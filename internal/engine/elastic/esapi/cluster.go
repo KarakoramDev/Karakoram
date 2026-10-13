@@ -228,12 +228,54 @@ func (c *Client) ReloadSecureSettings(ctx context.Context) error {
 		return err
 	}
 	if v.Summary.Failed > 0 {
-		return errors.New("Elasticsearch secure settings reload failed")
+		return errors.New("secure settings reload failed on Elasticsearch")
 	}
 	for _, n := range v.Nodes {
 		if len(n.ReloadException) > 0 && string(n.ReloadException) != "null" {
-			return errors.New("Elasticsearch node secure settings reload failed")
+			return errors.New("node secure settings reload failed on Elasticsearch")
 		}
 	}
 	return nil
+}
+
+// MaxIndexReplicas returns the largest configured replica count across indices.
+func (c *Client) MaxIndexReplicas(ctx context.Context) (int, error) {
+	var indices map[string]struct {
+		Settings map[string]string `json:"settings"`
+	}
+	if err := c.do(ctx, "GET", "/_all/_settings", url.Values{"flat_settings": {"true"}, "expand_wildcards": {"all"}}, nil, &indices); err != nil {
+		return 0, err
+	}
+	maximum := 0
+	for _, index := range indices {
+		text, ok := index.Settings["index.number_of_replicas"]
+		if !ok {
+			return 0, errors.New("index replica count unavailable")
+		}
+		count, err := strconv.Atoi(text)
+		if err != nil || count < 0 {
+			return 0, errors.New("invalid index replica count")
+		}
+		if count > maximum {
+			maximum = count
+		}
+	}
+	return maximum, nil
+}
+
+// UnassignedPrimaries reports whether any primary shard is unassigned.
+func (c *Client) UnassignedPrimaries(ctx context.Context) (bool, error) {
+	var shards []struct {
+		State   string `json:"state"`
+		Primary string `json:"prirep"`
+	}
+	if err := c.do(ctx, "GET", "/_cat/shards", url.Values{"format": {"json"}, "h": {"state,prirep"}}, nil, &shards); err != nil {
+		return false, err
+	}
+	for _, shard := range shards {
+		if shard.Primary == "p" && shard.State == "UNASSIGNED" {
+			return true, nil
+		}
+	}
+	return false, nil
 }

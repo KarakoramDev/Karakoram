@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
+	elasticagent "github.com/KarakoramDev/Karakoram/internal/agent/elastic"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -79,13 +80,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 			if len(rest) > 0 && strings.HasPrefix(rest[0], "--engine=") {
 				engineName, rest = strings.TrimPrefix(rest[0], "--engine="), rest[1:]
 			}
-			return agent.Readiness(ctx, agent.Options{Engine: engineName, DataDir: os.Getenv("KARAKORAM_DATA_DIR")}, rest, rabbitmqagent.New())
+			return agent.Readiness(ctx, agent.Options{Engine: engineName, DataDir: os.Getenv("KARAKORAM_DATA_DIR")}, rest, rabbitmqagent.New(), elasticagent.NewEngine())
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {
 			return err
 		}
-		return agent.Run(ctx, o, rabbitmqagent.New())
+		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine())
 	case "relay":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
 			return errUsage

@@ -110,6 +110,8 @@ type SnapshotInfo struct {
 	EndTime   time.Time         `json:"end_time"`
 	Failures  []SnapshotFailure `json:"failures"`
 	Shards    SnapshotShards    `json:"shards"`
+	// Reason is the snapshot-level failure reason, if any.
+	Reason string `json:"reason,omitempty"`
 }
 
 // CreateSnapshot starts a snapshot, optionally waiting for its completion.
@@ -157,7 +159,7 @@ func (c *Client) SnapshotSize(ctx context.Context, repo, name string) (int64, er
 		return 0, err
 	}
 	if len(v.Snapshots) == 0 {
-		return 0, errors.New("Elasticsearch snapshot size unavailable")
+		return 0, errors.New("snapshot size is unavailable on Elasticsearch")
 	}
 	return v.Snapshots[0].Stats.Total.Bytes, nil
 }

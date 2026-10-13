@@ -26,11 +26,19 @@ type IndexPrivileges struct {
 	AllowRestrictedIndices bool     `json:"allow_restricted_indices"`
 }
 
+// ApplicationPrivileges grants application-defined privileges.
+type ApplicationPrivileges struct {
+	Application string   `json:"application"`
+	Privileges  []string `json:"privileges"`
+	Resources   []string `json:"resources"`
+}
+
 // Role is a native role or API-key role descriptor.
 type Role struct {
-	Cluster  []string          `json:"cluster,omitempty"`
-	Indices  []IndexPrivileges `json:"indices,omitempty"`
-	Metadata map[string]any    `json:"metadata,omitempty"`
+	Cluster      []string                `json:"cluster,omitempty"`
+	Indices      []IndexPrivileges       `json:"indices,omitempty"`
+	Metadata     map[string]any          `json:"metadata,omitempty"`
+	Applications []ApplicationPrivileges `json:"applications,omitempty"`
 }
 
 // ChangePassword changes a native or built-in user's password.
@@ -102,7 +110,7 @@ func (c *Client) CreateServiceToken(ctx context.Context, namespace, service, nam
 		return "", err
 	}
 	if v.Token.Value == "" {
-		return "", errors.New("Elasticsearch service token response is empty")
+		return "", errors.New("service token response from Elasticsearch is empty")
 	}
 	return v.Token.Value, nil
 }
@@ -144,13 +152,14 @@ type APIKey struct {
 
 // APIKeyInfo is non-secret API-key inventory, with timestamps in Unix milliseconds.
 type APIKeyInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Creation    int64  `json:"creation"`
-	Expiration  int64  `json:"expiration"`
-	Invalidated bool   `json:"invalidated"`
-	Username    string `json:"username"`
-	Realm       string `json:"realm"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Creation    int64          `json:"creation"`
+	Expiration  int64          `json:"expiration"`
+	Invalidated bool           `json:"invalidated"`
+	Username    string         `json:"username"`
+	Realm       string         `json:"realm"`
+	Metadata    map[string]any `json:"metadata"`
 }
 
 // CreateAPIKey creates a key, returning its secret only in this response.
@@ -182,7 +191,7 @@ func (c *Client) InvalidateAPIKeys(ctx context.Context, ids []string) error {
 		return err
 	}
 	if v.ErrorCount > 0 {
-		return errors.New("Elasticsearch API key invalidation failed")
+		return errors.New("API key invalidation failed on Elasticsearch")
 	}
 	return nil
 }

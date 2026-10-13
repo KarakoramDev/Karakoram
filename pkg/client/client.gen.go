@@ -143,10 +143,16 @@ const (
 
 // Defines values for MemberRole.
 const (
+	MemberRoleApm             MemberRole = "apm"
 	MemberRoleArbiter         MemberRole = "arbiter"
 	MemberRoleBroker          MemberRole = "broker"
 	MemberRoleConfigPrimary   MemberRole = "config-primary"
 	MemberRoleConfigSecondary MemberRole = "config-secondary"
+	MemberRoleData            MemberRole = "data"
+	MemberRoleKibana          MemberRole = "kibana"
+	MemberRoleLogstash        MemberRole = "logstash"
+	MemberRoleMaster          MemberRole = "master"
+	MemberRoleMasterdata      MemberRole = "master,data"
 	MemberRolePrimary         MemberRole = "primary"
 	MemberRoleRouter          MemberRole = "router"
 	MemberRoleSecondary       MemberRole = "secondary"
@@ -305,13 +311,19 @@ const (
 
 // Defines values for SystemUserName.
 const (
-	SystemUserNameAdmin          SystemUserName = "admin"
-	SystemUserNameBackup         SystemUserName = "backup"
-	SystemUserNameClusterAdmin   SystemUserName = "clusterAdmin"
-	SystemUserNameClusterMonitor SystemUserName = "clusterMonitor"
-	SystemUserNameDatabaseAdmin  SystemUserName = "databaseAdmin"
-	SystemUserNameKarakoram      SystemUserName = "karakoram"
-	SystemUserNameUserAdmin      SystemUserName = "userAdmin"
+	SystemUserNameAdmin             SystemUserName = "admin"
+	SystemUserNameApmSecretToken    SystemUserName = "apm-secret-token"
+	SystemUserNameBackup            SystemUserName = "backup"
+	SystemUserNameClusterAdmin      SystemUserName = "clusterAdmin"
+	SystemUserNameClusterMonitor    SystemUserName = "clusterMonitor"
+	SystemUserNameDatabaseAdmin     SystemUserName = "databaseAdmin"
+	SystemUserNameElastic           SystemUserName = "elastic"
+	SystemUserNameKarakoram         SystemUserName = "karakoram"
+	SystemUserNameKarakoramApm      SystemUserName = "karakoram_apm"
+	SystemUserNameKarakoramLogstash SystemUserName = "karakoram_logstash"
+	SystemUserNameKarakoramMonitor  SystemUserName = "karakoram-monitor"
+	SystemUserNameKibanaToken       SystemUserName = "kibana-token"
+	SystemUserNameUserAdmin         SystemUserName = "userAdmin"
 )
 
 // Defines values for TLSCa.
@@ -1072,6 +1084,122 @@ type DatabaseUserList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// ElasticAPIKey Only API keys created through Karakoram are visible.
+type ElasticAPIKey struct {
+	Creation    int64  `json:"creation"`
+	Expiration  *int64 `json:"expiration,omitempty"`
+	Id          string `json:"id"`
+	Invalidated bool   `json:"invalidated"`
+	Name        string `json:"name"`
+	Username    string `json:"username"`
+}
+
+// ElasticAPIKeyCreate defines model for ElasticAPIKeyCreate.
+type ElasticAPIKeyCreate struct {
+	// Expiration Elasticsearch duration, for example 1d.
+	Expiration      *string                           `json:"expiration,omitempty"`
+	Name            string                            `json:"name"`
+	RoleDescriptors *map[string]ElasticRoleDescriptor `json:"roleDescriptors,omitempty"`
+}
+
+// ElasticAPIKeyCreated Sensitive one-time API key secret; never cached. Store it securely.
+type ElasticAPIKeyCreated struct {
+	ApiKey  string `json:"apiKey"`
+	Encoded string `json:"encoded"`
+
+	// Expiration Unix milliseconds.
+	Expiration *int64 `json:"expiration,omitempty"`
+	Id         string `json:"id"`
+	Name       string `json:"name"`
+}
+
+// ElasticAPIKeyList defines model for ElasticAPIKeyList.
+type ElasticAPIKeyList struct {
+	Items      []ElasticAPIKey `json:"items"`
+	NextCursor *string         `json:"nextCursor,omitempty"`
+}
+
+// ElasticApplicationPrivileges defines model for ElasticApplicationPrivileges.
+type ElasticApplicationPrivileges struct {
+	Application string   `json:"application"`
+	Privileges  []string `json:"privileges"`
+	Resources   []string `json:"resources"`
+}
+
+// ElasticIndexPrivileges defines model for ElasticIndexPrivileges.
+type ElasticIndexPrivileges struct {
+	AllowRestrictedIndices bool     `json:"allowRestrictedIndices"`
+	Names                  []string `json:"names"`
+	Privileges             []string `json:"privileges"`
+}
+
+// ElasticRole Built-in roles are readable but immutable; Karakoram-managed roles are hidden.
+type ElasticRole struct {
+	Applications []ElasticApplicationPrivileges `json:"applications"`
+	Cluster      []string                       `json:"cluster"`
+	Indices      []ElasticIndexPrivileges       `json:"indices"`
+	Name         string                         `json:"name"`
+
+	// Reserved Built-in roles cannot be changed or deleted.
+	Reserved *bool `json:"reserved,omitempty"`
+}
+
+// ElasticRoleDescriptor defines model for ElasticRoleDescriptor.
+type ElasticRoleDescriptor struct {
+	Applications []ElasticApplicationPrivileges `json:"applications"`
+	Cluster      []string                       `json:"cluster"`
+	Indices      []ElasticIndexPrivileges       `json:"indices"`
+}
+
+// ElasticRoleInput defines model for ElasticRoleInput.
+type ElasticRoleInput struct {
+	Applications []ElasticApplicationPrivileges `json:"applications"`
+	Cluster      []string                       `json:"cluster"`
+	Indices      []ElasticIndexPrivileges       `json:"indices"`
+	Name         string                         `json:"name"`
+}
+
+// ElasticRoleList defines model for ElasticRoleList.
+type ElasticRoleList struct {
+	Items      []ElasticRole `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// ElasticUser Native realm user. Reserved and Karakoram-managed identities are hidden.
+type ElasticUser struct {
+	Email    *string  `json:"email,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	FullName *string  `json:"fullName,omitempty"`
+	Roles    []string `json:"roles"`
+	Username string   `json:"username"`
+}
+
+// ElasticUserCreate defines model for ElasticUserCreate.
+type ElasticUserCreate struct {
+	Email    *string  `json:"email,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	FullName *string  `json:"fullName,omitempty"`
+	Password *string  `json:"password,omitempty"`
+	Roles    []string `json:"roles"`
+	Username string   `json:"username"`
+}
+
+// ElasticUserList defines model for ElasticUserList.
+type ElasticUserList struct {
+	Items      []ElasticUser `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// ElasticUserWrite defines model for ElasticUserWrite.
+type ElasticUserWrite struct {
+	Email    *string  `json:"email,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	FullName *string  `json:"fullName,omitempty"`
+	Password *string  `json:"password,omitempty"`
+	Roles    []string `json:"roles"`
+	Username string   `json:"username"`
+}
+
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
 	Name   string `json:"name"`
@@ -1224,7 +1352,7 @@ type Member struct {
 	// Resources Infrastructure resources currently allocated to the member container.
 	Resources *ObservedResources `json:"resources,omitempty"`
 
-	// Role Member role; broker identifies a RabbitMQ broker.
+	// Role Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
 	Role    MemberRole `json:"role"`
 	Set     string     `json:"set"`
 	State   string     `json:"state"`
@@ -1232,7 +1360,7 @@ type Member struct {
 	Version *string    `json:"version,omitempty"`
 }
 
-// MemberRole Member role; broker identifies a RabbitMQ broker.
+// MemberRole Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
 type MemberRole string
 
 // MemberList defines model for MemberList.
@@ -2674,6 +2802,126 @@ type ReplaceDatabaseUserParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListElasticAPIKeysParams defines parameters for ListElasticAPIKeys.
+type ListElasticAPIKeysParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateElasticAPIKeyParams defines parameters for CreateElasticAPIKey.
+type CreateElasticAPIKeyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// InvalidateElasticAPIKeyParams defines parameters for InvalidateElasticAPIKey.
+type InvalidateElasticAPIKeyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListElasticRolesParams defines parameters for ListElasticRoles.
+type ListElasticRolesParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateElasticRoleParams defines parameters for CreateElasticRole.
+type CreateElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteElasticRoleParams defines parameters for DeleteElasticRole.
+type DeleteElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetElasticRoleParams defines parameters for GetElasticRole.
+type GetElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateElasticRoleParams defines parameters for UpdateElasticRole.
+type UpdateElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListElasticUsersParams defines parameters for ListElasticUsers.
+type ListElasticUsersParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateElasticUserParams defines parameters for CreateElasticUser.
+type CreateElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteElasticUserParams defines parameters for DeleteElasticUser.
+type DeleteElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetElasticUserParams defines parameters for GetElasticUser.
+type GetElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateElasticUserParams defines parameters for UpdateElasticUser.
+type UpdateElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListClusterMembersParams defines parameters for ListClusterMembers.
 type ListClusterMembersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -3569,6 +3817,21 @@ type CreateDatabaseUserJSONRequestBody = CreateDatabaseUserRequest
 // ReplaceDatabaseUserJSONRequestBody defines body for ReplaceDatabaseUser for application/json ContentType.
 type ReplaceDatabaseUserJSONRequestBody = UpdateDatabaseUserRequest
 
+// CreateElasticAPIKeyJSONRequestBody defines body for CreateElasticAPIKey for application/json ContentType.
+type CreateElasticAPIKeyJSONRequestBody = ElasticAPIKeyCreate
+
+// CreateElasticRoleJSONRequestBody defines body for CreateElasticRole for application/json ContentType.
+type CreateElasticRoleJSONRequestBody = ElasticRoleInput
+
+// UpdateElasticRoleJSONRequestBody defines body for UpdateElasticRole for application/json ContentType.
+type UpdateElasticRoleJSONRequestBody = ElasticRoleInput
+
+// CreateElasticUserJSONRequestBody defines body for CreateElasticUser for application/json ContentType.
+type CreateElasticUserJSONRequestBody = ElasticUserCreate
+
+// UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
+type UpdateElasticUserJSONRequestBody = ElasticUserWrite
+
 // CreateRabbitMQOperatorPolicyJSONRequestBody defines body for CreateRabbitMQOperatorPolicy for application/json ContentType.
 type CreateRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
 
@@ -4002,6 +4265,55 @@ type ClientInterface interface {
 	ReplaceDatabaseUserWithBody(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ReplaceDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, body ReplaceDatabaseUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListElasticAPIKeys request
+	ListElasticAPIKeys(ctx context.Context, cluster ClusterPath, params *ListElasticAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateElasticAPIKeyWithBody request with any body
+	CreateElasticAPIKeyWithBody(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateElasticAPIKey(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, body CreateElasticAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// InvalidateElasticAPIKey request
+	InvalidateElasticAPIKey(ctx context.Context, cluster ClusterPath, id string, params *InvalidateElasticAPIKeyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListElasticRoles request
+	ListElasticRoles(ctx context.Context, cluster ClusterPath, params *ListElasticRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateElasticRoleWithBody request with any body
+	CreateElasticRoleWithBody(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateElasticRole(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, body CreateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteElasticRole request
+	DeleteElasticRole(ctx context.Context, cluster ClusterPath, role string, params *DeleteElasticRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetElasticRole request
+	GetElasticRole(ctx context.Context, cluster ClusterPath, role string, params *GetElasticRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateElasticRoleWithBody request with any body
+	UpdateElasticRoleWithBody(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateElasticRole(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, body UpdateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListElasticUsers request
+	ListElasticUsers(ctx context.Context, cluster ClusterPath, params *ListElasticUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateElasticUserWithBody request with any body
+	CreateElasticUserWithBody(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateElasticUser(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, body CreateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteElasticUser request
+	DeleteElasticUser(ctx context.Context, cluster ClusterPath, username string, params *DeleteElasticUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetElasticUser request
+	GetElasticUser(ctx context.Context, cluster ClusterPath, username string, params *GetElasticUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateElasticUserWithBody request with any body
+	UpdateElasticUserWithBody(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateElasticUser(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, body UpdateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListClusterMembers request
 	ListClusterMembers(ctx context.Context, cluster ClusterPath, params *ListClusterMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5033,6 +5345,222 @@ func (c *Client) ReplaceDatabaseUserWithBody(ctx context.Context, cluster Cluste
 
 func (c *Client) ReplaceDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, body ReplaceDatabaseUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplaceDatabaseUserRequest(c.Server, cluster, database, username, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListElasticAPIKeys(ctx context.Context, cluster ClusterPath, params *ListElasticAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListElasticAPIKeysRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateElasticAPIKeyWithBody(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateElasticAPIKeyRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateElasticAPIKey(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, body CreateElasticAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateElasticAPIKeyRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) InvalidateElasticAPIKey(ctx context.Context, cluster ClusterPath, id string, params *InvalidateElasticAPIKeyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewInvalidateElasticAPIKeyRequest(c.Server, cluster, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListElasticRoles(ctx context.Context, cluster ClusterPath, params *ListElasticRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListElasticRolesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateElasticRoleWithBody(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateElasticRoleRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateElasticRole(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, body CreateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateElasticRoleRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteElasticRole(ctx context.Context, cluster ClusterPath, role string, params *DeleteElasticRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteElasticRoleRequest(c.Server, cluster, role, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetElasticRole(ctx context.Context, cluster ClusterPath, role string, params *GetElasticRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetElasticRoleRequest(c.Server, cluster, role, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateElasticRoleWithBody(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateElasticRoleRequestWithBody(c.Server, cluster, role, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateElasticRole(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, body UpdateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateElasticRoleRequest(c.Server, cluster, role, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListElasticUsers(ctx context.Context, cluster ClusterPath, params *ListElasticUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListElasticUsersRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateElasticUserWithBody(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateElasticUserRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateElasticUser(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, body CreateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateElasticUserRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteElasticUser(ctx context.Context, cluster ClusterPath, username string, params *DeleteElasticUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteElasticUserRequest(c.Server, cluster, username, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetElasticUser(ctx context.Context, cluster ClusterPath, username string, params *GetElasticUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetElasticUserRequest(c.Server, cluster, username, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateElasticUserWithBody(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateElasticUserRequestWithBody(c.Server, cluster, username, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateElasticUser(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, body UpdateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateElasticUserRequest(c.Server, cluster, username, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9487,6 +10015,1064 @@ func NewReplaceDatabaseUserRequestWithBody(server string, cluster ClusterPath, d
 			}
 
 			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListElasticAPIKeysRequest generates requests for ListElasticAPIKeys
+func NewListElasticAPIKeysRequest(server string, cluster ClusterPath, params *ListElasticAPIKeysParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/api-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateElasticAPIKeyRequest calls the generic CreateElasticAPIKey builder with application/json body
+func NewCreateElasticAPIKeyRequest(server string, cluster ClusterPath, params *CreateElasticAPIKeyParams, body CreateElasticAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateElasticAPIKeyRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateElasticAPIKeyRequestWithBody generates requests for CreateElasticAPIKey with any type of body
+func NewCreateElasticAPIKeyRequestWithBody(server string, cluster ClusterPath, params *CreateElasticAPIKeyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/api-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewInvalidateElasticAPIKeyRequest generates requests for InvalidateElasticAPIKey
+func NewInvalidateElasticAPIKeyRequest(server string, cluster ClusterPath, id string, params *InvalidateElasticAPIKeyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/api-keys/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListElasticRolesRequest generates requests for ListElasticRoles
+func NewListElasticRolesRequest(server string, cluster ClusterPath, params *ListElasticRolesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateElasticRoleRequest calls the generic CreateElasticRole builder with application/json body
+func NewCreateElasticRoleRequest(server string, cluster ClusterPath, params *CreateElasticRoleParams, body CreateElasticRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateElasticRoleRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateElasticRoleRequestWithBody generates requests for CreateElasticRole with any type of body
+func NewCreateElasticRoleRequestWithBody(server string, cluster ClusterPath, params *CreateElasticRoleParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteElasticRoleRequest generates requests for DeleteElasticRole
+func NewDeleteElasticRoleRequest(server string, cluster ClusterPath, role string, params *DeleteElasticRoleParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetElasticRoleRequest generates requests for GetElasticRole
+func NewGetElasticRoleRequest(server string, cluster ClusterPath, role string, params *GetElasticRoleParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateElasticRoleRequest calls the generic UpdateElasticRole builder with application/json body
+func NewUpdateElasticRoleRequest(server string, cluster ClusterPath, role string, params *UpdateElasticRoleParams, body UpdateElasticRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateElasticRoleRequestWithBody(server, cluster, role, params, "application/json", bodyReader)
+}
+
+// NewUpdateElasticRoleRequestWithBody generates requests for UpdateElasticRole with any type of body
+func NewUpdateElasticRoleRequestWithBody(server string, cluster ClusterPath, role string, params *UpdateElasticRoleParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListElasticUsersRequest generates requests for ListElasticUsers
+func NewListElasticUsersRequest(server string, cluster ClusterPath, params *ListElasticUsersParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/users", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateElasticUserRequest calls the generic CreateElasticUser builder with application/json body
+func NewCreateElasticUserRequest(server string, cluster ClusterPath, params *CreateElasticUserParams, body CreateElasticUserJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateElasticUserRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateElasticUserRequestWithBody generates requests for CreateElasticUser with any type of body
+func NewCreateElasticUserRequestWithBody(server string, cluster ClusterPath, params *CreateElasticUserParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/users", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteElasticUserRequest generates requests for DeleteElasticUser
+func NewDeleteElasticUserRequest(server string, cluster ClusterPath, username string, params *DeleteElasticUserParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "username", runtime.ParamLocationPath, username)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/users/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetElasticUserRequest generates requests for GetElasticUser
+func NewGetElasticUserRequest(server string, cluster ClusterPath, username string, params *GetElasticUserParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "username", runtime.ParamLocationPath, username)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/users/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateElasticUserRequest calls the generic UpdateElasticUser builder with application/json body
+func NewUpdateElasticUserRequest(server string, cluster ClusterPath, username string, params *UpdateElasticUserParams, body UpdateElasticUserJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateElasticUserRequestWithBody(server, cluster, username, params, "application/json", bodyReader)
+}
+
+// NewUpdateElasticUserRequestWithBody generates requests for UpdateElasticUser with any type of body
+func NewUpdateElasticUserRequestWithBody(server string, cluster ClusterPath, username string, params *UpdateElasticUserParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "username", runtime.ParamLocationPath, username)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/elasticsearch/users/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
 	}
@@ -14995,6 +16581,55 @@ type ClientWithResponsesInterface interface {
 
 	ReplaceDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, body ReplaceDatabaseUserJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceDatabaseUserResponse, error)
 
+	// ListElasticAPIKeysWithResponse request
+	ListElasticAPIKeysWithResponse(ctx context.Context, cluster ClusterPath, params *ListElasticAPIKeysParams, reqEditors ...RequestEditorFn) (*ListElasticAPIKeysResponse, error)
+
+	// CreateElasticAPIKeyWithBodyWithResponse request with any body
+	CreateElasticAPIKeyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateElasticAPIKeyResponse, error)
+
+	CreateElasticAPIKeyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, body CreateElasticAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateElasticAPIKeyResponse, error)
+
+	// InvalidateElasticAPIKeyWithResponse request
+	InvalidateElasticAPIKeyWithResponse(ctx context.Context, cluster ClusterPath, id string, params *InvalidateElasticAPIKeyParams, reqEditors ...RequestEditorFn) (*InvalidateElasticAPIKeyResponse, error)
+
+	// ListElasticRolesWithResponse request
+	ListElasticRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListElasticRolesParams, reqEditors ...RequestEditorFn) (*ListElasticRolesResponse, error)
+
+	// CreateElasticRoleWithBodyWithResponse request with any body
+	CreateElasticRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateElasticRoleResponse, error)
+
+	CreateElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, body CreateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateElasticRoleResponse, error)
+
+	// DeleteElasticRoleWithResponse request
+	DeleteElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *DeleteElasticRoleParams, reqEditors ...RequestEditorFn) (*DeleteElasticRoleResponse, error)
+
+	// GetElasticRoleWithResponse request
+	GetElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *GetElasticRoleParams, reqEditors ...RequestEditorFn) (*GetElasticRoleResponse, error)
+
+	// UpdateElasticRoleWithBodyWithResponse request with any body
+	UpdateElasticRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateElasticRoleResponse, error)
+
+	UpdateElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, body UpdateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateElasticRoleResponse, error)
+
+	// ListElasticUsersWithResponse request
+	ListElasticUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListElasticUsersParams, reqEditors ...RequestEditorFn) (*ListElasticUsersResponse, error)
+
+	// CreateElasticUserWithBodyWithResponse request with any body
+	CreateElasticUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateElasticUserResponse, error)
+
+	CreateElasticUserWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, body CreateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateElasticUserResponse, error)
+
+	// DeleteElasticUserWithResponse request
+	DeleteElasticUserWithResponse(ctx context.Context, cluster ClusterPath, username string, params *DeleteElasticUserParams, reqEditors ...RequestEditorFn) (*DeleteElasticUserResponse, error)
+
+	// GetElasticUserWithResponse request
+	GetElasticUserWithResponse(ctx context.Context, cluster ClusterPath, username string, params *GetElasticUserParams, reqEditors ...RequestEditorFn) (*GetElasticUserResponse, error)
+
+	// UpdateElasticUserWithBodyWithResponse request with any body
+	UpdateElasticUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateElasticUserResponse, error)
+
+	UpdateElasticUserWithResponse(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, body UpdateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateElasticUserResponse, error)
+
 	// ListClusterMembersWithResponse request
 	ListClusterMembersWithResponse(ctx context.Context, cluster ClusterPath, params *ListClusterMembersParams, reqEditors ...RequestEditorFn) (*ListClusterMembersResponse, error)
 
@@ -16702,6 +18337,367 @@ func (r ReplaceDatabaseUserResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ReplaceDatabaseUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListElasticAPIKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticAPIKeyList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListElasticAPIKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListElasticAPIKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateElasticAPIKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ElasticAPIKeyCreated
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateElasticAPIKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateElasticAPIKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type InvalidateElasticAPIKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r InvalidateElasticAPIKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r InvalidateElasticAPIKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListElasticRolesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticRoleList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListElasticRolesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListElasticRolesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateElasticRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ElasticRole
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateElasticRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateElasticRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteElasticRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteElasticRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteElasticRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetElasticRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticRole
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetElasticRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetElasticRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateElasticRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticRole
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateElasticRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateElasticRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListElasticUsersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticUserList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListElasticUsersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListElasticUsersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateElasticUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ElasticUser
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateElasticUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateElasticUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteElasticUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteElasticUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteElasticUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetElasticUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticUser
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetElasticUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetElasticUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateElasticUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ElasticUser
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateElasticUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateElasticUserResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19422,6 +21418,163 @@ func (c *ClientWithResponses) ReplaceDatabaseUserWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseReplaceDatabaseUserResponse(rsp)
+}
+
+// ListElasticAPIKeysWithResponse request returning *ListElasticAPIKeysResponse
+func (c *ClientWithResponses) ListElasticAPIKeysWithResponse(ctx context.Context, cluster ClusterPath, params *ListElasticAPIKeysParams, reqEditors ...RequestEditorFn) (*ListElasticAPIKeysResponse, error) {
+	rsp, err := c.ListElasticAPIKeys(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListElasticAPIKeysResponse(rsp)
+}
+
+// CreateElasticAPIKeyWithBodyWithResponse request with arbitrary body returning *CreateElasticAPIKeyResponse
+func (c *ClientWithResponses) CreateElasticAPIKeyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateElasticAPIKeyResponse, error) {
+	rsp, err := c.CreateElasticAPIKeyWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateElasticAPIKeyResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateElasticAPIKeyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticAPIKeyParams, body CreateElasticAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateElasticAPIKeyResponse, error) {
+	rsp, err := c.CreateElasticAPIKey(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateElasticAPIKeyResponse(rsp)
+}
+
+// InvalidateElasticAPIKeyWithResponse request returning *InvalidateElasticAPIKeyResponse
+func (c *ClientWithResponses) InvalidateElasticAPIKeyWithResponse(ctx context.Context, cluster ClusterPath, id string, params *InvalidateElasticAPIKeyParams, reqEditors ...RequestEditorFn) (*InvalidateElasticAPIKeyResponse, error) {
+	rsp, err := c.InvalidateElasticAPIKey(ctx, cluster, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseInvalidateElasticAPIKeyResponse(rsp)
+}
+
+// ListElasticRolesWithResponse request returning *ListElasticRolesResponse
+func (c *ClientWithResponses) ListElasticRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListElasticRolesParams, reqEditors ...RequestEditorFn) (*ListElasticRolesResponse, error) {
+	rsp, err := c.ListElasticRoles(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListElasticRolesResponse(rsp)
+}
+
+// CreateElasticRoleWithBodyWithResponse request with arbitrary body returning *CreateElasticRoleResponse
+func (c *ClientWithResponses) CreateElasticRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateElasticRoleResponse, error) {
+	rsp, err := c.CreateElasticRoleWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateElasticRoleResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticRoleParams, body CreateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateElasticRoleResponse, error) {
+	rsp, err := c.CreateElasticRole(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateElasticRoleResponse(rsp)
+}
+
+// DeleteElasticRoleWithResponse request returning *DeleteElasticRoleResponse
+func (c *ClientWithResponses) DeleteElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *DeleteElasticRoleParams, reqEditors ...RequestEditorFn) (*DeleteElasticRoleResponse, error) {
+	rsp, err := c.DeleteElasticRole(ctx, cluster, role, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteElasticRoleResponse(rsp)
+}
+
+// GetElasticRoleWithResponse request returning *GetElasticRoleResponse
+func (c *ClientWithResponses) GetElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *GetElasticRoleParams, reqEditors ...RequestEditorFn) (*GetElasticRoleResponse, error) {
+	rsp, err := c.GetElasticRole(ctx, cluster, role, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetElasticRoleResponse(rsp)
+}
+
+// UpdateElasticRoleWithBodyWithResponse request with arbitrary body returning *UpdateElasticRoleResponse
+func (c *ClientWithResponses) UpdateElasticRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateElasticRoleResponse, error) {
+	rsp, err := c.UpdateElasticRoleWithBody(ctx, cluster, role, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateElasticRoleResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateElasticRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdateElasticRoleParams, body UpdateElasticRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateElasticRoleResponse, error) {
+	rsp, err := c.UpdateElasticRole(ctx, cluster, role, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateElasticRoleResponse(rsp)
+}
+
+// ListElasticUsersWithResponse request returning *ListElasticUsersResponse
+func (c *ClientWithResponses) ListElasticUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListElasticUsersParams, reqEditors ...RequestEditorFn) (*ListElasticUsersResponse, error) {
+	rsp, err := c.ListElasticUsers(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListElasticUsersResponse(rsp)
+}
+
+// CreateElasticUserWithBodyWithResponse request with arbitrary body returning *CreateElasticUserResponse
+func (c *ClientWithResponses) CreateElasticUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateElasticUserResponse, error) {
+	rsp, err := c.CreateElasticUserWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateElasticUserResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateElasticUserWithResponse(ctx context.Context, cluster ClusterPath, params *CreateElasticUserParams, body CreateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateElasticUserResponse, error) {
+	rsp, err := c.CreateElasticUser(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateElasticUserResponse(rsp)
+}
+
+// DeleteElasticUserWithResponse request returning *DeleteElasticUserResponse
+func (c *ClientWithResponses) DeleteElasticUserWithResponse(ctx context.Context, cluster ClusterPath, username string, params *DeleteElasticUserParams, reqEditors ...RequestEditorFn) (*DeleteElasticUserResponse, error) {
+	rsp, err := c.DeleteElasticUser(ctx, cluster, username, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteElasticUserResponse(rsp)
+}
+
+// GetElasticUserWithResponse request returning *GetElasticUserResponse
+func (c *ClientWithResponses) GetElasticUserWithResponse(ctx context.Context, cluster ClusterPath, username string, params *GetElasticUserParams, reqEditors ...RequestEditorFn) (*GetElasticUserResponse, error) {
+	rsp, err := c.GetElasticUser(ctx, cluster, username, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetElasticUserResponse(rsp)
+}
+
+// UpdateElasticUserWithBodyWithResponse request with arbitrary body returning *UpdateElasticUserResponse
+func (c *ClientWithResponses) UpdateElasticUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateElasticUserResponse, error) {
+	rsp, err := c.UpdateElasticUserWithBody(ctx, cluster, username, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateElasticUserResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateElasticUserWithResponse(ctx context.Context, cluster ClusterPath, username string, params *UpdateElasticUserParams, body UpdateElasticUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateElasticUserResponse, error) {
+	rsp, err := c.UpdateElasticUser(ctx, cluster, username, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateElasticUserResponse(rsp)
 }
 
 // ListClusterMembersWithResponse request returning *ListClusterMembersResponse
@@ -24383,6 +26536,869 @@ func ParseReplaceDatabaseUserResponse(rsp *http.Response) (*ReplaceDatabaseUserR
 			return nil, err
 		}
 		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListElasticAPIKeysResponse parses an HTTP response from a ListElasticAPIKeysWithResponse call
+func ParseListElasticAPIKeysResponse(rsp *http.Response) (*ListElasticAPIKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListElasticAPIKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticAPIKeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateElasticAPIKeyResponse parses an HTTP response from a CreateElasticAPIKeyWithResponse call
+func ParseCreateElasticAPIKeyResponse(rsp *http.Response) (*CreateElasticAPIKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateElasticAPIKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ElasticAPIKeyCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseInvalidateElasticAPIKeyResponse parses an HTTP response from a InvalidateElasticAPIKeyWithResponse call
+func ParseInvalidateElasticAPIKeyResponse(rsp *http.Response) (*InvalidateElasticAPIKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &InvalidateElasticAPIKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListElasticRolesResponse parses an HTTP response from a ListElasticRolesWithResponse call
+func ParseListElasticRolesResponse(rsp *http.Response) (*ListElasticRolesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListElasticRolesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticRoleList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateElasticRoleResponse parses an HTTP response from a CreateElasticRoleWithResponse call
+func ParseCreateElasticRoleResponse(rsp *http.Response) (*CreateElasticRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateElasticRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ElasticRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteElasticRoleResponse parses an HTTP response from a DeleteElasticRoleWithResponse call
+func ParseDeleteElasticRoleResponse(rsp *http.Response) (*DeleteElasticRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteElasticRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetElasticRoleResponse parses an HTTP response from a GetElasticRoleWithResponse call
+func ParseGetElasticRoleResponse(rsp *http.Response) (*GetElasticRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetElasticRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateElasticRoleResponse parses an HTTP response from a UpdateElasticRoleWithResponse call
+func ParseUpdateElasticRoleResponse(rsp *http.Response) (*UpdateElasticRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateElasticRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListElasticUsersResponse parses an HTTP response from a ListElasticUsersWithResponse call
+func ParseListElasticUsersResponse(rsp *http.Response) (*ListElasticUsersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListElasticUsersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticUserList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateElasticUserResponse parses an HTTP response from a CreateElasticUserWithResponse call
+func ParseCreateElasticUserResponse(rsp *http.Response) (*CreateElasticUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateElasticUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ElasticUser
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteElasticUserResponse parses an HTTP response from a DeleteElasticUserWithResponse call
+func ParseDeleteElasticUserResponse(rsp *http.Response) (*DeleteElasticUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteElasticUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetElasticUserResponse parses an HTTP response from a GetElasticUserWithResponse call
+func ParseGetElasticUserResponse(rsp *http.Response) (*GetElasticUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetElasticUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticUser
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateElasticUserResponse parses an HTTP response from a UpdateElasticUserWithResponse call
+func ParseUpdateElasticUserResponse(rsp *http.Response) (*UpdateElasticUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateElasticUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ElasticUser
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError

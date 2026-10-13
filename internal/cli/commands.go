@@ -101,6 +101,7 @@ func (a *app) addCommands(root *cobra.Command) {
 	}
 	a.addAuth(root)
 	a.addConfig(root)
+	a.addElastic(root)
 }
 func commandDescription(s commandSpec) string {
 	words := strings.Fields(s.path)

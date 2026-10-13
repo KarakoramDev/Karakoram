@@ -45,7 +45,7 @@ type Client struct {
 // New constructs a client trusting only CAPEM, with hostname verification enabled.
 func New(cfg Config) (*Client, error) {
 	if len(cfg.Endpoints) == 0 {
-		return nil, errors.New("Elasticsearch endpoints are empty")
+		return nil, errors.New("no Elasticsearch endpoints configured")
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(cfg.CAPEM) {
@@ -143,7 +143,7 @@ func (c *Client) doSecret(ctx context.Context, method, path string, q url.Values
 				return ctx.Err()
 			}
 			if connected.Load() {
-				return errors.New("Elasticsearch connection failed after connection establishment")
+				return errors.New("connection to Elasticsearch failed after establishment")
 			}
 			continue
 		}

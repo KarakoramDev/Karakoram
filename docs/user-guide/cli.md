@@ -206,6 +206,23 @@ karactl
     get <cluster> <database> <username>
     list <cluster>
     set <cluster> <database> <username>
+  elasticsearch
+    api-keys
+      create <cluster>
+      invalidate <cluster> <id>
+      list <cluster>
+    roles
+      create <cluster> <name>
+      delete <cluster> <name>
+      get <cluster> <name>
+      list <cluster>
+      update <cluster> <name>
+    users
+      create <cluster> <name>
+      delete <cluster> <name>
+      get <cluster> <name>
+      list <cluster>
+      update <cluster> <name>
   events
     list
     watch
@@ -730,3 +747,41 @@ latest result. Storage reads include optional `verification` only after a check.
 ```text
   -f, --file string   API request YAML/JSON file ('-' for stdin)
 ```
+
+## Elasticsearch access
+
+Elasticsearch native users, roles and API keys have a separate command group and
+use the `database-users` RBAC resource with read/create/update/delete actions.
+Every command accepts the inherited namespace and output flags.
+
+```sh
+karactl elasticsearch users list search -n production -o json
+karactl elasticsearch users create search analyst --roles viewer --password-stdin < protected-password-file
+karactl elasticsearch users update search analyst --full-name 'Search analyst' --disabled=false
+karactl elasticsearch roles create search ingest -f role.json
+karactl elasticsearch api-keys create search --name apm-agent --expiration 30d -f descriptors.json
+karactl elasticsearch api-keys invalidate search KEY_ID
+```
+
+User creation requires `--password-stdin`; updates can retain the current password.
+`--roles` replaces the role list, `--full-name` and `--email` set profile fields,
+and `--disabled` disables an identity (`--disabled=false` re-enables it).
+User updates retain fields whose flags are omitted. Reserved/built-in and
+`karakoram*` users are hidden and cannot be mutated. Built-in roles are readable
+but immutable; `karakoram*` roles are hidden and protected.
+
+Role create/update requires `-f`: the file contains `cluster`, `indices` and
+`applications` privilege arrays. The command's name is authoritative; a file name
+must match it. Missing arrays become empty. Index entries use `names`,
+`privileges`, and `allowRestrictedIndices`; application entries use `application`,
+`privileges`, and `resources`. Updates replace all privileges.
+
+API-key creation requires `--name`. `--expiration` accepts an Elasticsearch
+duration; `-f` is an optional JSON map of role descriptors (roles without names),
+not a complete create request. APM agent descriptors use application `apm`,
+privileges `event:write` and `config_agent:read`, and resources `["*"]`.
+Omitting descriptors inherits the creator's privileges, so supply least-privilege
+descriptors for applications. Creation displays `apiKey` and `encoded` **once**;
+protect this output and do not send it to logs. Listing never reveals secrets.
+Only API keys marked as created through Karakoram are listed or invalidated.
+All list commands accept `--limit` and `--cursor`.

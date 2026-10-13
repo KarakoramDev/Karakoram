@@ -7,7 +7,8 @@
 
 import { engines } from './index';
 import { rabbitmqUI } from './rabbitmq/index.ts';
+import { elasticsearchUI } from './elasticsearch';
 
 engines.rabbitmq = rabbitmqUI;
 
-export { engines };
+engines.elasticsearch = elasticsearchUI;

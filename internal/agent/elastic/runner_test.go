@@ -4,6 +4,7 @@
 package elastic
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -33,11 +34,12 @@ func (h *fakeHost) WriteFile(rel string, data []byte, mode os.FileMode) error {
 	_, err := atomicWrite(filepath.Join(h.dir, "karakoram", rel), data, mode)
 	return err
 }
-func (h *fakeHost) Configure(name string, p Process) {
+func (h *fakeHost) Configure(name string, p Process) error {
 	if h.processes == nil {
 		h.processes = map[string]Process{}
 	}
 	h.processes[name] = p
+	return nil
 }
 func (h *fakeHost) Action(_ context.Context, name, action string) error {
 	if h.actionErr != nil {
@@ -64,6 +66,18 @@ func fixture(t *testing.T) (*Runner, *fakeHost) {
 	r.Home = func(string, string) string { return home }
 	r.KeystoreCommand = func(_ context.Context, _ string, args, env []string, stdin io.Reader) error {
 		conf := strings.TrimPrefix(env[0], "ES_PATH_CONF=")
+		for _, name := range []string{"HOME", "ES_TMPDIR", "TMPDIR"} {
+			value := ""
+			for _, entry := range env {
+				if strings.HasPrefix(entry, name+"=") {
+					value = strings.TrimPrefix(entry, name+"=")
+				}
+			}
+			info, err := os.Stat(value)
+			if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+				t.Fatalf("keystore lacks private %s directory", name)
+			}
+		}
 		if args[0] == "create" {
 			return os.WriteFile(filepath.Join(conf, "elasticsearch.keystore"), []byte("keystore"), 0600)
 		}
@@ -85,7 +99,7 @@ func esSpec() agentspec.Spec {
 }
 func readText(t *testing.T, h *fakeHost, name string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(h.dir, name))
+	data, err := os.ReadFile(filepath.Join(h.dir, "karakoram", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +170,7 @@ func TestElasticsearchConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := h.processes["elasticsearch"]
-	if p.Binary != filepath.Join(r.home(s), "bin", "elasticsearch") || !contains(p.Env, "ES_PATH_CONF="+filepath.Join(h.dir, "config")) || !contains(p.Env, "ES_TMPDIR="+filepath.Join(h.dir, "tmp")) {
+	if p.Binary != filepath.Join(r.home(s), "bin", "elasticsearch") || !contains(p.Env, "ES_PATH_CONF="+filepath.Join(h.dir, "karakoram", "config")) || !contains(p.Env, "ES_TMPDIR="+filepath.Join(h.dir, "karakoram", "tmp")) {
 		t.Fatal(p)
 	}
 	s.Elasticsearch.InitialMasterNodes = nil
@@ -310,7 +324,7 @@ func TestKeystoreDigestAndBaselines(t *testing.T) {
 	if calls != 8 {
 		t.Fatal(calls)
 	}
-	if err := os.Remove(filepath.Join(h.dir, "config/elasticsearch.keystore")); err != nil {
+	if err := os.Remove(filepath.Join(h.dir, "karakoram", "config/elasticsearch.keystore")); err != nil {
 		t.Fatal(err)
 	}
 	apply(t, r, h, s)
@@ -330,7 +344,7 @@ func TestKeystoreDigestAndBaselines(t *testing.T) {
 	if readText(t, h, "config/jvm.options") != "new baseline" {
 		t.Fatal("version baseline not copied")
 	}
-	if err := os.Remove(filepath.Join(h.dir, "config/log4j2.properties")); err != nil {
+	if err := os.Remove(filepath.Join(h.dir, "karakoram", "config/log4j2.properties")); err != nil {
 		t.Fatal(err)
 	}
 	apply(t, r, h, s)
@@ -362,7 +376,7 @@ func TestComponentConfigs(t *testing.T) {
 			p := h.processes[tt.s.Component]
 			switch tt.s.Component {
 			case "kibana":
-				if readText(t, h, "config/node.options") != "--max-old-space-size=900\n" || !contains(p.Env, "KBN_PATH_CONF="+filepath.Join(h.dir, "config")) {
+				if readText(t, h, "config/node.options") != "--max-old-space-size=900\n" || !contains(p.Env, "KBN_PATH_CONF="+filepath.Join(h.dir, "karakoram", "config")) {
 					t.Fatal(p)
 				}
 				tt.s.Kibana.PublicBaseURL = ""
@@ -398,17 +412,17 @@ func TestComponentConfigs(t *testing.T) {
 				if err := yaml.Unmarshal([]byte(readText(t, h, "config/pipelines.yml")), &entries); err != nil {
 					t.Fatal(err)
 				}
-				if len(entries) != 1 || entries[0]["pipeline.id"] != "custom" || entries[0]["path.config"] != filepath.Join(h.dir, "config/pipelines/custom.conf") {
+				if len(entries) != 1 || entries[0]["pipeline.id"] != "custom" || entries[0]["path.config"] != filepath.Join(h.dir, "karakoram", "config/pipelines/custom.conf") {
 					t.Fatal(entries)
 				}
 				if readYAML(t, h, tt.file)["queue.type"] != "memory" {
 					t.Fatal("queue not updated")
 				}
 			case "apm-server":
-				if !reflect.DeepEqual(p.Args, []string{"-e", "-c", filepath.Join(h.dir, "config/apm-server.yml"), "--path.home", r.home(tt.s), "--path.data", filepath.Join(h.dir, "data")}) {
+				if !reflect.DeepEqual(p.Args, []string{"-e", "-c", filepath.Join(h.dir, "karakoram", "config/apm-server.yml"), "--path.home", r.home(tt.s), "--path.data", filepath.Join(h.dir, "karakoram", "data")}) {
 					t.Fatal(p)
 				}
-				info, err := os.Stat(filepath.Join(h.dir, "config/apm-server.yml"))
+				info, err := os.Stat(filepath.Join(h.dir, "karakoram", "config/apm-server.yml"))
 				if err != nil || info.Mode().Perm() != 0600 {
 					t.Fatal("unsafe APM config mode", err)
 				}
@@ -451,5 +465,70 @@ func TestReadiness(t *testing.T) {
 	defer v6.Close()
 	if err := New().Readiness(context.Background(), []string{"elasticsearch", strconv.Itoa(v6.Addr().(*net.TCPAddr).Port)}); err != nil {
 		t.Fatal("IPv6 fallback failed", err)
+	}
+}
+
+func atomicWrite(path string, data []byte, mode os.FileMode) (bool, error) {
+	old, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(old, data) {
+		info, err := os.Stat(path)
+		if err != nil {
+			return false, err
+		}
+		if info.Mode().Perm() == mode {
+			return false, nil
+		}
+		return true, os.Chmod(path, mode)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if err := privateDir(filepath.Dir(path)); err != nil {
+		return false, err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".elastic-*")
+	if err != nil {
+		return false, err
+	}
+	defer os.Remove(f.Name())
+	if err := f.Chmod(mode); err != nil {
+		f.Close()
+		return false, err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return false, err
+	}
+	if err := f.Close(); err != nil {
+		return false, err
+	}
+	return true, os.Rename(f.Name(), path)
+}
+
+func TestKeystoreCommandUsesMinimalEnvironment(t *testing.T) {
+	for _, key := range []string{"KARAKORAM_AGENT_TOKEN", "KARAKORAM_INTERNAL_CA", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "ES_JAVA_HOME", "JAVA_HOME", "CLI_JAVA_OPTS"} {
+		t.Setenv(key, "must-not-reach-keystore")
+	}
+	dir := t.TempDir()
+	capture := filepath.Join(dir, "environment")
+	env := []string{"HOME=" + dir, "ES_PATH_CONF=" + dir, "ES_TMPDIR=" + dir, "TMPDIR=" + dir}
+	if err := keystoreCommand(context.Background(), "/bin/sh", []string{"-c", `env > "$1"`, "keystore-test", capture}, env, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, "must-not-reach-keystore") {
+		t.Fatal("keystore inherited agent environment")
+	}
+	for _, entry := range env {
+		if !strings.Contains(text, entry+"\n") {
+			t.Fatal("missing keystore environment", entry)
+		}
+	}
+	if !strings.Contains(text, "PATH=") || !strings.Contains(text, "LANG=C.UTF-8\n") {
+		t.Fatal("missing process basics")
 	}
 }

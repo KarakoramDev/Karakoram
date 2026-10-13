@@ -35,7 +35,7 @@ import (
 type Host interface {
 	DataDir() string
 	WriteFile(rel string, data []byte, mode os.FileMode) error
-	Configure(name string, p Process)
+	Configure(name string, p Process) error
 	Action(ctx context.Context, name, action string) error
 	Running(name string) bool
 	Stopped(name string) bool
@@ -108,11 +108,13 @@ func (r *Runner) Apply(ctx context.Context, h Host, spec agentspec.Spec, cluster
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	home := r.home(spec)
-	files, proc, err := render(spec, h.DataDir(), home, cluster, member)
+	dataDir := filepath.Join(h.DataDir(), "karakoram")
+	files, proc, err := render(spec, dataDir, home, cluster, member)
 	if err != nil {
 		return nil, err
 	}
-	statePath := filepath.Join(h.DataDir(), "karakoram", "elastic-applied.json")
+	proc.Env = append(proc.Env, "HOME="+filepath.Join(dataDir, "home"), "TMPDIR="+filepath.Join(dataDir, "tmp"))
+	statePath := filepath.Join(dataDir, "elastic-applied.json")
 	var state applied
 	if data, e := os.ReadFile(statePath); e == nil {
 		if json.Unmarshal(data, &state) != nil {
@@ -121,17 +123,14 @@ func (r *Runner) Apply(ctx context.Context, h Host, spec agentspec.Spec, cluster
 	} else if !errors.Is(e, os.ErrNotExist) {
 		return nil, e
 	}
-	for _, rel := range []string{"config", "config/certs", "data", "logs", "tmp", "karakoram"} {
-		if err := privateDir(filepath.Join(h.DataDir(), rel)); err != nil {
+	for _, rel := range []string{"", "data", "logs", "tmp", "home"} {
+		if err := privateDir(filepath.Join(dataDir, rel)); err != nil {
 			return changes, err
 		}
 	}
 	if spec.Component == agentspec.ComponentElasticsearch || spec.Component == agentspec.ComponentLogstash {
-		if err := privateDir(filepath.Join(h.DataDir(), "config", "jvm.options.d")); err != nil {
-			return changes, err
-		}
 		for _, name := range []string{"jvm.options", "log4j2.properties"} {
-			dest := filepath.Join(h.DataDir(), "config", name)
+			dest := filepath.Join(dataDir, "config", name)
 			_, e := os.Stat(dest)
 			if state.Version != spec.Version || errors.Is(e, os.ErrNotExist) {
 				data, e := os.ReadFile(filepath.Join(home, "config", name))
@@ -150,7 +149,10 @@ func (r *Runner) Apply(ctx context.Context, h Host, spec agentspec.Spec, cluster
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		changed, e := atomicWrite(filepath.Join(h.DataDir(), name), files[name], 0600)
+		changed, e := fileChanged(dataDir, name, files[name], 0600)
+		if e == nil && changed {
+			e = h.WriteFile(name, files[name], 0600)
+		}
 		if e != nil {
 			return changes, fmt.Errorf("writing %s: %w", name, e)
 		}
@@ -160,12 +162,12 @@ func (r *Runner) Apply(ctx context.Context, h Host, spec agentspec.Spec, cluster
 	}
 	if spec.Component == agentspec.ComponentElasticsearch {
 		digest := secureDigest(spec.Elasticsearch.SecureSettings)
-		_, e := os.Stat(filepath.Join(h.DataDir(), "config", "elasticsearch.keystore"))
+		_, e := os.Stat(filepath.Join(dataDir, "config", "elasticsearch.keystore"))
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
 			return changes, e
 		}
 		if digest != state.SecureDigest || errors.Is(e, os.ErrNotExist) {
-			if e := r.keystore(ctx, home, filepath.Join(h.DataDir(), "config"), spec.Elasticsearch.SecureSettings); e != nil {
+			if e := r.keystore(ctx, h, home, filepath.Join(dataDir, "config"), spec.Elasticsearch.SecureSettings); e != nil {
 				return changes, e
 			}
 			changes = append(changes, "config/elasticsearch.keystore")
@@ -173,7 +175,9 @@ func (r *Runner) Apply(ctx context.Context, h Host, spec agentspec.Spec, cluster
 		}
 	}
 	state.Version = spec.Version
-	h.Configure(spec.Component, proc)
+	if err := h.Configure(spec.Component, proc); err != nil {
+		return changes, err
+	}
 	if !h.Maintenance() && !h.Stopped(spec.Component) {
 		action := ""
 		if !h.Running(spec.Component) {
@@ -212,41 +216,29 @@ func privateDir(path string) error {
 	return os.Chmod(path, 0700)
 }
 
-func atomicWrite(path string, data []byte, mode os.FileMode) (bool, error) {
-	old, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(old, data) {
-		info, err := os.Stat(path)
-		if err != nil {
-			return false, err
-		}
-		if info.Mode().Perm() == mode {
-			return false, nil
-		}
-		return true, os.Chmod(path, mode)
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
-	if err := privateDir(filepath.Dir(path)); err != nil {
-		return false, err
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".elastic-*")
+func fileChanged(dir, name string, data []byte, mode os.FileMode) (bool, error) {
+	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return false, err
 	}
-	defer os.Remove(f.Name())
-	if err := f.Chmod(mode); err != nil {
-		f.Close()
+	defer root.Close()
+	f, err := root.Open(name)
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
 		return false, err
 	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
+	defer f.Close()
+	old, err := io.ReadAll(f)
+	if err != nil {
 		return false, err
 	}
-	if err := f.Close(); err != nil {
+	info, err := f.Stat()
+	if err != nil {
 		return false, err
 	}
-	return true, os.Rename(f.Name(), path)
+	return !bytes.Equal(old, data) || info.Mode().Perm() != mode, nil
 }
 
 func secureDigest(settings map[string]string) string {
@@ -259,7 +251,7 @@ func secureDigest(settings map[string]string) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func (r *Runner) keystore(ctx context.Context, home, conf string, settings map[string]string) error {
+func (r *Runner) keystore(ctx context.Context, h Host, home, conf string, settings map[string]string) error {
 	dir, err := os.MkdirTemp(conf, ".keystore-*")
 	if err != nil {
 		return err
@@ -270,7 +262,13 @@ func (r *Runner) keystore(ctx context.Context, home, conf string, settings map[s
 		run = keystoreCommand
 	}
 	binary := filepath.Join(home, "bin", "elasticsearch-keystore")
-	env := []string{"ES_PATH_CONF=" + dir}
+	dataDir := filepath.Join(h.DataDir(), "karakoram")
+	env := []string{
+		"ES_PATH_CONF=" + dir,
+		"HOME=" + filepath.Join(dataDir, "home"),
+		"ES_TMPDIR=" + filepath.Join(dataDir, "tmp"),
+		"TMPDIR=" + filepath.Join(dataDir, "tmp"),
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	if err := run(ctx, binary, []string{"create"}, env, nil); err != nil {
@@ -286,16 +284,17 @@ func (r *Runner) keystore(ctx context.Context, home, conf string, settings map[s
 			return errors.New("adding Elasticsearch secure setting failed")
 		}
 	}
-	path := filepath.Join(dir, "elasticsearch.keystore")
-	if err := os.Chmod(path, 0600); err != nil {
+	data, err := os.ReadFile(filepath.Join(dir, "elasticsearch.keystore"))
+	if err != nil {
 		return err
 	}
-	return os.Rename(path, filepath.Join(conf, "elasticsearch.keystore"))
+	return h.WriteFile("config/elasticsearch.keystore", data, 0600)
 }
 
 func keystoreCommand(ctx context.Context, binary string, args, env []string, stdin io.Reader) error {
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Env = append(os.Environ(), env...)
+	// The product uses its bundled JDK; never inherit credentials or JVM flags.
+	cmd.Env = append([]string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C.UTF-8"}, env...)
 	cmd.Stdin = stdin
 	// Product CLI output can include secrets; never include it in errors or logs.
 	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard

@@ -17,7 +17,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/elastic"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 )
 
@@ -39,7 +41,12 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	s, token := namespaceTestServer(t)
 	ctx := t.Context()
 	var err error
-	s.Registry, err = engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}))
+	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), elastic.New(elastic.ProviderOptions{}), rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	elasticRegistry := s.Registry
+	rabbitRegistry, err := engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}), elastic.New(elastic.ProviderOptions{}), rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +107,10 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	for _, path := range paths {
 		operationID := doc.Paths.Value(path).Get.OperationID
 		t.Run(operationID, func(t *testing.T) {
+			s.Registry = elasticRegistry
+			if strings.Contains(path, "/rabbitmq/") {
+				s.Registry = rabbitRegistry
+			}
 			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
 			if path == "/healthz" || path == "/metrics" {
 				url = path
@@ -145,6 +156,9 @@ func TestEveryGETResponseConforms(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	t.Run("rabbitmq-native", testRabbitMQNativeGETResponses)
+	if w := call(s, "GET", "/api/v1/providers/elasticsearch", "", token); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
 }
 
 func TestOpenAPISpecIsPublicAndCacheable(t *testing.T) {

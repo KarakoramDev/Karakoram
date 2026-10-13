@@ -27,8 +27,9 @@ const (
 
 // Role is the provider's JSON/YAML security privilege definition.
 type Role struct {
-	Cluster []string          `json:"cluster" yaml:"cluster"`
-	Indices []IndexPrivileges `json:"indices" yaml:"indices"`
+	Cluster      []string                `json:"cluster" yaml:"cluster"`
+	Indices      []IndexPrivileges       `json:"indices" yaml:"indices"`
+	Applications []ApplicationPrivileges `json:"applications,omitempty" yaml:"applications,omitempty"`
 }
 
 // IndexPrivileges grants privileges over a set of index patterns.
@@ -36,6 +37,13 @@ type IndexPrivileges struct {
 	Names                  []string `json:"names" yaml:"names"`
 	Privileges             []string `json:"privileges" yaml:"privileges"`
 	AllowRestrictedIndices bool     `json:"allow_restricted_indices" yaml:"allow_restricted_indices"`
+}
+
+// ApplicationPrivileges grants application-defined privileges.
+type ApplicationPrivileges struct {
+	Application string   `json:"application" yaml:"application"`
+	Privileges  []string `json:"privileges" yaml:"privileges"`
+	Resources   []string `json:"resources" yaml:"resources"`
 }
 
 // MonitorRoleDefinition returns fresh slices for the least-privilege monitor.

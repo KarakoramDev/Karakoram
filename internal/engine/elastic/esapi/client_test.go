@@ -6,6 +6,7 @@ package esapi
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -339,7 +340,9 @@ func TestErrorsAndFailover(t *testing.T) {
 func TestTLSAndConfig(t *testing.T) {
 	c, s := testClient(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{}`) })
 	tr := c.http.Transport.(*http.Transport)
-	if tr.TLSClientConfig.MinVersion != tls.VersionTLS12 || tr.TLSClientConfig.InsecureSkipVerify || len(tr.TLSClientConfig.RootCAs.Subjects()) != 1 {
+	expectedRoots := x509.NewCertPool()
+	expectedRoots.AddCert(s.Certificate())
+	if tr.TLSClientConfig.MinVersion != tls.VersionTLS12 || tr.TLSClientConfig.InsecureSkipVerify || tr.TLSClientConfig.RootCAs == nil || !tr.TLSClientConfig.RootCAs.Equal(expectedRoots) {
 		t.Error("unpinned TLS")
 	}
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.Certificate().Raw})

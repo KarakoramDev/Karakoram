@@ -35,6 +35,20 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Operation = op.Id
 	}
 	switch name {
+	case "CreateElasticUser":
+		e.Target = in.Cluster + "/" + in.Body.(*api.ElasticUserCreate).Username
+	case "UpdateElasticUser", "DeleteElasticUser":
+		e.Target = in.Cluster + "/" + in.Username
+	case "CreateElasticRole":
+		e.Target = in.Cluster + "/" + in.Body.(*api.ElasticRoleInput).Name
+	case "UpdateElasticRole", "DeleteElasticRole":
+		e.Target = in.Cluster + "/" + in.Role
+	case "CreateElasticAPIKey":
+		if k, ok := result.body.(api.ElasticAPIKeyCreated); ok {
+			e.Target = in.Cluster + "/" + k.Id
+		}
+	case "InvalidateElasticAPIKey":
+		e.Target = in.Cluster + "/" + in.Token
 	case "CreateCluster":
 		b := in.Body.(*api.CreateClusterRequest)
 		e.Cluster, e.Target, e.Reason = b.Name, b.Name, "ClusterCreateRequested"

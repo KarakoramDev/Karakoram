@@ -107,7 +107,11 @@ func TestSecuredElasticsearchDocker(t *testing.T) {
 	r.KeystoreCommand = func(cmdCtx context.Context, _ string, args, env []string, stdin io.Reader) error {
 		keystoreCalls++
 		owner(h.dir)
-		dockerArgs := []string{"run", "--rm", "-i", "--pull=never", "--network", "none", "--user", user, "-v", mount, "-e", env[0], "--entrypoint", "/usr/share/elasticsearch/bin/elasticsearch-keystore", image}
+		dockerArgs := []string{"run", "--rm", "-i", "--pull=never", "--network", "none", "--user", user, "-v", mount}
+		for _, value := range env {
+			dockerArgs = append(dockerArgs, "-e", value)
+		}
+		dockerArgs = append(dockerArgs, "--entrypoint", "/usr/share/elasticsearch/bin/elasticsearch-keystore", image)
 		dockerArgs = append(dockerArgs, args...)
 		cmd := exec.CommandContext(cmdCtx, "docker", dockerArgs...)
 		cmd.Stdin = stdin
@@ -124,7 +128,7 @@ func TestSecuredElasticsearchDocker(t *testing.T) {
 		t.Fatal("unchanged secure settings rebuilt real keystore")
 	}
 	owner(h.dir)
-	container := docker("run", "-d", "--pull=never", "--hostname", "elastic-node", "--user", user, "--memory", "2g", "--ulimit", "nofile=65535:65535", "-p", "127.0.0.1::9200", "-v", mount, "-e", "ES_PATH_CONF="+filepath.Join(h.dir, "config"), "-e", "ES_TMPDIR="+filepath.Join(h.dir, "tmp"), image)
+	container := docker("run", "-d", "--pull=never", "--hostname", "elastic-node", "--user", user, "--memory", "2g", "--ulimit", "nofile=65535:65535", "-p", "127.0.0.1::9200", "-v", mount, "-e", "HOME="+filepath.Join(h.dir, "karakoram", "home"), "-e", "TMPDIR="+filepath.Join(h.dir, "karakoram", "tmp"), "-e", "ES_PATH_CONF="+filepath.Join(h.dir, "karakoram", "config"), "-e", "ES_TMPDIR="+filepath.Join(h.dir, "karakoram", "tmp"), image)
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", container).Run() })
 	binding := docker("port", container, "9200/tcp")
 	roots := x509.NewCertPool()

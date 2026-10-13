@@ -141,10 +141,16 @@ const (
 
 // Defines values for MemberRole.
 const (
+	MemberRoleApm             MemberRole = "apm"
 	MemberRoleArbiter         MemberRole = "arbiter"
 	MemberRoleBroker          MemberRole = "broker"
 	MemberRoleConfigPrimary   MemberRole = "config-primary"
 	MemberRoleConfigSecondary MemberRole = "config-secondary"
+	MemberRoleData            MemberRole = "data"
+	MemberRoleKibana          MemberRole = "kibana"
+	MemberRoleLogstash        MemberRole = "logstash"
+	MemberRoleMaster          MemberRole = "master"
+	MemberRoleMasterdata      MemberRole = "master,data"
 	MemberRolePrimary         MemberRole = "primary"
 	MemberRoleRouter          MemberRole = "router"
 	MemberRoleSecondary       MemberRole = "secondary"
@@ -303,13 +309,19 @@ const (
 
 // Defines values for SystemUserName.
 const (
-	SystemUserNameAdmin          SystemUserName = "admin"
-	SystemUserNameBackup         SystemUserName = "backup"
-	SystemUserNameClusterAdmin   SystemUserName = "clusterAdmin"
-	SystemUserNameClusterMonitor SystemUserName = "clusterMonitor"
-	SystemUserNameDatabaseAdmin  SystemUserName = "databaseAdmin"
-	SystemUserNameKarakoram      SystemUserName = "karakoram"
-	SystemUserNameUserAdmin      SystemUserName = "userAdmin"
+	SystemUserNameAdmin             SystemUserName = "admin"
+	SystemUserNameApmSecretToken    SystemUserName = "apm-secret-token"
+	SystemUserNameBackup            SystemUserName = "backup"
+	SystemUserNameClusterAdmin      SystemUserName = "clusterAdmin"
+	SystemUserNameClusterMonitor    SystemUserName = "clusterMonitor"
+	SystemUserNameDatabaseAdmin     SystemUserName = "databaseAdmin"
+	SystemUserNameElastic           SystemUserName = "elastic"
+	SystemUserNameKarakoram         SystemUserName = "karakoram"
+	SystemUserNameKarakoramApm      SystemUserName = "karakoram_apm"
+	SystemUserNameKarakoramLogstash SystemUserName = "karakoram_logstash"
+	SystemUserNameKarakoramMonitor  SystemUserName = "karakoram-monitor"
+	SystemUserNameKibanaToken       SystemUserName = "kibana-token"
+	SystemUserNameUserAdmin         SystemUserName = "userAdmin"
 )
 
 // Defines values for TLSCa.
@@ -1070,6 +1082,122 @@ type DatabaseUserList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// ElasticAPIKey Only API keys created through Karakoram are visible.
+type ElasticAPIKey struct {
+	Creation    int64  `json:"creation"`
+	Expiration  *int64 `json:"expiration,omitempty"`
+	Id          string `json:"id"`
+	Invalidated bool   `json:"invalidated"`
+	Name        string `json:"name"`
+	Username    string `json:"username"`
+}
+
+// ElasticAPIKeyCreate defines model for ElasticAPIKeyCreate.
+type ElasticAPIKeyCreate struct {
+	// Expiration Elasticsearch duration, for example 1d.
+	Expiration      *string                           `json:"expiration,omitempty"`
+	Name            string                            `json:"name"`
+	RoleDescriptors *map[string]ElasticRoleDescriptor `json:"roleDescriptors,omitempty"`
+}
+
+// ElasticAPIKeyCreated Sensitive one-time API key secret; never cached. Store it securely.
+type ElasticAPIKeyCreated struct {
+	ApiKey  string `json:"apiKey"`
+	Encoded string `json:"encoded"`
+
+	// Expiration Unix milliseconds.
+	Expiration *int64 `json:"expiration,omitempty"`
+	Id         string `json:"id"`
+	Name       string `json:"name"`
+}
+
+// ElasticAPIKeyList defines model for ElasticAPIKeyList.
+type ElasticAPIKeyList struct {
+	Items      []ElasticAPIKey `json:"items"`
+	NextCursor *string         `json:"nextCursor,omitempty"`
+}
+
+// ElasticApplicationPrivileges defines model for ElasticApplicationPrivileges.
+type ElasticApplicationPrivileges struct {
+	Application string   `json:"application"`
+	Privileges  []string `json:"privileges"`
+	Resources   []string `json:"resources"`
+}
+
+// ElasticIndexPrivileges defines model for ElasticIndexPrivileges.
+type ElasticIndexPrivileges struct {
+	AllowRestrictedIndices bool     `json:"allowRestrictedIndices"`
+	Names                  []string `json:"names"`
+	Privileges             []string `json:"privileges"`
+}
+
+// ElasticRole Built-in roles are readable but immutable; Karakoram-managed roles are hidden.
+type ElasticRole struct {
+	Applications []ElasticApplicationPrivileges `json:"applications"`
+	Cluster      []string                       `json:"cluster"`
+	Indices      []ElasticIndexPrivileges       `json:"indices"`
+	Name         string                         `json:"name"`
+
+	// Reserved Built-in roles cannot be changed or deleted.
+	Reserved *bool `json:"reserved,omitempty"`
+}
+
+// ElasticRoleDescriptor defines model for ElasticRoleDescriptor.
+type ElasticRoleDescriptor struct {
+	Applications []ElasticApplicationPrivileges `json:"applications"`
+	Cluster      []string                       `json:"cluster"`
+	Indices      []ElasticIndexPrivileges       `json:"indices"`
+}
+
+// ElasticRoleInput defines model for ElasticRoleInput.
+type ElasticRoleInput struct {
+	Applications []ElasticApplicationPrivileges `json:"applications"`
+	Cluster      []string                       `json:"cluster"`
+	Indices      []ElasticIndexPrivileges       `json:"indices"`
+	Name         string                         `json:"name"`
+}
+
+// ElasticRoleList defines model for ElasticRoleList.
+type ElasticRoleList struct {
+	Items      []ElasticRole `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// ElasticUser Native realm user. Reserved and Karakoram-managed identities are hidden.
+type ElasticUser struct {
+	Email    *string  `json:"email,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	FullName *string  `json:"fullName,omitempty"`
+	Roles    []string `json:"roles"`
+	Username string   `json:"username"`
+}
+
+// ElasticUserCreate defines model for ElasticUserCreate.
+type ElasticUserCreate struct {
+	Email    *string  `json:"email,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	FullName *string  `json:"fullName,omitempty"`
+	Password *string  `json:"password,omitempty"`
+	Roles    []string `json:"roles"`
+	Username string   `json:"username"`
+}
+
+// ElasticUserList defines model for ElasticUserList.
+type ElasticUserList struct {
+	Items      []ElasticUser `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// ElasticUserWrite defines model for ElasticUserWrite.
+type ElasticUserWrite struct {
+	Email    *string  `json:"email,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	FullName *string  `json:"fullName,omitempty"`
+	Password *string  `json:"password,omitempty"`
+	Roles    []string `json:"roles"`
+	Username string   `json:"username"`
+}
+
 // Endpoint defines model for Endpoint.
 type Endpoint struct {
 	Name   string `json:"name"`
@@ -1222,7 +1350,7 @@ type Member struct {
 	// Resources Infrastructure resources currently allocated to the member container.
 	Resources *ObservedResources `json:"resources,omitempty"`
 
-	// Role Member role; broker identifies a RabbitMQ broker.
+	// Role Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
 	Role    MemberRole `json:"role"`
 	Set     string     `json:"set"`
 	State   string     `json:"state"`
@@ -1230,7 +1358,7 @@ type Member struct {
 	Version *string    `json:"version,omitempty"`
 }
 
-// MemberRole Member role; broker identifies a RabbitMQ broker.
+// MemberRole Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
 type MemberRole string
 
 // MemberList defines model for MemberList.
@@ -2672,6 +2800,126 @@ type ReplaceDatabaseUserParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListElasticAPIKeysParams defines parameters for ListElasticAPIKeys.
+type ListElasticAPIKeysParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateElasticAPIKeyParams defines parameters for CreateElasticAPIKey.
+type CreateElasticAPIKeyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// InvalidateElasticAPIKeyParams defines parameters for InvalidateElasticAPIKey.
+type InvalidateElasticAPIKeyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListElasticRolesParams defines parameters for ListElasticRoles.
+type ListElasticRolesParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateElasticRoleParams defines parameters for CreateElasticRole.
+type CreateElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteElasticRoleParams defines parameters for DeleteElasticRole.
+type DeleteElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetElasticRoleParams defines parameters for GetElasticRole.
+type GetElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateElasticRoleParams defines parameters for UpdateElasticRole.
+type UpdateElasticRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListElasticUsersParams defines parameters for ListElasticUsers.
+type ListElasticUsersParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateElasticUserParams defines parameters for CreateElasticUser.
+type CreateElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteElasticUserParams defines parameters for DeleteElasticUser.
+type DeleteElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetElasticUserParams defines parameters for GetElasticUser.
+type GetElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateElasticUserParams defines parameters for UpdateElasticUser.
+type UpdateElasticUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListClusterMembersParams defines parameters for ListClusterMembers.
 type ListClusterMembersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -3567,6 +3815,21 @@ type CreateDatabaseUserJSONRequestBody = CreateDatabaseUserRequest
 // ReplaceDatabaseUserJSONRequestBody defines body for ReplaceDatabaseUser for application/json ContentType.
 type ReplaceDatabaseUserJSONRequestBody = UpdateDatabaseUserRequest
 
+// CreateElasticAPIKeyJSONRequestBody defines body for CreateElasticAPIKey for application/json ContentType.
+type CreateElasticAPIKeyJSONRequestBody = ElasticAPIKeyCreate
+
+// CreateElasticRoleJSONRequestBody defines body for CreateElasticRole for application/json ContentType.
+type CreateElasticRoleJSONRequestBody = ElasticRoleInput
+
+// UpdateElasticRoleJSONRequestBody defines body for UpdateElasticRole for application/json ContentType.
+type UpdateElasticRoleJSONRequestBody = ElasticRoleInput
+
+// CreateElasticUserJSONRequestBody defines body for CreateElasticUser for application/json ContentType.
+type CreateElasticUserJSONRequestBody = ElasticUserCreate
+
+// UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
+type UpdateElasticUserJSONRequestBody = ElasticUserWrite
+
 // CreateRabbitMQOperatorPolicyJSONRequestBody defines body for CreateRabbitMQOperatorPolicy for application/json ContentType.
 type CreateRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
 
@@ -3894,6 +4157,45 @@ type ServerInterface interface {
 	// Replace application user roles and optionally password
 	// (PUT /clusters/{cluster}/database-users/{database}/{username})
 	ReplaceDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string, params ReplaceDatabaseUserParams)
+	// List Elasticsearch api-keys
+	// (GET /clusters/{cluster}/elasticsearch/api-keys)
+	ListElasticAPIKeys(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListElasticAPIKeysParams)
+	// Create Elasticsearch api-keys
+	// (POST /clusters/{cluster}/elasticsearch/api-keys)
+	CreateElasticAPIKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateElasticAPIKeyParams)
+	// Invalidate Elasticsearch api-keys
+	// (DELETE /clusters/{cluster}/elasticsearch/api-keys/{id})
+	InvalidateElasticAPIKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, id string, params InvalidateElasticAPIKeyParams)
+	// List Elasticsearch roles
+	// (GET /clusters/{cluster}/elasticsearch/roles)
+	ListElasticRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListElasticRolesParams)
+	// Create Elasticsearch roles
+	// (POST /clusters/{cluster}/elasticsearch/roles)
+	CreateElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateElasticRoleParams)
+	// Delete Elasticsearch roles
+	// (DELETE /clusters/{cluster}/elasticsearch/roles/{role})
+	DeleteElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeleteElasticRoleParams)
+	// Get Elasticsearch roles
+	// (GET /clusters/{cluster}/elasticsearch/roles/{role})
+	GetElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetElasticRoleParams)
+	// Update Elasticsearch roles
+	// (PUT /clusters/{cluster}/elasticsearch/roles/{role})
+	UpdateElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdateElasticRoleParams)
+	// List Elasticsearch users
+	// (GET /clusters/{cluster}/elasticsearch/users)
+	ListElasticUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListElasticUsersParams)
+	// Create Elasticsearch users
+	// (POST /clusters/{cluster}/elasticsearch/users)
+	CreateElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateElasticUserParams)
+	// Delete Elasticsearch users
+	// (DELETE /clusters/{cluster}/elasticsearch/users/{username})
+	DeleteElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, username string, params DeleteElasticUserParams)
+	// Get Elasticsearch users
+	// (GET /clusters/{cluster}/elasticsearch/users/{username})
+	GetElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, username string, params GetElasticUserParams)
+	// Update Elasticsearch users
+	// (PUT /clusters/{cluster}/elasticsearch/users/{username})
+	UpdateElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, username string, params UpdateElasticUserParams)
 	// Read member health, role and replica lag
 	// (GET /clusters/{cluster}/members)
 	ListClusterMembers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListClusterMembersParams)
@@ -6977,6 +7279,857 @@ func (siw *ServerInterfaceWrapper) ReplaceDatabaseUser(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceDatabaseUser(w, r, cluster, database, username, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListElasticAPIKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListElasticAPIKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListElasticAPIKeysParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListElasticAPIKeys(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateElasticAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateElasticAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateElasticAPIKeyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateElasticAPIKey(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InvalidateElasticAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) InvalidateElasticAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params InvalidateElasticAPIKeyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InvalidateElasticAPIKey(w, r, cluster, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListElasticRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListElasticRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListElasticRolesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListElasticRoles(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateElasticRole operation middleware
+func (siw *ServerInterfaceWrapper) CreateElasticRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateElasticRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateElasticRole(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteElasticRole operation middleware
+func (siw *ServerInterfaceWrapper) DeleteElasticRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteElasticRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteElasticRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetElasticRole operation middleware
+func (siw *ServerInterfaceWrapper) GetElasticRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetElasticRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetElasticRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateElasticRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdateElasticRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateElasticRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateElasticRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListElasticUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListElasticUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListElasticUsersParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListElasticUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateElasticUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateElasticUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateElasticUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateElasticUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteElasticUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteElasticUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "username" -------------
+	var username string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "username", r.PathValue("username"), &username, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "username", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteElasticUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteElasticUser(w, r, cluster, username, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetElasticUser operation middleware
+func (siw *ServerInterfaceWrapper) GetElasticUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "username" -------------
+	var username string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "username", r.PathValue("username"), &username, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "username", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetElasticUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetElasticUser(w, r, cluster, username, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateElasticUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateElasticUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "username" -------------
+	var username string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "username", r.PathValue("username"), &username, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "username", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateElasticUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateElasticUser(w, r, cluster, username, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -11662,6 +12815,19 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/database-users/{database}/{username}", wrapper.DeleteDatabaseUser)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/database-users/{database}/{username}", wrapper.GetDatabaseUser)
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/database-users/{database}/{username}", wrapper.ReplaceDatabaseUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/elasticsearch/api-keys", wrapper.ListElasticAPIKeys)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/elasticsearch/api-keys", wrapper.CreateElasticAPIKey)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/elasticsearch/api-keys/{id}", wrapper.InvalidateElasticAPIKey)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/elasticsearch/roles", wrapper.ListElasticRoles)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/elasticsearch/roles", wrapper.CreateElasticRole)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/elasticsearch/roles/{role}", wrapper.DeleteElasticRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/elasticsearch/roles/{role}", wrapper.GetElasticRole)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/elasticsearch/roles/{role}", wrapper.UpdateElasticRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/elasticsearch/users", wrapper.ListElasticUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/elasticsearch/users", wrapper.CreateElasticUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/elasticsearch/users/{username}", wrapper.DeleteElasticUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/elasticsearch/users/{username}", wrapper.GetElasticUser)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/elasticsearch/users/{username}", wrapper.UpdateElasticUser)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members", wrapper.ListClusterMembers)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members/{member}", wrapper.GetClusterMember)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members/{member}/logs", wrapper.GetMemberLogs)
@@ -17514,6 +18680,1037 @@ func (response ReplaceDatabaseUser415JSONResponse) VisitReplaceDatabaseUserRespo
 type ReplaceDatabaseUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceDatabaseUser500JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticAPIKeysRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListElasticAPIKeysParams
+}
+
+type ListElasticAPIKeysResponseObject interface {
+	VisitListElasticAPIKeysResponse(w http.ResponseWriter) error
+}
+
+type ListElasticAPIKeys200JSONResponse ElasticAPIKeyList
+
+func (response ListElasticAPIKeys200JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListElasticAPIKeys400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListElasticAPIKeys400JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticAPIKeys401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListElasticAPIKeys401JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticAPIKeys403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListElasticAPIKeys403JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticAPIKeys404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListElasticAPIKeys404JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticAPIKeys409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListElasticAPIKeys409JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticAPIKeys500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListElasticAPIKeys500JSONResponse) VisitListElasticAPIKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKeyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateElasticAPIKeyParams
+	Body    *CreateElasticAPIKeyJSONRequestBody
+}
+
+type CreateElasticAPIKeyResponseObject interface {
+	VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error
+}
+
+type CreateElasticAPIKey201ResponseHeaders struct {
+	CacheControl string
+}
+
+type CreateElasticAPIKey201JSONResponse struct {
+	Body    ElasticAPIKeyCreated
+	Headers CreateElasticAPIKey201ResponseHeaders
+}
+
+func (response CreateElasticAPIKey201JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKey400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateElasticAPIKey400JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKey401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateElasticAPIKey401JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKey403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateElasticAPIKey403JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKey404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateElasticAPIKey404JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKey409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateElasticAPIKey409JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticAPIKey500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateElasticAPIKey500JSONResponse) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type InvalidateElasticAPIKeyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Id      string      `json:"id"`
+	Params  InvalidateElasticAPIKeyParams
+}
+
+type InvalidateElasticAPIKeyResponseObject interface {
+	VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error
+}
+
+type InvalidateElasticAPIKey204Response struct {
+}
+
+func (response InvalidateElasticAPIKey204Response) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type InvalidateElasticAPIKey400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response InvalidateElasticAPIKey400JSONResponse) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type InvalidateElasticAPIKey401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response InvalidateElasticAPIKey401JSONResponse) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type InvalidateElasticAPIKey403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response InvalidateElasticAPIKey403JSONResponse) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type InvalidateElasticAPIKey404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response InvalidateElasticAPIKey404JSONResponse) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type InvalidateElasticAPIKey409JSONResponse struct{ ConflictJSONResponse }
+
+func (response InvalidateElasticAPIKey409JSONResponse) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type InvalidateElasticAPIKey500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response InvalidateElasticAPIKey500JSONResponse) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticRolesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListElasticRolesParams
+}
+
+type ListElasticRolesResponseObject interface {
+	VisitListElasticRolesResponse(w http.ResponseWriter) error
+}
+
+type ListElasticRoles200JSONResponse ElasticRoleList
+
+func (response ListElasticRoles200JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListElasticRoles400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListElasticRoles400JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticRoles401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListElasticRoles401JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticRoles403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListElasticRoles403JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticRoles404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListElasticRoles404JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticRoles409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListElasticRoles409JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticRoles500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListElasticRoles500JSONResponse) VisitListElasticRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateElasticRoleParams
+	Body    *CreateElasticRoleJSONRequestBody
+}
+
+type CreateElasticRoleResponseObject interface {
+	VisitCreateElasticRoleResponse(w http.ResponseWriter) error
+}
+
+type CreateElasticRole201JSONResponse ElasticRole
+
+func (response CreateElasticRole201JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateElasticRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateElasticRole400JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateElasticRole401JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateElasticRole403JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateElasticRole404JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateElasticRole409JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateElasticRole500JSONResponse) VisitCreateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  DeleteElasticRoleParams
+}
+
+type DeleteElasticRoleResponseObject interface {
+	VisitDeleteElasticRoleResponse(w http.ResponseWriter) error
+}
+
+type DeleteElasticRole204Response struct {
+}
+
+func (response DeleteElasticRole204Response) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteElasticRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteElasticRole400JSONResponse) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteElasticRole401JSONResponse) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteElasticRole403JSONResponse) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteElasticRole404JSONResponse) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteElasticRole409JSONResponse) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteElasticRole500JSONResponse) VisitDeleteElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  GetElasticRoleParams
+}
+
+type GetElasticRoleResponseObject interface {
+	VisitGetElasticRoleResponse(w http.ResponseWriter) error
+}
+
+type GetElasticRole200JSONResponse ElasticRole
+
+func (response GetElasticRole200JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetElasticRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetElasticRole400JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetElasticRole401JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetElasticRole403JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetElasticRole404JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetElasticRole409JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetElasticRole500JSONResponse) VisitGetElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  UpdateElasticRoleParams
+	Body    *UpdateElasticRoleJSONRequestBody
+}
+
+type UpdateElasticRoleResponseObject interface {
+	VisitUpdateElasticRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdateElasticRole200JSONResponse ElasticRole
+
+func (response UpdateElasticRole200JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateElasticRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateElasticRole400JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateElasticRole401JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateElasticRole403JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateElasticRole404JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateElasticRole409JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateElasticRole500JSONResponse) VisitUpdateElasticRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListElasticUsersParams
+}
+
+type ListElasticUsersResponseObject interface {
+	VisitListElasticUsersResponse(w http.ResponseWriter) error
+}
+
+type ListElasticUsers200JSONResponse ElasticUserList
+
+func (response ListElasticUsers200JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListElasticUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListElasticUsers400JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListElasticUsers401JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListElasticUsers403JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListElasticUsers404JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListElasticUsers409JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListElasticUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListElasticUsers500JSONResponse) VisitListElasticUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateElasticUserParams
+	Body    *CreateElasticUserJSONRequestBody
+}
+
+type CreateElasticUserResponseObject interface {
+	VisitCreateElasticUserResponse(w http.ResponseWriter) error
+}
+
+type CreateElasticUser201JSONResponse ElasticUser
+
+func (response CreateElasticUser201JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateElasticUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateElasticUser400JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateElasticUser401JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateElasticUser403JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateElasticUser404JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateElasticUser409JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateElasticUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateElasticUser500JSONResponse) VisitCreateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticUserRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Username string      `json:"username"`
+	Params   DeleteElasticUserParams
+}
+
+type DeleteElasticUserResponseObject interface {
+	VisitDeleteElasticUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteElasticUser204Response struct {
+}
+
+func (response DeleteElasticUser204Response) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteElasticUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteElasticUser400JSONResponse) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteElasticUser401JSONResponse) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteElasticUser403JSONResponse) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteElasticUser404JSONResponse) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteElasticUser409JSONResponse) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteElasticUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteElasticUser500JSONResponse) VisitDeleteElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticUserRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Username string      `json:"username"`
+	Params   GetElasticUserParams
+}
+
+type GetElasticUserResponseObject interface {
+	VisitGetElasticUserResponse(w http.ResponseWriter) error
+}
+
+type GetElasticUser200JSONResponse ElasticUser
+
+func (response GetElasticUser200JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetElasticUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetElasticUser400JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetElasticUser401JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetElasticUser403JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetElasticUser404JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetElasticUser409JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetElasticUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetElasticUser500JSONResponse) VisitGetElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticUserRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Username string      `json:"username"`
+	Params   UpdateElasticUserParams
+	Body     *UpdateElasticUserJSONRequestBody
+}
+
+type UpdateElasticUserResponseObject interface {
+	VisitUpdateElasticUserResponse(w http.ResponseWriter) error
+}
+
+type UpdateElasticUser200JSONResponse ElasticUser
+
+func (response UpdateElasticUser200JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateElasticUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateElasticUser400JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateElasticUser401JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateElasticUser403JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateElasticUser404JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateElasticUser409JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateElasticUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateElasticUser500JSONResponse) VisitUpdateElasticUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
@@ -25026,6 +27223,45 @@ type StrictServerInterface interface {
 	// Replace application user roles and optionally password
 	// (PUT /clusters/{cluster}/database-users/{database}/{username})
 	ReplaceDatabaseUser(ctx context.Context, request ReplaceDatabaseUserRequestObject) (ReplaceDatabaseUserResponseObject, error)
+	// List Elasticsearch api-keys
+	// (GET /clusters/{cluster}/elasticsearch/api-keys)
+	ListElasticAPIKeys(ctx context.Context, request ListElasticAPIKeysRequestObject) (ListElasticAPIKeysResponseObject, error)
+	// Create Elasticsearch api-keys
+	// (POST /clusters/{cluster}/elasticsearch/api-keys)
+	CreateElasticAPIKey(ctx context.Context, request CreateElasticAPIKeyRequestObject) (CreateElasticAPIKeyResponseObject, error)
+	// Invalidate Elasticsearch api-keys
+	// (DELETE /clusters/{cluster}/elasticsearch/api-keys/{id})
+	InvalidateElasticAPIKey(ctx context.Context, request InvalidateElasticAPIKeyRequestObject) (InvalidateElasticAPIKeyResponseObject, error)
+	// List Elasticsearch roles
+	// (GET /clusters/{cluster}/elasticsearch/roles)
+	ListElasticRoles(ctx context.Context, request ListElasticRolesRequestObject) (ListElasticRolesResponseObject, error)
+	// Create Elasticsearch roles
+	// (POST /clusters/{cluster}/elasticsearch/roles)
+	CreateElasticRole(ctx context.Context, request CreateElasticRoleRequestObject) (CreateElasticRoleResponseObject, error)
+	// Delete Elasticsearch roles
+	// (DELETE /clusters/{cluster}/elasticsearch/roles/{role})
+	DeleteElasticRole(ctx context.Context, request DeleteElasticRoleRequestObject) (DeleteElasticRoleResponseObject, error)
+	// Get Elasticsearch roles
+	// (GET /clusters/{cluster}/elasticsearch/roles/{role})
+	GetElasticRole(ctx context.Context, request GetElasticRoleRequestObject) (GetElasticRoleResponseObject, error)
+	// Update Elasticsearch roles
+	// (PUT /clusters/{cluster}/elasticsearch/roles/{role})
+	UpdateElasticRole(ctx context.Context, request UpdateElasticRoleRequestObject) (UpdateElasticRoleResponseObject, error)
+	// List Elasticsearch users
+	// (GET /clusters/{cluster}/elasticsearch/users)
+	ListElasticUsers(ctx context.Context, request ListElasticUsersRequestObject) (ListElasticUsersResponseObject, error)
+	// Create Elasticsearch users
+	// (POST /clusters/{cluster}/elasticsearch/users)
+	CreateElasticUser(ctx context.Context, request CreateElasticUserRequestObject) (CreateElasticUserResponseObject, error)
+	// Delete Elasticsearch users
+	// (DELETE /clusters/{cluster}/elasticsearch/users/{username})
+	DeleteElasticUser(ctx context.Context, request DeleteElasticUserRequestObject) (DeleteElasticUserResponseObject, error)
+	// Get Elasticsearch users
+	// (GET /clusters/{cluster}/elasticsearch/users/{username})
+	GetElasticUser(ctx context.Context, request GetElasticUserRequestObject) (GetElasticUserResponseObject, error)
+	// Update Elasticsearch users
+	// (PUT /clusters/{cluster}/elasticsearch/users/{username})
+	UpdateElasticUser(ctx context.Context, request UpdateElasticUserRequestObject) (UpdateElasticUserResponseObject, error)
 	// Read member health, role and replica lag
 	// (GET /clusters/{cluster}/members)
 	ListClusterMembers(ctx context.Context, request ListClusterMembersRequestObject) (ListClusterMembersResponseObject, error)
@@ -26659,6 +28895,399 @@ func (sh *strictHandler) ReplaceDatabaseUser(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceDatabaseUserResponseObject); ok {
 		if err := validResponse.VisitReplaceDatabaseUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListElasticAPIKeys operation middleware
+func (sh *strictHandler) ListElasticAPIKeys(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListElasticAPIKeysParams) {
+	var request ListElasticAPIKeysRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListElasticAPIKeys(ctx, request.(ListElasticAPIKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListElasticAPIKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListElasticAPIKeysResponseObject); ok {
+		if err := validResponse.VisitListElasticAPIKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateElasticAPIKey operation middleware
+func (sh *strictHandler) CreateElasticAPIKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateElasticAPIKeyParams) {
+	var request CreateElasticAPIKeyRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateElasticAPIKeyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateElasticAPIKey(ctx, request.(CreateElasticAPIKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateElasticAPIKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateElasticAPIKeyResponseObject); ok {
+		if err := validResponse.VisitCreateElasticAPIKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// InvalidateElasticAPIKey operation middleware
+func (sh *strictHandler) InvalidateElasticAPIKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, id string, params InvalidateElasticAPIKeyParams) {
+	var request InvalidateElasticAPIKeyRequestObject
+
+	request.Cluster = cluster
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.InvalidateElasticAPIKey(ctx, request.(InvalidateElasticAPIKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "InvalidateElasticAPIKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(InvalidateElasticAPIKeyResponseObject); ok {
+		if err := validResponse.VisitInvalidateElasticAPIKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListElasticRoles operation middleware
+func (sh *strictHandler) ListElasticRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListElasticRolesParams) {
+	var request ListElasticRolesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListElasticRoles(ctx, request.(ListElasticRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListElasticRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListElasticRolesResponseObject); ok {
+		if err := validResponse.VisitListElasticRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateElasticRole operation middleware
+func (sh *strictHandler) CreateElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateElasticRoleParams) {
+	var request CreateElasticRoleRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateElasticRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateElasticRole(ctx, request.(CreateElasticRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateElasticRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateElasticRoleResponseObject); ok {
+		if err := validResponse.VisitCreateElasticRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteElasticRole operation middleware
+func (sh *strictHandler) DeleteElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeleteElasticRoleParams) {
+	var request DeleteElasticRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteElasticRole(ctx, request.(DeleteElasticRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteElasticRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteElasticRoleResponseObject); ok {
+		if err := validResponse.VisitDeleteElasticRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetElasticRole operation middleware
+func (sh *strictHandler) GetElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetElasticRoleParams) {
+	var request GetElasticRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetElasticRole(ctx, request.(GetElasticRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetElasticRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetElasticRoleResponseObject); ok {
+		if err := validResponse.VisitGetElasticRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateElasticRole operation middleware
+func (sh *strictHandler) UpdateElasticRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdateElasticRoleParams) {
+	var request UpdateElasticRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	var body UpdateElasticRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateElasticRole(ctx, request.(UpdateElasticRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateElasticRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateElasticRoleResponseObject); ok {
+		if err := validResponse.VisitUpdateElasticRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListElasticUsers operation middleware
+func (sh *strictHandler) ListElasticUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListElasticUsersParams) {
+	var request ListElasticUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListElasticUsers(ctx, request.(ListElasticUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListElasticUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListElasticUsersResponseObject); ok {
+		if err := validResponse.VisitListElasticUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateElasticUser operation middleware
+func (sh *strictHandler) CreateElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateElasticUserParams) {
+	var request CreateElasticUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateElasticUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateElasticUser(ctx, request.(CreateElasticUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateElasticUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateElasticUserResponseObject); ok {
+		if err := validResponse.VisitCreateElasticUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteElasticUser operation middleware
+func (sh *strictHandler) DeleteElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, username string, params DeleteElasticUserParams) {
+	var request DeleteElasticUserRequestObject
+
+	request.Cluster = cluster
+	request.Username = username
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteElasticUser(ctx, request.(DeleteElasticUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteElasticUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteElasticUserResponseObject); ok {
+		if err := validResponse.VisitDeleteElasticUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetElasticUser operation middleware
+func (sh *strictHandler) GetElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, username string, params GetElasticUserParams) {
+	var request GetElasticUserRequestObject
+
+	request.Cluster = cluster
+	request.Username = username
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetElasticUser(ctx, request.(GetElasticUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetElasticUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetElasticUserResponseObject); ok {
+		if err := validResponse.VisitGetElasticUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateElasticUser operation middleware
+func (sh *strictHandler) UpdateElasticUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, username string, params UpdateElasticUserParams) {
+	var request UpdateElasticUserRequestObject
+
+	request.Cluster = cluster
+	request.Username = username
+	request.Params = params
+
+	var body UpdateElasticUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateElasticUser(ctx, request.(UpdateElasticUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateElasticUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateElasticUserResponseObject); ok {
+		if err := validResponse.VisitUpdateElasticUserResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
