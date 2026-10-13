@@ -280,6 +280,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	files, env := render(n.DataDir(), s, c)
 	names := make([]string, 0, len(files))
 	for _, f := range files {
+		if unchangedFile(filepath.Join(n.DataDir(), "karakoram", f.name), f.content, f.mode) {
+			continue
+		}
 		if err := n.WriteFile(f.name, []byte(f.content), f.mode); err != nil {
 			return nil, err
 		}
@@ -389,4 +392,15 @@ func (e *Runner) Version(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// unchangedFile reports whether a regular file already holds content with mode,
+// so periodic reloads neither rewrite secrets nor report them as changed.
+func unchangedFile(path, content string, mode os.FileMode) bool {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != mode.Perm() || info.Size() != int64(len(content)) {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	return err == nil && string(data) == content
 }

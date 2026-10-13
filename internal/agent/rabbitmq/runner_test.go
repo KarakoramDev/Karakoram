@@ -409,3 +409,25 @@ func TestRoutesRequireBearer(t *testing.T) {
 		}
 	}
 }
+
+// Reloads run every minute; identical files must not be rewritten or reported as changed.
+func TestUnchangedFileSkipsIdenticalContent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rabbitmq.conf")
+	if err := os.WriteFile(path, []byte("a = 1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !unchangedFile(path, "a = 1\n", 0600) {
+		t.Fatal("identical file reported as changed")
+	}
+	if unchangedFile(path, "a = 2\n", 0600) || unchangedFile(path, "a = 1\n", 0400) || unchangedFile(filepath.Join(dir, "missing"), "", 0600) {
+		t.Fatal("changed, mode-mismatched or missing file reported as unchanged")
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
+	if unchangedFile(link, "a = 1\n", 0600) {
+		t.Fatal("symlink reported as an unchanged regular file")
+	}
+}
