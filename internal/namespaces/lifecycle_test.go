@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/coder/websocket"
 )
 
@@ -118,7 +120,11 @@ func TestSessionSnapshotCannotRevokePublishedEnrollment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.o.Store.PutNamespaceRelayKey(t.Context(), n.Name, key); err != nil {
+	token, err := r.o.Store.GetNamespaceToken(t.Context(), n.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.o.Store.UpdateNamespaceCredentials(t.Context(), n, token, key); err != nil {
 		t.Fatal(err)
 	}
 	if err = r.save(t.Context(), n); err != nil {
@@ -350,5 +356,191 @@ func TestRegistrationWaitsForNamespaceLifecycleLock(t *testing.T) {
 	m.Unlock()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNamespaceDeleteAndRecreatePersistsFreshEnrollment(t *testing.T) {
+	r, backend, _ := setupRegistry(t)
+	ctx := t.Context()
+	old, err := r.Create(ctx, "production", "proj-test", "valid-token", "Original description")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldKey, err := r.o.Store.GetNamespaceRelayKey(ctx, old.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := func() {
+		m := r.lock(old.Name)
+		m.Lock()
+		defer m.Unlock()
+		r.step(ctx, old.Name)
+	}
+	for range 4 {
+		step()
+	}
+	if backend.imports != 1 || backend.deploys != 1 {
+		t.Fatal("original relay did not deploy")
+	}
+	startTestRelay(t, r, old)
+	oldCert, err := relay.ParseCertificatePEM(old.ClientCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.Delete(ctx, old.Name); err != nil {
+		t.Fatal(err)
+	}
+	step()
+	deletingOptions := r.o
+	deletingOptions.NewBackend = func(_ zerops.Options) (Backend, error) { return backend, nil }
+	deletingReload, err := New(ctx, deletingOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleting, err := deletingReload.Get(ctx, old.Name)
+	if err != nil || deleting.Phase != "Deleting" || deleting.PendingOpKind != "delete" || deleting.PendingOpID == "" {
+		t.Fatal("registry reload lost persisted deletion intent", err)
+	}
+	if deletingReload.Authorize(ctx, old.Name, oldCert) == nil {
+		t.Fatal("registry reload authorized a deleting enrollment")
+	}
+	if err = deletingReload.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		step()
+	}
+	if backend.deletes != 1 || backend.service != nil || r.backend(old.Name) != nil {
+		t.Fatal("relay deletion did not retire the original backend")
+	}
+	for _, get := range []func() error{
+		func() error { _, err := r.Get(ctx, old.Name); return err },
+		func() error { _, err := r.o.Store.GetNamespaceToken(ctx, old.Name); return err },
+		func() error { _, err := r.o.Store.GetNamespaceRelayKey(ctx, old.Name); return err },
+	} {
+		if err = get(); !errors.Is(err, store.ErrNotFound) {
+			t.Fatal("deleted namespace or credential survives", err)
+		}
+	}
+	lateSave := func() error {
+		result := make(chan error, 1)
+		go func() {
+			m := r.lock(old.Name)
+			m.Lock()
+			defer m.Unlock()
+			snapshot := *old
+			result <- r.save(ctx, &snapshot)
+		}()
+		return <-result
+	}
+	if err = lateSave(); !errors.Is(err, store.ErrStale) {
+		t.Fatal("delayed original snapshot resurrected the deleted namespace")
+	}
+	if _, err = r.Get(ctx, old.Name); !errors.Is(err, ErrNotFound) {
+		t.Fatal("delayed snapshot restored the deleted row", err)
+	}
+	fresh, err := r.Create(ctx, old.Name, old.ProjectID, "replacement-token", "Replacement description")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = lateSave(); !errors.Is(err, store.ErrStale) {
+		t.Fatal("delayed original snapshot overwrote the replacement")
+	}
+	if !fresh.CreatedAt.After(old.CreatedAt) || fresh.ClientSerial == old.ClientSerial || fresh.OwnershipMarker == old.OwnershipMarker {
+		t.Fatal("re-registration reused the original identity")
+	}
+	if fresh.Phase != "Pending" || fresh.Relay.Phase != "Pending" || fresh.Relay.ServiceID != "" || fresh.PendingOpID != "" || fresh.DeployedExecutableHash != "" || fresh.PreviousClientSerial != "" {
+		t.Fatal("re-registration retained relay checkpoints")
+	}
+	check := func(registry *Registry) {
+		t.Helper()
+		got, err := registry.Get(ctx, fresh.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !got.CreatedAt.Equal(fresh.CreatedAt) || got.Description != fresh.Description || got.ClientSerial != fresh.ClientSerial || got.OwnershipMarker != fresh.OwnershipMarker || got.Phase == "Deleting" {
+			t.Fatal("original namespace snapshot replaced the new registration")
+		}
+		if registry.Authorize(ctx, fresh.Name, oldCert) == nil || registry.Hub.AcceptsSerial(fresh.Name, old.ClientSerial) {
+			t.Fatal("original relay enrollment was restored")
+		}
+		token, err := registry.o.Store.GetNamespaceToken(ctx, fresh.Name)
+		if err != nil || token != "replacement-token" {
+			t.Fatal("original token restored", err)
+		}
+		key, err := registry.o.Store.GetNamespaceRelayKey(ctx, fresh.Name)
+		if err != nil || string(key) == string(oldKey) {
+			t.Fatal("original relay key restored", err)
+		}
+	}
+	check(r)
+	// Deliver queued session notices from the deleted enrollment, then run
+	// periodic reconciliation with its original import/deploy/delete history.
+	for {
+		select {
+		case notice := <-r.notices:
+			r.sessionEvent(ctx, notice)
+		default:
+			goto drained
+		}
+	}
+drained:
+	check(r)
+	step()
+	got, err := r.Get(ctx, fresh.Name)
+	if err != nil || got.Relay.Phase != "Deploying" || got.PendingOpKind != "import" {
+		t.Fatal("replacement did not transition Pending to Deploying", err)
+	}
+	for range 3 {
+		step()
+		check(r)
+	}
+	runTicks := func(registry *Registry) {
+		t.Helper()
+		runCtx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() { done <- registry.Run(runCtx) }()
+		defer func() {
+			cancel()
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatal("registry loop shutdown", err)
+			}
+		}()
+		for range 3 {
+			before, err := registry.Get(ctx, fresh.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry.trigger()
+			waitNamespace(t, func() bool {
+				registry.trigger()
+				after, err := registry.Get(ctx, fresh.Name)
+				return err == nil && after.UpdatedAt.After(before.UpdatedAt)
+			})
+			check(registry)
+		}
+	}
+	runTicks(r)
+	if backend.imports != 2 || backend.deploys != 2 || backend.deletes != 1 {
+		t.Fatal("replacement repeated the original relay deletion")
+	}
+	o := r.o
+	o.NewBackend = func(_ zerops.Options) (Backend, error) { return backend, nil }
+	if err = r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := New(ctx, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reloaded.Close()
+	check(reloaded)
+	for range 3 {
+		reloaded.step(ctx, fresh.Name)
+		check(reloaded)
+	}
+	runTicks(reloaded)
+	if backend.deletes != 1 || backend.imports != 2 || backend.deploys != 2 {
+		t.Fatal("registry reload resumed an obsolete relay operation")
 	}
 }

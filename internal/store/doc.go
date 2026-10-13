@@ -3,6 +3,9 @@
 
 // Package store provides pure-Go SQLite persistence for Karakoram resources.
 // Writes use a single connection; readers use a WAL-enabled connection pool.
+// The SQLite driver must close first-row statements on context cancellation
+// (modernc.org/sqlite v1.40.1 or later); otherwise pooled readers can retain
+// obsolete WAL snapshots even after later writes have committed.
 // Migrations are embedded and ordered. Methods accept contexts and return
 // ErrNotFound or ErrConflict for resource-level failures.
 //
@@ -15,6 +18,11 @@
 // Running work is resumed before Pending work; only the reconciler owns claims.
 // Deletion intent and hard deletion retire unfinished operations transactionally,
 // preserving failed history while preventing name reuse from resuming old work.
+// Namespace creation is insert-only. Updates, credentials and deletion are fenced
+// by the registration's immutable creation time; obsolete snapshots return
+// ErrStale instead of resurrecting a deleted record or overwriting a reused name.
+// Namespace read-modify-write paths read registration and enrollment state through
+// the writer connection before side effects, rather than a pooled reader snapshot.
 //
 // Credential-bearing structs never serialize hidden fields into public JSON.
 // Backup storage credentials, cluster KV values, and agent tokens are encrypted

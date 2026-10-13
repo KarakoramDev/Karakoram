@@ -685,7 +685,7 @@ func TestNamespaceFailureIsolatedAndWorkersDistinct(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, namespace := range []string{"healthy", "broken"} {
-		if err := s.PutNamespace(ctx, &domain.Namespace{Name: namespace, Phase: "Ready"}); err != nil {
+		if err := s.CreateNamespace(ctx, &domain.Namespace{Name: namespace, Phase: "Ready"}); err != nil {
 			t.Fatal(err)
 		}
 		c := domain.Cluster{Namespace: namespace, Name: "same", Spec: domain.ClusterSpec{Provider: "fake"}}
@@ -763,7 +763,7 @@ func TestNamespaceDependenciesResolvedBeforeProviderCalls(t *testing.T) {
 	m.opts.Namespaces = ns
 	c := domain.Cluster{Namespace: "healthy", Name: "same", Spec: domain.ClusterSpec{Provider: "fake"}}
 	ctx := context.Background()
-	if err := s.PutNamespace(ctx, &domain.Namespace{Name: c.Namespace, Phase: "Ready"}); err != nil {
+	if err := s.CreateNamespace(ctx, &domain.Namespace{Name: c.Namespace, Phase: "Ready"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.CreateCluster(ctx, &c); err != nil {

@@ -25,7 +25,7 @@ func TestInternalTLSPreservesPersistedRelaySANs(t *testing.T) {
 		if name == "staging" {
 			hostname = "stagerelay"
 		}
-		if err = s.Store.PutNamespace(t.Context(), &domain.Namespace{Name: name, Relay: domain.NamespaceRelayStatus{Hostname: hostname}}); err != nil {
+		if err = s.Store.CreateNamespace(t.Context(), &domain.Namespace{Name: name, Relay: domain.NamespaceRelayStatus{Hostname: hostname}}); err != nil {
 			t.Fatal(err)
 		}
 	}

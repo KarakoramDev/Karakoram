@@ -165,7 +165,8 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 		}
 	}})
 	now := time.Now().UTC()
-	n, err := o.Store.GetNamespace(ctx, domain.DefaultNamespace)
+	n, err := o.Store.GetNamespaceForUpdate(ctx, domain.DefaultNamespace)
+	createDefault := errors.Is(err, store.ErrNotFound)
 	if errors.Is(err, store.ErrNotFound) {
 		n = &domain.Namespace{Name: domain.DefaultNamespace, CreatedAt: now}
 	} else if err != nil {
@@ -187,11 +188,18 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 		n.ProjectName = project.Name
 	}
 	updatePhase(n)
-	if err = o.Store.PutNamespace(ctx, n); err != nil {
+	if createDefault {
+		err = o.Store.CreateNamespace(ctx, n)
+	} else {
+		err = o.Store.UpdateNamespace(ctx, n)
+	}
+	if errors.Is(err, store.ErrStale) {
+		o.Logger.Debug("Dropping stale namespace startup state", "namespace", n.Name)
+	} else if err != nil {
 		r.Hub.Close()
 		return nil, err
 	}
-	all, err := o.Store.ListNamespaces(ctx)
+	all, err := o.Store.ListNamespacesForUpdate(ctx)
 	if err != nil {
 		r.Hub.Close()
 		return nil, err
@@ -200,15 +208,19 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 		if n.Default {
 			continue
 		}
-		if n.Phase != "Deleting" {
-			r.enroll(&n)
-		}
 		n.Relay.DesiredVersion = version.Version
-		if e := o.Store.PutNamespace(ctx, &n); e != nil {
+		if e := o.Store.UpdateNamespace(ctx, &n); e != nil {
+			if errors.Is(e, store.ErrStale) {
+				o.Logger.Debug("Dropping stale namespace startup state", "namespace", n.Name)
+				continue
+			}
 			r.Hub.Close()
 			return nil, e
 		}
-		token, e := o.Store.GetNamespaceToken(ctx, n.Name)
+		if n.Phase != "Deleting" {
+			r.enroll(&n)
+		}
+		token, e := o.Store.GetNamespaceTokenForUpdate(ctx, n.Name)
 		z := o.Zerops
 		z.Token = token
 		z.ProjectID = n.ProjectID
@@ -220,7 +232,11 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 			n.Token.Valid = false
 			n.Token.LastError = "Stored project credentials are unavailable"
 			updatePhase(&n)
-			if e = o.Store.PutNamespace(ctx, &n); e != nil {
+			if e = o.Store.UpdateNamespace(ctx, &n); e != nil {
+				if errors.Is(e, store.ErrStale) {
+					o.Logger.Debug("Dropping stale namespace startup state", "namespace", n.Name)
+					continue
+				}
 				r.Hub.Close()
 				return nil, e
 			}
@@ -254,7 +270,10 @@ func (r *Registry) event(ctx context.Context, n *domain.Namespace, kind, message
 }
 func (r *Registry) save(ctx context.Context, n *domain.Namespace) error {
 	n.UpdatedAt = time.Now().UTC()
-	err := r.o.Store.PutNamespace(ctx, n)
+	err := r.o.Store.UpdateNamespace(ctx, n)
+	if errors.Is(err, store.ErrStale) {
+		r.o.Logger.Debug("Dropping stale namespace state", "namespace", n.Name)
+	}
 	if err == nil && !n.Default {
 		if n.Phase == "Deleting" {
 			r.Hub.Revoke(n.Name)
@@ -302,7 +321,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	m := r.lock(name)
 	m.Lock()
 	defer m.Unlock()
-	all, err := r.List(ctx)
+	all, err := r.o.Store.ListNamespacesForUpdate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +357,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	if err != nil {
 		return nil, err
 	}
-	if err = r.o.Store.PutNamespaceCredentials(ctx, n, token, key); err != nil {
+	if err = r.o.Store.CreateNamespaceCredentials(ctx, n, token, key); err != nil {
 		return nil, err
 	}
 	r.enroll(n)
@@ -353,7 +372,7 @@ func (r *Registry) Update(ctx context.Context, name, description string) (*domai
 	m := r.lock(name)
 	m.Lock()
 	defer m.Unlock()
-	n, err := r.Get(ctx, name)
+	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +387,7 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	m := r.lock(name)
 	m.Lock()
 	defer m.Unlock()
-	n, err := r.Get(ctx, name)
+	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +409,10 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	n.ProjectName = p.Name
 	n.UpdatedAt = now
 	updatePhase(n)
-	if err = r.o.Store.PutNamespaceCredentials(ctx, n, token, nil); err != nil {
+	if err = r.o.Store.UpdateNamespaceCredentials(ctx, n, token, nil); err != nil {
+		if errors.Is(err, store.ErrStale) {
+			r.o.Logger.Debug("Dropping stale namespace credentials", "namespace", n.Name)
+		}
 		return nil, err
 	}
 	if b := r.backend(name); b != nil {
@@ -408,7 +430,7 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 	m := r.lock(name)
 	m.Lock()
 	defer m.Unlock()
-	n, err := r.Get(ctx, name)
+	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +440,7 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 	z := r.o.Zerops
 	z.ProjectID = n.ProjectID
 	if !n.Default {
-		z.Token, err = r.o.Store.GetNamespaceToken(ctx, name)
+		z.Token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
 		if err != nil {
 			return nil, err
 		}
@@ -451,14 +473,17 @@ func (r *Registry) Delete(ctx context.Context, name string) error {
 	m := r.lock(name)
 	m.Lock()
 	defer m.Unlock()
-	n, err := r.Get(ctx, name)
+	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
 		return err
 	}
 	if n.Default {
 		return fmt.Errorf("%w: default namespace cannot be deleted", ErrConflict)
 	}
-	if err = r.o.Store.BeginNamespaceDeletion(ctx, name); err != nil {
+	if err = r.o.Store.BeginNamespaceDeletion(ctx, n); err != nil {
+		if errors.Is(err, store.ErrStale) {
+			r.o.Logger.Debug("Dropping stale namespace deletion intent", "namespace", name)
+		}
 		return err
 	}
 	r.Hub.Revoke(name)

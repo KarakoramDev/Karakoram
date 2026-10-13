@@ -65,7 +65,7 @@ func TestNamespaceMigrationPreservesLegacyData(t *testing.T) {
 	})
 
 	// Creating a colliding name must not replace any legacy state or ciphertext.
-	if err := s.PutNamespace(ctx, &domain.Namespace{Name: "dev", Phase: "Ready"}); err != nil {
+	if err := s.CreateNamespace(ctx, &domain.Namespace{Name: "dev", Phase: "Ready"}); err != nil {
 		t.Fatal(err)
 	}
 	other := domain.Cluster{Namespace: "dev", Name: "orders", Spec: domain.ClusterSpec{Provider: "psmdb", Version: "8.0"}, Internal: json.RawMessage(`{}`)}

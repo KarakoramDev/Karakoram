@@ -216,7 +216,7 @@ func TestScheduleStorageFallsBackToPrimary(t *testing.T) {
 func TestNamespacesPaginateAfterAuthorization(t *testing.T) {
 	s, admin := namespaceTestServer(t)
 	for _, ns := range []string{"alpha", "hidden", "omega"} {
-		if err := s.Store.PutNamespace(t.Context(), &domain.Namespace{Name: ns, Phase: "Ready"}); err != nil {
+		if err := s.Store.CreateNamespace(t.Context(), &domain.Namespace{Name: ns, Phase: "Ready"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -315,5 +315,57 @@ func TestLegacyCloneCanBePatchedAfterMigration(t *testing.T) {
 	updated, err := st.GetCluster(t.Context(), domain.ClusterRef{Name: "clone"})
 	if err != nil || updated.Spec.Components.Engine.Replicas != 3 || updated.Spec.DataSource.Namespace != "default" {
 		t.Fatal(updated, err)
+	}
+}
+
+func TestCrossNamespaceCloneFromSucceededLogicalBackup(t *testing.T) {
+	s, _, admin := testServer(t)
+	ctx := t.Context()
+	if err := s.Store.CreateNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
+	provider := psmdb.New(psmdb.Options{Store: s.Store})
+	var err error
+	s.Registry, err = engine.NewRegistry(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := domain.ClusterSpec{}
+	provider.ApplyDefaults(&spec)
+	spec.Backup.Storage = "archive"
+	spec.Exposure.Public = true
+	spec.Exposure.Allowlist = []string{"2001:db8::1/128"}
+	spec.Monitoring.Enabled = true
+	source := domain.Cluster{Namespace: "prod", Name: "orders", Spec: spec, Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
+	if err := s.Store.CreateCluster(ctx, &source); err != nil {
+		t.Fatal(err)
+	}
+	storage := domain.BackupStorage{Namespace: "prod", Name: "archive", Type: "s3", EndpointURL: "https://s3.example.com", Bucket: "backups", Region: "us-east-1", Credentials: domain.StorageCredentials{AccessKeyID: "test-access", SecretAccessKey: "test-secret"}}
+	if err := s.Store.CreateBackupStorage(ctx, &storage); err != nil {
+		t.Fatal(err)
+	}
+	backup := domain.Backup{Namespace: "prod", Cluster: source.Name, Name: "saved", Storage: storage.Name, Type: "logical", Phase: domain.PhaseSucceeded, SourceVersion: spec.Version, SourceTopology: spec.Topology}
+	if err := s.Store.CreateBackup(ctx, &backup); err != nil {
+		t.Fatal(err)
+	}
+	backupAPI := decodeNamespaceResponse[api.Backup](t, call(s, "GET", "/api/v1/clusters/orders/backups/saved?namespace=prod", "", admin), 200)
+	if value(backupAPI.Namespace) != "prod" || backupAPI.Phase != api.BackupPhaseSucceeded {
+		t.Fatal(backupAPI)
+	}
+	sourceAPI := decodeNamespaceResponse[api.Cluster](t, call(s, "GET", "/api/v1/clusters/orders?namespace=prod", "", admin), 200)
+	cloneSpec := sourceAPI.Spec
+	cloneSpec.Backup = nil
+	cloneSpec.DataSource = &api.DataSource{Namespace: ptr("prod"), Cluster: source.Name, Backup: &backupAPI.Name}
+	body, err := json.Marshal(api.CreateClusterRequest{Name: "copy", Spec: cloneSpec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clone := decodeNamespaceResponse[api.Cluster](t, call(s, "POST", "/api/v1/clusters?namespace=default", string(body), admin), 201)
+	if value(clone.Namespace) != "default" || value(clone.Spec.DataSource.Namespace) != "prod" || clone.Spec.DataSource.Cluster != source.Name || value(clone.Spec.DataSource.Backup) != backup.Name {
+		t.Fatal(clone)
+	}
+	persisted, err := s.Store.GetCluster(ctx, domain.ClusterRef{Namespace: "default", Name: "copy"})
+	if err != nil || persisted.Spec.Backup.Storage != "" || len(persisted.Spec.Backup.Schedules) != 0 {
+		t.Fatal(persisted, err)
 	}
 }

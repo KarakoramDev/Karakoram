@@ -143,7 +143,7 @@ func TestSameNameSchedulesAreNamespaceScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, namespace := range []string{"default", "other"} {
-		if err := db.PutNamespace(ctx, &domain.Namespace{Name: namespace, Phase: "Ready"}); err != nil {
+		if err := db.CreateNamespace(ctx, &domain.Namespace{Name: namespace, Phase: "Ready"}); err != nil {
 			t.Fatal(err)
 		}
 		c := domain.Cluster{Namespace: namespace, Name: "demo", Spec: domain.ClusterSpec{Backup: domain.BackupConfig{Schedules: []domain.BackupSchedule{{Name: "daily", Cron: "@daily", Enabled: true}}}}}

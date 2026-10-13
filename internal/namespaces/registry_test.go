@@ -451,7 +451,7 @@ func TestTokenHealthEventsOnlyOnTransitions(t *testing.T) {
 	r, _, log := setupRegistry(t)
 	n := createTestNamespace(t, r)
 	ctx := context.Background()
-	if err := r.o.Store.PutNamespaceToken(ctx, n.Name, "bad-token"); err != nil {
+	if err := r.o.Store.UpdateNamespaceCredentials(ctx, n, "bad-token", nil); err != nil {
 		t.Fatal(err)
 	}
 	for range 3 {
@@ -499,7 +499,7 @@ func TestStartupIsolatesUnavailableStoredToken(t *testing.T) {
 	r, _, _ := setupRegistry(t)
 	n := createTestNamespace(t, r)
 	ctx := context.Background()
-	if err := r.o.Store.DeleteNamespaceToken(ctx, n.Name); err != nil {
+	if err := r.o.Store.DeleteNamespaceToken(ctx, n); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := New(ctx, r.o)

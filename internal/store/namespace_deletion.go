@@ -52,7 +52,8 @@ func namespaceForInsert(ctx context.Context, tx *sql.Tx, namespace string) error
 
 // BeginNamespaceDeletion checks inventory and establishes deletion intent in the
 // same serialized writer transaction used by cluster and storage creation.
-func (s *Store) BeginNamespaceDeletion(ctx context.Context, namespace string) error {
+func (s *Store) BeginNamespaceDeletion(ctx context.Context, expected *domain.Namespace) error {
+	namespace := expected.Name
 	if err := domain.ValidateNamespaceName(namespace); err != nil {
 		return err
 	}
@@ -66,11 +67,17 @@ func (s *Store) BeginNamespaceDeletion(ctx context.Context, namespace string) er
 	defer tx.Rollback()
 	var data []byte
 	if err = tx.QueryRowContext(ctx, "SELECT data FROM namespaces WHERE name=?", namespace).Scan(&data); err != nil {
-		return typed(err)
+		if typed(err) == ErrNotFound {
+			return ErrStale
+		}
+		return err
 	}
 	var n domain.Namespace
 	if err = json.Unmarshal(data, &n); err != nil {
 		return err
+	}
+	if !n.CreatedAt.Equal(expected.CreatedAt) {
+		return ErrStale
 	}
 	blockers := []string{}
 	var count int
@@ -99,7 +106,7 @@ func (s *Store) BeginNamespaceDeletion(ctx context.Context, namespace string) er
 	}
 	n.Phase = "Deleting"
 	n.UpdatedAt = time.Now().UTC()
-	if err = putNamespace(ctx, tx, &n); err != nil {
+	if err = writeNamespace(ctx, tx, &n, false); err != nil {
 		return err
 	}
 	return tx.Commit()

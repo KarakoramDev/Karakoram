@@ -5,15 +5,26 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
 func (s *Store) GetNamespace(ctx context.Context, name string) (*domain.Namespace, error) {
+	return getNamespace(ctx, s.reader, name)
+}
+
+// GetNamespaceForUpdate reads through the same connection as lifecycle writes.
+func (s *Store) GetNamespaceForUpdate(ctx context.Context, name string) (*domain.Namespace, error) {
+	return getNamespace(ctx, s.writer, name)
+}
+
+func getNamespace(ctx context.Context, db *sql.DB, name string) (*domain.Namespace, error) {
 	var data []byte
-	if err := s.reader.QueryRowContext(ctx, "SELECT data FROM namespaces WHERE name=?", name).Scan(&data); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT data FROM namespaces WHERE name=?", name).Scan(&data); err != nil {
 		return nil, typed(err)
 	}
 	var n domain.Namespace
@@ -23,7 +34,16 @@ func (s *Store) GetNamespace(ctx context.Context, name string) (*domain.Namespac
 	return &n, nil
 }
 func (s *Store) ListNamespaces(ctx context.Context) ([]domain.Namespace, error) {
-	rows, err := s.reader.QueryContext(ctx, "SELECT data FROM namespaces ORDER BY name")
+	return listNamespaces(ctx, s.reader)
+}
+
+// ListNamespacesForUpdate reads authoritative inventory for registration and startup.
+func (s *Store) ListNamespacesForUpdate(ctx context.Context) ([]domain.Namespace, error) {
+	return listNamespaces(ctx, s.writer)
+}
+
+func listNamespaces(ctx context.Context, db *sql.DB) ([]domain.Namespace, error) {
+	rows, err := db.QueryContext(ctx, "SELECT data FROM namespaces ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -42,26 +62,60 @@ func (s *Store) ListNamespaces(ctx context.Context) ([]domain.Namespace, error) 
 	}
 	return out, rows.Err()
 }
-func putNamespace(ctx context.Context, db executor, n *domain.Namespace) error {
+
+// ErrStale indicates a snapshot of a removed or replaced namespace registration.
+var ErrStale = fmt.Errorf("%w: stale namespace registration", ErrConflict)
+
+func writeNamespace(ctx context.Context, db executor, n *domain.Namespace, create bool) error {
 	data, err := json.Marshal(n)
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, "INSERT INTO namespaces(name,data,updated_at) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at", n.Name, data, n.UpdatedAt.UTC().Format(time.RFC3339Nano))
-	return typed(err)
-}
-func (s *Store) PutNamespace(ctx context.Context, n *domain.Namespace) error {
-	return putNamespace(ctx, s.writer, n)
+	if create {
+		_, err = db.ExecContext(ctx, "INSERT INTO namespaces(name,data,updated_at) VALUES(?,?,?)", n.Name, data, n.UpdatedAt.UTC().Format(time.RFC3339Nano))
+		return typed(err)
+	}
+	result, err := db.ExecContext(ctx, "UPDATE namespaces SET data=?,updated_at=? WHERE name=? AND json_extract(data,'$.createdAt')=? AND (json_extract(data,'$.phase')!='Deleting' OR ?='Deleting')", data, n.UpdatedAt.UTC().Format(time.RFC3339Nano), n.Name, n.CreatedAt.Format(time.RFC3339Nano), n.Phase)
+	if err != nil {
+		return typed(err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrStale
+	}
+	return nil
 }
 
-// PutNamespaceCredentials atomically enrolls a record and its sealed credentials.
-func (s *Store) PutNamespaceCredentials(ctx context.Context, n *domain.Namespace, token string, key []byte) error {
+// CreateNamespace inserts a registration without replacing an existing record.
+func (s *Store) CreateNamespace(ctx context.Context, n *domain.Namespace) error {
+	return writeNamespace(ctx, s.writer, n, true)
+}
+
+// UpdateNamespace persists only the same registration, preserving deletion intent.
+func (s *Store) UpdateNamespace(ctx context.Context, n *domain.Namespace) error {
+	return writeNamespace(ctx, s.writer, n, false)
+}
+
+// CreateNamespaceCredentials atomically creates a registration and sealed credentials.
+func (s *Store) CreateNamespaceCredentials(ctx context.Context, n *domain.Namespace, token string, key []byte) error {
+	return s.writeNamespaceCredentials(ctx, n, token, key, true)
+}
+
+// UpdateNamespaceCredentials atomically updates credentials for the same registration.
+func (s *Store) UpdateNamespaceCredentials(ctx context.Context, n *domain.Namespace, token string, key []byte) error {
+	return s.writeNamespaceCredentials(ctx, n, token, key, false)
+}
+
+func (s *Store) writeNamespaceCredentials(ctx context.Context, n *domain.Namespace, token string, key []byte, create bool) error {
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if err = putNamespace(ctx, tx, n); err != nil {
+	if err = writeNamespace(ctx, tx, n, create); err != nil {
 		return err
 	}
 	for kind, value := range map[string][]byte{"zerops-token": []byte(token), "relay-key": key} {
@@ -80,13 +134,13 @@ func (s *Store) PutNamespaceCredentials(ctx context.Context, n *domain.Namespace
 }
 
 // DeleteNamespace removes the record and all its credentials in one transaction.
-func (s *Store) DeleteNamespace(ctx context.Context, name string) error {
+func (s *Store) DeleteNamespace(ctx context.Context, n *domain.Namespace) error {
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, "DELETE FROM namespaces WHERE name=?", name)
+	result, err := tx.ExecContext(ctx, "DELETE FROM namespaces WHERE name=? AND json_extract(data,'$.createdAt')=?", n.Name, n.CreatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		return err
 	}
@@ -95,9 +149,9 @@ func (s *Store) DeleteNamespace(ctx context.Context, name string) error {
 		return err
 	}
 	if count == 0 {
-		return ErrNotFound
+		return ErrStale
 	}
-	if _, err = tx.ExecContext(ctx, "DELETE FROM records WHERE kind='namespace-secret' AND scope=?", name); err != nil {
+	if _, err = tx.ExecContext(ctx, "DELETE FROM records WHERE kind='namespace-secret' AND scope=?", n.Name); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -110,31 +164,45 @@ func (s *Store) namespaceSecret(ctx context.Context, name, kind string) ([]byte,
 	}
 	return s.sealer.OpenFor("namespace/"+name+"/"+kind, sealed)
 }
-func (s *Store) putNamespaceSecret(ctx context.Context, name, kind string, value []byte) error {
-	sealed, err := s.sealer.SealFor("namespace/"+name+"/"+kind, value)
-	if err != nil {
-		return err
+
+func (s *Store) namespaceSecretForUpdate(ctx context.Context, name, kind string) ([]byte, error) {
+	var sealed string
+	if err := s.writer.QueryRowContext(ctx, "SELECT secret FROM records WHERE kind='namespace-secret' AND scope=? AND key=?", name, kind).Scan(&sealed); err != nil {
+		return nil, typed(err)
 	}
-	return put(ctx, s.writer, "namespace-secret", name, kind, struct{}{}, sealed, "", "", false)
+	return s.sealer.OpenFor("namespace/"+name+"/"+kind, sealed)
 }
 func (s *Store) GetNamespaceToken(ctx context.Context, name string) (string, error) {
 	v, err := s.namespaceSecret(ctx, name, "zerops-token")
 	return string(v), err
 }
-func (s *Store) PutNamespaceToken(ctx context.Context, name, token string) error {
-	return s.putNamespaceSecret(ctx, name, "zerops-token", []byte(token))
+
+// GetNamespaceTokenForUpdate reads current credentials for lifecycle operations.
+func (s *Store) GetNamespaceTokenForUpdate(ctx context.Context, name string) (string, error) {
+	v, err := s.namespaceSecretForUpdate(ctx, name, "zerops-token")
+	return string(v), err
 }
-func (s *Store) DeleteNamespaceToken(ctx context.Context, name string) error {
-	return s.remove(ctx, "namespace-secret", name, "zerops-token")
+func (s *Store) DeleteNamespaceToken(ctx context.Context, n *domain.Namespace) error {
+	result, err := s.writer.ExecContext(ctx, "DELETE FROM records WHERE kind='namespace-secret' AND scope=? AND key='zerops-token' AND EXISTS (SELECT 1 FROM namespaces WHERE name=? AND json_extract(data,'$.createdAt')=?)", n.Name, n.Name, n.CreatedAt.Format(time.RFC3339Nano))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrStale
+	}
+	return nil
 }
 func (s *Store) GetNamespaceRelayKey(ctx context.Context, name string) ([]byte, error) {
 	return s.namespaceSecret(ctx, name, "relay-key")
 }
-func (s *Store) PutNamespaceRelayKey(ctx context.Context, name string, key []byte) error {
-	return s.putNamespaceSecret(ctx, name, "relay-key", key)
-}
-func (s *Store) DeleteNamespaceRelayKey(ctx context.Context, name string) error {
-	return s.remove(ctx, "namespace-secret", name, "relay-key")
+
+// GetNamespaceRelayKeyForUpdate reads current enrollment for relay provisioning.
+func (s *Store) GetNamespaceRelayKeyForUpdate(ctx context.Context, name string) ([]byte, error) {
+	return s.namespaceSecretForUpdate(ctx, name, "relay-key")
 }
 
 // RelayPKI is installation-wide trust material, always sealed as a setting.

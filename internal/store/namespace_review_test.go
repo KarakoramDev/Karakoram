@@ -30,7 +30,7 @@ func TestStorageAADSeparatesLegacyAndNamespacedIdentities(t *testing.T) {
 	if storageAAD("default", legacy.Name) == storageAAD("prod", "archive") {
 		t.Fatal("AAD domains alias")
 	}
-	if err = s.PutNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
+	if err = s.CreateNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
 		t.Fatal(err)
 	}
 	modern := domain.BackupStorage{Namespace: "prod", Name: "archive", Credentials: domain.StorageCredentials{SecretAccessKey: "modern-secret"}}
@@ -121,7 +121,7 @@ func TestNamespaceDeletionInventoryAndInsertGuards(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			s, _ := testStore(t)
 			ctx := t.Context()
-			if err := s.PutNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
+			if err := s.CreateNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
 				t.Fatal(err)
 			}
 			var err error
@@ -139,7 +139,7 @@ func TestNamespaceDeletionInventoryAndInsertGuards(t *testing.T) {
 				t.Fatal(err)
 			}
 			var conflict *NamespaceConflictError
-			if err = s.BeginNamespaceDeletion(ctx, "prod"); !errors.As(err, &conflict) || !errors.Is(err, ErrConflict) || len(conflict.Blockers) != 1 {
+			if err = s.BeginNamespaceDeletion(ctx, &domain.Namespace{Name: "prod"}); !errors.As(err, &conflict) || !errors.Is(err, ErrConflict) || len(conflict.Blockers) != 1 {
 				t.Fatal(err)
 			}
 			n, err := s.GetNamespace(ctx, "prod")
@@ -150,10 +150,10 @@ func TestNamespaceDeletionInventoryAndInsertGuards(t *testing.T) {
 	}
 	s, _ := testStore(t)
 	ctx := t.Context()
-	if err := s.PutNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
+	if err := s.CreateNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.BeginNamespaceDeletion(ctx, "prod"); err != nil {
+	if err := s.BeginNamespaceDeletion(ctx, &domain.Namespace{Name: "prod"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, ns := range []string{"prod", "missing"} {
@@ -175,14 +175,18 @@ func TestNamespaceCreateAndDeletionAreSerialized(t *testing.T) {
 			for range 10 {
 				s, _ := testStore(t)
 				ctx := t.Context()
-				if err := s.PutNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
+				if err := s.CreateNamespace(ctx, &domain.Namespace{Name: "prod", Phase: "Ready"}); err != nil {
 					t.Fatal(err)
 				}
 				start := make(chan struct{})
 				var createErr, deleteErr error
 				var wg sync.WaitGroup
 				wg.Add(2)
-				go func() { defer wg.Done(); <-start; deleteErr = s.BeginNamespaceDeletion(ctx, "prod") }()
+				go func() {
+					defer wg.Done()
+					<-start
+					deleteErr = s.BeginNamespaceDeletion(ctx, &domain.Namespace{Name: "prod"})
+				}()
 				go func() {
 					defer wg.Done()
 					<-start

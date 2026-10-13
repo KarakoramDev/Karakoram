@@ -138,6 +138,11 @@ stale relay state from routing a reused name into the old project. Review the
 previous policy grants before reuse; credential/session revocation does not
 remove authorization rules. See [relay security](../security.md#relay-threat-model).
 
+After deletion completes, registering the same name creates a new namespace
+with a fresh creation timestamp, description and relay enrollment. Reconciliation
+checkpoints and sealed credentials from the removed registration cannot overwrite
+the replacement; relay provisioning starts again from `Pending`.
+
 ## Troubleshooting
 
 - **Token invalid:** re-validate, check project-scoped Full access and rotate with a replacement for the same project. Updating a Karakoram API token does not fix the infrastructure token.

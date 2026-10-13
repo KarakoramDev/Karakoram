@@ -35,7 +35,7 @@ func (r *Registry) Run(ctx context.Context) error {
 		if err := r.renewHubCertificate(ctx, time.Now()); err != nil {
 			r.o.Logger.Error("Relay hub certificate renewal failed", "error", err)
 		}
-		all, err := r.List(ctx)
+		all, err := r.o.Store.ListNamespacesForUpdate(ctx)
 		if err != nil {
 			r.o.Logger.Error("Namespace listing failed", "error", err)
 			return
@@ -82,7 +82,7 @@ func (r *Registry) sessionEvent(ctx context.Context, notice sessionNotice) {
 		return
 	}
 	defer m.Unlock()
-	n, err := r.Get(ctx, notice.ns)
+	n, err := r.o.Store.GetNamespaceForUpdate(ctx, notice.ns)
 	if err != nil || n.Phase == "Deleting" {
 		return
 	}
@@ -131,7 +131,7 @@ func (r *Registry) syncSessionSnapshot(ctx context.Context, n *domain.Namespace,
 }
 
 func (r *Registry) step(ctx context.Context, name string) {
-	n, err := r.Get(ctx, name)
+	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
 		return
 	}
@@ -143,7 +143,7 @@ func (r *Registry) step(ctx context.Context, name string) {
 		z := r.o.Zerops
 		z.ProjectID = n.ProjectID
 		if !n.Default {
-			z.Token, err = r.o.Store.GetNamespaceToken(ctx, name)
+			z.Token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
 		}
 		var validation error
 		var project infra.Project
@@ -189,6 +189,10 @@ func (r *Registry) step(ctx context.Context, name string) {
 	r.syncSession(ctx, n)
 	if !n.RetryAt.After(time.Now()) && (n.Token.Valid || n.Phase == "Deleting") {
 		err = r.reconcile(ctx, n, b)
+		if errors.Is(err, store.ErrStale) {
+			r.o.Logger.Debug("Dropping stale namespace reconciliation", "namespace", name)
+			return
+		}
 		if err != nil {
 			n.Failures++
 			n.RetryAt = time.Now().Add(time.Second * time.Duration(1<<min(n.Failures, 8)))
@@ -200,11 +204,11 @@ func (r *Registry) step(ctx context.Context, name string) {
 		}
 	}
 	// Successful deletion already removed the record.
-	if _, e := r.Get(ctx, name); errors.Is(e, store.ErrNotFound) {
+	if _, e := r.o.Store.GetNamespaceForUpdate(ctx, name); errors.Is(e, store.ErrNotFound) {
 		return
 	}
 	updatePhase(n)
-	if err = r.save(ctx, n); err != nil && ctx.Err() == nil {
+	if err = r.save(ctx, n); err != nil && !errors.Is(err, store.ErrStale) && ctx.Err() == nil {
 		r.o.Logger.Error("Namespace state persistence failed", "namespace", name, "error", err)
 	}
 }
@@ -276,10 +280,10 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 			op.Kind = "delete"
 			return r.pending(ctx, n, b, op)
 		}
-		r.Hub.Revoke(n.Name)
-		if err = r.o.Store.DeleteNamespace(ctx, n.Name); err != nil {
+		if err = r.o.Store.DeleteNamespace(ctx, n); err != nil {
 			return err
 		}
+		r.Hub.Revoke(n.Name)
 		r.mu.Lock()
 		delete(r.backends, n.Name)
 		r.mu.Unlock()
@@ -291,17 +295,17 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		if err != nil {
 			return errors.New("Cannot renew relay certificate")
 		}
-		token, err := r.o.Store.GetNamespaceToken(ctx, n.Name)
+		token, err := r.o.Store.GetNamespaceTokenForUpdate(ctx, n.Name)
 		if err != nil {
 			return err
 		}
-		if err = r.o.Store.PutNamespaceCredentials(ctx, n, token, key); err != nil {
+		if err = r.o.Store.UpdateNamespaceCredentials(ctx, n, token, key); err != nil {
 			return err
 		}
 		r.enroll(n)
 		return nil
 	}
-	key, err := r.o.Store.GetNamespaceRelayKey(ctx, n.Name)
+	key, err := r.o.Store.GetNamespaceRelayKeyForUpdate(ctx, n.Name)
 	if err != nil {
 		return err
 	}
