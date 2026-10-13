@@ -533,6 +533,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure
 	}
+	if strings.Contains(name, "RabbitMQ") {
+		return s.rabbitmq(ctx, name, in, rc, p)
+	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {
 		return s.failure(engine.ErrNotSupported)

@@ -28,7 +28,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	s, token := namespaceTestServer(t)
 	ctx := t.Context()
 	var err error
-	s.Registry, err = engine.NewRegistry(&fakeProvider{}, psmdb.New(psmdb.Options{}))
+	s.Registry, err = engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	for _, path := range paths {
 		operationID := doc.Paths.Value(path).Get.OperationID
 		t.Run(operationID, func(t *testing.T) {
-			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom").Replace(path)
+			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
 			if path == "/healthz" || path == "/metrics" {
 				url = path
 			}

@@ -1,0 +1,275 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package rabbitmq
+
+import (
+	"context"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"net"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
+)
+
+func TestProvidedCAMemberCertificates(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	rc.Cluster.Spec.TLS.CA = "userProvided"
+	ctx := context.Background()
+	s := state(t, rc)
+	s.add(rc.Cluster.Name)
+	if err := p.ensureSecrets(ctx, rc, s); err == nil {
+		t.Fatal("missing customer CA accepted")
+	}
+	ca, err := pki.NewCA("customer", 365*24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string][]byte{"tls/ca.crt": ca.CertPEM, "tls/ca.key": ca.KeyPEM} {
+		if err := rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := p.ensureSecrets(ctx, rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := p.MemberConfig(ctx, rc, "demom0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TLS.CAPEM != string(ca.CertPEM) || cfg.AgentTLS.CertPEM == "" || cfg.AgentTLS.KeyPEM == "" {
+		t.Fatal("customer CA or separate agent certificate not propagated")
+	}
+	block, _ := pem.Decode([]byte(cfg.TLS.CertPEM))
+	if block == nil {
+		t.Fatal("missing member certificate")
+	}
+	leaf, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(ca.CertPEM)
+	if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: "demom0"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExposureTargetsFollowTLSModeAndAddressFamily(t *testing.T) {
+	for _, mode := range []string{"disabled", "preferTLS", "requireTLS"} {
+		for _, family := range []string{"IPV4", "IPV6"} {
+			t.Run(mode+"/"+family, func(t *testing.T) {
+				p, rc, f, _ := setup(t)
+				rc.Cluster.Spec.Components.Engine.Replicas = 1
+				rc.Cluster.Spec.TLS.Mode = mode
+				rc.Cluster.Spec.Exposure.Public = true
+				rc.Cluster.Spec.Exposure.IPType = family
+				rc.Cluster.Spec.Exposure.Allowlist = []string{"192.0.2.0/24", "2001:db8::/32"}
+				ready(t, p, rc)
+				if len(f.publicPorts) != 1 {
+					t.Fatal(f.publicPorts)
+				}
+				target := 5671
+				if mode == "disabled" {
+					target = 5672
+				}
+				route := f.publicPorts[0]
+				if route.Hostname != "demom0" || route.TargetPort != target || route.Protocol != "tcp" || route.IPType != family || !slices.Equal(route.Allowlist, rc.Cluster.Spec.Exposure.Allowlist) {
+					t.Fatal(route)
+				}
+			})
+		}
+	}
+}
+
+func TestRelayTargetsIncludePlannedObservedAndRemovingMembers(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	if got := p.RelayTargets(nil); len(got) != 0 {
+		t.Fatal(got)
+	}
+	if got := p.RelayTargets(rc.Cluster); len(got) != 15 {
+		t.Fatal("fresh plan must be reachable before infrastructure provisioning", got)
+	}
+	s := state(t, rc)
+	m := s.add(rc.Cluster.Name)
+	m.Removing = true
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	rc.Cluster.Status.Members = []domain.MemberStatus{{Name: m.Name}, {Name: "demom9"}}
+	targets := p.RelayTargets(rc.Cluster)
+	if len(targets) != 10 || !slices.IsSorted(targets) {
+		t.Fatal("relay targets must be sorted, deduplicated and preserve observed identities", targets)
+	}
+	for _, host := range []string{m.Name, "demom9"} {
+		for _, port := range []int{9443, 5672, 5671, 15672, 15671} {
+			if !slices.Contains(targets, net.JoinHostPort(host, strconv.Itoa(port))) {
+				t.Fatalf("missing relay target %s port %d", host, port)
+			}
+		}
+	}
+}
+
+func TestTLSUpdatesPreserveCreationTimeDistributionTransport(t *testing.T) {
+	for _, from := range []string{"disabled", "preferTLS", "requireTLS"} {
+		t.Run(from, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			rc.Cluster.Spec.TLS.Mode = from
+			ready(t, p, rc)
+			old := cloneCluster(t, rc.Cluster)
+			for _, to := range []string{"disabled", "preferTLS", "requireTLS"} {
+				next := cloneCluster(t, old)
+				next.Spec.TLS.Mode = to
+				err := p.Validate(context.Background(), old, next)
+				crossesDistribution := (from == "requireTLS") != (to == "requireTLS")
+				if crossesDistribution {
+					if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "inter-node TLS is fixed at creation") {
+						t.Fatalf("%s -> %s accepted incompatible distribution: %v", from, to, err)
+					}
+				} else if err != nil {
+					t.Fatalf("%s -> %s rejected listener-only TLS update: %v", from, to, err)
+				}
+				// Even if a persisted desired spec or per-member listener snapshot
+				// changes, configuration must never change the cluster transport.
+				rc.Cluster = next
+				s := state(t, rc)
+				s.Members[0].TLSMode = to
+				if err := s.save(rc.Cluster); err != nil {
+					t.Fatal(err)
+				}
+				cfg, err := p.MemberConfig(context.Background(), rc, s.Members[0].Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var spec rmqspec.MemberSpec
+				if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+					t.Fatal(err)
+				}
+				if spec.InterNodeTLS != (from == "requireTLS") {
+					t.Fatalf("%s -> %s changed creation-time distribution: %+v", from, to, spec)
+				}
+			}
+		})
+	}
+}
+
+func TestAutomaticLeafRenewalPublishesOnlyAfterSafeStop(t *testing.T) {
+	p, rc, _, a := setup(t)
+	ready(t, p, rc)
+	ctx := context.Background()
+	caCert, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/ca.crt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caKey, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/ca.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := pki.LoadCA(caCert, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"members", "agents"} {
+		cert, key, err := ca.Issue(pki.CertRequest{
+			CommonName: "demom0",
+			DNSNames:   []string{"demom0", "localhost"},
+			IPs:        []net.IP{net.ParseIP("127.0.0.1")},
+			Validity:   time.Hour,
+			Server:     true,
+			Client:     kind == "members",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), "tls/"+kind+"/demom0.pem", append(cert, key...)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := p.MemberConfig(ctx, rc, "demom0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline := state(t, rc)
+	versions := map[string]int64{}
+	for _, m := range baseline.Members {
+		versions[m.Name] = m.ConfigVersion
+	}
+	if err := p.ensureSecrets(ctx, rc, baseline); err != nil {
+		t.Fatal(err)
+	}
+	if err := baseline.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	pending := map[string]string{}
+	for _, kind := range []string{"members", "agents"} {
+		bundle, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/"+kind+"/demom0.pending.pem")
+		if err != nil {
+			t.Fatalf("%s renewal not staged: %v", kind, err)
+		}
+		pending[kind] = string(bundle)
+	}
+	after, err := p.MemberConfig(ctx, rc, "demom0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.ConfigVersion != before.ConfigVersion || after.TLS.CertPEM != before.TLS.CertPEM || after.AgentTLS != before.AgentTLS {
+		t.Fatal("pending renewal escaped the per-member publication gate")
+	}
+	a.log.clear()
+	syncUntil(t, p, rc, func(s *internalState) bool {
+		return s.Members[0].ChangeStep == "platform"
+	})
+	stopped, err := p.MemberConfig(ctx, rc, "demom0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.broker("demom0").running || stopped.ConfigVersion != before.ConfigVersion || stopped.TLS.CertPEM != before.TLS.CertPEM || stopped.AgentTLS != before.AgentTLS {
+		t.Fatal("renewal published before the old broker was safely stopped")
+	}
+	if _, err := p.Sync(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"members", "agents"} {
+		bundle, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/"+kind+"/demom0.pem")
+		if err != nil || string(bundle) != pending[kind] {
+			t.Fatalf("%s staged renewal was not atomically promoted: %v", kind, err)
+		}
+		if _, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/"+kind+"/demom0.pending.pem"); !missing(err) {
+			t.Fatalf("%s pending leaf survived promotion: %v", kind, err)
+		}
+	}
+	syncUntil(t, p, rc, func(s *internalState) bool {
+		return s.Phase == "ready" && s.Pending == nil && s.Members[0].ChangeStep == ""
+	})
+	calls := a.log.snapshot()
+	assertBefore(t, calls, "agent:demom0:drain", "agent:demom0:stop")
+	assertBefore(t, calls, "agent:demom0:stop", "infra:demom0:deploy")
+	if countCall(calls, "infra:demom0:deploy") != 1 {
+		t.Fatalf("automatic renewal deployed more than once: %v", calls)
+	}
+	final, err := p.MemberConfig(ctx, rc, "demom0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.ConfigVersion != before.ConfigVersion+1 || final.TLS.CertPEM == before.TLS.CertPEM || final.AgentTLS.CertPEM == before.AgentTLS.CertPEM {
+		t.Fatal("automatic renewal did not publish both renewed leaves exactly once")
+	}
+	for _, m := range state(t, rc).Members {
+		if m.Name != "demom0" && m.ConfigVersion != versions[m.Name] {
+			t.Fatalf("automatic leaf renewal drifted untouched peer config version: %+v", m)
+		}
+	}
+}

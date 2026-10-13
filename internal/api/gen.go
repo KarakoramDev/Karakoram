@@ -107,6 +107,15 @@ const (
 	CreateBackupStorageRequestTypeS3 CreateBackupStorageRequestType = "s3"
 )
 
+// Defines values for CreatedRabbitMQUserTags.
+const (
+	CreatedRabbitMQUserTagsAdministrator CreatedRabbitMQUserTags = "administrator"
+	CreatedRabbitMQUserTagsImpersonator  CreatedRabbitMQUserTags = "impersonator"
+	CreatedRabbitMQUserTagsManagement    CreatedRabbitMQUserTags = "management"
+	CreatedRabbitMQUserTagsMonitoring    CreatedRabbitMQUserTags = "monitoring"
+	CreatedRabbitMQUserTagsPolicymaker   CreatedRabbitMQUserTags = "policymaker"
+)
+
 // Defines values for ExposureIpType.
 const (
 	ExposureIpTypeIPV4 ExposureIpType = "IPV4"
@@ -210,6 +219,41 @@ const (
 	ProviderVersionStatusUnavailable ProviderVersionStatus = "unavailable"
 )
 
+// Defines values for RabbitMQPolicyApplyTo.
+const (
+	All           RabbitMQPolicyApplyTo = "all"
+	ClassicQueues RabbitMQPolicyApplyTo = "classic_queues"
+	Exchanges     RabbitMQPolicyApplyTo = "exchanges"
+	Queues        RabbitMQPolicyApplyTo = "queues"
+	QuorumQueues  RabbitMQPolicyApplyTo = "quorum_queues"
+	Streams       RabbitMQPolicyApplyTo = "streams"
+)
+
+// Defines values for RabbitMQUserTags.
+const (
+	RabbitMQUserTagsAdministrator RabbitMQUserTags = "administrator"
+	RabbitMQUserTagsImpersonator  RabbitMQUserTags = "impersonator"
+	RabbitMQUserTagsManagement    RabbitMQUserTags = "management"
+	RabbitMQUserTagsMonitoring    RabbitMQUserTags = "monitoring"
+	RabbitMQUserTagsPolicymaker   RabbitMQUserTags = "policymaker"
+)
+
+// Defines values for RabbitMQUserWriteTags.
+const (
+	Administrator RabbitMQUserWriteTags = "administrator"
+	Impersonator  RabbitMQUserWriteTags = "impersonator"
+	Management    RabbitMQUserWriteTags = "management"
+	Monitoring    RabbitMQUserWriteTags = "monitoring"
+	Policymaker   RabbitMQUserWriteTags = "policymaker"
+)
+
+// Defines values for RabbitMQVhostDefaultQueueType.
+const (
+	Classic RabbitMQVhostDefaultQueueType = "classic"
+	Quorum  RabbitMQVhostDefaultQueueType = "quorum"
+	Stream  RabbitMQVhostDefaultQueueType = "stream"
+)
+
 // Defines values for RelayStatusPhase.
 const (
 	RelayStatusPhaseDeploying   RelayStatusPhase = "Deploying"
@@ -258,10 +302,12 @@ const (
 
 // Defines values for SystemUserName.
 const (
+	SystemUserNameAdmin          SystemUserName = "admin"
 	SystemUserNameBackup         SystemUserName = "backup"
 	SystemUserNameClusterAdmin   SystemUserName = "clusterAdmin"
 	SystemUserNameClusterMonitor SystemUserName = "clusterMonitor"
 	SystemUserNameDatabaseAdmin  SystemUserName = "databaseAdmin"
+	SystemUserNameKarakoram      SystemUserName = "karakoram"
 	SystemUserNameUserAdmin      SystemUserName = "userAdmin"
 )
 
@@ -939,6 +985,17 @@ type CreatedDatabaseUser struct {
 	Username          string          `json:"username"`
 }
 
+// CreatedRabbitMQUser defines model for CreatedRabbitMQUser.
+type CreatedRabbitMQUser struct {
+	// GeneratedPassword Present only when a password was generated at creation; store it securely once.
+	GeneratedPassword *string                   `json:"generatedPassword,omitempty"`
+	Name              string                    `json:"name"`
+	Tags              []CreatedRabbitMQUserTags `json:"tags"`
+}
+
+// CreatedRabbitMQUserTags defines model for CreatedRabbitMQUser.Tags.
+type CreatedRabbitMQUserTags string
+
 // CurrentUser defines model for CurrentUser.
 type CurrentUser struct {
 	// CsrfToken Present for cookie sessions, including OIDC sessions. Safe authenticated GET discovery allows the UI to authorize subsequent unsafe requests. Absent for bearer API-token authentication.
@@ -1492,6 +1549,100 @@ type ProviderVersionStatus string
 type RBACPolicy struct {
 	// Policy Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. Validation errors name policy and the line. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies.
 	Policy string `json:"policy"`
+}
+
+// RabbitMQPermission defines model for RabbitMQPermission.
+type RabbitMQPermission struct {
+	Configure string `json:"configure"`
+	Read      string `json:"read"`
+	User      string `json:"user"`
+	Vhost     string `json:"vhost"`
+	Write     string `json:"write"`
+}
+
+// RabbitMQPermissionList defines model for RabbitMQPermissionList.
+type RabbitMQPermissionList struct {
+	Items []RabbitMQPermission `json:"items"`
+}
+
+// RabbitMQPolicy defines model for RabbitMQPolicy.
+type RabbitMQPolicy struct {
+	ApplyTo    RabbitMQPolicyApplyTo  `json:"applyTo"`
+	Definition map[string]interface{} `json:"definition"`
+	Name       string                 `json:"name"`
+	Pattern    string                 `json:"pattern"`
+	Priority   int                    `json:"priority"`
+	Vhost      string                 `json:"vhost"`
+}
+
+// RabbitMQPolicyApplyTo defines model for RabbitMQPolicy.ApplyTo.
+type RabbitMQPolicyApplyTo string
+
+// RabbitMQPolicyList defines model for RabbitMQPolicyList.
+type RabbitMQPolicyList struct {
+	Items []RabbitMQPolicy `json:"items"`
+}
+
+// RabbitMQTopicPermission defines model for RabbitMQTopicPermission.
+type RabbitMQTopicPermission struct {
+	Exchange string `json:"exchange"`
+	Read     string `json:"read"`
+	User     string `json:"user"`
+	Vhost    string `json:"vhost"`
+	Write    string `json:"write"`
+}
+
+// RabbitMQTopicPermissionList defines model for RabbitMQTopicPermissionList.
+type RabbitMQTopicPermissionList struct {
+	Items []RabbitMQTopicPermission `json:"items"`
+}
+
+// RabbitMQUser defines model for RabbitMQUser.
+type RabbitMQUser struct {
+	Name string             `json:"name"`
+	Tags []RabbitMQUserTags `json:"tags"`
+}
+
+// RabbitMQUserTags defines model for RabbitMQUser.Tags.
+type RabbitMQUserTags string
+
+// RabbitMQUserList defines model for RabbitMQUserList.
+type RabbitMQUserList struct {
+	Items []RabbitMQUser `json:"items"`
+}
+
+// RabbitMQUserWrite defines model for RabbitMQUserWrite.
+type RabbitMQUserWrite struct {
+	Name         string                  `json:"name"`
+	Password     *string                 `json:"password,omitempty"`
+	PasswordHash *string                 `json:"passwordHash,omitempty"`
+	Tags         []RabbitMQUserWriteTags `json:"tags"`
+}
+
+// RabbitMQUserWriteTags defines model for RabbitMQUserWrite.Tags.
+type RabbitMQUserWriteTags string
+
+// RabbitMQVhost defines model for RabbitMQVhost.
+type RabbitMQVhost struct {
+	DefaultQueueType *RabbitMQVhostDefaultQueueType `json:"defaultQueueType,omitempty"`
+	Description      *string                        `json:"description,omitempty"`
+	Limits           *RabbitMQVhostLimits           `json:"limits,omitempty"`
+	Name             string                         `json:"name"`
+	Tags             []string                       `json:"tags"`
+}
+
+// RabbitMQVhostDefaultQueueType defines model for RabbitMQVhost.DefaultQueueType.
+type RabbitMQVhostDefaultQueueType string
+
+// RabbitMQVhostLimits defines model for RabbitMQVhostLimits.
+type RabbitMQVhostLimits struct {
+	MaxConnections *int `json:"maxConnections,omitempty"`
+	MaxQueues      *int `json:"maxQueues,omitempty"`
+}
+
+// RabbitMQVhostList defines model for RabbitMQVhostList.
+type RabbitMQVhostList struct {
+	Items []RabbitMQVhost `json:"items"`
 }
 
 // RaiseFCVRequest defines model for RaiseFCVRequest.
@@ -2584,6 +2735,240 @@ type GetClusterPlacementParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListRabbitMQOperatorPoliciesParams defines parameters for ListRabbitMQOperatorPolicies.
+type ListRabbitMQOperatorPoliciesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQOperatorPolicyParams defines parameters for CreateRabbitMQOperatorPolicy.
+type CreateRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQOperatorPolicyParams defines parameters for DeleteRabbitMQOperatorPolicy.
+type DeleteRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQOperatorPolicyParams defines parameters for GetRabbitMQOperatorPolicy.
+type GetRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQOperatorPolicyParams defines parameters for ReplaceRabbitMQOperatorPolicy.
+type ReplaceRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQPermissionsParams defines parameters for ListRabbitMQPermissions.
+type ListRabbitMQPermissionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQPermissionParams defines parameters for CreateRabbitMQPermission.
+type CreateRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQPermissionParams defines parameters for DeleteRabbitMQPermission.
+type DeleteRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQPermissionParams defines parameters for GetRabbitMQPermission.
+type GetRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQPermissionParams defines parameters for ReplaceRabbitMQPermission.
+type ReplaceRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQPoliciesParams defines parameters for ListRabbitMQPolicies.
+type ListRabbitMQPoliciesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQPolicyParams defines parameters for CreateRabbitMQPolicy.
+type CreateRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQPolicyParams defines parameters for DeleteRabbitMQPolicy.
+type DeleteRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQPolicyParams defines parameters for GetRabbitMQPolicy.
+type GetRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQPolicyParams defines parameters for ReplaceRabbitMQPolicy.
+type ReplaceRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQTopicPermissionsParams defines parameters for ListRabbitMQTopicPermissions.
+type ListRabbitMQTopicPermissionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQTopicPermissionParams defines parameters for CreateRabbitMQTopicPermission.
+type CreateRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQTopicPermissionParams defines parameters for DeleteRabbitMQTopicPermission.
+type DeleteRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQTopicPermissionParams defines parameters for GetRabbitMQTopicPermission.
+type GetRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQTopicPermissionParams defines parameters for ReplaceRabbitMQTopicPermission.
+type ReplaceRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQUsersParams defines parameters for ListRabbitMQUsers.
+type ListRabbitMQUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQUserParams defines parameters for CreateRabbitMQUser.
+type CreateRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQUserParams defines parameters for DeleteRabbitMQUser.
+type DeleteRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQUserParams defines parameters for GetRabbitMQUser.
+type GetRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQUserParams defines parameters for ReplaceRabbitMQUser.
+type ReplaceRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQVhostsParams defines parameters for ListRabbitMQVhosts.
+type ListRabbitMQVhostsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQVhostParams defines parameters for CreateRabbitMQVhost.
+type CreateRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQVhostParams defines parameters for DeleteRabbitMQVhost.
+type DeleteRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQVhostParams defines parameters for GetRabbitMQVhost.
+type GetRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQVhostParams defines parameters for ReplaceRabbitMQVhost.
+type ReplaceRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -2981,6 +3366,42 @@ type CreateDatabaseUserJSONRequestBody = CreateDatabaseUserRequest
 // ReplaceDatabaseUserJSONRequestBody defines body for ReplaceDatabaseUser for application/json ContentType.
 type ReplaceDatabaseUserJSONRequestBody = UpdateDatabaseUserRequest
 
+// CreateRabbitMQOperatorPolicyJSONRequestBody defines body for CreateRabbitMQOperatorPolicy for application/json ContentType.
+type CreateRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
+
+// ReplaceRabbitMQOperatorPolicyJSONRequestBody defines body for ReplaceRabbitMQOperatorPolicy for application/json ContentType.
+type ReplaceRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
+
+// CreateRabbitMQPermissionJSONRequestBody defines body for CreateRabbitMQPermission for application/json ContentType.
+type CreateRabbitMQPermissionJSONRequestBody = RabbitMQPermission
+
+// ReplaceRabbitMQPermissionJSONRequestBody defines body for ReplaceRabbitMQPermission for application/json ContentType.
+type ReplaceRabbitMQPermissionJSONRequestBody = RabbitMQPermission
+
+// CreateRabbitMQPolicyJSONRequestBody defines body for CreateRabbitMQPolicy for application/json ContentType.
+type CreateRabbitMQPolicyJSONRequestBody = RabbitMQPolicy
+
+// ReplaceRabbitMQPolicyJSONRequestBody defines body for ReplaceRabbitMQPolicy for application/json ContentType.
+type ReplaceRabbitMQPolicyJSONRequestBody = RabbitMQPolicy
+
+// CreateRabbitMQTopicPermissionJSONRequestBody defines body for CreateRabbitMQTopicPermission for application/json ContentType.
+type CreateRabbitMQTopicPermissionJSONRequestBody = RabbitMQTopicPermission
+
+// ReplaceRabbitMQTopicPermissionJSONRequestBody defines body for ReplaceRabbitMQTopicPermission for application/json ContentType.
+type ReplaceRabbitMQTopicPermissionJSONRequestBody = RabbitMQTopicPermission
+
+// CreateRabbitMQUserJSONRequestBody defines body for CreateRabbitMQUser for application/json ContentType.
+type CreateRabbitMQUserJSONRequestBody = RabbitMQUserWrite
+
+// ReplaceRabbitMQUserJSONRequestBody defines body for ReplaceRabbitMQUser for application/json ContentType.
+type ReplaceRabbitMQUserJSONRequestBody = RabbitMQUserWrite
+
+// CreateRabbitMQVhostJSONRequestBody defines body for CreateRabbitMQVhost for application/json ContentType.
+type CreateRabbitMQVhostJSONRequestBody = RabbitMQVhost
+
+// ReplaceRabbitMQVhostJSONRequestBody defines body for ReplaceRabbitMQVhost for application/json ContentType.
+type ReplaceRabbitMQVhostJSONRequestBody = RabbitMQVhost
+
 // RaiseClusterFCVJSONRequestBody defines body for RaiseClusterFCV for application/json ContentType.
 type RaiseClusterFCVJSONRequestBody = RaiseFCVRequest
 
@@ -3296,6 +3717,96 @@ type ServerInterface interface {
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterPlacementParams)
+	// List RabbitMQ OperatorPolicy
+	// (GET /clusters/{cluster}/rabbitmq/operator-policies)
+	ListRabbitMQOperatorPolicies(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQOperatorPoliciesParams)
+	// Create RabbitMQ OperatorPolicy
+	// (POST /clusters/{cluster}/rabbitmq/operator-policies)
+	CreateRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQOperatorPolicyParams)
+	// Delete RabbitMQ OperatorPolicy
+	// (DELETE /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name})
+	DeleteRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params DeleteRabbitMQOperatorPolicyParams)
+	// Get RabbitMQ OperatorPolicy
+	// (GET /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name})
+	GetRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params GetRabbitMQOperatorPolicyParams)
+	// Replace RabbitMQ OperatorPolicy
+	// (PUT /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name})
+	ReplaceRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params ReplaceRabbitMQOperatorPolicyParams)
+	// List RabbitMQ Permission
+	// (GET /clusters/{cluster}/rabbitmq/permissions)
+	ListRabbitMQPermissions(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQPermissionsParams)
+	// Create RabbitMQ Permission
+	// (POST /clusters/{cluster}/rabbitmq/permissions)
+	CreateRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQPermissionParams)
+	// Delete RabbitMQ Permission
+	// (DELETE /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user})
+	DeleteRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params DeleteRabbitMQPermissionParams)
+	// Get RabbitMQ Permission
+	// (GET /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user})
+	GetRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params GetRabbitMQPermissionParams)
+	// Replace RabbitMQ Permission
+	// (PUT /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user})
+	ReplaceRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params ReplaceRabbitMQPermissionParams)
+	// List RabbitMQ Policy
+	// (GET /clusters/{cluster}/rabbitmq/policies)
+	ListRabbitMQPolicies(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQPoliciesParams)
+	// Create RabbitMQ Policy
+	// (POST /clusters/{cluster}/rabbitmq/policies)
+	CreateRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQPolicyParams)
+	// Delete RabbitMQ Policy
+	// (DELETE /clusters/{cluster}/rabbitmq/policies/{vhost}/{name})
+	DeleteRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params DeleteRabbitMQPolicyParams)
+	// Get RabbitMQ Policy
+	// (GET /clusters/{cluster}/rabbitmq/policies/{vhost}/{name})
+	GetRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params GetRabbitMQPolicyParams)
+	// Replace RabbitMQ Policy
+	// (PUT /clusters/{cluster}/rabbitmq/policies/{vhost}/{name})
+	ReplaceRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params ReplaceRabbitMQPolicyParams)
+	// List RabbitMQ TopicPermission
+	// (GET /clusters/{cluster}/rabbitmq/topic-permissions)
+	ListRabbitMQTopicPermissions(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQTopicPermissionsParams)
+	// Create RabbitMQ TopicPermission
+	// (POST /clusters/{cluster}/rabbitmq/topic-permissions)
+	CreateRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQTopicPermissionParams)
+	// Delete RabbitMQ TopicPermission
+	// (DELETE /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user})
+	DeleteRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params DeleteRabbitMQTopicPermissionParams)
+	// Get RabbitMQ TopicPermission
+	// (GET /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user})
+	GetRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params GetRabbitMQTopicPermissionParams)
+	// Replace RabbitMQ TopicPermission
+	// (PUT /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user})
+	ReplaceRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params ReplaceRabbitMQTopicPermissionParams)
+	// List RabbitMQ User
+	// (GET /clusters/{cluster}/rabbitmq/users)
+	ListRabbitMQUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQUsersParams)
+	// Create RabbitMQ User
+	// (POST /clusters/{cluster}/rabbitmq/users)
+	CreateRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQUserParams)
+	// Delete RabbitMQ User
+	// (DELETE /clusters/{cluster}/rabbitmq/users/{user})
+	DeleteRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteRabbitMQUserParams)
+	// Get RabbitMQ User
+	// (GET /clusters/{cluster}/rabbitmq/users/{user})
+	GetRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetRabbitMQUserParams)
+	// Replace RabbitMQ User
+	// (PUT /clusters/{cluster}/rabbitmq/users/{user})
+	ReplaceRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params ReplaceRabbitMQUserParams)
+	// List RabbitMQ Vhost
+	// (GET /clusters/{cluster}/rabbitmq/vhosts)
+	ListRabbitMQVhosts(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQVhostsParams)
+	// Create RabbitMQ Vhost
+	// (POST /clusters/{cluster}/rabbitmq/vhosts)
+	CreateRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQVhostParams)
+	// Delete RabbitMQ Vhost
+	// (DELETE /clusters/{cluster}/rabbitmq/vhosts/{vhost})
+	DeleteRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, params DeleteRabbitMQVhostParams)
+	// Get RabbitMQ Vhost
+	// (GET /clusters/{cluster}/rabbitmq/vhosts/{vhost})
+	GetRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, params GetRabbitMQVhostParams)
+	// Replace RabbitMQ Vhost
+	// (PUT /clusters/{cluster}/rabbitmq/vhosts/{vhost})
+	ReplaceRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, params ReplaceRabbitMQVhostParams)
 	// Explicitly raise feature compatibility version
 	// (POST /clusters/{cluster}/raise-fcv)
 	RaiseClusterFCV(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RaiseClusterFCVParams)
@@ -6765,6 +7276,1974 @@ func (siw *ServerInterfaceWrapper) GetClusterPlacement(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListRabbitMQOperatorPolicies operation middleware
+func (siw *ServerInterfaceWrapper) ListRabbitMQOperatorPolicies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRabbitMQOperatorPoliciesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRabbitMQOperatorPolicies(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRabbitMQOperatorPolicy operation middleware
+func (siw *ServerInterfaceWrapper) CreateRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRabbitMQOperatorPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRabbitMQOperatorPolicy(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRabbitMQOperatorPolicy operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRabbitMQOperatorPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRabbitMQOperatorPolicy(w, r, cluster, vhost, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRabbitMQOperatorPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRabbitMQOperatorPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRabbitMQOperatorPolicy(w, r, cluster, vhost, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRabbitMQOperatorPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRabbitMQOperatorPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRabbitMQOperatorPolicy(w, r, cluster, vhost, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRabbitMQPermissions operation middleware
+func (siw *ServerInterfaceWrapper) ListRabbitMQPermissions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRabbitMQPermissionsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRabbitMQPermissions(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRabbitMQPermission operation middleware
+func (siw *ServerInterfaceWrapper) CreateRabbitMQPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRabbitMQPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRabbitMQPermission(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRabbitMQPermission operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRabbitMQPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRabbitMQPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRabbitMQPermission(w, r, cluster, vhost, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRabbitMQPermission operation middleware
+func (siw *ServerInterfaceWrapper) GetRabbitMQPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRabbitMQPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRabbitMQPermission(w, r, cluster, vhost, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRabbitMQPermission operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRabbitMQPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRabbitMQPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRabbitMQPermission(w, r, cluster, vhost, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRabbitMQPolicies operation middleware
+func (siw *ServerInterfaceWrapper) ListRabbitMQPolicies(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRabbitMQPoliciesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRabbitMQPolicies(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRabbitMQPolicy operation middleware
+func (siw *ServerInterfaceWrapper) CreateRabbitMQPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRabbitMQPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRabbitMQPolicy(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRabbitMQPolicy operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRabbitMQPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRabbitMQPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRabbitMQPolicy(w, r, cluster, vhost, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRabbitMQPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetRabbitMQPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRabbitMQPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRabbitMQPolicy(w, r, cluster, vhost, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRabbitMQPolicy operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRabbitMQPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRabbitMQPolicyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRabbitMQPolicy(w, r, cluster, vhost, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRabbitMQTopicPermissions operation middleware
+func (siw *ServerInterfaceWrapper) ListRabbitMQTopicPermissions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRabbitMQTopicPermissionsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRabbitMQTopicPermissions(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRabbitMQTopicPermission operation middleware
+func (siw *ServerInterfaceWrapper) CreateRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRabbitMQTopicPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRabbitMQTopicPermission(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRabbitMQTopicPermission operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRabbitMQTopicPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRabbitMQTopicPermission(w, r, cluster, vhost, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRabbitMQTopicPermission operation middleware
+func (siw *ServerInterfaceWrapper) GetRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRabbitMQTopicPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRabbitMQTopicPermission(w, r, cluster, vhost, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRabbitMQTopicPermission operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRabbitMQTopicPermissionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRabbitMQTopicPermission(w, r, cluster, vhost, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRabbitMQUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListRabbitMQUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRabbitMQUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRabbitMQUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRabbitMQUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateRabbitMQUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRabbitMQUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRabbitMQUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRabbitMQUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRabbitMQUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRabbitMQUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRabbitMQUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRabbitMQUser operation middleware
+func (siw *ServerInterfaceWrapper) GetRabbitMQUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRabbitMQUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRabbitMQUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRabbitMQUser operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRabbitMQUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRabbitMQUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRabbitMQUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRabbitMQVhosts operation middleware
+func (siw *ServerInterfaceWrapper) ListRabbitMQVhosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRabbitMQVhostsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRabbitMQVhosts(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRabbitMQVhost operation middleware
+func (siw *ServerInterfaceWrapper) CreateRabbitMQVhost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRabbitMQVhostParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRabbitMQVhost(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRabbitMQVhost operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRabbitMQVhost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteRabbitMQVhostParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRabbitMQVhost(w, r, cluster, vhost, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRabbitMQVhost operation middleware
+func (siw *ServerInterfaceWrapper) GetRabbitMQVhost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRabbitMQVhostParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRabbitMQVhost(w, r, cluster, vhost, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRabbitMQVhost operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRabbitMQVhost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "vhost" -------------
+	var vhost string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "vhost", r.PathValue("vhost"), &vhost, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vhost", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceRabbitMQVhostParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRabbitMQVhost(w, r, cluster, vhost, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RaiseClusterFCV operation middleware
 func (siw *ServerInterfaceWrapper) RaiseClusterFCV(w http.ResponseWriter, r *http.Request) {
 
@@ -8762,6 +11241,36 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/operations", wrapper.ListClusterOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/pitr", wrapper.GetPITRWindow)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/placement", wrapper.GetClusterPlacement)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies", wrapper.ListRabbitMQOperatorPolicies)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies", wrapper.CreateRabbitMQOperatorPolicy)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}", wrapper.DeleteRabbitMQOperatorPolicy)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}", wrapper.GetRabbitMQOperatorPolicy)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}", wrapper.ReplaceRabbitMQOperatorPolicy)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/permissions", wrapper.ListRabbitMQPermissions)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/permissions", wrapper.CreateRabbitMQPermission)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/permissions/{vhost}/{user}", wrapper.DeleteRabbitMQPermission)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/permissions/{vhost}/{user}", wrapper.GetRabbitMQPermission)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/permissions/{vhost}/{user}", wrapper.ReplaceRabbitMQPermission)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/policies", wrapper.ListRabbitMQPolicies)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/policies", wrapper.CreateRabbitMQPolicy)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/policies/{vhost}/{name}", wrapper.DeleteRabbitMQPolicy)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/policies/{vhost}/{name}", wrapper.GetRabbitMQPolicy)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/policies/{vhost}/{name}", wrapper.ReplaceRabbitMQPolicy)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/topic-permissions", wrapper.ListRabbitMQTopicPermissions)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/topic-permissions", wrapper.CreateRabbitMQTopicPermission)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user}", wrapper.DeleteRabbitMQTopicPermission)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user}", wrapper.GetRabbitMQTopicPermission)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user}", wrapper.ReplaceRabbitMQTopicPermission)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/users", wrapper.ListRabbitMQUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/users", wrapper.CreateRabbitMQUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/users/{user}", wrapper.DeleteRabbitMQUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/users/{user}", wrapper.GetRabbitMQUser)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/users/{user}", wrapper.ReplaceRabbitMQUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts", wrapper.ListRabbitMQVhosts)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts", wrapper.CreateRabbitMQVhost)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts/{vhost}", wrapper.DeleteRabbitMQVhost)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts/{vhost}", wrapper.GetRabbitMQVhost)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/rabbitmq/vhosts/{vhost}", wrapper.ReplaceRabbitMQVhost)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/raise-fcv", wrapper.RaiseClusterFCV)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/restart", wrapper.RestartCluster)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/restores", wrapper.ListRestores)
@@ -15540,6 +18049,2382 @@ func (response GetClusterPlacement500JSONResponse) VisitGetClusterPlacementRespo
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListRabbitMQOperatorPoliciesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListRabbitMQOperatorPoliciesParams
+}
+
+type ListRabbitMQOperatorPoliciesResponseObject interface {
+	VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error
+}
+
+type ListRabbitMQOperatorPolicies200JSONResponse RabbitMQPolicyList
+
+func (response ListRabbitMQOperatorPolicies200JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRabbitMQOperatorPolicies400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListRabbitMQOperatorPolicies400JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQOperatorPolicies401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRabbitMQOperatorPolicies401JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQOperatorPolicies403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRabbitMQOperatorPolicies403JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQOperatorPolicies404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRabbitMQOperatorPolicies404JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQOperatorPolicies409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListRabbitMQOperatorPolicies409JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQOperatorPolicies500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRabbitMQOperatorPolicies500JSONResponse) VisitListRabbitMQOperatorPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQOperatorPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateRabbitMQOperatorPolicyParams
+	Body    *CreateRabbitMQOperatorPolicyJSONRequestBody
+}
+
+type CreateRabbitMQOperatorPolicyResponseObject interface {
+	VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error
+}
+
+type CreateRabbitMQOperatorPolicy201JSONResponse RabbitMQPolicy
+
+func (response CreateRabbitMQOperatorPolicy201JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRabbitMQOperatorPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRabbitMQOperatorPolicy400JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQOperatorPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateRabbitMQOperatorPolicy401JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQOperatorPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRabbitMQOperatorPolicy403JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQOperatorPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRabbitMQOperatorPolicy404JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQOperatorPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRabbitMQOperatorPolicy409JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQOperatorPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateRabbitMQOperatorPolicy500JSONResponse) VisitCreateRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQOperatorPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Name    string      `json:"name"`
+	Params  DeleteRabbitMQOperatorPolicyParams
+}
+
+type DeleteRabbitMQOperatorPolicyResponseObject interface {
+	VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error
+}
+
+type DeleteRabbitMQOperatorPolicy204Response struct {
+}
+
+func (response DeleteRabbitMQOperatorPolicy204Response) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRabbitMQOperatorPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteRabbitMQOperatorPolicy400JSONResponse) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQOperatorPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteRabbitMQOperatorPolicy401JSONResponse) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQOperatorPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRabbitMQOperatorPolicy403JSONResponse) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQOperatorPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRabbitMQOperatorPolicy404JSONResponse) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQOperatorPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteRabbitMQOperatorPolicy409JSONResponse) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQOperatorPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteRabbitMQOperatorPolicy500JSONResponse) VisitDeleteRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQOperatorPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Name    string      `json:"name"`
+	Params  GetRabbitMQOperatorPolicyParams
+}
+
+type GetRabbitMQOperatorPolicyResponseObject interface {
+	VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetRabbitMQOperatorPolicy200JSONResponse RabbitMQPolicy
+
+func (response GetRabbitMQOperatorPolicy200JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetRabbitMQOperatorPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetRabbitMQOperatorPolicy400JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQOperatorPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetRabbitMQOperatorPolicy401JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQOperatorPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRabbitMQOperatorPolicy403JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQOperatorPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRabbitMQOperatorPolicy404JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQOperatorPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetRabbitMQOperatorPolicy409JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQOperatorPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRabbitMQOperatorPolicy500JSONResponse) VisitGetRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQOperatorPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Name    string      `json:"name"`
+	Params  ReplaceRabbitMQOperatorPolicyParams
+	Body    *ReplaceRabbitMQOperatorPolicyJSONRequestBody
+}
+
+type ReplaceRabbitMQOperatorPolicyResponseObject interface {
+	VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRabbitMQOperatorPolicy200JSONResponse RabbitMQPolicy
+
+func (response ReplaceRabbitMQOperatorPolicy200JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReplaceRabbitMQOperatorPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceRabbitMQOperatorPolicy400JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQOperatorPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceRabbitMQOperatorPolicy401JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQOperatorPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRabbitMQOperatorPolicy403JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQOperatorPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRabbitMQOperatorPolicy404JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQOperatorPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRabbitMQOperatorPolicy409JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQOperatorPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceRabbitMQOperatorPolicy500JSONResponse) VisitReplaceRabbitMQOperatorPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPermissionsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListRabbitMQPermissionsParams
+}
+
+type ListRabbitMQPermissionsResponseObject interface {
+	VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error
+}
+
+type ListRabbitMQPermissions200JSONResponse RabbitMQPermissionList
+
+func (response ListRabbitMQPermissions200JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRabbitMQPermissions400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListRabbitMQPermissions400JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPermissions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRabbitMQPermissions401JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPermissions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRabbitMQPermissions403JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPermissions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRabbitMQPermissions404JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPermissions409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListRabbitMQPermissions409JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPermissions500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRabbitMQPermissions500JSONResponse) VisitListRabbitMQPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateRabbitMQPermissionParams
+	Body    *CreateRabbitMQPermissionJSONRequestBody
+}
+
+type CreateRabbitMQPermissionResponseObject interface {
+	VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error
+}
+
+type CreateRabbitMQPermission201JSONResponse RabbitMQPermission
+
+func (response CreateRabbitMQPermission201JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRabbitMQPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRabbitMQPermission400JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateRabbitMQPermission401JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRabbitMQPermission403JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRabbitMQPermission404JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRabbitMQPermission409JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateRabbitMQPermission500JSONResponse) VisitCreateRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	User    string      `json:"user"`
+	Params  DeleteRabbitMQPermissionParams
+}
+
+type DeleteRabbitMQPermissionResponseObject interface {
+	VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error
+}
+
+type DeleteRabbitMQPermission204Response struct {
+}
+
+func (response DeleteRabbitMQPermission204Response) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRabbitMQPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteRabbitMQPermission400JSONResponse) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteRabbitMQPermission401JSONResponse) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRabbitMQPermission403JSONResponse) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRabbitMQPermission404JSONResponse) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteRabbitMQPermission409JSONResponse) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteRabbitMQPermission500JSONResponse) VisitDeleteRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	User    string      `json:"user"`
+	Params  GetRabbitMQPermissionParams
+}
+
+type GetRabbitMQPermissionResponseObject interface {
+	VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error
+}
+
+type GetRabbitMQPermission200JSONResponse RabbitMQPermission
+
+func (response GetRabbitMQPermission200JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetRabbitMQPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetRabbitMQPermission400JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetRabbitMQPermission401JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRabbitMQPermission403JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRabbitMQPermission404JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetRabbitMQPermission409JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRabbitMQPermission500JSONResponse) VisitGetRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	User    string      `json:"user"`
+	Params  ReplaceRabbitMQPermissionParams
+	Body    *ReplaceRabbitMQPermissionJSONRequestBody
+}
+
+type ReplaceRabbitMQPermissionResponseObject interface {
+	VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRabbitMQPermission200JSONResponse RabbitMQPermission
+
+func (response ReplaceRabbitMQPermission200JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReplaceRabbitMQPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceRabbitMQPermission400JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceRabbitMQPermission401JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRabbitMQPermission403JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRabbitMQPermission404JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRabbitMQPermission409JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceRabbitMQPermission500JSONResponse) VisitReplaceRabbitMQPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPoliciesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListRabbitMQPoliciesParams
+}
+
+type ListRabbitMQPoliciesResponseObject interface {
+	VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error
+}
+
+type ListRabbitMQPolicies200JSONResponse RabbitMQPolicyList
+
+func (response ListRabbitMQPolicies200JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRabbitMQPolicies400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListRabbitMQPolicies400JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPolicies401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRabbitMQPolicies401JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPolicies403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRabbitMQPolicies403JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPolicies404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRabbitMQPolicies404JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPolicies409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListRabbitMQPolicies409JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQPolicies500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRabbitMQPolicies500JSONResponse) VisitListRabbitMQPoliciesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateRabbitMQPolicyParams
+	Body    *CreateRabbitMQPolicyJSONRequestBody
+}
+
+type CreateRabbitMQPolicyResponseObject interface {
+	VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error
+}
+
+type CreateRabbitMQPolicy201JSONResponse RabbitMQPolicy
+
+func (response CreateRabbitMQPolicy201JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRabbitMQPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRabbitMQPolicy400JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateRabbitMQPolicy401JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRabbitMQPolicy403JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRabbitMQPolicy404JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRabbitMQPolicy409JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateRabbitMQPolicy500JSONResponse) VisitCreateRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Name    string      `json:"name"`
+	Params  DeleteRabbitMQPolicyParams
+}
+
+type DeleteRabbitMQPolicyResponseObject interface {
+	VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error
+}
+
+type DeleteRabbitMQPolicy204Response struct {
+}
+
+func (response DeleteRabbitMQPolicy204Response) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRabbitMQPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteRabbitMQPolicy400JSONResponse) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteRabbitMQPolicy401JSONResponse) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRabbitMQPolicy403JSONResponse) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRabbitMQPolicy404JSONResponse) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteRabbitMQPolicy409JSONResponse) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteRabbitMQPolicy500JSONResponse) VisitDeleteRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Name    string      `json:"name"`
+	Params  GetRabbitMQPolicyParams
+}
+
+type GetRabbitMQPolicyResponseObject interface {
+	VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetRabbitMQPolicy200JSONResponse RabbitMQPolicy
+
+func (response GetRabbitMQPolicy200JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetRabbitMQPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetRabbitMQPolicy400JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetRabbitMQPolicy401JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRabbitMQPolicy403JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRabbitMQPolicy404JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetRabbitMQPolicy409JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRabbitMQPolicy500JSONResponse) VisitGetRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPolicyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Name    string      `json:"name"`
+	Params  ReplaceRabbitMQPolicyParams
+	Body    *ReplaceRabbitMQPolicyJSONRequestBody
+}
+
+type ReplaceRabbitMQPolicyResponseObject interface {
+	VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRabbitMQPolicy200JSONResponse RabbitMQPolicy
+
+func (response ReplaceRabbitMQPolicy200JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReplaceRabbitMQPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceRabbitMQPolicy400JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceRabbitMQPolicy401JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRabbitMQPolicy403JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRabbitMQPolicy404JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRabbitMQPolicy409JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceRabbitMQPolicy500JSONResponse) VisitReplaceRabbitMQPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQTopicPermissionsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListRabbitMQTopicPermissionsParams
+}
+
+type ListRabbitMQTopicPermissionsResponseObject interface {
+	VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error
+}
+
+type ListRabbitMQTopicPermissions200JSONResponse RabbitMQTopicPermissionList
+
+func (response ListRabbitMQTopicPermissions200JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRabbitMQTopicPermissions400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListRabbitMQTopicPermissions400JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQTopicPermissions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRabbitMQTopicPermissions401JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQTopicPermissions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRabbitMQTopicPermissions403JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQTopicPermissions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRabbitMQTopicPermissions404JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQTopicPermissions409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListRabbitMQTopicPermissions409JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQTopicPermissions500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRabbitMQTopicPermissions500JSONResponse) VisitListRabbitMQTopicPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQTopicPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateRabbitMQTopicPermissionParams
+	Body    *CreateRabbitMQTopicPermissionJSONRequestBody
+}
+
+type CreateRabbitMQTopicPermissionResponseObject interface {
+	VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error
+}
+
+type CreateRabbitMQTopicPermission201JSONResponse RabbitMQTopicPermission
+
+func (response CreateRabbitMQTopicPermission201JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRabbitMQTopicPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRabbitMQTopicPermission400JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQTopicPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateRabbitMQTopicPermission401JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQTopicPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRabbitMQTopicPermission403JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQTopicPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRabbitMQTopicPermission404JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQTopicPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRabbitMQTopicPermission409JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQTopicPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateRabbitMQTopicPermission500JSONResponse) VisitCreateRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQTopicPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	User    string      `json:"user"`
+	Params  DeleteRabbitMQTopicPermissionParams
+}
+
+type DeleteRabbitMQTopicPermissionResponseObject interface {
+	VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error
+}
+
+type DeleteRabbitMQTopicPermission204Response struct {
+}
+
+func (response DeleteRabbitMQTopicPermission204Response) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRabbitMQTopicPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteRabbitMQTopicPermission400JSONResponse) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQTopicPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteRabbitMQTopicPermission401JSONResponse) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQTopicPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRabbitMQTopicPermission403JSONResponse) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQTopicPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRabbitMQTopicPermission404JSONResponse) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQTopicPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteRabbitMQTopicPermission409JSONResponse) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQTopicPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteRabbitMQTopicPermission500JSONResponse) VisitDeleteRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQTopicPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	User    string      `json:"user"`
+	Params  GetRabbitMQTopicPermissionParams
+}
+
+type GetRabbitMQTopicPermissionResponseObject interface {
+	VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error
+}
+
+type GetRabbitMQTopicPermission200JSONResponse RabbitMQTopicPermissionList
+
+func (response GetRabbitMQTopicPermission200JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetRabbitMQTopicPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetRabbitMQTopicPermission400JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQTopicPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetRabbitMQTopicPermission401JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQTopicPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRabbitMQTopicPermission403JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQTopicPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRabbitMQTopicPermission404JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQTopicPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetRabbitMQTopicPermission409JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQTopicPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRabbitMQTopicPermission500JSONResponse) VisitGetRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQTopicPermissionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	User    string      `json:"user"`
+	Params  ReplaceRabbitMQTopicPermissionParams
+	Body    *ReplaceRabbitMQTopicPermissionJSONRequestBody
+}
+
+type ReplaceRabbitMQTopicPermissionResponseObject interface {
+	VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRabbitMQTopicPermission200JSONResponse RabbitMQTopicPermission
+
+func (response ReplaceRabbitMQTopicPermission200JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReplaceRabbitMQTopicPermission400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceRabbitMQTopicPermission400JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQTopicPermission401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceRabbitMQTopicPermission401JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQTopicPermission403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRabbitMQTopicPermission403JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQTopicPermission404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRabbitMQTopicPermission404JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQTopicPermission409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRabbitMQTopicPermission409JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQTopicPermission500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceRabbitMQTopicPermission500JSONResponse) VisitReplaceRabbitMQTopicPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListRabbitMQUsersParams
+}
+
+type ListRabbitMQUsersResponseObject interface {
+	VisitListRabbitMQUsersResponse(w http.ResponseWriter) error
+}
+
+type ListRabbitMQUsers200JSONResponse RabbitMQUserList
+
+func (response ListRabbitMQUsers200JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRabbitMQUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListRabbitMQUsers400JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRabbitMQUsers401JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRabbitMQUsers403JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRabbitMQUsers404JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListRabbitMQUsers409JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRabbitMQUsers500JSONResponse) VisitListRabbitMQUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateRabbitMQUserParams
+	Body    *CreateRabbitMQUserJSONRequestBody
+}
+
+type CreateRabbitMQUserResponseObject interface {
+	VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error
+}
+
+type CreateRabbitMQUser201JSONResponse CreatedRabbitMQUser
+
+func (response CreateRabbitMQUser201JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRabbitMQUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRabbitMQUser400JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateRabbitMQUser401JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRabbitMQUser403JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRabbitMQUser404JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRabbitMQUser409JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateRabbitMQUser500JSONResponse) VisitCreateRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteRabbitMQUserParams
+}
+
+type DeleteRabbitMQUserResponseObject interface {
+	VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteRabbitMQUser204Response struct {
+}
+
+func (response DeleteRabbitMQUser204Response) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRabbitMQUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteRabbitMQUser400JSONResponse) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteRabbitMQUser401JSONResponse) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRabbitMQUser403JSONResponse) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRabbitMQUser404JSONResponse) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteRabbitMQUser409JSONResponse) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteRabbitMQUser500JSONResponse) VisitDeleteRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetRabbitMQUserParams
+}
+
+type GetRabbitMQUserResponseObject interface {
+	VisitGetRabbitMQUserResponse(w http.ResponseWriter) error
+}
+
+type GetRabbitMQUser200JSONResponse RabbitMQUser
+
+func (response GetRabbitMQUser200JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetRabbitMQUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetRabbitMQUser400JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetRabbitMQUser401JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRabbitMQUser403JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRabbitMQUser404JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetRabbitMQUser409JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRabbitMQUser500JSONResponse) VisitGetRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  ReplaceRabbitMQUserParams
+	Body    *ReplaceRabbitMQUserJSONRequestBody
+}
+
+type ReplaceRabbitMQUserResponseObject interface {
+	VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRabbitMQUser200JSONResponse RabbitMQUser
+
+func (response ReplaceRabbitMQUser200JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReplaceRabbitMQUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceRabbitMQUser400JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceRabbitMQUser401JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRabbitMQUser403JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRabbitMQUser404JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRabbitMQUser409JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceRabbitMQUser500JSONResponse) VisitReplaceRabbitMQUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQVhostsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListRabbitMQVhostsParams
+}
+
+type ListRabbitMQVhostsResponseObject interface {
+	VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error
+}
+
+type ListRabbitMQVhosts200JSONResponse RabbitMQVhostList
+
+func (response ListRabbitMQVhosts200JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListRabbitMQVhosts400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListRabbitMQVhosts400JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQVhosts401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListRabbitMQVhosts401JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQVhosts403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListRabbitMQVhosts403JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQVhosts404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListRabbitMQVhosts404JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQVhosts409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListRabbitMQVhosts409JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRabbitMQVhosts500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListRabbitMQVhosts500JSONResponse) VisitListRabbitMQVhostsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQVhostRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateRabbitMQVhostParams
+	Body    *CreateRabbitMQVhostJSONRequestBody
+}
+
+type CreateRabbitMQVhostResponseObject interface {
+	VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error
+}
+
+type CreateRabbitMQVhost201JSONResponse RabbitMQVhost
+
+func (response CreateRabbitMQVhost201JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRabbitMQVhost400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateRabbitMQVhost400JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQVhost401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateRabbitMQVhost401JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQVhost403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateRabbitMQVhost403JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQVhost404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateRabbitMQVhost404JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQVhost409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRabbitMQVhost409JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRabbitMQVhost500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateRabbitMQVhost500JSONResponse) VisitCreateRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQVhostRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Params  DeleteRabbitMQVhostParams
+}
+
+type DeleteRabbitMQVhostResponseObject interface {
+	VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error
+}
+
+type DeleteRabbitMQVhost204Response struct {
+}
+
+func (response DeleteRabbitMQVhost204Response) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRabbitMQVhost400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteRabbitMQVhost400JSONResponse) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQVhost401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteRabbitMQVhost401JSONResponse) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQVhost403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteRabbitMQVhost403JSONResponse) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQVhost404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRabbitMQVhost404JSONResponse) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQVhost409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteRabbitMQVhost409JSONResponse) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteRabbitMQVhost500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteRabbitMQVhost500JSONResponse) VisitDeleteRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQVhostRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Params  GetRabbitMQVhostParams
+}
+
+type GetRabbitMQVhostResponseObject interface {
+	VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error
+}
+
+type GetRabbitMQVhost200JSONResponse RabbitMQVhost
+
+func (response GetRabbitMQVhost200JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetRabbitMQVhost400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetRabbitMQVhost400JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQVhost401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetRabbitMQVhost401JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQVhost403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetRabbitMQVhost403JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQVhost404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRabbitMQVhost404JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQVhost409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetRabbitMQVhost409JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRabbitMQVhost500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetRabbitMQVhost500JSONResponse) VisitGetRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQVhostRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Vhost   string      `json:"vhost"`
+	Params  ReplaceRabbitMQVhostParams
+	Body    *ReplaceRabbitMQVhostJSONRequestBody
+}
+
+type ReplaceRabbitMQVhostResponseObject interface {
+	VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRabbitMQVhost200JSONResponse RabbitMQVhost
+
+func (response ReplaceRabbitMQVhost200JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ReplaceRabbitMQVhost400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceRabbitMQVhost400JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQVhost401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceRabbitMQVhost401JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQVhost403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceRabbitMQVhost403JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQVhost404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRabbitMQVhost404JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQVhost409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRabbitMQVhost409JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRabbitMQVhost500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceRabbitMQVhost500JSONResponse) VisitReplaceRabbitMQVhostResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type RaiseClusterFCVRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  RaiseClusterFCVParams
@@ -19736,6 +24621,96 @@ type StrictServerInterface interface {
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(ctx context.Context, request GetClusterPlacementRequestObject) (GetClusterPlacementResponseObject, error)
+	// List RabbitMQ OperatorPolicy
+	// (GET /clusters/{cluster}/rabbitmq/operator-policies)
+	ListRabbitMQOperatorPolicies(ctx context.Context, request ListRabbitMQOperatorPoliciesRequestObject) (ListRabbitMQOperatorPoliciesResponseObject, error)
+	// Create RabbitMQ OperatorPolicy
+	// (POST /clusters/{cluster}/rabbitmq/operator-policies)
+	CreateRabbitMQOperatorPolicy(ctx context.Context, request CreateRabbitMQOperatorPolicyRequestObject) (CreateRabbitMQOperatorPolicyResponseObject, error)
+	// Delete RabbitMQ OperatorPolicy
+	// (DELETE /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name})
+	DeleteRabbitMQOperatorPolicy(ctx context.Context, request DeleteRabbitMQOperatorPolicyRequestObject) (DeleteRabbitMQOperatorPolicyResponseObject, error)
+	// Get RabbitMQ OperatorPolicy
+	// (GET /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name})
+	GetRabbitMQOperatorPolicy(ctx context.Context, request GetRabbitMQOperatorPolicyRequestObject) (GetRabbitMQOperatorPolicyResponseObject, error)
+	// Replace RabbitMQ OperatorPolicy
+	// (PUT /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name})
+	ReplaceRabbitMQOperatorPolicy(ctx context.Context, request ReplaceRabbitMQOperatorPolicyRequestObject) (ReplaceRabbitMQOperatorPolicyResponseObject, error)
+	// List RabbitMQ Permission
+	// (GET /clusters/{cluster}/rabbitmq/permissions)
+	ListRabbitMQPermissions(ctx context.Context, request ListRabbitMQPermissionsRequestObject) (ListRabbitMQPermissionsResponseObject, error)
+	// Create RabbitMQ Permission
+	// (POST /clusters/{cluster}/rabbitmq/permissions)
+	CreateRabbitMQPermission(ctx context.Context, request CreateRabbitMQPermissionRequestObject) (CreateRabbitMQPermissionResponseObject, error)
+	// Delete RabbitMQ Permission
+	// (DELETE /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user})
+	DeleteRabbitMQPermission(ctx context.Context, request DeleteRabbitMQPermissionRequestObject) (DeleteRabbitMQPermissionResponseObject, error)
+	// Get RabbitMQ Permission
+	// (GET /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user})
+	GetRabbitMQPermission(ctx context.Context, request GetRabbitMQPermissionRequestObject) (GetRabbitMQPermissionResponseObject, error)
+	// Replace RabbitMQ Permission
+	// (PUT /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user})
+	ReplaceRabbitMQPermission(ctx context.Context, request ReplaceRabbitMQPermissionRequestObject) (ReplaceRabbitMQPermissionResponseObject, error)
+	// List RabbitMQ Policy
+	// (GET /clusters/{cluster}/rabbitmq/policies)
+	ListRabbitMQPolicies(ctx context.Context, request ListRabbitMQPoliciesRequestObject) (ListRabbitMQPoliciesResponseObject, error)
+	// Create RabbitMQ Policy
+	// (POST /clusters/{cluster}/rabbitmq/policies)
+	CreateRabbitMQPolicy(ctx context.Context, request CreateRabbitMQPolicyRequestObject) (CreateRabbitMQPolicyResponseObject, error)
+	// Delete RabbitMQ Policy
+	// (DELETE /clusters/{cluster}/rabbitmq/policies/{vhost}/{name})
+	DeleteRabbitMQPolicy(ctx context.Context, request DeleteRabbitMQPolicyRequestObject) (DeleteRabbitMQPolicyResponseObject, error)
+	// Get RabbitMQ Policy
+	// (GET /clusters/{cluster}/rabbitmq/policies/{vhost}/{name})
+	GetRabbitMQPolicy(ctx context.Context, request GetRabbitMQPolicyRequestObject) (GetRabbitMQPolicyResponseObject, error)
+	// Replace RabbitMQ Policy
+	// (PUT /clusters/{cluster}/rabbitmq/policies/{vhost}/{name})
+	ReplaceRabbitMQPolicy(ctx context.Context, request ReplaceRabbitMQPolicyRequestObject) (ReplaceRabbitMQPolicyResponseObject, error)
+	// List RabbitMQ TopicPermission
+	// (GET /clusters/{cluster}/rabbitmq/topic-permissions)
+	ListRabbitMQTopicPermissions(ctx context.Context, request ListRabbitMQTopicPermissionsRequestObject) (ListRabbitMQTopicPermissionsResponseObject, error)
+	// Create RabbitMQ TopicPermission
+	// (POST /clusters/{cluster}/rabbitmq/topic-permissions)
+	CreateRabbitMQTopicPermission(ctx context.Context, request CreateRabbitMQTopicPermissionRequestObject) (CreateRabbitMQTopicPermissionResponseObject, error)
+	// Delete RabbitMQ TopicPermission
+	// (DELETE /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user})
+	DeleteRabbitMQTopicPermission(ctx context.Context, request DeleteRabbitMQTopicPermissionRequestObject) (DeleteRabbitMQTopicPermissionResponseObject, error)
+	// Get RabbitMQ TopicPermission
+	// (GET /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user})
+	GetRabbitMQTopicPermission(ctx context.Context, request GetRabbitMQTopicPermissionRequestObject) (GetRabbitMQTopicPermissionResponseObject, error)
+	// Replace RabbitMQ TopicPermission
+	// (PUT /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user})
+	ReplaceRabbitMQTopicPermission(ctx context.Context, request ReplaceRabbitMQTopicPermissionRequestObject) (ReplaceRabbitMQTopicPermissionResponseObject, error)
+	// List RabbitMQ User
+	// (GET /clusters/{cluster}/rabbitmq/users)
+	ListRabbitMQUsers(ctx context.Context, request ListRabbitMQUsersRequestObject) (ListRabbitMQUsersResponseObject, error)
+	// Create RabbitMQ User
+	// (POST /clusters/{cluster}/rabbitmq/users)
+	CreateRabbitMQUser(ctx context.Context, request CreateRabbitMQUserRequestObject) (CreateRabbitMQUserResponseObject, error)
+	// Delete RabbitMQ User
+	// (DELETE /clusters/{cluster}/rabbitmq/users/{user})
+	DeleteRabbitMQUser(ctx context.Context, request DeleteRabbitMQUserRequestObject) (DeleteRabbitMQUserResponseObject, error)
+	// Get RabbitMQ User
+	// (GET /clusters/{cluster}/rabbitmq/users/{user})
+	GetRabbitMQUser(ctx context.Context, request GetRabbitMQUserRequestObject) (GetRabbitMQUserResponseObject, error)
+	// Replace RabbitMQ User
+	// (PUT /clusters/{cluster}/rabbitmq/users/{user})
+	ReplaceRabbitMQUser(ctx context.Context, request ReplaceRabbitMQUserRequestObject) (ReplaceRabbitMQUserResponseObject, error)
+	// List RabbitMQ Vhost
+	// (GET /clusters/{cluster}/rabbitmq/vhosts)
+	ListRabbitMQVhosts(ctx context.Context, request ListRabbitMQVhostsRequestObject) (ListRabbitMQVhostsResponseObject, error)
+	// Create RabbitMQ Vhost
+	// (POST /clusters/{cluster}/rabbitmq/vhosts)
+	CreateRabbitMQVhost(ctx context.Context, request CreateRabbitMQVhostRequestObject) (CreateRabbitMQVhostResponseObject, error)
+	// Delete RabbitMQ Vhost
+	// (DELETE /clusters/{cluster}/rabbitmq/vhosts/{vhost})
+	DeleteRabbitMQVhost(ctx context.Context, request DeleteRabbitMQVhostRequestObject) (DeleteRabbitMQVhostResponseObject, error)
+	// Get RabbitMQ Vhost
+	// (GET /clusters/{cluster}/rabbitmq/vhosts/{vhost})
+	GetRabbitMQVhost(ctx context.Context, request GetRabbitMQVhostRequestObject) (GetRabbitMQVhostResponseObject, error)
+	// Replace RabbitMQ Vhost
+	// (PUT /clusters/{cluster}/rabbitmq/vhosts/{vhost})
+	ReplaceRabbitMQVhost(ctx context.Context, request ReplaceRabbitMQVhostRequestObject) (ReplaceRabbitMQVhostResponseObject, error)
 	// Explicitly raise feature compatibility version
 	// (POST /clusters/{cluster}/raise-fcv)
 	RaiseClusterFCV(ctx context.Context, request RaiseClusterFCVRequestObject) (RaiseClusterFCVResponseObject, error)
@@ -21474,6 +26449,930 @@ func (sh *strictHandler) GetClusterPlacement(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterPlacementResponseObject); ok {
 		if err := validResponse.VisitGetClusterPlacementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRabbitMQOperatorPolicies operation middleware
+func (sh *strictHandler) ListRabbitMQOperatorPolicies(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQOperatorPoliciesParams) {
+	var request ListRabbitMQOperatorPoliciesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRabbitMQOperatorPolicies(ctx, request.(ListRabbitMQOperatorPoliciesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRabbitMQOperatorPolicies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRabbitMQOperatorPoliciesResponseObject); ok {
+		if err := validResponse.VisitListRabbitMQOperatorPoliciesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRabbitMQOperatorPolicy operation middleware
+func (sh *strictHandler) CreateRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQOperatorPolicyParams) {
+	var request CreateRabbitMQOperatorPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateRabbitMQOperatorPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRabbitMQOperatorPolicy(ctx, request.(CreateRabbitMQOperatorPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRabbitMQOperatorPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRabbitMQOperatorPolicyResponseObject); ok {
+		if err := validResponse.VisitCreateRabbitMQOperatorPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRabbitMQOperatorPolicy operation middleware
+func (sh *strictHandler) DeleteRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params DeleteRabbitMQOperatorPolicyParams) {
+	var request DeleteRabbitMQOperatorPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRabbitMQOperatorPolicy(ctx, request.(DeleteRabbitMQOperatorPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRabbitMQOperatorPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRabbitMQOperatorPolicyResponseObject); ok {
+		if err := validResponse.VisitDeleteRabbitMQOperatorPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRabbitMQOperatorPolicy operation middleware
+func (sh *strictHandler) GetRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params GetRabbitMQOperatorPolicyParams) {
+	var request GetRabbitMQOperatorPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRabbitMQOperatorPolicy(ctx, request.(GetRabbitMQOperatorPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRabbitMQOperatorPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRabbitMQOperatorPolicyResponseObject); ok {
+		if err := validResponse.VisitGetRabbitMQOperatorPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRabbitMQOperatorPolicy operation middleware
+func (sh *strictHandler) ReplaceRabbitMQOperatorPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params ReplaceRabbitMQOperatorPolicyParams) {
+	var request ReplaceRabbitMQOperatorPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Name = name
+	request.Params = params
+
+	var body ReplaceRabbitMQOperatorPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRabbitMQOperatorPolicy(ctx, request.(ReplaceRabbitMQOperatorPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRabbitMQOperatorPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRabbitMQOperatorPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceRabbitMQOperatorPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRabbitMQPermissions operation middleware
+func (sh *strictHandler) ListRabbitMQPermissions(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQPermissionsParams) {
+	var request ListRabbitMQPermissionsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRabbitMQPermissions(ctx, request.(ListRabbitMQPermissionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRabbitMQPermissions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRabbitMQPermissionsResponseObject); ok {
+		if err := validResponse.VisitListRabbitMQPermissionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRabbitMQPermission operation middleware
+func (sh *strictHandler) CreateRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQPermissionParams) {
+	var request CreateRabbitMQPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateRabbitMQPermissionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRabbitMQPermission(ctx, request.(CreateRabbitMQPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRabbitMQPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRabbitMQPermissionResponseObject); ok {
+		if err := validResponse.VisitCreateRabbitMQPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRabbitMQPermission operation middleware
+func (sh *strictHandler) DeleteRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params DeleteRabbitMQPermissionParams) {
+	var request DeleteRabbitMQPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRabbitMQPermission(ctx, request.(DeleteRabbitMQPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRabbitMQPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRabbitMQPermissionResponseObject); ok {
+		if err := validResponse.VisitDeleteRabbitMQPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRabbitMQPermission operation middleware
+func (sh *strictHandler) GetRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params GetRabbitMQPermissionParams) {
+	var request GetRabbitMQPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRabbitMQPermission(ctx, request.(GetRabbitMQPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRabbitMQPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRabbitMQPermissionResponseObject); ok {
+		if err := validResponse.VisitGetRabbitMQPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRabbitMQPermission operation middleware
+func (sh *strictHandler) ReplaceRabbitMQPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params ReplaceRabbitMQPermissionParams) {
+	var request ReplaceRabbitMQPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.User = user
+	request.Params = params
+
+	var body ReplaceRabbitMQPermissionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRabbitMQPermission(ctx, request.(ReplaceRabbitMQPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRabbitMQPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRabbitMQPermissionResponseObject); ok {
+		if err := validResponse.VisitReplaceRabbitMQPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRabbitMQPolicies operation middleware
+func (sh *strictHandler) ListRabbitMQPolicies(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQPoliciesParams) {
+	var request ListRabbitMQPoliciesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRabbitMQPolicies(ctx, request.(ListRabbitMQPoliciesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRabbitMQPolicies")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRabbitMQPoliciesResponseObject); ok {
+		if err := validResponse.VisitListRabbitMQPoliciesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRabbitMQPolicy operation middleware
+func (sh *strictHandler) CreateRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQPolicyParams) {
+	var request CreateRabbitMQPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateRabbitMQPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRabbitMQPolicy(ctx, request.(CreateRabbitMQPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRabbitMQPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRabbitMQPolicyResponseObject); ok {
+		if err := validResponse.VisitCreateRabbitMQPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRabbitMQPolicy operation middleware
+func (sh *strictHandler) DeleteRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params DeleteRabbitMQPolicyParams) {
+	var request DeleteRabbitMQPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRabbitMQPolicy(ctx, request.(DeleteRabbitMQPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRabbitMQPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRabbitMQPolicyResponseObject); ok {
+		if err := validResponse.VisitDeleteRabbitMQPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRabbitMQPolicy operation middleware
+func (sh *strictHandler) GetRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params GetRabbitMQPolicyParams) {
+	var request GetRabbitMQPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRabbitMQPolicy(ctx, request.(GetRabbitMQPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRabbitMQPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRabbitMQPolicyResponseObject); ok {
+		if err := validResponse.VisitGetRabbitMQPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRabbitMQPolicy operation middleware
+func (sh *strictHandler) ReplaceRabbitMQPolicy(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, name string, params ReplaceRabbitMQPolicyParams) {
+	var request ReplaceRabbitMQPolicyRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Name = name
+	request.Params = params
+
+	var body ReplaceRabbitMQPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRabbitMQPolicy(ctx, request.(ReplaceRabbitMQPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRabbitMQPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRabbitMQPolicyResponseObject); ok {
+		if err := validResponse.VisitReplaceRabbitMQPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRabbitMQTopicPermissions operation middleware
+func (sh *strictHandler) ListRabbitMQTopicPermissions(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQTopicPermissionsParams) {
+	var request ListRabbitMQTopicPermissionsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRabbitMQTopicPermissions(ctx, request.(ListRabbitMQTopicPermissionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRabbitMQTopicPermissions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRabbitMQTopicPermissionsResponseObject); ok {
+		if err := validResponse.VisitListRabbitMQTopicPermissionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRabbitMQTopicPermission operation middleware
+func (sh *strictHandler) CreateRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQTopicPermissionParams) {
+	var request CreateRabbitMQTopicPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateRabbitMQTopicPermissionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRabbitMQTopicPermission(ctx, request.(CreateRabbitMQTopicPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRabbitMQTopicPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRabbitMQTopicPermissionResponseObject); ok {
+		if err := validResponse.VisitCreateRabbitMQTopicPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRabbitMQTopicPermission operation middleware
+func (sh *strictHandler) DeleteRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params DeleteRabbitMQTopicPermissionParams) {
+	var request DeleteRabbitMQTopicPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRabbitMQTopicPermission(ctx, request.(DeleteRabbitMQTopicPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRabbitMQTopicPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRabbitMQTopicPermissionResponseObject); ok {
+		if err := validResponse.VisitDeleteRabbitMQTopicPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRabbitMQTopicPermission operation middleware
+func (sh *strictHandler) GetRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params GetRabbitMQTopicPermissionParams) {
+	var request GetRabbitMQTopicPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRabbitMQTopicPermission(ctx, request.(GetRabbitMQTopicPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRabbitMQTopicPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRabbitMQTopicPermissionResponseObject); ok {
+		if err := validResponse.VisitGetRabbitMQTopicPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRabbitMQTopicPermission operation middleware
+func (sh *strictHandler) ReplaceRabbitMQTopicPermission(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, user string, params ReplaceRabbitMQTopicPermissionParams) {
+	var request ReplaceRabbitMQTopicPermissionRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.User = user
+	request.Params = params
+
+	var body ReplaceRabbitMQTopicPermissionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRabbitMQTopicPermission(ctx, request.(ReplaceRabbitMQTopicPermissionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRabbitMQTopicPermission")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRabbitMQTopicPermissionResponseObject); ok {
+		if err := validResponse.VisitReplaceRabbitMQTopicPermissionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRabbitMQUsers operation middleware
+func (sh *strictHandler) ListRabbitMQUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQUsersParams) {
+	var request ListRabbitMQUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRabbitMQUsers(ctx, request.(ListRabbitMQUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRabbitMQUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRabbitMQUsersResponseObject); ok {
+		if err := validResponse.VisitListRabbitMQUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRabbitMQUser operation middleware
+func (sh *strictHandler) CreateRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQUserParams) {
+	var request CreateRabbitMQUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateRabbitMQUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRabbitMQUser(ctx, request.(CreateRabbitMQUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRabbitMQUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRabbitMQUserResponseObject); ok {
+		if err := validResponse.VisitCreateRabbitMQUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRabbitMQUser operation middleware
+func (sh *strictHandler) DeleteRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteRabbitMQUserParams) {
+	var request DeleteRabbitMQUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRabbitMQUser(ctx, request.(DeleteRabbitMQUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRabbitMQUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRabbitMQUserResponseObject); ok {
+		if err := validResponse.VisitDeleteRabbitMQUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRabbitMQUser operation middleware
+func (sh *strictHandler) GetRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetRabbitMQUserParams) {
+	var request GetRabbitMQUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRabbitMQUser(ctx, request.(GetRabbitMQUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRabbitMQUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRabbitMQUserResponseObject); ok {
+		if err := validResponse.VisitGetRabbitMQUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRabbitMQUser operation middleware
+func (sh *strictHandler) ReplaceRabbitMQUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params ReplaceRabbitMQUserParams) {
+	var request ReplaceRabbitMQUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body ReplaceRabbitMQUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRabbitMQUser(ctx, request.(ReplaceRabbitMQUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRabbitMQUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRabbitMQUserResponseObject); ok {
+		if err := validResponse.VisitReplaceRabbitMQUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRabbitMQVhosts operation middleware
+func (sh *strictHandler) ListRabbitMQVhosts(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQVhostsParams) {
+	var request ListRabbitMQVhostsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRabbitMQVhosts(ctx, request.(ListRabbitMQVhostsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRabbitMQVhosts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRabbitMQVhostsResponseObject); ok {
+		if err := validResponse.VisitListRabbitMQVhostsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRabbitMQVhost operation middleware
+func (sh *strictHandler) CreateRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRabbitMQVhostParams) {
+	var request CreateRabbitMQVhostRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateRabbitMQVhostJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRabbitMQVhost(ctx, request.(CreateRabbitMQVhostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRabbitMQVhost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRabbitMQVhostResponseObject); ok {
+		if err := validResponse.VisitCreateRabbitMQVhostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRabbitMQVhost operation middleware
+func (sh *strictHandler) DeleteRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, params DeleteRabbitMQVhostParams) {
+	var request DeleteRabbitMQVhostRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRabbitMQVhost(ctx, request.(DeleteRabbitMQVhostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRabbitMQVhost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRabbitMQVhostResponseObject); ok {
+		if err := validResponse.VisitDeleteRabbitMQVhostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRabbitMQVhost operation middleware
+func (sh *strictHandler) GetRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, params GetRabbitMQVhostParams) {
+	var request GetRabbitMQVhostRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRabbitMQVhost(ctx, request.(GetRabbitMQVhostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRabbitMQVhost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRabbitMQVhostResponseObject); ok {
+		if err := validResponse.VisitGetRabbitMQVhostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRabbitMQVhost operation middleware
+func (sh *strictHandler) ReplaceRabbitMQVhost(w http.ResponseWriter, r *http.Request, cluster ClusterPath, vhost string, params ReplaceRabbitMQVhostParams) {
+	var request ReplaceRabbitMQVhostRequestObject
+
+	request.Cluster = cluster
+	request.Vhost = vhost
+	request.Params = params
+
+	var body ReplaceRabbitMQVhostJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRabbitMQVhost(ctx, request.(ReplaceRabbitMQVhostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRabbitMQVhost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRabbitMQVhostResponseObject); ok {
+		if err := validResponse.VisitReplaceRabbitMQVhostResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

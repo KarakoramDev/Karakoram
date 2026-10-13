@@ -2618,6 +2618,1008 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Balancer'
+  /clusters/{cluster}/rabbitmq/vhosts:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listRabbitMQVhosts
+      tags: [DatabaseUsers]
+      summary: List RabbitMQ Vhost
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQVhostList'
+    post:
+      operationId: createRabbitMQVhost
+      tags: [DatabaseUsers]
+      summary: Create RabbitMQ Vhost
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQVhost'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQVhost'
+  /clusters/{cluster}/rabbitmq/vhosts/{vhost}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: vhost
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    get:
+      operationId: getRabbitMQVhost
+      tags: [DatabaseUsers]
+      summary: Get RabbitMQ Vhost
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQVhost'
+    put:
+      operationId: replaceRabbitMQVhost
+      tags: [DatabaseUsers]
+      summary: Replace RabbitMQ Vhost
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQVhost'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQVhost'
+    delete:
+      operationId: deleteRabbitMQVhost
+      tags: [DatabaseUsers]
+      summary: Delete RabbitMQ Vhost
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Successful response.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/rabbitmq/users:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listRabbitMQUsers
+      tags: [DatabaseUsers]
+      summary: List RabbitMQ User
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQUserList'
+    post:
+      operationId: createRabbitMQUser
+      tags: [DatabaseUsers]
+      summary: Create RabbitMQ User
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedRabbitMQUser'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQUserWrite'
+  /clusters/{cluster}/rabbitmq/users/{user}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: user
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    get:
+      operationId: getRabbitMQUser
+      tags: [DatabaseUsers]
+      summary: Get RabbitMQ User
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQUser'
+    put:
+      operationId: replaceRabbitMQUser
+      tags: [DatabaseUsers]
+      summary: Replace RabbitMQ User
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQUser'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQUserWrite'
+    delete:
+      operationId: deleteRabbitMQUser
+      tags: [DatabaseUsers]
+      summary: Delete RabbitMQ User
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Successful response.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/rabbitmq/permissions:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listRabbitMQPermissions
+      tags: [DatabaseUsers]
+      summary: List RabbitMQ Permission
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPermissionList'
+    post:
+      operationId: createRabbitMQPermission
+      tags: [DatabaseUsers]
+      summary: Create RabbitMQ Permission
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPermission'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQPermission'
+  /clusters/{cluster}/rabbitmq/permissions/{vhost}/{user}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: vhost
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    - name: user
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    get:
+      operationId: getRabbitMQPermission
+      tags: [DatabaseUsers]
+      summary: Get RabbitMQ Permission
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPermission'
+    put:
+      operationId: replaceRabbitMQPermission
+      tags: [DatabaseUsers]
+      summary: Replace RabbitMQ Permission
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPermission'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQPermission'
+    delete:
+      operationId: deleteRabbitMQPermission
+      tags: [DatabaseUsers]
+      summary: Delete RabbitMQ Permission
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Successful response.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/rabbitmq/topic-permissions:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listRabbitMQTopicPermissions
+      tags: [DatabaseUsers]
+      summary: List RabbitMQ TopicPermission
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQTopicPermissionList'
+    post:
+      operationId: createRabbitMQTopicPermission
+      tags: [DatabaseUsers]
+      summary: Create RabbitMQ TopicPermission
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQTopicPermission'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQTopicPermission'
+  /clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: vhost
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    - name: user
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    get:
+      operationId: getRabbitMQTopicPermission
+      tags: [DatabaseUsers]
+      summary: Get RabbitMQ TopicPermission
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQTopicPermissionList'
+    put:
+      operationId: replaceRabbitMQTopicPermission
+      tags: [DatabaseUsers]
+      summary: Replace RabbitMQ TopicPermission
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQTopicPermission'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQTopicPermission'
+    delete:
+      operationId: deleteRabbitMQTopicPermission
+      tags: [DatabaseUsers]
+      summary: Delete RabbitMQ TopicPermission
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Successful response.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/rabbitmq/policies:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listRabbitMQPolicies
+      tags: [DatabaseUsers]
+      summary: List RabbitMQ Policy
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicyList'
+    post:
+      operationId: createRabbitMQPolicy
+      tags: [DatabaseUsers]
+      summary: Create RabbitMQ Policy
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicy'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQPolicy'
+  /clusters/{cluster}/rabbitmq/policies/{vhost}/{name}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: vhost
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    get:
+      operationId: getRabbitMQPolicy
+      tags: [DatabaseUsers]
+      summary: Get RabbitMQ Policy
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicy'
+    put:
+      operationId: replaceRabbitMQPolicy
+      tags: [DatabaseUsers]
+      summary: Replace RabbitMQ Policy
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicy'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQPolicy'
+    delete:
+      operationId: deleteRabbitMQPolicy
+      tags: [DatabaseUsers]
+      summary: Delete RabbitMQ Policy
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Successful response.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/rabbitmq/operator-policies:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listRabbitMQOperatorPolicies
+      tags: [DatabaseUsers]
+      summary: List RabbitMQ OperatorPolicy
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicyList'
+    post:
+      operationId: createRabbitMQOperatorPolicy
+      tags: [DatabaseUsers]
+      summary: Create RabbitMQ OperatorPolicy
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicy'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQPolicy'
+  /clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: vhost
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    get:
+      operationId: getRabbitMQOperatorPolicy
+      tags: [DatabaseUsers]
+      summary: Get RabbitMQ OperatorPolicy
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicy'
+    put:
+      operationId: replaceRabbitMQOperatorPolicy
+      tags: [DatabaseUsers]
+      summary: Replace RabbitMQ OperatorPolicy
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RabbitMQPolicy'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RabbitMQPolicy'
+    delete:
+      operationId: deleteRabbitMQOperatorPolicy
+      tags: [DatabaseUsers]
+      summary: Delete RabbitMQ OperatorPolicy
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500': 
+          $ref: '#/components/responses/InternalError'
+        '204':
+          description: Successful response.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/database-users:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -5984,6 +6986,8 @@ components:
             - clusterMonitor
             - backup
             - databaseAdmin
+            - karakoram
+            - admin
         username:
           type: string
         roles:
@@ -6006,8 +7010,177 @@ components:
         db:
           type: string
       required:
-        - role
-        - db
+      - role
+      - db
+    RabbitMQVhost:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        defaultQueueType:
+          type: string
+          enum: [classic, quorum, stream]
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        limits:
+          $ref: '#/components/schemas/RabbitMQVhostLimits'
+      required: [name, tags]
+    RabbitMQVhostLimits:
+      type: object
+      additionalProperties: false
+      properties:
+        maxConnections:
+          type: integer
+          minimum: -1
+        maxQueues:
+          type: integer
+          minimum: -1
+    RabbitMQUser:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+            enum: [management, policymaker, monitoring, administrator, impersonator]
+      required: [name, tags]
+    RabbitMQUserWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+            enum: [management, policymaker, monitoring, administrator, impersonator]
+        password:
+          type: string
+          writeOnly: true
+        passwordHash:
+          type: string
+          writeOnly: true
+      required: [name, tags]
+    CreatedRabbitMQUser:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+            enum: [management, policymaker, monitoring, administrator, impersonator]
+        generatedPassword:
+          type: string
+          readOnly: true
+          description: Present only when a password was generated at creation; store it securely once.
+      required: [name, tags]
+    RabbitMQPermission:
+      type: object
+      additionalProperties: false
+      properties:
+        vhost:
+          type: string
+        user:
+          type: string
+        configure:
+          type: string
+        write:
+          type: string
+        read:
+          type: string
+      required: [vhost, user, configure, write, read]
+    RabbitMQTopicPermission:
+      type: object
+      additionalProperties: false
+      properties:
+        vhost:
+          type: string
+        user:
+          type: string
+        exchange:
+          type: string
+        write:
+          type: string
+        read:
+          type: string
+      required: [vhost, user, exchange, write, read]
+    RabbitMQPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        vhost:
+          type: string
+        name:
+          type: string
+        pattern:
+          type: string
+        applyTo:
+          type: string
+          enum: [all, queues, exchanges, classic_queues, quorum_queues, streams]
+        priority:
+          type: integer
+          minimum: 0
+        definition:
+          type: object
+          additionalProperties: true
+      required: [vhost, name, pattern, applyTo, priority, definition]
+    RabbitMQVhostList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RabbitMQVhost'
+      required: [items]
+    RabbitMQUserList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RabbitMQUser'
+      required: [items]
+    RabbitMQPermissionList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RabbitMQPermission'
+      required: [items]
+    RabbitMQTopicPermissionList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RabbitMQTopicPermission'
+      required: [items]
+    RabbitMQPolicyList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RabbitMQPolicy'
+      required: [items]
     DatabaseUser:
       type: object
       additionalProperties: false
