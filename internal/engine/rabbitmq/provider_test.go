@@ -236,7 +236,7 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 				if err = yaml.Unmarshal([]byte(text), &doc); err != nil {
 					t.Fatal(err)
 				}
-				for _, want := range []string{"temporaryShutdown: true", "/var/www/karakoram agent readiness", "failureTimeout: 300s", "retryPeriod: 10s", "ubuntu@24.04", "hostname: demom0v", "rabbitmq-server=4.3.5-1", "1:27.3.4.17-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com", "KARAKORAM_URL", "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_INTERNAL_CA", "KARAKORAM_ENGINE: rabbitmq", "KARAKORAM_DATA_DIR: /mnt/demom0v", "./karakoram agent"} {
+				for _, want := range []string{"temporaryShutdown: true", "/var/www/karakoram agent readiness --engine=rabbitmq --data-dir=/mnt/demom0v", "failureTimeout: 300s", "retryPeriod: 10s", "ubuntu@24.04", "hostname: demom0v", "rabbitmq-server=4.3.5-1", "1:27.3.4.17-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com", "KARAKORAM_URL", "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_INTERNAL_CA", "KARAKORAM_ENGINE: rabbitmq", "KARAKORAM_DATA_DIR: /mnt/demom0v", "./karakoram agent"} {
 					if !strings.Contains(text, want) {
 						t.Errorf("missing %q in YAML:\n%s", want, text)
 					}

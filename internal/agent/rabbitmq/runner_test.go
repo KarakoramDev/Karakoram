@@ -215,6 +215,16 @@ func TestHeldReadiness(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Zerops readiness runs without the service environment.
+	t.Setenv("KARAKORAM_DATA_DIR", "")
+	if err := New().Readiness(context.Background(), agent.Options{}, []string{"--data-dir=" + dir}); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range [][]string{{"--data-dir=relative"}, {"--port=5672"}} {
+		if err := New().Readiness(context.Background(), agent.Options{}, bad); err == nil {
+			t.Fatalf("readiness accepted %q", bad)
+		}
+	}
 }
 func TestRoutesRequireBearer(t *testing.T) {
 	dir := t.TempDir()

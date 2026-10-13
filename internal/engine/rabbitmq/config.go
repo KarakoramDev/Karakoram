@@ -66,7 +66,7 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 		}
 	}
 	run := map[string]any{"base": "ubuntu@24.04", "ports": ports, "prepareCommands": prepare, "envVariables": map[string]string{"KARAKORAM_URL": agentURL, "KARAKORAM_CLUSTER": rc.Cluster.Name, "KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM, "KARAKORAM_DATA_DIR": "/mnt/" + m.Volume, "KARAKORAM_ENGINE": "rabbitmq"}, "start": "./karakoram agent", "volume": map[string]string{"hostname": m.Volume}}
-	b, err := yaml.Marshal(map[string]any{"zerops": []map[string]any{{"setup": m.Name, "deploy": map[string]any{"temporaryShutdown": true, "readinessCheck": map[string]any{"exec": map[string]string{"command": "/var/www/karakoram agent readiness"}, "failureTimeout": "300s", "retryPeriod": "10s"}}, "run": run}}})
+	b, err := yaml.Marshal(map[string]any{"zerops": []map[string]any{{"setup": m.Name, "deploy": map[string]any{"temporaryShutdown": true, "readinessCheck": map[string]any{"exec": map[string]string{"command": "/var/www/karakoram agent readiness --engine=rabbitmq --data-dir=/mnt/" + m.Volume}, "failureTimeout": "300s", "retryPeriod": "10s"}}, "run": run}}})
 	return string(b), err
 }
 func runtimeResources(r domain.Resources) domain.Resources { r.MinDisk = 1; r.MaxDisk = 3; return r }

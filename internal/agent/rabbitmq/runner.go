@@ -306,10 +306,16 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	return names, nil
 }
 func (*Runner) Readiness(ctx context.Context, o agent.Options, args []string) error {
-	if len(args) != 0 {
-		return errors.New("rabbitmq readiness takes no arguments")
-	}
+	// Zerops readiness checks run without the service environment, so the
+	// provider passes the data directory explicitly.
 	dir := o.DataDir
+	for _, arg := range args {
+		value, ok := strings.CutPrefix(arg, "--data-dir=")
+		if !ok || !filepath.IsAbs(value) {
+			return errors.New("rabbitmq readiness accepts only --data-dir=<absolute path>")
+		}
+		dir = filepath.Clean(value)
+	}
 	if dir == "" {
 		dir = os.Getenv("KARAKORAM_DATA_DIR")
 	}
