@@ -220,3 +220,120 @@ func TestOrphanHandoffRequiresBoundedMountedFailureHistory(t *testing.T) {
 		})
 	}
 }
+
+func TestSyncMinorityOutageAllowsQueuedReplacement(t *testing.T) {
+	for _, lost := range []string{"demom0", "demom1"} {
+		t.Run(lost, func(t *testing.T) {
+			p, rc, _, a := setup(t)
+			ready(t, p, rc)
+			ctx := t.Context()
+			st := rc.Store.(*store.Store)
+			a.broker(lost).down = true
+			op := &domain.Operation{ID: "queued-lost-replace", Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationReplaceMember, Payload: json.RawMessage(`{"member":"` + lost + `"}`)}
+			if err := st.EnqueueOperation(ctx, op); err != nil {
+				t.Fatal(err)
+			}
+			// Match the reconciler's Sync/Status-before-claim ordering.
+			if _, err := p.Sync(ctx, rc); err != nil {
+				t.Fatal("minority loss blocked queued recovery", err)
+			}
+			status, err := p.Status(ctx, rc)
+			if err != nil || status.Phase != domain.PhaseDegraded {
+				t.Fatalf("status=%+v err=%v", status, err)
+			}
+			for _, m := range status.Members {
+				if m.Name == lost && (m.Health || m.Agent.Healthy || m.Agent.Message == "") {
+					t.Fatalf("lost member not reported unhealthy: %+v", m)
+				}
+			}
+			if err := st.UpdateClusterState(ctx, rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			claimed, err := st.ClaimOperation(ctx, rc.Cluster.Ref())
+			if err != nil || claimed.ID != op.ID || claimed.Phase != domain.PhaseRunning {
+				t.Fatalf("claimed=%+v err=%v", claimed, err)
+			}
+			result, err := p.RunOperation(ctx, rc, claimed)
+			if err != nil || result.Step != "replacement-planned" {
+				t.Fatalf("replacement did not start: %+v %v", result, err)
+			}
+		})
+	}
+}
+
+func TestSyncMajorityUnreachableStillReturnsError(t *testing.T) {
+	p, rc, _, a := setup(t)
+	ready(t, p, rc)
+	a.broker("demom0").down = true
+	a.broker("demom1").down = true
+	if _, err := p.Sync(t.Context(), rc); err == nil {
+		t.Fatal("majority outage was tolerated")
+	}
+}
+
+func TestRollingOperationsFinishProvisioningBeforeChangingMembers(t *testing.T) {
+	for _, kind := range []string{domain.OperationRestart, domain.OperationRotateTLS} {
+		for _, scenario := range []string{"creation/imported", "creation/deployed", "scale-up/imported", "scale-up/deployed"} {
+			t.Run(kind+"/"+scenario, func(t *testing.T) {
+				p, rc, _, a := setup(t)
+				target, last := "demom0", "demom2"
+				if strings.HasPrefix(scenario, "scale-up") {
+					ready(t, p, rc)
+					rc.Cluster.Spec.Components.Engine.Replicas = 5
+					target, last = "demom3", "demom4"
+				}
+				stage := "imported"
+				if strings.HasSuffix(scenario, "deployed") {
+					stage = "deployed"
+				}
+				syncUntil(t, p, rc, func(s *internalState) bool {
+					m := s.find(target)
+					return m != nil && m.Stage == stage && s.Pending == nil
+				})
+				a.log.clear()
+				op := &domain.Operation{Kind: kind}
+				result, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil || result.Done || result.Step != "waiting-provisioning" {
+					t.Fatalf("out=%+v err=%v", result, err)
+				}
+				op.Checkpoint = result.Checkpoint
+				if !p.SyncDuringOperation(op) {
+					t.Fatal("rolling operation excluded required provisioning Sync")
+				}
+				for _, m := range state(t, rc).Members {
+					if m.ChangeAction != "" {
+						t.Fatalf("rolling change began before provisioning: %+v", m)
+					}
+				}
+				done := false
+				for range 300 {
+					if p.SyncDuringOperation(op) {
+						if _, err := p.Sync(t.Context(), rc); err != nil {
+							t.Fatal(err)
+						}
+					}
+					result, err = p.RunOperation(t.Context(), rc, op)
+					if err != nil {
+						t.Fatalf("rolling operation: %v checkpoint=%s", err, op.Checkpoint)
+					}
+					op.Checkpoint = result.Checkpoint
+					if result.Done {
+						done = true
+						break
+					}
+					var cp operationState
+					if err := decodeJSON(op.Checkpoint, &cp); err != nil {
+						t.Fatal(err)
+					}
+					if cp.Waiting != "" && p.SyncDuringOperation(op) {
+						t.Fatal("rolling change allowed ordinary Sync")
+					}
+				}
+				if !done || len(state(t, rc).runningMembers()) != rc.Cluster.Spec.Components.Engine.Replicas {
+					t.Fatalf("rolling operation did not converge: %s", op.Checkpoint)
+				}
+				assertBefore(t, a.log.snapshot(), "agent:"+last+":join", "agent:demom0:drain")
+			})
+		}
+	}
+}

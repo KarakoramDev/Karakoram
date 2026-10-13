@@ -384,28 +384,44 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Phase = "exposure"
 		return result, e
 	}
-	// Ready requires every member's view to include the entire planned cluster.
+	// A minority outage must not prevent claiming recovery operations. Status
+	// reports incomplete membership as Degraded; removal retains its own gates.
 	names := []string{}
 	for _, m := range s.runningMembers() {
 		names = append(names, "rabbit@"+m.Name)
 	}
+	healthyMembers := 0
+	complete := true
+	var observationErr error
 	for _, m := range s.runningMembers() {
 		healthy, e := p.healthy(ctx, rc, m)
-		if e != nil {
-			return result, e
+		if e != nil || !healthy {
+			complete = false
+			if e != nil && observationErr == nil {
+				observationErr = e
+			}
+			continue
 		}
-		if !healthy {
-			return result, nil
-		}
+		healthyMembers++
 		st, e := p.brokerStatus(ctx, rc, m.Name)
 		if e != nil {
-			return result, e
+			complete = false
+			if observationErr == nil {
+				observationErr = e
+			}
+			continue
 		}
 		for _, name := range names {
 			if !slices.Contains(st.RunningNodes, name) {
-				return result, fmt.Errorf("%w: member %s does not observe %s running", engine.ErrConflict, m.Name, name)
+				complete = false
 			}
 		}
+	}
+	if !complete {
+		if observationErr != nil && healthyMembers <= len(names)/2 {
+			return result, observationErr
+		}
+		return result, nil
 	}
 	retained, e := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 	if e != nil {

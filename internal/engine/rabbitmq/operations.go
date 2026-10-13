@@ -232,12 +232,27 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 		}
 		return opResult(cp, false, "member-change")
 	}
+	// Do not begin a rolling change until ordinary Sync has finished the entire
+	// desired membership. This checkpoint alone permits provisioning Sync; once
+	// a broker is being changed, the operation remains isolated.
+	active := 0
+	provisioning := s.Suspended
+	for _, m := range s.Members {
+		if m.Removing {
+			provisioning = true
+			continue
+		}
+		active++
+		provisioning = provisioning || m.Stage != "ready"
+	}
+	if provisioning || active != rc.Cluster.Spec.Components.Engine.Replicas {
+		cp.Stage = "provision"
+		return opResult(cp, false, "waiting-provisioning")
+	}
+	cp.Stage = ""
 	for _, m := range ordered(s) {
 		if m.Removing || slices.Contains(cp.Done, m.Name) {
 			continue
-		}
-		if m.Stage != "ready" {
-			return opResult(cp, false, "waiting-member")
 		}
 		if rotate {
 			if err := rotateCertificate(ctx, rc, m); err != nil {
@@ -254,14 +269,21 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 	return opResult(cp, true, "rolling-complete")
 }
 func (*Provider) SyncDuringOperation(op *domain.Operation) bool {
-	if op == nil || op.Kind != domain.OperationReplaceMember {
+	if op == nil {
 		return false
 	}
 	var cp operationState
 	if decodeJSON(op.Checkpoint, &cp) != nil {
 		return false
 	}
-	return cp.Stage == "join" || cp.Stage == "remove"
+	switch op.Kind {
+	case domain.OperationReplaceMember:
+		return cp.Stage == "join" || cp.Stage == "remove"
+	case domain.OperationRestart, domain.OperationRotateTLS:
+		return cp.Stage == "provision" && cp.Waiting == ""
+	default:
+		return false
+	}
 }
 
 var _ engine.OperationSyncPolicy = (*Provider)(nil)

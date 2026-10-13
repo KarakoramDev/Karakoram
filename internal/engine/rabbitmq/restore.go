@@ -73,14 +73,14 @@ func definitionsSource(ctx context.Context, rc *engine.Context, source domain.Cl
 		source.Name = rc.Cluster.Name
 	}
 	if name == "" {
-		return nil, errors.New("RabbitMQ restore requires a definitions backup; PITR is not supported")
+		return nil, invalid("RabbitMQ restore requires a definitions backup; PITR is not supported")
 	}
 	b, err := rc.Store.GetBackup(ctx, source, name)
 	if err != nil {
 		return nil, err
 	}
 	if b.Provider != "rabbitmq" || b.Type != "definitions" || b.Phase != domain.PhaseSucceeded || b.Location == "" {
-		return nil, errors.New("restore source is not a successful RabbitMQ definitions backup")
+		return nil, invalid("restore source is not a successful RabbitMQ definitions backup")
 	}
 	return b, nil
 }
@@ -158,13 +158,20 @@ func (p *Provider) restoreOp(ctx context.Context, rc *engine.Context, op *domain
 		return definitionsResult(cp), err
 	}
 	if r.Source.PITRTime != nil {
-		return definitionsResult(cp), errors.New("RabbitMQ definitions restore does not support PITR")
+		cp.Step, cp.Failure = "failed", "RabbitMQ definitions restore does not support PITR"
+	}
+	var b *domain.Backup
+	if cp.Step == "" || cp.Step == "import" {
+		b, err = definitionsSource(ctx, rc, domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}, r.Source.Backup)
+		if err != nil {
+			if !errors.Is(err, engine.ErrInvalid) {
+				return definitionsResult(cp), err
+			}
+			cp.Step, cp.Failure = "failed", err.Error()
+		}
 	}
 	switch cp.Step {
 	case "":
-		if _, err = definitionsSource(ctx, rc, domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}, r.Source.Backup); err != nil {
-			return definitionsResult(cp), err
-		}
 		stamp := now(rc)
 		if r.StartedAt == nil {
 			r.StartedAt = &stamp
@@ -178,11 +185,7 @@ func (p *Provider) restoreOp(ctx context.Context, rc *engine.Context, op *domain
 		}
 		cp.Step = "import"
 	case "import":
-		b, e := definitionsSource(ctx, rc, domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}, r.Source.Backup)
-		if e != nil {
-			return definitionsResult(cp), e
-		}
-		if e = p.importDefinitionsBackup(ctx, rc, b); e != nil {
+		if e := p.importDefinitionsBackup(ctx, rc, b); e != nil {
 			var invalid *invalidDefinitionsError
 			switch {
 			case errors.As(e, &invalid):

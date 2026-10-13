@@ -179,20 +179,43 @@ func TestDefinitionsRestoreCrossNamespaceEvents(t *testing.T) {
 	}
 }
 func TestDefinitionsSourceRejectsOtherProviderAndPITR(t *testing.T) {
-	f := newDefinitionsFixture(t)
-	seedDefinitions(t, f, definitionsGzip(t, definitionsFixture))
-	op := prepareDefinitionsRestore(t, f)
-	f.store.backup.Provider = "psmdb"
-	if _, err := f.p.restoreOp(context.Background(), f.rc, op); err == nil {
-		t.Fatal("other provider accepted")
-	}
-	stamp := f.store.backup.CreatedAt
-	f.store.restore.Source.PITRTime = &stamp
-	if _, err := f.p.restoreOp(context.Background(), f.rc, op); err == nil {
-		t.Fatal("PITR accepted")
-	}
-	if f.imports != 0 {
-		t.Fatal("invalid source modified target")
+	for _, test := range []string{"provider", "type", "PITR", "missing backup", "unfinished backup", "missing location", "import checkpoint"} {
+		t.Run(test, func(t *testing.T) {
+			f := newDefinitionsFixture(t)
+			seedDefinitions(t, f, definitionsGzip(t, definitionsFixture))
+			op := prepareDefinitionsRestore(t, f)
+			switch test {
+			case "provider":
+				f.store.backup.Provider = "psmdb"
+			case "type":
+				f.store.backup.Type = "physical"
+			case "PITR":
+				stamp := f.store.backup.CreatedAt
+				f.store.restore.Source.PITRTime = &stamp
+			case "missing backup":
+				f.store.restore.Source.Backup = ""
+			case "unfinished backup":
+				f.store.backup.Phase = domain.PhaseRunning
+			case "missing location":
+				f.store.backup.Location = ""
+			case "import checkpoint":
+				advanceDefinitions(t, f, op, f.p.restoreOp)
+				f.store.backup.Type = "physical"
+			}
+			out, err := f.p.restoreOp(context.Background(), f.rc, op)
+			r := f.store.restore
+			if err == nil || !out.Done || out.Step != "done" || r.Phase != domain.PhaseFailed || r.CompletedAt == nil || r.Error == "" || f.imports != 0 {
+				t.Fatalf("out=%+v err=%v restore=%+v imports=%d", out, err, r, f.imports)
+			}
+			if f.events.events[len(f.events.events)-1].Reason != "RestoreFailed" {
+				t.Fatal(f.events.events)
+			}
+			op.Checkpoint = out.Checkpoint
+			out, err = f.p.restoreOp(context.Background(), f.rc, op)
+			if !out.Done || err == nil || f.imports != 0 {
+				t.Fatal("terminal invalid restore was retried", out, err)
+			}
+		})
 	}
 }
 
@@ -239,4 +262,18 @@ func TestDefinitionsRestoreRejectedImport(t *testing.T) {
 	if err == nil || !out.Done || f.store.restore.Phase != domain.PhaseFailed {
 		t.Fatalf("out=%+v err=%v restore=%+v", out, err, f.store.restore)
 	}
+}
+
+func TestDefinitionsRestoreSourceLookupFailureRemainsRetryable(t *testing.T) {
+	f := newDefinitionsFixture(t)
+	seedDefinitions(t, f, definitionsGzip(t, definitionsFixture))
+	op := prepareDefinitionsRestore(t, f)
+	backup := f.store.backup
+	f.store.backup = nil
+	out, err := f.p.restoreOp(context.Background(), f.rc, op)
+	if err == nil || out.Done || f.store.restore.Phase != domain.PhasePending {
+		t.Fatalf("out=%+v err=%v restore=%+v", out, err, f.store.restore)
+	}
+	f.store.backup = backup
+	finishDefinitions(t, f, op, f.p.restoreOp)
 }

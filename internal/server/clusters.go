@@ -473,6 +473,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
 			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime")
 		}
+		if p.Name() == "rabbitmq" && b.Source.PitrTime != nil {
+			return s.failure(engine.Invalid("RabbitMQ definitions restore does not support PITR"))
+		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
 				return *failure
@@ -483,6 +486,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 			if !backup.ProviderMatches(c.Spec.Provider) {
 				return s.failure(engine.InvalidField("source.backup", domain.ReasonConflict, "backup provider does not match target provider"))
+			}
+			if p.Name() == "rabbitmq" && (backup.Type != "definitions" || backup.Phase != domain.PhaseSucceeded || backup.Location == "") {
+				return s.failure(engine.Invalid("restore source is not a successful RabbitMQ definitions backup"))
 			}
 		}
 		if b.Source.PitrTime != nil {

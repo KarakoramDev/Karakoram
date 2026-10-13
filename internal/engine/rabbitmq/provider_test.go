@@ -293,7 +293,8 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 				if cfg.Engine != "rabbitmq" || cfg.Member != m.Name || cfg.TLS.Mode != mode || cfg.ConfigVersion != s.ConfigVersion || len(cfg.SystemUsers) < 2 || cfg.SystemUsers["admin"].Password == "" || cfg.SystemUsers["karakoram"].Password == "" {
 					t.Fatalf("member config: %+v", cfg)
 				}
-				if spec.NodeName != "rabbit@demom0" || !slices.Equal(spec.Peers, []string{"rabbit@demom0", "rabbit@demom1", "rabbit@demom2"}) || spec.Cookie == "" || spec.Version != "4.3.6" || spec.DefaultQueueType != "quorum" || spec.PrometheusPort != 15692 || spec.ConfigOverrides != rc.Cluster.Spec.EngineConfig || spec.TotalMemoryBytes <= 0 || spec.MemoryHighWatermarkBytes <= 0 || spec.MemoryHighWatermarkBytes >= spec.TotalMemoryBytes || spec.DiskFreeLimitBytes <= 0 || !slices.Contains(spec.Plugins, "rabbitmq_management") || !slices.Contains(spec.Plugins, "rabbitmq_prometheus") || !slices.Contains(spec.Plugins, "rabbitmq_stream") {
+				// The other fixture members are still planned (no runtime), so the seed discovers only itself.
+				if spec.NodeName != "rabbit@demom0" || !slices.Equal(spec.Peers, []string{"rabbit@demom0"}) || spec.Cookie == "" || spec.Version != "4.3.6" || spec.DefaultQueueType != "quorum" || spec.PrometheusPort != 15692 || spec.ConfigOverrides != rc.Cluster.Spec.EngineConfig || spec.TotalMemoryBytes <= 0 || spec.MemoryHighWatermarkBytes <= 0 || spec.MemoryHighWatermarkBytes >= spec.TotalMemoryBytes || spec.DiskFreeLimitBytes <= 0 || !slices.Contains(spec.Plugins, "rabbitmq_management") || !slices.Contains(spec.Plugins, "rabbitmq_prometheus") || !slices.Contains(spec.Plugins, "rabbitmq_stream") {
 					t.Fatalf("member spec: %+v", spec)
 				}
 				amqp, amqps, mgmt, mgmts := 5672, 0, 15672, 0

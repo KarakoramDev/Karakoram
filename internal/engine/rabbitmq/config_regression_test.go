@@ -273,3 +273,57 @@ func TestAutomaticLeafRenewalPublishesOnlyAfterSafeStop(t *testing.T) {
 		}
 	}
 }
+
+func TestMemberConfigDiscoveryExcludesUncreatedPeers(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	s := state(t, rc)
+	for range 3 {
+		s.add(rc.Cluster.Name)
+	}
+	if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	assertPeers := func(name string, want []string) {
+		t.Helper()
+		if err := s.save(rc.Cluster); err != nil {
+			t.Fatal(err)
+		}
+		config, err := p.MemberConfig(t.Context(), rc, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec rmqspec.MemberSpec
+		if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(spec.Peers, want) {
+			t.Fatalf("%s peers=%v want=%v", name, spec.Peers, want)
+		}
+	}
+	s.Members[0].Stage = "imported"
+	assertPeers("demom0", []string{"rabbit@demom0"})
+	s.Members[0].Stage = "ready"
+	s.Bootstrapped = true
+	s.Members[1].Stage = "imported"
+	assertPeers("demom1", []string{"rabbit@demom0", "rabbit@demom1"})
+	s.Members[1].Stage = "ready"
+	s.Members[2].Stage = "imported"
+	full := []string{"rabbit@demom0", "rabbit@demom1", "rabbit@demom2"}
+	assertPeers("demom2", full)
+	assertPeers("demom0", full)
+	// Retained planned peers are not fresh identities: preserve discovery even
+	// before their resumed runtimes exist.
+	s.Members[1].Stage = "planned"
+	s.Members[1].Resume = true
+	s.Members[2].Stage = "planned"
+	s.Members[2].ServiceID = "retained-runtime"
+	assertPeers("demom0", full)
+	// A wiped/new replacement must discover survivors, never bootstrap alone.
+	replacement := s.add(rc.Cluster.Name)
+	if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	assertPeers(replacement.Name, append(slices.Clone(full), "rabbit@demom3"))
+	s.Members[1].Removing = true
+	assertPeers("demom0", []string{"rabbit@demom0", "rabbit@demom2"})
+}

@@ -267,7 +267,9 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	}
 	peers := []string{}
 	for _, other := range ordered(s) {
-		if !other.Removing || other.Name == name {
+		// Fresh planned peers have no runtime yet. Keep retained identities in
+		// discovery so a resumed or replaced broker still finds the old cluster.
+		if (!other.Removing || other.Name == name) && (other.Name == name || other.Stage != "planned" || other.ServiceID != "" || other.Resume) {
 			peers = append(peers, "rabbit@"+other.Name)
 		}
 	}
