@@ -26,18 +26,22 @@ import (
 
 // Client performs bearer-authenticated requests over pinned-CA HTTPS.
 type Client struct {
-	base  *url.URL
-	token string
-	http  *http.Client
+	base   *url.URL
+	token  string
+	http   *http.Client
+	engine *http.Client
 }
 
-// ClientOptions supplies the HTTPS endpoint, token, trust roots, and request deadline.
+// ClientOptions supplies the HTTPS endpoint, token, trust roots, and request deadlines.
+// EngineTimeout bounds engine-owned actions such as broker drains, which may
+// legitimately outlast ordinary requests; it defaults to three minutes.
 type ClientOptions struct {
-	BaseURL     string
-	Token       string
-	CAPEM       []byte
-	Timeout     time.Duration
-	DialContext func(context.Context, string, string) (net.Conn, error)
+	BaseURL       string
+	Token         string
+	CAPEM         []byte
+	Timeout       time.Duration
+	EngineTimeout time.Duration
+	DialContext   func(context.Context, string, string) (net.Conn, error)
 }
 
 // NewClient trusts only the supplied private CA and verifies the hostname.
@@ -64,13 +68,25 @@ func NewClient(opts ClientOptions) (*Client, error) {
 	if opts.DialContext != nil {
 		transport.DialContext = opts.DialContext
 	}
-	client := &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	return &Client{base: base, token: opts.Token, http: client}, nil
+	redirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client := &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: redirect}
+	engineTimeout := opts.EngineTimeout
+	if engineTimeout <= 0 {
+		engineTimeout = 3 * time.Minute
+	}
+	engineTransport := transport.Clone()
+	engineTransport.ResponseHeaderTimeout = engineTimeout
+	engineClient := &http.Client{Transport: engineTransport, Timeout: engineTimeout, CheckRedirect: redirect}
+	return &Client{base: base, token: opts.Token, http: client, engine: engineClient}, nil
 }
 
 // Close releases idle HTTPS connections.
-func (c *Client) Close() { c.http.CloseIdleConnections() }
+func (c *Client) Close() { c.http.CloseIdleConnections(); c.engine.CloseIdleConnections() }
 func (c *Client) request(ctx context.Context, method, path string, input, output any) error {
+	return c.requestWith(ctx, c.http, method, path, input, output)
+}
+
+func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path string, input, output any) error {
 	var body io.Reader
 	if input != nil {
 		data, err := json.Marshal(input)
@@ -93,7 +109,7 @@ func (c *Client) request(ctx context.Context, method, path string, input, output
 	if input != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	res, err := c.http.Do(req)
+	res, err := hc.Do(req)
 	if err != nil {
 		return err
 	}
@@ -140,9 +156,13 @@ func (c *Client) Process(ctx context.Context, a ProcessAction) error {
 
 var processName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 
-// Engine invokes an engine-owned authenticated JSON action.
+// Engine invokes an engine-owned authenticated JSON action using the longer
+// engine deadline. Engine and action names share the process-name syntax.
 func (c *Client) Engine(ctx context.Context, engine, action string, req, resp any) error {
-	return c.request(ctx, "POST", "/v1/"+engine+"/"+action, req, resp)
+	if !processName.MatchString(engine) || !processName.MatchString(action) {
+		return errors.New("invalid engine action")
+	}
+	return c.requestWith(ctx, c.engine, "POST", "/v1/"+engine+"/"+action, req, resp)
 }
 
 // Maintenance sets database auto-restart suppression.

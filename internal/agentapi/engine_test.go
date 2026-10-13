@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEngineClient(t *testing.T) {
@@ -38,7 +39,7 @@ func TestEngineClient(t *testing.T) {
 			w.WriteHeader(http.StatusConflict)
 		case "/v1/rabbitmq/invalid":
 			_, _ = w.Write([]byte("not JSON"))
-		case "/v1/rabbitmq/x":
+		case "/v1/rabbitmq/empty":
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			t.Error(r.URL.Path)
@@ -65,8 +66,21 @@ func TestEngineClient(t *testing.T) {
 	if err := client.Engine(ctx, "rabbitmq", "invalid", nil, &out); err == nil {
 		t.Fatal("invalid response accepted")
 	}
-	if err := client.Engine(ctx, "rabbitmq", "x", struct{}{}, nil); err != nil {
+	if err := client.Engine(ctx, "rabbitmq", "empty", struct{}{}, nil); err != nil {
 		t.Fatal(err)
+	}
+	for _, pair := range [][2]string{{"rabbitmq", "../status"}, {"rabbitmq", "a/b"}, {"../v1", "status"}, {"rabbitmq", "x"}} {
+		if err := client.Engine(ctx, pair[0], pair[1], struct{}{}, nil); err == nil {
+			t.Fatalf("invalid engine action %q accepted", pair)
+		}
+	}
+	slow, err := NewClient(ClientOptions{BaseURL: server.URL, Token: "token", CAPEM: ca, Timeout: time.Nanosecond, EngineTimeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer slow.Close()
+	if err := slow.Engine(ctx, "rabbitmq", "empty", struct{}{}, nil); err != nil {
+		t.Fatalf("engine deadline not independent of ordinary timeout: %v", err)
 	}
 	bad, err := NewClient(ClientOptions{BaseURL: server.URL, Token: "wrong", CAPEM: ca})
 	if err != nil {
