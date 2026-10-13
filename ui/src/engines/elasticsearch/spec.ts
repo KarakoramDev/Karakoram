@@ -409,6 +409,11 @@ export const USERNAME_RE = /^[\x21-\x7e][\x20-\x7e]{0,505}[\x21-\x7e]$|^[\x21-\x
 /** Elasticsearch time value accepted as API key expiration (e.g. 30d, 12h, 90m). */
 export const EXPIRATION_RE = /^[1-9][0-9]*(d|h|m|s|ms|micros|nanos)$/;
 
+/** The API marks built-in roles with `reserved`; custom roles remain visible by default. */
+export function visibleElasticRoles(roles: readonly Schemas['ElasticRole'][], showBuiltIn = false): Schemas['ElasticRole'][] {
+  return roles.filter((role) => showBuiltIn || !role.reserved);
+}
+
 /** Parse required, explicitly scoped API-key role descriptors without dropping restrictions. */
 export function parseRoleDescriptors(text: string): { value?: Record<string, Schemas['ElasticRoleDescriptor']>; error?: string } {
   if (!text.trim()) return { error: 'At least one role descriptor is required.' };

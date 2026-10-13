@@ -24,6 +24,7 @@ import {
   validUserPassword,
   validatePipelines,
   validateSpec,
+  visibleElasticRoles,
   withReplicas,
   writeOptions,
 } from './spec.ts';
@@ -43,6 +44,22 @@ const topology: Schemas['ProviderTopology'] = {
   limits: { engine: { minReplicas: 1, maxReplicas: 20 }, master: { allowedReplicas: [3, 5] }, kibana: { minReplicas: 0, maxReplicas: 3 } },
 };
 const noResourceErrors = () => [];
+
+test('built-in roles are hidden by default using the API reserved flag, not role names', () => {
+  const descriptor = { cluster: ['monitor'], indices: [], applications: [] };
+  const custom: Schemas['ElasticRole'] = { ...descriptor, name: 'custom' };
+  const reserved: Schemas['ElasticRole'] = { ...descriptor, name: 'viewer', reserved: true };
+  const explicitlyCustom: Schemas['ElasticRole'] = { ...descriptor, name: 'superuser', reserved: false };
+  const roles = Object.freeze([custom, reserved, explicitlyCustom]);
+  assert.deepEqual(visibleElasticRoles(roles), [custom, explicitlyCustom]);
+  assert.deepEqual(visibleElasticRoles(roles, false), [custom, explicitlyCustom]);
+  assert.deepEqual(visibleElasticRoles(roles, true), [custom, reserved, explicitlyCustom]);
+  assert.equal(visibleElasticRoles(roles)[0], custom);
+  assert.deepEqual(roles, [custom, reserved, explicitlyCustom]);
+  assert.deepEqual(visibleElasticRoles([reserved]), []);
+  assert.deepEqual(visibleElasticRoles([]), []);
+  assert.deepEqual(visibleElasticRoles([], true), []);
+});
 
 test('options round-trip through engineOptions with server-compatible keys', () => {
   const empty = readOptions(base);

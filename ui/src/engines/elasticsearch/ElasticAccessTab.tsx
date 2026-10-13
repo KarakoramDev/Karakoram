@@ -12,7 +12,7 @@ import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Me
 import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
 import { hasCapability } from '../index';
-import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, type MemberKind } from './spec';
+import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, visibleElasticRoles, type MemberKind } from './spec';
 
 type ElasticUser = Schemas['ElasticUser'];
 type ElasticRole = Schemas['ElasticRole'];
@@ -40,6 +40,7 @@ export function ElasticAccessTab() {
 
   const [userDialog, setUserDialog] = useState<null | { user?: ElasticUser }>(null);
   const [roleDialog, setRoleDialog] = useState<null | { role?: ElasticRole }>(null);
+  const [showBuiltInRoles, setShowBuiltInRoles] = useState(false);
   const [keyDialog, setKeyDialog] = useState(false);
   const [deleteUser, setDeleteUser] = useState<ElasticUser | null>(null);
   const [deleteRole, setDeleteRole] = useState<ElasticRole | null>(null);
@@ -78,7 +79,10 @@ export function ElasticAccessTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const roleNames = roles.data?.items.map((r) => r.name) ?? [];
+  const roleItems = roles.data?.items ?? [];
+  const visibleRoles = visibleElasticRoles(roleItems, showBuiltInRoles);
+  const builtInRoleCount = roleItems.reduce((count, role) => count + (role.reserved ? 1 : 0), 0);
+  const roleNames = roleItems.map((r) => r.name);
   const accessible = hasCapability(provider, 'elasticAccess');
 
   return (
@@ -170,11 +174,14 @@ export function ElasticAccessTab() {
         title="Roles"
         flush
         actions={
-          canCreate ? (
-            <Button size="sm" onClick={() => setRoleDialog({})}>
-              + Add role
-            </Button>
-          ) : null
+          <div className="row wrap" style={{ gap: 12 }}>
+            {builtInRoleCount > 0 ? <Switch label={`Show built-in roles (${builtInRoleCount})`} checked={showBuiltInRoles} onChange={(e) => setShowBuiltInRoles(e.target.checked)} /> : null}
+            {canCreate ? (
+              <Button size="sm" onClick={() => setRoleDialog({})}>
+                + Add role
+              </Button>
+            ) : null}
+          </div>
         }
       >
         {roles.isPending ? (
@@ -183,8 +190,8 @@ export function ElasticAccessTab() {
           <div className="card-body">
             <ErrorBlock error={roles.error} retry={() => roles.refetch()} />
           </div>
-        ) : roles.data.items.length === 0 ? (
-          <div className="table-empty">No roles reported.</div>
+        ) : visibleRoles.length === 0 ? (
+          <div className="table-empty">{builtInRoleCount > 0 && !showBuiltInRoles ? 'No custom roles. Show built-in roles to view the reserved roles.' : 'No roles reported.'}</div>
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -197,7 +204,7 @@ export function ElasticAccessTab() {
                 </tr>
               </thead>
               <tbody>
-                {roles.data.items.map((r) => (
+                {visibleRoles.map((r) => (
                   <tr key={r.name}>
                     <td>
                       <span className="row" style={{ gap: 6 }}>
