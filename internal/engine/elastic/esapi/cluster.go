@@ -188,13 +188,14 @@ func (c *Client) AllocationExcludeNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// SetAllocationExcludeNames replaces persistent exclusions; empty resets the setting.
+// SetAllocationExcludeNames replaces effective exclusions, clearing transient precedence.
 func (c *Client) SetAllocationExcludeNames(ctx context.Context, names []string) error {
 	var v any
 	if len(names) > 0 {
 		v = strings.Join(names, ",")
 	}
-	return c.PutClusterSettings(ctx, map[string]any{"cluster.routing.allocation.exclude._name": v}, nil)
+	key := "cluster.routing.allocation.exclude._name"
+	return c.PutClusterSettings(ctx, map[string]any{key: v}, map[string]any{key: nil})
 }
 
 // Flush flushes indices, returning conflicts for the caller to handle.
@@ -238,27 +239,62 @@ func (c *Client) ReloadSecureSettings(ctx context.Context) error {
 	return nil
 }
 
-// MaxIndexReplicas returns the largest configured replica count across indices.
+// MaxIndexReplicas returns the largest replica requirement, including auto-expand.
 func (c *Client) MaxIndexReplicas(ctx context.Context) (int, error) {
 	var indices map[string]struct {
-		Settings map[string]string `json:"settings"`
+		Settings map[string]json.RawMessage `json:"settings"`
 	}
-	if err := c.do(ctx, "GET", "/_all/_settings", url.Values{"flat_settings": {"true"}, "expand_wildcards": {"all"}}, nil, &indices); err != nil {
+	q := url.Values{"flat_settings": {"true"}, "expand_wildcards": {"all"}, "filter_path": {"*.settings.index.number_of_replicas,*.settings.index.auto_expand_replicas"}}
+	if err := c.do(ctx, "GET", "/_all/_settings", q, nil, &indices); err != nil {
 		return 0, err
 	}
-	maximum := 0
+	maximum, dataNodes := 0, -1
 	for _, index := range indices {
-		text, ok := index.Settings["index.number_of_replicas"]
+		raw, ok := index.Settings["index.number_of_replicas"]
 		if !ok {
 			return 0, errors.New("index replica count unavailable")
+		}
+		text := string(raw)
+		if len(raw) > 0 && raw[0] == '"' {
+			if err := json.Unmarshal(raw, &text); err != nil {
+				return 0, err
+			}
 		}
 		count, err := strconv.Atoi(text)
 		if err != nil || count < 0 {
 			return 0, errors.New("invalid index replica count")
 		}
-		if count > maximum {
-			maximum = count
+		if raw := index.Settings["index.auto_expand_replicas"]; len(raw) > 0 {
+			text = string(raw)
+			if raw[0] == '"' {
+				if err = json.Unmarshal(raw, &text); err != nil {
+					return 0, err
+				}
+			}
+			if text != "false" {
+				lower, upper, ok := strings.Cut(text, "-")
+				minimum, e := strconv.Atoi(lower)
+				if !ok || e != nil || minimum < 0 {
+					return 0, errors.New("invalid index auto-expand replicas")
+				}
+				if upper == "all" {
+					if dataNodes < 0 {
+						h, e := c.Health(ctx, HealthOptions{})
+						if e != nil {
+							return 0, e
+						}
+						dataNodes = h.NumberOfDataNodes
+					}
+					count = max(0, dataNodes-1)
+				} else {
+					count, err = strconv.Atoi(upper)
+					if err != nil || count < minimum {
+						return 0, errors.New("invalid index auto-expand replicas")
+					}
+				}
+			}
 		}
+		maximum = max(maximum, count)
 	}
 	return maximum, nil
 }

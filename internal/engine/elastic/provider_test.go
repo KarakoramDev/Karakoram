@@ -206,6 +206,7 @@ type coreES struct {
 	shards                   map[string]int
 	replicas                 int
 	persistent               map[string]any
+	transient                map[string]any
 	mutations                []string
 	tokens                   int
 	snapshots                []string
@@ -254,6 +255,7 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "PUT" {
 			var body struct {
 				Persistent map[string]any `json:"persistent"`
+				Transient  map[string]any `json:"transient"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			for k, v := range body.Persistent {
@@ -263,8 +265,18 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					f.persistent[k] = v
 				}
 			}
+			for k, v := range body.Transient {
+				if v == nil {
+					delete(f.transient, k)
+				} else {
+					if f.transient == nil {
+						f.transient = map[string]any{}
+					}
+					f.transient[k] = v
+				}
+			}
 		}
-		reply(map[string]any{"persistent": f.persistent, "transient": map[string]any{}})
+		reply(map[string]any{"persistent": f.persistent, "transient": f.transient})
 	case r.URL.Path == "/_flush" || r.URL.Path == "/_cluster/voting_config_exclusions" || r.URL.Path == "/_nodes/reload_secure_settings":
 		reply(map[string]any{"acknowledged": true})
 	case r.URL.Path == "/_security/_authenticate":
@@ -764,8 +776,18 @@ func TestCleanupSnapshotsComponentsRuntimeVolumeOrdering(t *testing.T) {
 	}
 }
 func TestCleanupKeepVolumesAndResume(t *testing.T) {
-	p, rc, f, _ := coreSetup(t, 1)
-	coreConverge(t, p, rc, f)
+	p, rc, f, es := coreSetup(t, 1)
+	s := coreConverge(t, p, rc, f)
+	s.Rolling = &rolling{Reason: "restart", OperationID: "retired", Current: "demon0", Step: "apply"}
+	s.Members[0].Removing = true
+	s.Members[0].Replaces = "retired-member"
+	s.Members[0].AllocationExcluded = true
+	s.DrainBlocked = "old removal"
+	es.persistent["cluster.routing.allocation.enable"] = "primaries"
+	es.transient = map[string]any{"cluster.routing.allocation.exclude._name": "operator,demon0"}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
 	for range 20 {
 		done, err := p.Cleanup(context.Background(), rc, domain.DeleteOptions{KeepVolumes: true, KeepBackups: true})
 		if err != nil {
@@ -775,9 +797,12 @@ func TestCleanupKeepVolumesAndResume(t *testing.T) {
 			break
 		}
 	}
-	s, _ := load(rc.Cluster)
+	s, _ = load(rc.Cluster)
 	if !s.Suspended || f.services["demon0v"] == nil || f.services["demon0"] != nil {
 		t.Fatal("invalid retained-volume cleanup")
+	}
+	if s.Rolling != nil || s.DrainBlocked != "" || s.Members[0].Removing || s.Members[0].Replaces != "" || s.Members[0].AllocationExcluded || !s.ResumeAllocationReset {
+		t.Fatal("retired operation bookkeeping survived cleanup", s)
 	}
 	retained, err := rc.Store.ListRetainedVolumes(context.Background(), rc.Cluster.Ref())
 	if err != nil || len(retained) != 1 {
@@ -786,6 +811,12 @@ func TestCleanupKeepVolumesAndResume(t *testing.T) {
 	s = coreConverge(t, p, rc, f)
 	if s.ClusterUUID != "test-uuid" || len(s.InitialMasterNodes) != 0 {
 		t.Fatal("resume attempted bootstrap")
+	}
+	if _, ok := es.persistent["cluster.routing.allocation.enable"]; ok || len(s.ResumeExcludeNames) != 0 || s.ResumeAllocationReset {
+		t.Fatal("retained resume did not restore shard allocation", s, es.persistent)
+	}
+	if es.persistent["cluster.routing.allocation.exclude._name"] != "operator" {
+		t.Fatal("resume lost the operator's exclusion", es.persistent)
 	}
 }
 func TestPlatformRetryPersistsActionAndDoesNotAdvance(t *testing.T) {
@@ -1390,5 +1421,166 @@ func TestUpgradeBeforeEnablingNewComponent(t *testing.T) {
 	}
 	if !reflect.DeepEqual(deploys, []string{"deploy:demon1", "deploy:demon0", "deploy:demoapm"}) {
 		t.Fatal("new component preceded ES upgrade", deploys)
+	}
+}
+
+func TestRestorePublishesEmptyComponentIntent(t *testing.T) {
+	p, rc, f, _ := coreSetup(t, 1)
+	for _, kind := range []string{kindKibana, kindLogstash, kindAPM} {
+		comp := rc.Cluster.Spec.Components.Extra[kind]
+		comp.Replicas = 2
+		rc.Cluster.Spec.Components.Extra[kind] = comp
+	}
+	s := coreConverge(t, p, rc, f)
+	s.RestoreActive = true
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range s.componentMembers() {
+		config, err := p.MemberConfig(context.Background(), rc, m.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if config.DesiredProcesses == nil || len(config.DesiredProcesses) != 0 {
+			t.Fatal("restore configuration permits component startup", m.Name, config.DesiredProcesses)
+		}
+	}
+}
+
+func TestRollingWaitsForEveryMaster(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 2)
+	rc.Cluster.Spec.Topology.Type = "dedicatedMasters"
+	p.ApplyDefaults(&rc.Cluster.Spec)
+	s := coreConverge(t, p, rc, f)
+	delete(f.nodes, "demom2")
+	for _, step := range []string{"prepare", "apply"} {
+		s.Rolling = &rolling{Reason: "restart", Current: "demom0", Order: []string{"demom0"}, Step: step}
+		before := len(es.mutations)
+		token := s.find("demom0").RestartToken
+		done, msg, err := p.rollingStep(context.Background(), rc, s)
+		if done || !errors.Is(err, errWaiting) || !strings.Contains(msg, "master-eligible") || s.Rolling.Step != step || len(es.mutations) != before || s.find("demom0").RestartToken != token {
+			t.Fatalf("master disrupted without full quorum membership: %v %s %v %+v", done, msg, err, s.Rolling)
+		}
+	}
+	s.Retry = &pending{Action: "resources", Member: "demom0", Resources: domain.Resources{MinRAM: 4}}
+	before := f.mutations
+	if _, _, err := p.retryPending(context.Background(), rc, s); !errors.Is(err, errWaiting) || f.mutations != before || s.Retry == nil {
+		t.Fatal("platform retry bypassed master membership gate", err)
+	}
+	s.Retry = nil
+	f.nodes["demom2"] = rc.Cluster.Spec.Version
+	s.Rolling.Step = "prepare"
+	if _, _, err := p.rollingStep(context.Background(), rc, s); err != nil || s.Rolling.Step != "flush" {
+		t.Fatal("joined masters did not release the gate", err, s.Rolling)
+	}
+}
+
+func TestYellowRequiresUnplaceableReplicas(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 3)
+	s := coreConverge(t, p, rc, f)
+	es.health = "yellow"
+	for _, tc := range []struct {
+		replicas                 int
+		primary                  bool
+		relocating, initializing int
+		want                     bool
+	}{{1, false, 0, 0, false}, {2, false, 0, 0, false}, {3, false, 0, 0, true}, {4, false, 0, 0, true}, {3, true, 0, 0, false}, {3, false, 1, 0, false}, {3, false, 0, 1, false}} {
+		es.replicas, es.unassignedPrimary = tc.replicas, tc.primary
+		es.relocating, es.initializing = tc.relocating, tc.initializing
+		for _, step := range []string{"prepare", "recover"} {
+			s.Rolling = &rolling{Reason: "restart", Current: "demon1", Order: []string{"demon1"}, Step: step}
+			_, _, err := p.rollingStep(context.Background(), rc, s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			advanced := s.Rolling.Step != step || s.Rolling.Current == ""
+			if advanced != tc.want {
+				t.Fatalf("yellow gate %+v step=%s rolling=%+v", tc, step, s.Rolling)
+			}
+		}
+		s.Rolling = nil
+		s.Phase = "ready"
+		if err := save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+		status, err := p.Status(context.Background(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (status.Phase == domain.PhaseReady) != tc.want {
+			t.Fatalf("yellow readiness %+v: %+v", tc, status)
+		}
+	}
+}
+
+func TestProvisioningPrecedesSavedRolling(t *testing.T) {
+	for _, kind := range []string{kindNode, kindKibana} {
+		for _, stage := range []string{stagePlanned, stageImported} {
+			t.Run(kind+"/"+stage, func(t *testing.T) {
+				p, rc, f, _ := coreSetup(t, 1)
+				if kind == kindKibana {
+					kb := rc.Cluster.Spec.Components.Extra[kindKibana]
+					kb.Replicas = 1
+					rc.Cluster.Spec.Components.Extra[kindKibana] = kb
+				}
+				s := coreConverge(t, p, rc, f)
+				m := s.members(kind)[0]
+				m.Stage = stage
+				s.Rolling = &rolling{Reason: "restart", Current: "demon0", Step: "prepare", Order: []string{"demon0"}}
+				if stage == stagePlanned {
+					delete(f.services, m.Name)
+				}
+				if err := save(rc.Cluster, s); err != nil {
+					t.Fatal(err)
+				}
+				before := len(f.calls)
+				if _, err := p.Sync(context.Background(), rc); err != nil {
+					t.Fatal(err)
+				}
+				action := "import:"
+				if stage == stageImported {
+					action = "deploy:"
+				}
+				if !slices.Contains(f.calls[before:], action+m.Name) {
+					t.Fatal("saved rolling suppressed provisioning", f.calls[before:])
+				}
+				s, _ = load(rc.Cluster)
+				if s.Rolling.Step != "prepare" {
+					t.Fatal("rolling advanced before provisioning", s.Rolling)
+				}
+			})
+		}
+	}
+}
+
+func TestRemovalPreservesOperatorExclusions(t *testing.T) {
+	for _, alreadyExcluded := range []bool{false, true} {
+		p, rc, f, es := coreSetup(t, 3)
+		s := coreConverge(t, p, rc, f)
+		m := s.find("demon2")
+		excluded := "operator"
+		if alreadyExcluded {
+			excluded += ",demon2"
+		}
+		es.transient = map[string]any{"cluster.routing.allocation.exclude._name": excluded}
+		m.Removing = true
+		if err := p.removeStep(context.Background(), rc, s, m); err != nil {
+			t.Fatal(err)
+		}
+		if es.persistent["cluster.routing.allocation.exclude._name"] != "operator,demon2" || es.transient["cluster.routing.allocation.exclude._name"] != nil || m.AllocationExcluded == alreadyExcluded {
+			t.Fatal("effective drain exclusion was not applied with ownership", es.persistent, es.transient, m)
+		}
+		delete(f.nodes, m.Name)
+		m.Stage = "removed"
+		if err := p.removeStep(context.Background(), rc, s, m); err != nil {
+			t.Fatal(err)
+		}
+		want := "operator"
+		if alreadyExcluded {
+			want += ",demon2"
+		}
+		if es.persistent["cluster.routing.allocation.exclude._name"] != want {
+			t.Fatal("removal changed an operator-owned exclusion", es.persistent)
+		}
 	}
 }

@@ -25,6 +25,24 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		}
 	}()
 	s.Phase = "cleanup"
+	if opts.KeepVolumes {
+		if s.Rolling != nil {
+			s.ResumeAllocationReset = true
+			s.Rolling = nil
+		}
+		s.DrainBlocked = ""
+		for _, m := range s.Members {
+			if m.AllocationExcluded {
+				s.ResumeExcludeNames = append(s.ResumeExcludeNames, m.Name)
+				m.AllocationExcluded = false
+			}
+			if masterEligible(rc.Cluster.Spec, m) && (m.Stage == stageExcluded || m.Stage == stageDeleting || m.Stage == "delete-volume" || m.Stage == "removed") {
+				s.ResumeVotingReset = true
+			}
+			m.Removing = false
+			m.Replaces = ""
+		}
+	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return false, e
 	}

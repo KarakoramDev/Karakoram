@@ -27,14 +27,20 @@ type fakeHost struct {
 	actions                       []string
 	processes                     map[string]Process
 	actionErr                     error
+	desired                       bool
+	writes                        int
+	configures                    int
+	logger                        *slog.Logger
 }
 
 func (h *fakeHost) DataDir() string { return h.dir }
 func (h *fakeHost) WriteFile(rel string, data []byte, mode os.FileMode) error {
+	h.writes++
 	_, err := atomicWrite(filepath.Join(h.dir, "karakoram", rel), data, mode)
 	return err
 }
 func (h *fakeHost) Configure(name string, p Process) error {
+	h.configures++
 	if h.processes == nil {
 		h.processes = map[string]Process{}
 	}
@@ -46,13 +52,18 @@ func (h *fakeHost) Action(_ context.Context, name, action string) error {
 		return h.actionErr
 	}
 	h.actions = append(h.actions, name+":"+action)
-	h.running = true
+	h.running, h.desired = action != "stop", action != "stop"
 	return nil
 }
-func (h *fakeHost) Running(string) bool  { return h.running }
-func (h *fakeHost) Stopped(string) bool  { return h.stopped }
-func (h *fakeHost) Maintenance() bool    { return h.maintenance }
-func (h *fakeHost) Logger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+func (h *fakeHost) Running(string) bool { return h.running }
+func (h *fakeHost) Stopped(string) bool { return h.stopped }
+func (h *fakeHost) Maintenance() bool   { return h.maintenance }
+func (h *fakeHost) Logger() *slog.Logger {
+	if h.logger != nil {
+		return h.logger
+	}
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
 
 func fixture(t *testing.T) (*Runner, *fakeHost) {
 	t.Helper()
@@ -120,6 +131,67 @@ func apply(t *testing.T, r *Runner, h *fakeHost, s agentspec.Spec) []string {
 		t.Fatal(err)
 	}
 	return changes
+}
+
+func TestMissingProductHomeDefersApply(t *testing.T) {
+	for _, component := range New().Processes() {
+		for _, status := range []string{"unconfigured", "stopped", "running", "held", "maintenance"} {
+			t.Run(component+"/"+status, func(t *testing.T) {
+				r, h := fixture(t)
+				installed := r.Home
+				missing := filepath.Join(t.TempDir(), "old-version")
+				r.Home = func(component, version string) string {
+					if version == "9.5.4" {
+						return missing
+					}
+					return installed(component, version)
+				}
+				s := esSpec()
+				s.Component, s.Version = component, "9.5.4"
+				s.Kibana = &agentspec.KibanaSpec{}
+				s.Logstash = &agentspec.LogstashSpec{}
+				s.APM = &agentspec.APMSpec{}
+				if status != "unconfigured" {
+					h.processes = map[string]Process{component: {Binary: filepath.Join(missing, "bin", component), Dir: missing}}
+					h.desired = true
+				}
+				h.running = status == "running"
+				h.stopped = status == "held"
+				h.maintenance = status == "maintenance"
+				old := `{"version":"9.5.4","restartToken":"old","applied":true}`
+				if err := h.WriteFile("elastic-applied.json", []byte(old), 0600); err != nil {
+					t.Fatal(err)
+				}
+				writes, configures := h.writes, h.configures
+				var logs bytes.Buffer
+				h.logger = slog.New(slog.NewTextHandler(&logs, nil))
+				keystore := r.KeystoreCommand
+				r.KeystoreCommand = func(context.Context, string, []string, []string, io.Reader) error {
+					t.Fatal("missing home invoked keystore")
+					return nil
+				}
+				if changes := apply(t, r, h, s); len(changes) != 0 {
+					t.Fatal("missing home rendered configuration", changes)
+				}
+				if h.writes != writes || readText(t, h, "elastic-applied.json") != old || h.configures != configures {
+					t.Fatal("missing home changed files or configured an unavailable binary")
+				}
+				if h.running || h.desired || !reflect.DeepEqual(h.actions, []string{component + ":stop"}) {
+					t.Fatal("missing home left process desired", h.actions, h.running, h.desired)
+				}
+				if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), missing) {
+					t.Fatal("missing home warning absent", logs.String())
+				}
+				r.KeystoreCommand = keystore
+				h.stopped, h.maintenance = false, false
+				s.Version, s.RestartToken = "9.5.5", "new"
+				apply(t, r, h, s)
+				if !h.running || !h.desired || h.actions[1] != component+":start" || h.processes[component].Dir != installed(component, s.Version) {
+					t.Fatal("fresh configuration did not start installed version", h.actions, h.processes)
+				}
+			})
+		}
+	}
 }
 
 func TestElasticsearchConfig(t *testing.T) {
@@ -361,7 +433,7 @@ func TestComponentConfigs(t *testing.T) {
 	}{
 		{agentspec.Spec{Component: "kibana", Version: "9.5.5", HeapMB: 900, CAPEM: "ca", Kibana: &agentspec.KibanaSpec{ESHosts: []string{"https://one:9200"}, ServiceAccountToken: "token", SecurityKey: "security", SavedObjectsKey: "saved", ReportingKey: "report", PublicBaseURL: "https://example.com", Settings: map[string]any{"server.basePath": "/kibana"}}}, "kibana.yml", map[string]any{"server.host": "::", "server.port": 5601, "server.publicBaseUrl": "https://example.com", "xpack.security.secureCookies": true, "elasticsearch.serviceAccountToken": "token", "elasticsearch.ssl.verificationMode": "full", "telemetry.optIn": false, "telemetry.allowChangingOptInStatus": false, "xpack.security.encryptionKey": "security", "xpack.encryptedSavedObjects.encryptionKey": "saved", "xpack.reporting.encryptionKey": "report", "server.basePath": "/kibana"}},
 		{agentspec.Spec{Component: "logstash", Version: "9.5.5", HeapMB: 512, CAPEM: "ca", Logstash: &agentspec.LogstashSpec{ESHosts: []string{"https://one:9200", "https://two:9200"}, Writer: agentspec.Credentials{Username: "writer", Password: "password"}, PersistentQueue: true}}, "logstash.yml", map[string]any{"api.http.host": "127.0.0.1", "api.http.port": 9600, "queue.type": "persisted", "pipeline.ecs_compatibility": "v8"}},
-		{agentspec.Spec{Component: "apm-server", Version: "9.5.5", CAPEM: "ca", APM: &agentspec.APMSpec{ESHosts: []string{"https://one:9200"}, Writer: agentspec.Credentials{Username: "apm", Password: "password"}, SecretToken: "secret", APIKeys: true}}, "apm-server.yml", map[string]any{"apm-server.host": "0.0.0.0:8200", "apm-server.auth.secret_token": "secret", "apm-server.auth.api_key.enabled": true, "output.elasticsearch.username": "apm", "output.elasticsearch.password": "password", "http.enabled": true, "http.host": "127.0.0.1", "http.port": 5066, "logging.to_stderr": true}},
+		{agentspec.Spec{Component: "apm-server", Version: "9.5.5", CAPEM: "ca", APM: &agentspec.APMSpec{ESHosts: []string{"https://one:9200"}, Writer: agentspec.Credentials{Username: "apm", Password: "password"}, SecretToken: "secret", APIKeys: true}}, "apm-server.yml", map[string]any{"apm-server.host": "[::]:8200", "apm-server.auth.secret_token": "secret", "apm-server.auth.api_key.enabled": true, "output.elasticsearch.username": "apm", "output.elasticsearch.password": "password", "http.enabled": true, "http.host": "127.0.0.1", "http.port": 5066, "logging.to_stderr": true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.s.Component, func(t *testing.T) {
@@ -391,7 +463,7 @@ func TestComponentConfigs(t *testing.T) {
 				tt.s.Kibana.Settings = nil
 			case "logstash":
 				pipeline := readText(t, h, "config/pipelines/main.conf")
-				for _, text := range []string{`beats { port => 5044 }`, `http { port => 8080 }`, `hosts => ["https://one:9200", "https://two:9200"]`, `password => "${KARAKORAM_ES_PASSWORD}"`, `ssl_enabled => true`, `data_stream => true`} {
+				for _, text := range []string{`beats { host => "::" port => 5044 }`, `http { host => "::" port => 8080 }`, `hosts => ["https://one:9200", "https://two:9200"]`, `password => "${KARAKORAM_ES_PASSWORD}"`, `ssl_enabled => true`, `data_stream => true`} {
 					if !strings.Contains(pipeline, text) {
 						t.Errorf("missing %s", text)
 					}

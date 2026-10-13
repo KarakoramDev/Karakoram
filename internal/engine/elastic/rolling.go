@@ -5,12 +5,14 @@ package elastic
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"slices"
 	"sort"
 	"strconv"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
 
 func (p *Provider) rollingStart(rc *engine.Context, s *state, reason, version, operationID string) {
@@ -167,6 +169,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	defer c.Close()
 	switch r.Step {
 	case "prepare":
+		if err := rollingMasterReady(ctx, rc, s, m, c); err != nil {
+			return false, "waiting for all master-eligible nodes to join", err
+		}
 		ok, err := p.healthy(ctx, c)
 		if err != nil || !ok {
 			return false, "waiting for shard health", err
@@ -182,6 +187,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		r.Step = "apply"
 		return false, "flushed indices", nil
 	case "apply":
+		if err := rollingMasterReady(ctx, rc, s, m, c); err != nil {
+			return false, "waiting for all master-eligible nodes to join", err
+		}
 		resources := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
 		if !reflect.DeepEqual(m.Resources, resources) {
 			return false, "resizing node", p.issueAction(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: resources})
@@ -232,6 +240,25 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	default:
 		return false, "", invalid("unknown rolling step")
 	}
+}
+
+func rollingMasterReady(ctx context.Context, rc *engine.Context, s *state, m *member, c *esapi.Client) error {
+	if !masterEligible(rc.Cluster.Spec, m) {
+		return nil
+	}
+	nodes, err := c.Nodes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, planned := range s.esNodes() {
+		if !masterEligible(rc.Cluster.Spec, planned) {
+			continue
+		}
+		if !slices.ContainsFunc(nodes, func(n esapi.Node) bool { return n.Name == planned.Name }) {
+			return fmt.Errorf("%w: master-eligible node %s has not joined", errWaiting, planned.Name)
+		}
+	}
+	return nil
 }
 func rollingNonce(r *rolling) string {
 	if r.Reason == "restart" {

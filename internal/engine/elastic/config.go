@@ -367,7 +367,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 			v.Port = 8200
 		}
 		if s.RestoreActive {
-			v.DesiredProcesses = nil
+			v.DesiredProcesses = []string{}
 		}
 	}
 	v.TLS = agentapi.TLSConfig{Mode: "requireTLS", CAPEM: spec.CAPEM}

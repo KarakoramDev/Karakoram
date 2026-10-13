@@ -7,9 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 
-	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
@@ -116,6 +114,7 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 			cp.Names = append(cp.Names, m.Name)
 		}
 		s.RestoreActive = true
+		p.bumpConfig(s)
 		s.Phase = "restore"
 		r.Phase = domain.PhaseRunning
 		stamp := operationNow(rc)
@@ -131,43 +130,14 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		}
 		cp.Stage = "stop"
 	case "stop":
-		if cp.Index < len(cp.Names) {
-			m := s.find(cp.Names[cp.Index])
-			if m != nil {
-				agent, e := p.agentClient(ctx, rc, m.Name)
-				if e != nil {
-					return operationResult(cp, false), e
-				}
-				defer agent.Close()
-				if e = agent.Process(ctx, agentapi.ProcessAction{Process: componentProcess(m), Action: "stop"}); e != nil {
-					return operationResult(cp, false), e
-				}
-			}
-			cp.Index++
-		} else {
+		done, e := p.restoreComponentAction(ctx, rc, s, &cp, "stop")
+		if e != nil {
+			return operationResult(cp, false), e
+		}
+		if done {
 			cp.Index = 0
-			cp.Stage = "stopped"
+			cp.Stage = "destructive"
 		}
-	case "stopped":
-		for _, name := range cp.Names {
-			m := s.find(name)
-			if m == nil {
-				continue
-			}
-			agent, e := p.agentClient(ctx, rc, name)
-			if e != nil {
-				return operationResult(cp, false), e
-			}
-			defer agent.Close()
-			status, e := agent.Status(ctx)
-			if e != nil {
-				return operationResult(cp, false), e
-			}
-			if proc := status.Processes[componentProcess(m)]; proc.PID != 0 || proc.State == "running" {
-				return operationResult(cp, false), nil
-			}
-		}
-		cp.Stage = "destructive"
 	case "destructive":
 		if err = client.PutClusterSettings(ctx, nil, map[string]any{"action.destructive_requires_name": false}); err != nil {
 			return operationResult(cp, false), err
@@ -179,13 +149,16 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		}
 		cp.Stage = "indices"
 	case "indices":
-		indices, e := client.ListIndices(ctx, false)
+		indices, e := client.ListIndices(ctx, true)
 		if e != nil {
 			return operationResult(cp, false), e
 		}
-		// A non-hidden listing can still contain dot-prefixed indices. Never delete
-		// system/security indices: snapshot feature-state restoration owns them.
-		indices = slices.DeleteFunc(indices, func(name string) bool { return strings.HasPrefix(name, ".") })
+		system, e := client.SystemIndices(ctx)
+		if e != nil {
+			return operationResult(cp, false), e
+		}
+		// Feature-state restoration owns system indices, including security.
+		indices = slices.DeleteFunc(indices, func(name string) bool { return system[name] })
 		if err = client.DeleteIndices(ctx, indices); err != nil && !esapi.IsNotFound(err) {
 			return operationResult(cp, false), err
 		}
@@ -245,69 +218,22 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		}
 		cp.Stage = "config"
 	case "config":
+		// Platform-stopped services cannot acknowledge configuration. Publish
+		// the released intent before Start; fresh agents fetch it at startup.
+		s.RestoreActive = false
 		p.bumpConfig(s)
 		cp.ConfigVersion = s.ConfigVersion
-		p.reloadMembers(ctx, rc, cp.Names...)
-		cp.Stage = "configured"
-	case "configured":
-		for _, name := range cp.Names {
-			m := s.find(name)
-			if m == nil {
-				continue
-			}
-			agent, e := p.agentClient(ctx, rc, name)
-			if e != nil {
-				return operationResult(cp, false), e
-			}
-			defer agent.Close()
-			status, e := agent.Status(ctx)
-			if e != nil {
-				return operationResult(cp, false), e
-			}
-			if status.ConfigVersion < cp.ConfigVersion {
-				p.reloadMembers(ctx, rc, name)
-				return operationResult(cp, false), nil
-			}
-		}
 		cp.Index = 0
 		cp.Stage = "start"
-		s.RestoreActive = false
 	case "start":
-		if cp.Index < len(cp.Names) {
-			m := s.find(cp.Names[cp.Index])
-			if m != nil {
-				agent, e := p.agentClient(ctx, rc, m.Name)
-				if e != nil {
-					return operationResult(cp, false), e
-				}
-				defer agent.Close()
-				if e = agent.Process(ctx, agentapi.ProcessAction{Process: componentProcess(m), Action: "start"}); e != nil {
-					return operationResult(cp, false), e
-				}
-			}
-			cp.Index++
-		} else {
+		done, e := p.restoreComponentAction(ctx, rc, s, &cp, "start")
+		if e != nil {
+			return operationResult(cp, false), e
+		}
+		if done {
 			cp.Stage = "running"
 		}
 	case "running":
-		for _, name := range cp.Names {
-			m := s.find(name)
-			if m == nil {
-				continue
-			}
-			agent, e := p.agentClient(ctx, rc, name)
-			if e != nil {
-				return operationResult(cp, false), e
-			}
-			defer agent.Close()
-			status, e := agent.Status(ctx)
-			if e != nil {
-				return operationResult(cp, false), e
-			}
-			if status.Processes[componentProcess(m)].State != "running" {
-				return operationResult(cp, false), nil
-			}
-		}
 		stamp := operationNow(rc)
 		r.Phase = domain.PhaseSucceeded
 		r.CompletedAt = &stamp
@@ -329,4 +255,41 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		return operationResult(cp, false), operationInvalid("unknown restore checkpoint")
 	}
 	return operationResult(cp, false), nil
+}
+
+// restoreComponentAction checkpoints each service-wide stop/start receipt and
+// waits for platform completion before advancing to the next component.
+func (p *Provider) restoreComponentAction(ctx context.Context, rc *engine.Context, s *state, cp *operationState, action string) (bool, error) {
+	if cp.Pending != nil {
+		if s.Pending == nil && s.Retry == nil {
+			s.Pending = cp.Pending
+		}
+		_, err := p.observePending(ctx, rc, s)
+		if err == nil && s.Retry != nil {
+			_, _, err = p.retryPending(ctx, rc, s)
+		}
+		if s.Pending != nil {
+			cp.Pending = s.Pending
+		} else if s.Retry != nil {
+			cp.Pending = s.Retry
+		} else {
+			cp.Pending = nil
+			cp.Index++
+		}
+		return false, err
+	}
+	if cp.Index >= len(cp.Names) {
+		return true, nil
+	}
+	m := s.find(cp.Names[cp.Index])
+	if m == nil {
+		cp.Index++
+		return false, nil
+	}
+	err := p.issueAction(ctx, rc, s, &pending{Action: action, Member: m.Name})
+	cp.Pending = s.Pending
+	if cp.Pending == nil {
+		cp.Pending = s.Retry
+	}
+	return false, err
 }

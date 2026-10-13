@@ -26,6 +26,7 @@ type operationState struct {
 	ConfigVersion int64    `json:"configVersion,omitempty"`
 	OldTokenName  string   `json:"oldTokenName,omitempty"`
 	Failure       string   `json:"failure,omitempty"`
+	Pending       *pending `json:"pending,omitempty"`
 }
 
 func operationResult(cp operationState, done bool) engine.OpResult {
@@ -82,6 +83,11 @@ func (p *Provider) runOperation(ctx context.Context, rc *engine.Context, s *stat
 		return p.runRotateUser(ctx, rc, s, op, cp, payload["user"])
 	case domain.OperationRestart:
 		if cp.Stage == "" {
+			if err := disruptiveOperationReady(rc, s); err != nil {
+				return operationResult(cp, true), err
+			}
+		}
+		if cp.Stage == "" {
 			if s.Rolling != nil && (s.Rolling.Reason != "restart" || s.Rolling.OperationID != op.ID) {
 				_, _, err := p.rollingStep(ctx, rc, s)
 				return operationResult(cp, false), err
@@ -118,6 +124,9 @@ func syncDuringOperation(op *domain.Operation) bool {
 func (p *Provider) runReplaceMember(ctx context.Context, rc *engine.Context, s *state, cp operationState, name string) (engine.OpResult, error) {
 	switch cp.Stage {
 	case "":
+		if err := disruptiveOperationReady(rc, s); err != nil {
+			return operationResult(cp, true), err
+		}
 		old := s.find(name)
 		if old == nil {
 			return operationResult(cp, true), operationInvalid("member does not exist")
@@ -182,6 +191,18 @@ func (p *Provider) runReplaceMember(ctx context.Context, rc *engine.Context, s *
 		return operationResult(cp, false), operationInvalid("unknown replacement checkpoint")
 	}
 	return operationResult(cp, false), nil
+}
+
+func disruptiveOperationReady(rc *engine.Context, s *state) error {
+	if s.ClusterUUID == "" || s.Suspended || rc.Cluster.Deleting || rc.Cluster.Status.Phase == domain.PhaseDeleting || rc.Cluster.Status.Phase == domain.PhaseSuspended {
+		return fmt.Errorf("%w: restart and replacement require a formed, active cluster", engine.ErrConflict)
+	}
+	for _, m := range s.esNodes() {
+		if m.Stage != stageJoined {
+			return fmt.Errorf("%w: Elasticsearch member %s has not joined", engine.ErrConflict, m.Name)
+		}
+	}
+	return nil
 }
 
 func (p *Provider) operationRepository(ctx context.Context, rc *engine.Context, s *state, storage *domain.BackupStorage, readOnly bool, basePath string) (string, error) {

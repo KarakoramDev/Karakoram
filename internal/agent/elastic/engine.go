@@ -133,6 +133,15 @@ type nodeHost struct{ *agent.Node }
 func (h nodeHost) Configure(name string, p Process) error {
 	return h.Node.Configure(name, agent.ProcessSpec{Binary: p.Binary, Args: p.Args, Env: p.Env, Dir: p.Dir})
 }
+func (h nodeHost) Action(ctx context.Context, name, action string) error {
+	if action == "stop" {
+		states, _ := h.Snapshot()
+		if _, configured := states[name]; !configured {
+			return nil
+		}
+	}
+	return h.Node.Action(ctx, name, action)
+}
 func (h nodeHost) Running(name string) bool {
 	states, _ := h.Snapshot()
 	return states[name].State == "running"

@@ -155,10 +155,8 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 		if a == nil {
 			return nil, p, errors.New("missing APM Server spec")
 		}
-		// The documented standalone host example uses IPv4; do not assume IPv6
-		// listener syntax is supported by every version in the catalog.
 		config = map[string]any{
-			"apm-server.host": "0.0.0.0:8200", "apm-server.auth.secret_token": a.SecretToken, "apm-server.auth.api_key.enabled": a.APIKeys,
+			"apm-server.host": "[::]:8200", "apm-server.auth.secret_token": a.SecretToken, "apm-server.auth.api_key.enabled": a.APIKeys,
 			"output.elasticsearch.hosts": a.ESHosts, "output.elasticsearch.username": a.Writer.Username, "output.elasticsearch.password": a.Writer.Password,
 			"output.elasticsearch.ssl.certificate_authorities": []string{ca},
 			"http.enabled": true, "http.host": "127.0.0.1", "http.port": 5066, "logging.to_stderr": true,
@@ -210,8 +208,8 @@ func defaultPipeline(hosts []string, ca string) string {
 		quoted[i] = strconv.Quote(host)
 	}
 	return `input {
-  beats { port => 5044 }
-  http { port => 8080 }
+  beats { host => "::" port => 5044 }
+  http { host => "::" port => 8080 }
 }
 output {
   elasticsearch {

@@ -103,11 +103,22 @@ func (r *Runner) home(s agentspec.Spec) string {
 
 // Apply renders one member and starts it when permitted. Only a changed applied
 // restart token restarts a running process. Holds retain the previous token so
-// the pending restart is applied after the hold is released.
+// the pending restart is applied after the hold is released. Missing product
+// homes defer cached configuration until the agent fetches the installed version.
 func (r *Runner) Apply(ctx context.Context, h Host, spec agentspec.Spec, cluster, member string) (changes []string, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	home := r.home(spec)
+	if info, e := os.Stat(home); errors.Is(e, os.ErrNotExist) {
+		h.Logger().Warn("Elastic product home missing; waiting for current configuration", "component", spec.Component, "version", spec.Version, "home", home)
+		// Clear supervisor intent even for a stopped child: its crash retry or
+		// maintenance release must not launch an unavailable cached binary.
+		return nil, h.Action(ctx, spec.Component, "stop")
+	} else if e != nil {
+		return nil, e
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("elastic product home %s is not a directory", home)
+	}
 	dataDir := filepath.Join(h.DataDir(), "karakoram")
 	files, proc, err := render(spec, dataDir, home, cluster, member)
 	if err != nil {

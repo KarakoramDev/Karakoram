@@ -157,8 +157,8 @@ func TestReplaceMemberRejection(t *testing.T) {
 	for _, kind := range []string{kindNode, kindKibana, kindLogstash, kindAPM} {
 		t.Run(kind, func(t *testing.T) {
 			p := New(ProviderOptions{})
-			s := &state{Members: []*member{{Name: "member", Kind: kind}}}
-			result, err := p.runReplaceMember(context.Background(), &engine.Context{}, s, operationState{}, "member")
+			s := &state{ClusterUUID: "formed", Members: []*member{{Name: "member", Kind: kind, Stage: stageJoined}}}
+			result, err := p.runReplaceMember(context.Background(), &engine.Context{Cluster: &domain.Cluster{}}, s, operationState{}, "member")
 			if !errors.Is(err, engine.ErrInvalid) || !result.Done {
 				t.Fatalf("replacement accepted: %+v %v", result, err)
 			}
@@ -176,6 +176,35 @@ func TestSnapshotLocationAndNames(t *testing.T) {
 		b.Location = bad
 		if _, _, _, err = recordedSnapshot(storage, b); err == nil {
 			t.Fatalf("accepted %s", bad)
+		}
+	}
+}
+
+func TestDisruptiveOperationsRequireFormation(t *testing.T) {
+	for _, kind := range []string{domain.OperationRestart, domain.OperationReplaceMember} {
+		for _, problem := range []string{"uuid", "planned", "imported", "deployed", "deleting", "suspended", "phase-suspended"} {
+			t.Run(string(kind)+"/"+problem, func(t *testing.T) {
+				p := New(ProviderOptions{})
+				rc := &engine.Context{Cluster: &domain.Cluster{}}
+				s := &state{ClusterUUID: "formed", Members: []*member{{Name: "n0", Kind: kindNode, Stage: stageJoined}, {Name: "n1", Kind: kindNode, Stage: stageJoined}}}
+				switch problem {
+				case "uuid":
+					s.ClusterUUID = ""
+				case "deleting":
+					rc.Cluster.Deleting = true
+				case "suspended":
+					s.Suspended = true
+				case "phase-suspended":
+					rc.Cluster.Status.Phase = domain.PhaseSuspended
+				default:
+					s.Members[1].Stage = problem
+				}
+				op := &domain.Operation{Kind: kind, Payload: json.RawMessage(`{"member":"n0"}`)}
+				result, err := p.runOperation(context.Background(), rc, s, op)
+				if !result.Done || !errors.Is(err, engine.ErrConflict) || s.Rolling != nil || len(s.Members) != 2 {
+					t.Fatalf("premature operation: %+v %v %+v", result, err, s)
+				}
+			})
 		}
 	}
 }

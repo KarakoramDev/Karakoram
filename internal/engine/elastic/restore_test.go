@@ -11,33 +11,37 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
+
+type restoreInfra struct {
+	*coreInfra
+	completed func(string, string)
+	polls     int
+}
+
+func (f *restoreInfra) OpStatus(_ context.Context, _ infra.Op) (infra.OpState, error) {
+	f.polls++
+	if f.polls%2 != 0 {
+		return infra.OpState{}, nil
+	}
+	call := f.calls[len(f.calls)-1]
+	action, name, _ := strings.Cut(call, ":")
+	f.completed(action, name)
+	return infra.OpState{Done: true}, nil
+}
 
 func TestRestoreCheckpointStageOrdering(t *testing.T) {
 	var actions []string
-	running := true
+	stopped := map[string]bool{}
 	hasIndex := true
 	p, rc, s, st := opsFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-		case path == "/v1/processes/kibana/stop":
-			actions = append(actions, "stop")
-			running = false
-			opsJSON(w, map[string]any{})
-		case path == "/v1/processes/kibana/start":
-			actions = append(actions, "start")
-			running = true
-			opsJSON(w, map[string]any{})
-		case path == "/v1/status":
-			state := "stopped"
-			if running {
-				state = "running"
-			}
-			opsJSON(w, agentapi.Status{ConfigVersion: 10000, Processes: map[string]agentapi.ProcessStatus{"kibana": {State: state}}})
-		case path == "/v1/reload":
+		case strings.HasPrefix(path, "/v1/"):
+			t.Error("restore addressed a single component agent", path)
 			opsJSON(w, map[string]any{})
 		case strings.HasSuffix(path, "/snapshot-one/_restore"):
 			actions = append(actions, "restore")
@@ -48,28 +52,43 @@ func TestRestoreCheckpointStageOrdering(t *testing.T) {
 			}
 			opsJSON(w, map[string]any{"accepted": true})
 		case strings.HasSuffix(path, "/snapshot-one"):
-			opsJSON(w, map[string]any{"snapshots": []esapi.SnapshotInfo{{Snapshot: "snapshot-one", State: "SUCCESS", Version: "9.5.5", Indices: []string{"logs-test", ".security-7"}}}})
+			opsJSON(w, map[string]any{"snapshots": []esapi.SnapshotInfo{{Snapshot: "snapshot-one", State: "SUCCESS", Version: "9.5.5", Indices: []string{"logs-test", ".tenant-cache", "hidden-user", ".security-7"}}}})
 		case path == "/_cat/indices":
+			if r.URL.Query().Get("expand_wildcards") != "all" {
+				t.Error("restore did not enumerate hidden indices")
+			}
 			rows := []map[string]string{{"index": ".security-7"}}
 			if hasIndex {
-				rows = append(rows, map[string]string{"index": "logs-test"})
+				for _, name := range []string{"logs-test", ".tenant-cache", "hidden-user"} {
+					rows = append(rows, map[string]string{"index": name})
+				}
 			}
 			opsJSON(w, rows)
-		case r.Method == "DELETE" && path == "/logs-test":
-			if running {
-				t.Error("index deletion while component running")
+		case path == "/_cluster/state/metadata":
+			opsJSON(w, map[string]any{"metadata": map[string]any{"indices": map[string]any{".security-7": map[string]bool{"system": true}, ".tenant-cache": map[string]bool{"system": false}, "hidden-user": map[string]bool{"system": false}, "logs-test": map[string]bool{"system": false}}}})
+		case r.Method == "DELETE" && !strings.HasPrefix(path, "/_"):
+			if !stopped["testkb"] || !stopped["testls"] || !stopped["testapm"] {
+				t.Error("index deletion before service-wide stops completed")
+			}
+			for _, name := range []string{"logs-test", ".tenant-cache", "hidden-user"} {
+				if !slices.Contains(strings.Split(strings.TrimPrefix(path, "/"), ","), name) {
+					t.Error("ordinary index was not deleted", name, path)
+				}
+			}
+			if strings.Contains(path, "security") {
+				t.Error("deleted system index")
 			}
 			actions = append(actions, "indices")
 			hasIndex = false
 			opsJSON(w, map[string]any{"acknowledged": true})
 		case r.Method == "DELETE" && strings.HasPrefix(path, "/_data_stream/"):
-			if running {
-				t.Error("data stream deletion while component running")
+			if !stopped["testkb"] || !stopped["testls"] || !stopped["testapm"] {
+				t.Error("data stream deletion before service-wide stops completed")
+			}
+			if r.URL.Query().Get("expand_wildcards") != "all" {
+				t.Error("hidden data streams were not deleted")
 			}
 			actions = append(actions, "streams")
-			opsJSON(w, map[string]any{"acknowledged": true})
-		case r.Method == "DELETE" && strings.Contains(path, "security"):
-			t.Error("deleted security index")
 			opsJSON(w, map[string]any{"acknowledged": true})
 		case path == "/_cat/recovery":
 			opsJSON(w, []any{})
@@ -95,7 +114,20 @@ func TestRestoreCheckpointStageOrdering(t *testing.T) {
 			opsJSON(w, map[string]any{"acknowledged": true, "nodes": map[string]any{}})
 		}
 	})
-	s.Members = append(s.Members, &member{Name: "testkb", Kind: kindKibana, Stage: stageJoined})
+	f := &restoreInfra{coreInfra: &coreInfra{services: map[string]*infra.Service{}}}
+	f.completed = func(action, name string) {
+		actions = append(actions, action)
+		stopped[name] = action == "stop"
+		if action == "start" && s.RestoreActive {
+			t.Error("service started before restore intent was released")
+		}
+	}
+	rc.Backend = f
+	for _, kind := range []string{kindKibana, kindLogstash, kindAPM} {
+		name := map[string]string{kindKibana: "testkb", kindLogstash: "testls", kindAPM: "testapm"}[kind]
+		s.Members = append(s.Members, &member{Name: name, Kind: kind, Stage: stageJoined, ServiceID: name, Containers: 2})
+		f.services[name] = &infra.Service{ID: name, MinContainers: 2, MaxContainers: 2}
+	}
 	st.backup.Phase = domain.PhaseSucceeded
 	st.backup.Provider = "elasticsearch"
 	st.backup.SourceVersion = "9.5.5"
@@ -103,13 +135,23 @@ func TestRestoreCheckpointStageOrdering(t *testing.T) {
 	st.restore = domain.Restore{Name: "initial-restore", Source: domain.RestoreSource{Backup: st.backup.Name}, Phase: domain.PhasePending}
 	op := &domain.Operation{ID: "restore-one", Kind: domain.OperationRestore}
 	cp := operationState{}
-	for range 40 {
-		// Reload JSON every call rather than passing an in-memory continuation.
+	for range 80 {
+		// Reload both checkpoints rather than passing an in-memory continuation.
 		result, err := p.runRestore(context.Background(), rc, s, op, cp, st.restore.Name)
 		if err != nil {
 			t.Fatal(err)
 		}
 		cp = opsCheckpoint(t, result)
+		if err = save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+		s, err = load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cp.Pending != nil && cp.Pending.Op.ID == "" {
+			t.Error("platform receipt missing from restore checkpoint")
+		}
 		if result.Done {
 			break
 		}
@@ -124,6 +166,9 @@ func TestRestoreCheckpointStageOrdering(t *testing.T) {
 			t.Fatalf("bad order for %s: %v", action, actions)
 		}
 		previous = i
+	}
+	if len(f.calls) != 6 {
+		t.Fatal("component stop/start was not exactly once per service", f.calls)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -199,6 +200,18 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *stat
 			return true, delay, &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: "waiting for scheduled platform retry"}
 		}
 	}
+	// A delayed platform retry is another disruption, so it must recheck
+	// membership even when Sync dispatches it before the rolling state machine.
+	if m := s.find(v.Member); s.Rolling != nil && m != nil && masterEligible(rc.Cluster.Spec, m) && (v.Action == "resources" || v.Action == "upgrade" || v.Action == "deploy") {
+		c, err := p.es(ctx, rc, s)
+		if err != nil {
+			return true, 5 * time.Second, err
+		}
+		defer c.Close()
+		if err = rollingMasterReady(ctx, rc, s, m, c); err != nil {
+			return true, 5 * time.Second, err
+		}
+	}
 	s.Retry = nil
 	err := p.issueAction(ctx, rc, s, v)
 	return true, 5 * time.Second, err
@@ -353,10 +366,6 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err = p.ensureSecrets(ctx, rc, s); err != nil {
 		return result, err
 	}
-	if s.Rolling != nil {
-		_, _, err = p.rollingStep(ctx, rc, s)
-		return result, err
-	}
 	for _, m := range s.esNodes() {
 		if m.Removing {
 			return result, p.removeStep(ctx, rc, s, m)
@@ -367,6 +376,18 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		case stageImported:
 			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 		}
+	}
+	if s.Rolling != nil {
+		for _, m := range s.componentMembers() {
+			switch m.Stage {
+			case stagePlanned:
+				return result, p.importMember(ctx, rc, s, m)
+			case stageImported:
+				return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
+			}
+		}
+		_, _, err = p.rollingStep(ctx, rc, s)
+		return result, err
 	}
 	c, e := p.es(ctx, rc, s)
 	if errors.Is(e, errWaiting) {
@@ -410,6 +431,32 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		for _, m := range s.esNodes() {
 			p.reloadMembers(ctx, rc, m.Name)
 		}
+		return result, nil
+	}
+	if s.ResumeAllocationReset {
+		if e = c.SetAllocationEnable(ctx, nil); e != nil {
+			return result, e
+		}
+		s.ResumeAllocationReset = false
+		return result, nil
+	}
+	if len(s.ResumeExcludeNames) > 0 {
+		names, e := c.AllocationExcludeNames(ctx)
+		if e != nil {
+			return result, e
+		}
+		names = slices.DeleteFunc(names, func(name string) bool { return slices.Contains(s.ResumeExcludeNames, name) })
+		if e = c.SetAllocationExcludeNames(ctx, names); e != nil {
+			return result, e
+		}
+		s.ResumeExcludeNames = nil
+		return result, nil
+	}
+	if s.ResumeVotingReset {
+		if e = c.ClearVotingExclusions(ctx, false); e != nil {
+			return result, e
+		}
+		s.ResumeVotingReset = false
 		return result, nil
 	}
 	if rc.Cluster.Spec.DataSource != nil && s.InitialRestore != "done" {

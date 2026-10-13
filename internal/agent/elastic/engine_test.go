@@ -215,6 +215,63 @@ func TestAdapterExplicitEmptyProcessIntent(t *testing.T) {
 	}
 }
 
+func TestAdapterCachedVersionFetchesInstalledVersion(t *testing.T) {
+	r, _ := fixture(t)
+	installed := r.Home
+	missing := filepath.Join(t.TempDir(), "elasticsearch-9.5.4")
+	r.Home = func(component, version string) string {
+		if version == "9.5.4" {
+			return missing
+		}
+		return installed(component, version)
+	}
+	e := NewEngine()
+	e.runner = r
+	dir := t.TempDir()
+	old := esSpec()
+	old.Version, old.RestartToken = "9.5.4", "old"
+	payload, err := json.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, cert := testCertificates(t, "localhost")
+	cached := agentapi.MemberConfig{Engine: agentspec.Engine, EngineSpec: payload, Cluster: "test", Member: "testn0", DesiredProcesses: []string{old.Component}, AgentTLS: agentapi.Certificate{CertPEM: cert.CertPEM, KeyPEM: cert.KeyPEM}}
+	data, err := json.Marshal(cached)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := atomicWrite(filepath.Join(dir, "karakoram", "config.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	fresh := esSpec()
+	binary := filepath.Join(r.home(fresh), "bin", fresh.Component)
+	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
+		t.Fatal(err)
+	}
+	capture := filepath.Join(dir, "started")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\ntouch '"+capture+"'\nexec sleep 30\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	result := runAdapter(t, e, dir, fresh, []string{fresh.Component})
+	if result.err != nil || len(result.changes) != 0 || len(result.states) != 0 {
+		t.Fatal("cached missing version was not deferred", result)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		_, err := os.Stat(capture)
+		if err == nil && e.Version(context.Background()) == fresh.Version {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("agent did not fetch and start installed version", err, e.Version(context.Background()))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatal("fixture unexpectedly installed cached version", err)
+	}
+}
+
 func TestAdapterProtectedFilesRejectSymlinkEscape(t *testing.T) {
 	r, _ := fixture(t)
 	e := NewEngine()

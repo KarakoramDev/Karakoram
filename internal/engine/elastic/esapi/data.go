@@ -31,6 +31,26 @@ func (c *Client) ListIndices(ctx context.Context, expandHidden bool) ([]string, 
 	return names, nil
 }
 
+// SystemIndices identifies system indices from metadata, not their names.
+func (c *Client) SystemIndices(ctx context.Context) (map[string]bool, error) {
+	var v struct {
+		Metadata struct {
+			Indices map[string]struct {
+				System bool `json:"system"`
+			} `json:"indices"`
+		} `json:"metadata"`
+	}
+	q := url.Values{"filter_path": {"metadata.indices.*.system"}}
+	if err := c.do(ctx, "GET", "/_cluster/state/metadata", q, nil, &v); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(v.Metadata.Indices))
+	for name, index := range v.Metadata.Indices {
+		out[name] = index.System
+	}
+	return out, nil
+}
+
 // DeleteDataStreams deletes matching streams, including hidden streams.
 func (c *Client) DeleteDataStreams(ctx context.Context, pattern string) error {
 	return c.do(ctx, "DELETE", "/_data_stream/"+segment(pattern), url.Values{"expand_wildcards": {"all"}}, nil, nil)

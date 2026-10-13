@@ -98,8 +98,8 @@ func TestRESTMethods(t *testing.T) {
 			}
 			return e
 		}},
-		{name: "exclude-set", method: "PUT", path: "/_cluster/settings", body: `{"persistent":{"cluster.routing.allocation.exclude._name":"n1,n2"}}`, call: func(c *Client) error { return c.SetAllocationExcludeNames(ctx, []string{"n1", "n2"}) }},
-		{name: "exclude-reset", method: "PUT", path: "/_cluster/settings", body: `{"persistent":{"cluster.routing.allocation.exclude._name":null}}`, call: func(c *Client) error { return c.SetAllocationExcludeNames(ctx, nil) }},
+		{name: "exclude-set", method: "PUT", path: "/_cluster/settings", body: `{"persistent":{"cluster.routing.allocation.exclude._name":"n1,n2"},"transient":{"cluster.routing.allocation.exclude._name":null}}`, call: func(c *Client) error { return c.SetAllocationExcludeNames(ctx, []string{"n1", "n2"}) }},
+		{name: "exclude-reset", method: "PUT", path: "/_cluster/settings", body: `{"persistent":{"cluster.routing.allocation.exclude._name":null},"transient":{"cluster.routing.allocation.exclude._name":null}}`, call: func(c *Client) error { return c.SetAllocationExcludeNames(ctx, nil) }},
 		{name: "flush", method: "POST", path: "/_flush", call: func(c *Client) error { return c.Flush(ctx) }},
 		{name: "vote", method: "POST", path: "/_cluster/voting_config_exclusions", q: url.Values{"node_names": {"n1,n2"}, "timeout": {"2000ms"}}, call: func(c *Client) error { return c.AddVotingExclusion(ctx, []string{"n1", "n2"}, 2*time.Second) }},
 		{name: "clear-vote", method: "DELETE", path: "/_cluster/voting_config_exclusions", q: url.Values{"wait_for_removal": {"false"}}, call: func(c *Client) error { return c.ClearVotingExclusions(ctx, false) }},
@@ -212,6 +212,13 @@ func TestRESTMethods(t *testing.T) {
 		{name: "indices", method: "GET", path: "/_cat/indices", q: url.Values{"format": {"json"}, "expand_wildcards": {"all"}, "h": {"index"}}, response: `[{"index":"docs"}]`, call: func(c *Client) error {
 			v, e := c.ListIndices(ctx, true)
 			if !reflect.DeepEqual(v, []string{"docs"}) {
+				t.Error(v)
+			}
+			return e
+		}},
+		{name: "system-indices", method: "GET", path: "/_cluster/state/metadata", q: url.Values{"filter_path": {"metadata.indices.*.system"}}, response: `{"metadata":{"indices":{".security-7":{"system":true},".tenant-cache":{"system":false},"hidden-user":{"system":false}}}}`, call: func(c *Client) error {
+			v, e := c.SystemIndices(ctx)
+			if !reflect.DeepEqual(v, map[string]bool{".security-7": true, ".tenant-cache": false, "hidden-user": false}) {
 				t.Error(v)
 			}
 			return e
@@ -463,5 +470,84 @@ func TestMalformedAndStringErrors(t *testing.T) {
 	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `not JSON`) })
 	if _, err := c.Info(context.Background()); err == nil {
 		t.Fatal("accepted malformed success response")
+	}
+}
+
+func TestMaxIndexReplicas(t *testing.T) {
+	for _, tc := range []struct {
+		name, settings string
+		nodes, want    int
+		fail           bool
+	}{
+		{"analyzer-arrays", `"index.number_of_replicas":"2","index.analysis.analyzer.custom.filter":["lowercase","stop"]`, 3, 2, false},
+		{"numeric", `"index.number_of_replicas":3`, 4, 3, false},
+		{"disabled", `"index.number_of_replicas":"2","index.auto_expand_replicas":false`, 3, 2, false},
+		{"disabled-string", `"index.number_of_replicas":"2","index.auto_expand_replicas":"false"`, 3, 2, false},
+		{"bounded", `"index.number_of_replicas":"1","index.auto_expand_replicas":"1-5"`, 3, 5, false},
+		{"all", `"index.number_of_replicas":"0","index.auto_expand_replicas":"0-all"`, 4, 3, false},
+		{"single-all", `"index.number_of_replicas":"0","index.auto_expand_replicas":"0-all"`, 1, 0, false},
+		{"missing", `"index.analysis.filter.stop.stopwords":["a","the"]`, 3, 0, true},
+		{"negative", `"index.number_of_replicas":"-1"`, 3, 0, true},
+		{"invalid-range", `"index.number_of_replicas":"0","index.auto_expand_replicas":"3-1"`, 3, 0, true},
+		{"invalid-all", `"index.number_of_replicas":"0","index.auto_expand_replicas":"x-all"`, 3, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/_all/_settings":
+					if r.URL.Query().Get("filter_path") != "*.settings.index.number_of_replicas,*.settings.index.auto_expand_replicas" || r.URL.Query().Get("expand_wildcards") != "all" {
+						t.Error("replica settings request is not restricted", r.URL)
+					}
+					fmt.Fprintf(w, `{"logs":{"settings":{%s}},"other":{"settings":{"index.number_of_replicas":"0"}}}`, tc.settings)
+				case "/_cluster/health":
+					fmt.Fprintf(w, `{"number_of_data_nodes":%d}`, tc.nodes)
+				default:
+					t.Error("unexpected request", r.URL)
+					http.Error(w, "unexpected", 500)
+				}
+			})
+			got, err := c.MaxIndexReplicas(context.Background())
+			if (err != nil) != tc.fail || (!tc.fail && got != tc.want) {
+				t.Fatalf("replicas=%d err=%v, want %d failure=%v", got, err, tc.want, tc.fail)
+			}
+		})
+	}
+}
+
+func TestAllocationExclusionsMigrateTransient(t *testing.T) {
+	key := "cluster.routing.allocation.exclude._name"
+	persistent, transient := map[string]any{key: "old"}, map[string]any{key: "operator"}
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			var settings ClusterSettings
+			if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+				t.Error(err)
+			}
+			if value, ok := settings.Transient[key]; !ok || value != nil {
+				t.Error("transient override was not cleared", settings)
+			}
+			persistent, transient = settings.Persistent, settings.Transient
+			delete(transient, key)
+		}
+		_ = json.NewEncoder(w).Encode(ClusterSettings{persistent, transient})
+	})
+	ctx := context.Background()
+	names, err := c.AllocationExcludeNames(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = c.SetAllocationExcludeNames(ctx, append(names, "draining")); err != nil {
+		t.Fatal(err)
+	}
+	names, err = c.AllocationExcludeNames(ctx)
+	if err != nil || !reflect.DeepEqual(names, []string{"operator", "draining"}) {
+		t.Fatalf("effective exclusion: %v %v", names, err)
+	}
+	if err = c.SetAllocationExcludeNames(ctx, []string{"operator"}); err != nil {
+		t.Fatal(err)
+	}
+	names, err = c.AllocationExcludeNames(ctx)
+	if err != nil || !reflect.DeepEqual(names, []string{"operator"}) {
+		t.Fatalf("operator exclusion lost: %v %v", names, err)
 	}
 }

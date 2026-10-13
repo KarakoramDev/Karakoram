@@ -122,6 +122,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return err
 		}
 		if !slices.Contains(names, m.Name) {
+			m.AllocationExcluded = true
 			names = append(names, m.Name)
 		}
 		if err = c.SetAllocationExcludeNames(ctx, names); err != nil {
@@ -187,7 +188,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 		if err != nil {
 			return err
 		}
-		if slices.Contains(names, m.Name) {
+		if m.AllocationExcluded && slices.Contains(names, m.Name) {
 			names = slices.DeleteFunc(names, func(name string) bool { return name == m.Name })
 			return c.SetAllocationExcludeNames(ctx, names)
 		}

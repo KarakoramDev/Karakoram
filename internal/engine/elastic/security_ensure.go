@@ -190,6 +190,15 @@ func healthAcceptable(ctx context.Context, c *esapi.Client, h esapi.Health) (boo
 	if h.Status != "yellow" {
 		return false, nil
 	}
+	if h.NumberOfDataNodes < 1 {
+		return false, nil
+	}
+	if h.NumberOfDataNodes > 1 {
+		replicas, err := c.MaxIndexReplicas(ctx)
+		if err != nil || h.NumberOfDataNodes > replicas {
+			return false, err
+		}
+	}
 	primaries, err := c.UnassignedPrimaries(ctx)
-	return !primaries, err
+	return err == nil && !primaries, err
 }

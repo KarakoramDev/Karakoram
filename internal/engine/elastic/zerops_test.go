@@ -98,7 +98,7 @@ func TestZeropsYAML(t *testing.T) {
 				t.Fatal("missing volume")
 			}
 			r := setup.Deploy.Readiness
-			if !setup.Deploy.Shutdown || r.Exec.Command != "/var/www/karakoram agent readiness "+tt.component || r.FailureTimeout != tt.timeout || r.RetryPeriod != "10s" {
+			if !setup.Deploy.Shutdown || r.Exec.Command != "/var/www/karakoram agent readiness --engine=elasticsearch "+tt.component || r.FailureTimeout != tt.timeout || r.RetryPeriod != "10s" {
 				t.Fatal("deployment readiness")
 			}
 		})

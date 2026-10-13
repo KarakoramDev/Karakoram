@@ -81,6 +81,11 @@ type state struct {
 	RestoreActive bool `json:"restoreActive,omitempty"`
 	// Suspended is set when a cluster was deleted with retained volumes.
 	Suspended bool `json:"suspended,omitempty"`
+	// Resume reconciles allocation changes owned by retired operations after
+	// retained members have been reprovisioned and joined.
+	ResumeAllocationReset bool     `json:"resumeAllocationReset,omitempty"`
+	ResumeExcludeNames    []string `json:"resumeExcludeNames,omitempty"`
+	ResumeVotingReset     bool     `json:"resumeVotingReset,omitempty"`
 	// Cleanup progress.
 	CleanupBackups bool `json:"cleanupBackups,omitempty"`
 	CleanupSecrets bool `json:"cleanupSecrets,omitempty"`
@@ -115,6 +120,8 @@ type member struct {
 	Containers int              `json:"containers,omitempty"`
 	// Removing marks scale-down or replacement removal in progress.
 	Removing bool `json:"removing,omitempty"`
+	// AllocationExcluded records an exclusion added by this removal, not an operator.
+	AllocationExcluded bool `json:"allocationExcluded,omitempty"`
 	// Replaces names the member this one replaces (replace-member operation).
 	Replaces string `json:"replaces,omitempty"`
 	// PublicPort/Subdomain record applied public exposure.
