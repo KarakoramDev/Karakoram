@@ -493,16 +493,22 @@ func TestTokenHealthEventsOnlyOnTransitions(t *testing.T) {
 		t.Fatal("rotation did not recover token", err)
 	}
 	for range 3 {
-		r.sessionEvent(ctx, sessionNotice{n.Name, relay.SessionEvent{Type: "refused"}})
+		r.sessionEvent(ctx, sessionNotice{n.Name, relay.SessionEvent{Type: "refused", Target: "demom0:27017", Reason: "target hostname could not be resolved"}})
 	}
-	refusals := 0
-	for _, reason := range log.reasons {
-		if reason == "RelayTargetRefused" {
-			refusals++
+	var refusals []string
+	for _, event := range log.items {
+		if event.Reason == "RelayTargetRefused" {
+			refusals = append(refusals, event.Message)
 		}
 	}
-	if refusals != 1 {
-		t.Fatal("target refusal event spam", log.reasons)
+	if len(refusals) != 1 || refusals[0] != "Relay could not open demom0:27017: target hostname could not be resolved" {
+		t.Fatal("target refusal events", refusals)
+	}
+	// Relay-supplied text outside the fixed reasons never reaches events.
+	r.refused[n.Name] = time.Time{}
+	r.sessionEvent(ctx, sessionNotice{n.Name, relay.SessionEvent{Type: "refused", Target: "demom1:27017", Reason: "forged\nreason"}})
+	if last := log.items[len(log.items)-1]; last.Reason != "RelayTargetRefused" || last.Message != "Relay could not open demom1:27017: target refused" {
+		t.Fatal("unsanitized target refusal", last.Message)
 	}
 }
 

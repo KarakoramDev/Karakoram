@@ -6,6 +6,7 @@ package namespaces
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -73,7 +74,8 @@ func (r *Registry) sessionEvent(ctx context.Context, notice sessionNotice) {
 		}
 		if time.Since(r.refused[n.Name]) >= time.Minute {
 			r.refused[n.Name] = time.Now()
-			r.event(ctx, n, "RelayTargetRefused", "Relay refused a target outside its policy")
+			// Targets come from control-plane policy; relay text is limited to fixed reasons.
+			r.event(ctx, n, "RelayTargetRefused", fmt.Sprintf("Relay could not open %s: %s", notice.event.Target, relay.RefusalReason(notice.event.Reason)))
 		}
 		return
 	}
