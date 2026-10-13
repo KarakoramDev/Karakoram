@@ -63,6 +63,8 @@ type member struct {
 	ManagementPublic        bool             `json:"managementPublic"`
 	RemoveStep              string           `json:"removeStep,omitempty"`
 	GrowIndex               int              `json:"growIndex"`
+	Lost                    bool             `json:"lost,omitempty"`
+	RemovalBlocked          string           `json:"removalBlocked,omitempty"`
 	ChangeAction            string           `json:"changeAction,omitempty"`
 	ChangeStep              string           `json:"changeStep,omitempty"`
 	TargetVersion           string           `json:"targetVersion,omitempty"`

@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,6 +59,11 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 			v["httpSupport"] = true
 		}
 		ports = append(ports, v)
+	}
+	if slices.Contains(options.Plugins, "rabbitmq_stream") {
+		for _, port := range []int{5551, 5552} {
+			ports = append(ports, map[string]any{"port": port, "protocol": "tcp"})
+		}
 	}
 	run := map[string]any{"base": "ubuntu@24.04", "ports": ports, "prepareCommands": prepare, "envVariables": map[string]string{"KARAKORAM_URL": agentURL, "KARAKORAM_CLUSTER": rc.Cluster.Name, "KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM, "KARAKORAM_DATA_DIR": "/mnt/" + m.Volume, "KARAKORAM_ENGINE": "rabbitmq"}, "start": "./karakoram agent", "volume": map[string]string{"hostname": m.Volume}}
 	b, err := yaml.Marshal(map[string]any{"zerops": []map[string]any{{"setup": m.Name, "deploy": map[string]any{"temporaryShutdown": true, "readinessCheck": map[string]any{"exec": map[string]string{"command": "/var/www/karakoram agent readiness"}, "failureTimeout": "300s", "retryPeriod": "10s"}}, "run": run}}})
@@ -261,7 +267,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	}
 	peers := []string{}
 	for _, other := range ordered(s) {
-		if !other.Removing {
+		if !other.Removing || other.Name == name {
 			peers = append(peers, "rabbit@"+other.Name)
 		}
 	}
@@ -284,6 +290,17 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		spec.ManagementTLSPort = 15671
 		if options.ManagementUI.Public {
 			spec.ManagementPort = 15672
+		}
+	}
+	if slices.Contains(options.Plugins, "rabbitmq_stream") {
+		switch m.TLSMode {
+		case "disabled":
+			spec.StreamPort = 5552
+		case "preferTLS":
+			spec.StreamPort = 5552
+			spec.StreamTLSPort = 5551
+		default:
+			spec.StreamTLSPort = 5551
 		}
 	}
 	if spec.AMQPSPort > 0 {

@@ -18,6 +18,9 @@ type MemberSpec struct {
 	// Management HTTP and HTTPS are individually optional; at least one is required.
 	ManagementPort    int `json:"managementPort"`
 	ManagementTLSPort int `json:"managementTlsPort"`
+	// Stream listeners are required when rabbitmq_stream is enabled and follow TLS mode.
+	StreamPort    int `json:"streamPort,omitempty"`
+	StreamTLSPort int `json:"streamTlsPort,omitempty"`
 	// PrometheusPort is always required by the enabled Prometheus plugin.
 	PrometheusPort           int    `json:"prometheusPort"`
 	ConfigOverrides          string `json:"configOverrides,omitempty"`

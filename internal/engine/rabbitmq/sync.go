@@ -232,16 +232,18 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			return result, e
 		}
 	}
+	// Retained Khepri voters need a majority online before an individual broker
+	// can finish startup. Provision and start the entire retained plan first.
 	for _, m := range ordered(s) {
-		if m.Removing {
+		if !m.Resume || m.Removing {
 			continue
 		}
 		switch m.Stage {
 		case "planned":
-			s.Phase = "import"
+			s.Phase = "resume"
 			return result, p.importMember(ctx, rc, s, m)
 		case "imported":
-			s.Phase = "deploy"
+			s.Phase = "resume"
 			if e = applyProvidedCertificate(ctx, rc, m); e != nil {
 				return result, e
 			}
@@ -261,6 +263,22 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			}
 			m.Stage = "resume-revive"
 			return result, nil
+		}
+	}
+	for _, m := range ordered(s) {
+		if m.Removing {
+			continue
+		}
+		switch m.Stage {
+		case "planned":
+			s.Phase = "import"
+			return result, p.importMember(ctx, rc, s, m)
+		case "imported":
+			s.Phase = "deploy"
+			if e = applyProvidedCertificate(ctx, rc, m); e != nil {
+				return result, e
+			}
+			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 		case "resume-revive":
 			if e = p.action(ctx, rc, m.Name, "revive", nil); e != nil {
 				return result, e
@@ -287,7 +305,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 				return result, nil
 			}
 			s.Phase = "join"
-			seed := s.runningMembers()
+			seed := p.availableMembers(ctx, rc, s)
 			if len(seed) == 0 {
 				return result, fmt.Errorf("no healthy seed member")
 			}
@@ -398,9 +416,8 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			return result, e
 		}
 	}
-	s.Phase = "ready"
-	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	if rc.Cluster.Spec.DataSource != nil && !s.CloneImported {
+		s.Phase = "restore"
 		if e = s.save(rc.Cluster); e != nil {
 			return result, e
 		}
@@ -417,6 +434,8 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			return result, nil
 		}
 	}
+	s.Phase = "ready"
+	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	result.RequeueAfter = 30 * time.Second
 	return result, nil
 }
@@ -567,20 +586,17 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *intern
 		if m.Stage == "planned" || m.Stage == "imported" {
 			m.RemoveStep = "delete-runtime"
 		} else {
-			m.RemoveStep = "grow"
+			m.RemoveStep = "check-queues"
 		}
 	}
 	if m.RemoveStep != "delete-runtime" && m.RemoveStep != "delete-volume" {
 		if len(survivors) == 0 {
-			return fmt.Errorf("%w: no survivor for member removal", engine.ErrConflict)
+			return blockRemoval(m, "no survivor for member removal")
 		}
 		for _, peer := range survivors {
 			healthy, err := p.healthy(ctx, rc, peer)
-			if err != nil {
-				return err
-			}
-			if !healthy {
-				return fmt.Errorf("%w: remaining member %s is down", engine.ErrConflict, peer.Name)
+			if err != nil || !healthy {
+				return blockRemoval(m, fmt.Sprintf("remaining member %s is unavailable; removal is paused", peer.Name))
 			}
 		}
 	}
@@ -589,6 +605,24 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *intern
 		seed = survivors[0].Name
 	}
 	switch m.RemoveStep {
+	case "check-queues", "grow", "streams", "shrink", "drain", "stop-app":
+		lost, err := p.departureUnavailable(ctx, rc, m)
+		if err != nil {
+			return err
+		}
+		m.Lost = m.Lost || lost
+		if m.Lost {
+			if err := p.guardLostMajority(ctx, rc, s, m, survivors); err != nil {
+				return err
+			}
+		}
+		if err := p.guardClassicQueues(ctx, rc, s, m); err != nil {
+			return err
+		}
+	}
+	switch m.RemoveStep {
+	case "check-queues":
+		m.RemoveStep = "grow"
 	case "grow":
 		if m.GrowIndex < len(survivors) {
 			if err := p.action(ctx, rc, seed, "grow", rmqspec.NodeRequest{Node: "rabbit@" + survivors[m.GrowIndex].Name}); err != nil {
@@ -611,27 +645,71 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *intern
 			return err
 		}
 		m.RemoveStep = "drain"
+		if m.Lost {
+			m.RemoveStep = "forget"
+		}
 	case "drain":
+		if m.Lost {
+			m.RemoveStep = "forget"
+			return nil
+		}
 		if err := p.action(ctx, rc, m.Name, "drain", nil); err != nil {
 			return err
 		}
-		m.RemoveStep = "stop"
-	case "stop":
+		m.RemoveStep = "stop-app"
+	case "stop-app":
+		if m.Lost {
+			m.RemoveStep = "forget"
+			return nil
+		}
 		a, err := p.agent(ctx, rc, m.Name)
 		if err != nil {
 			return err
 		}
-		defer a.Close()
-		if err = a.Maintenance(ctx, agentapi.Maintenance{Enabled: true}); err != nil {
+		err = a.Maintenance(ctx, agentapi.Maintenance{Enabled: true})
+		a.Close()
+		if err != nil {
 			return err
 		}
-		if err = p.action(ctx, rc, m.Name, "stop", nil); err != nil {
+		// The Erlang VM remains a live Khepri voter until the survivor forgets it.
+		if err = p.action(ctx, rc, m.Name, "stop-app", nil); err != nil {
 			return err
 		}
 		m.RemoveStep = "forget"
 	case "forget":
+		lost, err := p.departureUnavailable(ctx, rc, m)
+		if err != nil {
+			return err
+		}
+		m.Lost = m.Lost || lost
+		if m.Lost {
+			if err := p.guardLostMajority(ctx, rc, s, m, survivors); err != nil {
+				return err
+			}
+		}
 		if err := p.action(ctx, rc, seed, "forget", rmqspec.NodeRequest{Node: "rabbit@" + m.Name}); err != nil {
 			return err
+		}
+		m.RemovalBlocked = ""
+		m.RemoveStep = "stop"
+	case "stop":
+		st, agentErr := p.agentStatus(ctx, rc, m.Name)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if agentErr == nil && running(st) {
+			a, err := p.agent(ctx, rc, m.Name)
+			if err != nil {
+				return err
+			}
+			err = a.Maintenance(ctx, agentapi.Maintenance{Enabled: true})
+			a.Close()
+			if err != nil {
+				return err
+			}
+			if err = p.action(ctx, rc, m.Name, "stop", nil); err != nil {
+				return err
+			}
 		}
 		m.RemoveStep = "delete-runtime"
 	case "delete-runtime":
@@ -656,14 +734,57 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *intern
 	}
 	return nil
 }
-func (p *Provider) migrateStreams(ctx context.Context, rc *engine.Context, s *internalState, m *member) (bool, error) {
-	options, err := parseOptions(m.EngineOptions)
+
+func blockRemoval(m *member, message string) error {
+	m.RemovalBlocked = message
+	return fmt.Errorf("%w: %s", engine.ErrConflict, message)
+}
+
+func (p *Provider) departureUnavailable(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+	for _, name := range []string{m.Name, m.Volume} {
+		service, err := rc.Backend.GetService(ctx, name)
+		if err != nil {
+			return false, err
+		}
+		if service == nil {
+			return true, nil
+		}
+	}
+	st, err := p.agentStatus(ctx, rc, m.Name)
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	return err != nil || !running(st), nil
+}
+
+func (p *Provider) guardClassicQueues(ctx context.Context, rc *engine.Context, s *internalState, m *member) error {
+	if err := s.save(rc.Cluster); err != nil {
+		return err
+	}
+	admin, err := p.adminClient(ctx, rc)
 	if err != nil {
-		return false, err
+		return err
 	}
-	if !slices.Contains(options.Plugins, "rabbitmq_stream") {
-		return true, nil
+	defer admin.Close()
+	queues, err := admin.Queues(ctx)
+	if err != nil {
+		return err
 	}
+	blocked := []string{}
+	node := "rabbit@" + m.Name
+	for _, q := range queues {
+		if q.Durable && (q.Type == "classic" || q.Type == "") && (q.Node == node || q.Leader == node) {
+			blocked = append(blocked, fmt.Sprintf("%q/%q", q.Vhost, q.Name))
+		}
+	}
+	if len(blocked) > 0 {
+		slices.Sort(blocked)
+		return blockRemoval(m, "durable classic queues on "+m.Name+" prevent automatic removal: "+strings.Join(blocked, ", ")+"; explicitly migrate or delete these queues before retrying")
+	}
+	m.RemovalBlocked = ""
+	return nil
+}
+func (p *Provider) migrateStreams(ctx context.Context, rc *engine.Context, s *internalState, m *member) (bool, error) {
 	admin, err := p.adminClient(ctx, rc)
 	if err != nil {
 		return false, err
@@ -691,4 +812,41 @@ func (p *Provider) migrateStreams(ctx context.Context, rc *engine.Context, s *in
 func (p *Provider) streamReplica(ctx context.Context, rc *engine.Context, name string, req rmqspec.StreamReplicasRequest) error {
 	var out rmqspec.StreamReplicasResponse
 	return p.call(ctx, rc, name, "stream-replicas", req, &out)
+}
+
+// availableMembers skips failed brokers when choosing a replacement's join seed.
+func (p *Provider) availableMembers(ctx context.Context, rc *engine.Context, s *internalState) []*member {
+	out := []*member{}
+	for _, m := range s.runningMembers() {
+		lost, err := p.departureUnavailable(ctx, rc, m)
+		if err != nil || lost {
+			continue
+		}
+		ok, err := p.healthy(ctx, rc, m)
+		if err == nil && ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func (p *Provider) guardLostMajority(ctx context.Context, rc *engine.Context, s *internalState, m *member, survivors []*member) error {
+	if len(survivors) == 0 {
+		return blockRemoval(m, "lost-node removal requires surviving brokers")
+	}
+	st, err := p.brokerStatus(ctx, rc, survivors[0].Name)
+	if err != nil {
+		return err
+	}
+	voters := max(len(st.DiskNodes), len(s.Members))
+	online := 0
+	for _, peer := range survivors {
+		if slices.Contains(st.RunningNodes, "rabbit@"+peer.Name) {
+			online++
+		}
+	}
+	if online < voters/2+1 {
+		return blockRemoval(m, "lost-node removal requires a Khepri voter majority among the surviving brokers")
+	}
+	return nil
 }

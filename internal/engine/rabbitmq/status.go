@@ -172,6 +172,12 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	condition("Alarms", alarms, "MemoryOrDisk")
 	condition("Partition", partition, "ClusterMembership")
 	v.Conditions = append(v.Conditions, domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)})
+	for _, m := range ordered(s) {
+		if m.RemovalBlocked != "" {
+			v.Conditions = append(v.Conditions, domain.Condition{Type: "MemberRemovalBlocked", Status: "True", Reason: "UnsafeRemoval", Message: m.RemovalBlocked, LastTransitionTime: now(rc)})
+			v.Message = m.RemovalBlocked
+		}
+	}
 	if s.Retry != nil {
 		if r := s.PlatformRetries[platformRetryKey(s.Retry)]; r != nil && r.CPUModeCooldown {
 			condition("PlatformCooldown", true, "CPUModeChangeTooRecent")

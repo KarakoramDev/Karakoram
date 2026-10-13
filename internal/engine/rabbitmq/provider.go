@@ -150,12 +150,12 @@ func validateEngineConfig(config string) error {
 		if !ok || !configKey.MatchString(k) || strings.TrimSpace(v) == "" {
 			return invalid("engineConfig requires key = value lines")
 		}
-		for _, prefix := range []string{"listeners.", "ssl_options.", "management.tcp.", "management.ssl.", "prometheus.", "cluster_formation.", "vm_memory_high_watermark", "total_memory_available_override_value", "disk_free_limit", "log.", "default_user", "default_pass", "loopback_users", "distribution.", "quorum_queue.initial_cluster_size", "default_queue_type", "management.load_definitions", "load_definitions", "definitions.", "auth_backends", "ssl_cert_login"} {
+		for _, prefix := range []string{"listeners.", "ssl_options.", "management.listener.", "management.tcp.", "management.ssl.", "prometheus.", "cluster_formation.", "vm_memory_high_watermark", "total_memory_available_override_value", "disk_free_limit", "log.", "default_user", "default_pass", "loopback_users", "distribution.", "quorum_queue.initial_cluster_size", "default_queue_type", "management.load_definitions", "load_definitions", "definitions.", "auth_backends", "ssl_cert_login", "stream.listeners.", "stream.replication.", "stream.ssl.", "osiris."} {
 			if k == strings.TrimSuffix(prefix, ".") || strings.HasPrefix(k, prefix) {
 				return invalid("engineConfig key %q is managed", k)
 			}
 		}
-		if strings.ContainsAny(v, "\x00\r") {
+		if strings.ContainsAny(v, "\x00\r") || strings.Contains(v, "$(") {
 			return invalid("invalid engineConfig value")
 		}
 	}

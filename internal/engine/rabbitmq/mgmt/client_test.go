@@ -181,3 +181,28 @@ func TestInvalidJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestQueuePlacementMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/queues" {
+			t.Error(r.URL.Path)
+		}
+		fmt.Fprint(w, `[{"name":"durable-classic","vhost":"/","type":"classic","durable":true,"node":"rabbit@leaving"},{"name":"replicated","vhost":"/","type":"quorum","durable":true,"leader":"rabbit@survivor","members":["rabbit@survivor","rabbit@leaving"]}]`)
+	}))
+	defer srv.Close()
+	c, err := New(srv.URL, "karakoram", "secret", srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	queues, err := c.Queues(t.Context())
+	if err != nil || len(queues) != 2 {
+		t.Fatal(queues, err)
+	}
+	if !queues[0].Durable || queues[0].Node != "rabbit@leaving" || queues[0].Type != "classic" {
+		t.Fatal(queues[0])
+	}
+	if queues[1].Leader != "rabbit@survivor" || len(queues[1].Members) != 2 {
+		t.Fatal(queues[1])
+	}
+}

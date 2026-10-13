@@ -29,7 +29,6 @@ func TestStreamReplicasMoveBeforeQueueShrink(t *testing.T) {
 	p, rc, _, a := setup(t)
 	rc.Cluster.Spec.TLS.Mode = "disabled"
 	rc.Cluster.Spec.Components.Engine.Replicas = 5
-	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"plugins":["rabbitmq_stream"]}`)
 	ready(t, p, rc)
 	a.log.clear()
 	var mu sync.Mutex

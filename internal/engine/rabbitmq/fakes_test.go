@@ -22,6 +22,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/mgmt"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -202,6 +203,7 @@ type fakeBroker struct {
 	joined      bool
 	critical    bool
 	maintenance bool
+	appStopped  bool
 	version     string
 	config      int64
 	alarms      json.RawMessage
@@ -217,6 +219,8 @@ type fakeAgents struct {
 	clients       map[string]*agentapi.Client
 	failures      map[string]int
 	streamHandler func(rmqspec.StreamReplicasRequest)
+	queueSource   func() []mgmt.Queue
+	forgetHandler func(string)
 }
 
 func (a *fakeAgents) broker(name string) *fakeBroker {
@@ -290,16 +294,22 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			_ = json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
 		case "/v1/rabbitmq/status":
 			nodes := []string{}
+			diskNodes := []string{}
 			if b.joined {
 				for peer, pb := range a.brokers {
-					if pb.joined && pb.running && !pb.down {
+					if pb.joined {
+						diskNodes = append(diskNodes, "rabbit@"+peer)
+					}
+					if pb.joined && pb.running && !pb.down && !pb.appStopped {
 						nodes = append(nodes, "rabbit@"+peer)
 					}
 				}
-			} else if b.running {
+			} else if b.running && !b.appStopped {
 				nodes = append(nodes, "rabbit@"+name)
+				diskNodes = append(diskNodes, "rabbit@"+name)
 			}
 			slices.Sort(nodes)
+			slices.Sort(diskNodes)
 			alarms, partitions := b.alarms, b.partitions
 			if len(alarms) == 0 {
 				alarms = json.RawMessage(`[]`)
@@ -307,7 +317,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if len(partitions) == 0 {
 				partitions = json.RawMessage(`[]`)
 			}
-			_ = json.NewEncoder(w).Encode(rmqspec.StatusResponse{NodeName: "rabbit@" + name, RunningNodes: nodes, DiskNodes: nodes, Alarms: alarms, Partitions: partitions, Maintenance: b.maintenance, Version: b.version})
+			_ = json.NewEncoder(w).Encode(rmqspec.StatusResponse{NodeName: "rabbit@" + name, RunningNodes: nodes, DiskNodes: diskNodes, Alarms: alarms, Partitions: partitions, Maintenance: b.maintenance, Version: b.version})
 		case "/v1/rabbitmq/quorum-critical":
 			_ = json.NewEncoder(w).Encode(rmqspec.QuorumCriticalResponse{Critical: b.critical})
 		case "/v1/rabbitmq/stream-replicas":
@@ -336,17 +346,24 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 				b.joined = true
 			case "drain":
 				b.maintenance = true
+			case "stop-app":
+				b.appStopped = true
 			case "stop":
 				b.running = false
 			case "start":
 				b.running = true
+				b.appStopped = false
 			case "revive":
 				b.maintenance = false
 				b.running = true
+				b.appStopped = false
 			case "forget":
 				var req rmqspec.NodeRequest
 				_ = json.NewDecoder(r.Body).Decode(&req)
 				a.log.add("agent:" + name + ":forget:" + req.Node)
+				if a.forgetHandler != nil {
+					a.forgetHandler(req.Node)
+				}
 				if peer := a.brokers[strings.TrimPrefix(req.Node, "rabbit@")]; peer != nil {
 					peer.joined = false
 				}
@@ -398,6 +415,7 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fakeInfra, *fakeAgents) {
 	a := &fakeAgents{t: t, p: p, rc: rc, log: log, brokers: map[string]*fakeBroker{}, servers: map[string]*httptest.Server{}, clients: map[string]*agentapi.Client{}, failures: map[string]int{}}
 	rc.Agents = a
 	f.agents = a
+	setupManagement(t, rc, a)
 	return p, rc, f, a
 }
 func state(t *testing.T, rc *engine.Context) *internalState {

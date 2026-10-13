@@ -16,11 +16,23 @@
 // durable exponential backoff; CPU-mode cooldowns do not hot-loop.
 //
 // Removal grows quorum queue replicas on every remaining broker, migrates stream
-// replicas, shrinks the leaving broker and drains/stops it before forgetting its
-// cluster identity and deleting infrastructure. Down survivors prevent removal.
-// Cleanup gracefully stops brokers and may retain volumes and their credentials.
-// Persistently mounted volumes are handed to the orphan-volume cleanup workflow
-// only after their runtime is absent and their ownership is verified again.
+// queue replicas (independently of the optional stream protocol plugin), and
+// shrinks the leaving broker. Its application is drained and stopped while the
+// Erlang VM remains a live Khepri voter; a survivor forgets it before full process
+// shutdown and infrastructure deletion. Durable classic queues hosted on that
+// member block automatic scale-down and replacement: the reported queues must
+// be explicitly migrated or deleted by the operator before retrying.
+//
+// Replacing a lost node uses healthy survivors to join a new, monotonically named
+// member and migrate replicated queues. An unreachable departure skips local
+// drain/stop commands and is forgotten only with a Khepri majority among survivors.
+// This does not recover classic queue contents or enable recovery without a
+// surviving metadata majority. Down remaining brokers prevent automatic removal.
+// Cleanup gracefully stops brokers and may retain volumes and credentials.
+// Resume starts every retained broker before waiting for individual readiness,
+// allowing the retained Khepri majority to recover. Persistently mounted volumes
+// are handed to orphan-volume cleanup only after their runtime is absent and
+// their ownership is verified again.
 //
 // Broker credentials, Erlang cookies, CA keys, leaf certificates and pending
 // password rotations exist only in SecretStore. Public AMQP requires an explicit

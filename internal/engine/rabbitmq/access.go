@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -115,8 +114,8 @@ func userValidation(v UserWrite) error {
 }
 func regexValidation(patterns ...string) error {
 	for _, v := range patterns {
-		if _, e := regexp.Compile(v); e != nil {
-			return engine.Invalid("invalid regular expression %q", v)
+		if len(v) == 0 || len(v) > 4096 {
+			return engine.Invalid("regular expression must be non-empty and at most 4096 bytes")
 		}
 	}
 	return nil

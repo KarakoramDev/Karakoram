@@ -102,12 +102,15 @@ func TestAccessValidation(t *testing.T) {
 	if e := userValidation(UserWrite{Name: "app", Password: &pw, PasswordHash: &hash}); !errors.Is(e, engine.ErrInvalid) {
 		t.Fatal(e)
 	}
-	for _, pattern := range []string{"[", "(", "*"} {
-		if e := permissionValidation(Permission{Vhost: "/", User: "app", Configure: pattern}); !errors.Is(e, engine.ErrInvalid) {
+	for _, pattern := range []string{"", strings.Repeat("x", 4097)} {
+		if e := permissionValidation(Permission{Vhost: "/", User: "app", Configure: pattern, Write: ".*", Read: ".*"}); !errors.Is(e, engine.ErrInvalid) {
+			t.Fatal(e)
+		}
+		if e := topicValidation(TopicPermission{Vhost: "/", User: "app", Exchange: "events", Write: pattern, Read: ".*"}); !errors.Is(e, engine.ErrInvalid) {
 			t.Fatal(e)
 		}
 	}
-	for _, v := range []Policy{{Vhost: "/", Name: "p", Pattern: "[", ApplyTo: "queues", Definition: map[string]any{}}, {Vhost: "/", Name: "p", ApplyTo: "invalid", Definition: map[string]any{}}, {Vhost: "/", Name: "p", ApplyTo: "queues", Priority: -1, Definition: map[string]any{}}, {Vhost: "/", Name: "p", ApplyTo: "queues"}, {Vhost: "/", Name: "p", ApplyTo: "queues", Definition: map[string]any{"bad": make(chan int)}}} {
+	for _, v := range []Policy{{Vhost: "/", Name: "p", Pattern: "", ApplyTo: "queues", Definition: map[string]any{}}, {Vhost: "/", Name: "p", Pattern: strings.Repeat("x", 4097), ApplyTo: "queues", Definition: map[string]any{}}, {Vhost: "/", Name: "p", Pattern: ".*", ApplyTo: "invalid", Definition: map[string]any{}}, {Vhost: "/", Name: "p", Pattern: ".*", ApplyTo: "queues", Priority: -1, Definition: map[string]any{}}, {Vhost: "/", Name: "p", Pattern: ".*", ApplyTo: "queues"}, {Vhost: "/", Name: "p", Pattern: ".*", ApplyTo: "queues", Definition: map[string]any{"bad": make(chan int)}}} {
 		if e := policyValidation(v); !errors.Is(e, engine.ErrInvalid) {
 			t.Fatal(v, e)
 		}
@@ -315,5 +318,70 @@ func TestAccessAdminRelayTLSAndFailover(t *testing.T) {
 	rc.Cluster.Internal = json.RawMessage(`{"members":[{"name":"broker","stage":"planned"}]}`)
 	if _, e = p.adminClient(t.Context(), rc); !errors.Is(e, engine.ErrConflict) {
 		t.Fatal(e)
+	}
+}
+
+// RabbitMQ evaluates PCRE patterns; the control plane must not reject constructs
+// merely because Go's RE2 implementation cannot compile them.
+func TestAccessPCREPatternsPassThrough(t *testing.T) {
+	for _, pattern := range []string{`^(?=event\.)event\..+$`, `^(event)\.\1$`} {
+		t.Run(pattern, func(t *testing.T) {
+			puts := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/api/overview":
+					fmt.Fprint(w, `{}`)
+				case r.Method == "GET":
+					w.WriteHeader(http.StatusNotFound)
+				case r.Method == "PUT":
+					var body map[string]any
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					if strings.HasPrefix(r.URL.Path, "/api/permissions/") {
+						for _, key := range []string{"configure", "write", "read"} {
+							if body[key] != pattern {
+								t.Errorf("%s pattern changed: %#v", key, body[key])
+							}
+						}
+					} else if strings.HasPrefix(r.URL.Path, "/api/topic-permissions/") {
+						for _, key := range []string{"write", "read"} {
+							if body[key] != pattern {
+								t.Errorf("%s pattern changed: %#v", key, body[key])
+							}
+						}
+					} else if body["pattern"] != pattern {
+						t.Errorf("policy pattern changed: %#v", body["pattern"])
+					}
+					puts++
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}))
+			defer srv.Close()
+			rc, _ := accessContext(t, srv, "disabled", "broker")
+			p := New(Options{})
+			if err := p.CreatePermission(t.Context(), rc, Permission{Vhost: "/", User: "app", Configure: pattern, Write: pattern, Read: pattern}); err != nil {
+				t.Fatal(err)
+			}
+			if err := p.CreateTopicPermission(t.Context(), rc, TopicPermission{Vhost: "/", User: "app", Exchange: "events", Write: pattern, Read: pattern}); err != nil {
+				t.Fatal(err)
+			}
+			policy := Policy{Vhost: "/", Name: "events", Pattern: pattern, ApplyTo: "queues", Definition: map[string]any{"message-ttl": 100}}
+			if err := p.CreatePolicy(t.Context(), rc, policy); err != nil {
+				t.Fatal(err)
+			}
+			if err := p.CreateOperatorPolicy(t.Context(), rc, policy); err != nil {
+				t.Fatal(err)
+			}
+			if puts != 4 {
+				t.Fatalf("expected four unchanged payloads, got %d", puts)
+			}
+		})
+	}
+	if err := regexValidation(strings.Repeat("x", 4096)); err != nil {
+		t.Fatal("4096-byte boundary rejected", err)
 	}
 }

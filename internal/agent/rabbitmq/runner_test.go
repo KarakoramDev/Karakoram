@@ -102,9 +102,9 @@ func TestRendering(t *testing.T) {
 				t.Fatal(files)
 			}
 			if mode == "requireTLS" {
-				last := files[len(files)-1]
-				if last.name != "inter_node_tls.config" || !strings.Contains(last.content, "{verify,verify_peer}") {
-					t.Fatal(last)
+				dist := slices.IndexFunc(files, func(f renderedFile) bool { return f.name == "inter_node_tls.config" })
+				if dist < 0 || !strings.Contains(files[dist].content, "{verify,verify_peer}") {
+					t.Fatal(files)
 				}
 			}
 		})
@@ -222,6 +222,7 @@ func TestRoutesRequireBearer(t *testing.T) {
 	t.Setenv("KARAKORAM_RABBITMQ_BIN", bin)
 	// The executable fake supplies the real cluster_status field encodings.
 	fake := "#!/bin/sh\nif [ \"$1\" = version ]; then echo 4.3.6; exit; fi\nif [ \"$1\" = cluster_status ]; then echo '{\"running_nodes\":[\"rabbit@rmqone\"],\"disk_nodes\":[\"rabbit@rmqone\"],\"alarms\":[],\"partitions\":{},\"maintenance_status\":{\"rabbit@rmqone\":\"marked for maintenance\"},\"versions\":{\"rabbit@rmqone\":{\"rabbitmq_version\":\"4.3.6\"}},\"feature_flags\":[{\"name\":\"test\",\"state\":\"enabled\"}]}'; exit; fi\nexec sleep 30\n"
+	fake = strings.Replace(fake, "exec sleep 30\n", "if [ \"$1\" = stop_app ] || [ \"$1\" = start_app ]; then printf '%s\\n' \"$1\" >> \"$HOME/app-actions\"; echo '{\"result\":\"ok\"}'; exit; fi\nexec sleep 30\n", 1)
 	for _, name := range []string{process, "rabbitmqctl"} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte(fake), 0700); err != nil {
 			t.Fatal(err)
@@ -343,12 +344,46 @@ func TestRoutesRequireBearer(t *testing.T) {
 	if err != nil || restarted.Processes[process].PID == resumed.Processes[process].PID {
 		t.Fatal("generic start left transient hold active", restarted, err)
 	}
+	if err := client.Engine(context.Background(), "rabbitmq", "stop-app", rmqspec.EmptyRequest{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	appStopped, err := client.Status(context.Background())
+	if err != nil || appStopped.Processes[process].PID != restarted.Processes[process].PID {
+		t.Fatal("stop-app replaced Erlang runtime", appStopped, err)
+	}
+	if err := client.Maintenance(context.Background(), agentapi.Maintenance{Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Engine(context.Background(), "rabbitmq", "start", rmqspec.EmptyRequest{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	actions, err := os.ReadFile(filepath.Join(dir, "karakoram", "home", "app-actions"))
+	if err != nil || string(actions) != "stop_app\n" {
+		t.Fatal("start_app bypassed maintenance", string(actions), err)
+	}
+	if err := client.Maintenance(context.Background(), agentapi.Maintenance{Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Engine(context.Background(), "rabbitmq", "start", rmqspec.EmptyRequest{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	actions, err = os.ReadFile(filepath.Join(dir, "karakoram", "home", "app-actions"))
+	if err != nil || string(actions) != "stop_app\nstart_app\n" {
+		t.Fatal("start did not resume application", string(actions), err)
+	}
+	if err := client.Engine(context.Background(), "rabbitmq", "stop-app", rmqspec.EmptyRequest{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	fakeCLI(t, "rabbitmq-upgrade", "exit 1\n")
+	if err := client.Engine(context.Background(), "rabbitmq", "stop", rmqspec.EmptyRequest{}, nil); err != nil {
+		t.Fatal("full stop unnecessarily drained a stopped application", err)
+	}
 	roots := x509.NewCertPool()
 	roots.AppendCertsFromPEM(ca.CertPEM)
 	bad := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}, Timeout: time.Second}
 	defer bad.CloseIdleConnections()
 	for _, token := range []string{"", "wrong"} {
-		for _, action := range []string{"status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
+		for _, action := range []string{"status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "stop-app", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
 			req, _ := http.NewRequest(http.MethodPost, "https://"+address+"/v1/rabbitmq/"+action, strings.NewReader("{}"))
 			if token != "" {
 				req.Header.Set("Authorization", "Bearer "+token)

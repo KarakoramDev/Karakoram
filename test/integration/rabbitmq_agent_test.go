@@ -133,13 +133,21 @@ func TestRabbitMQAgent(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := rmqspec.MemberSpec{NodeName: "rabbit@" + member, Peers: []string{"rabbit@" + member}, Cookie: strings.Repeat("integration-cookie", 3), Version: "4.3.6", Plugins: []string{"rabbitmq_management", "rabbitmq_prometheus", "rabbitmq_stream"}, AMQPSPort: 5671, ManagementTLSPort: 15671, PrometheusPort: 15692, MemoryHighWatermarkBytes: 512 << 20, TotalMemoryBytes: 1 << 30, DiskFreeLimitBytes: 50 << 20, DefaultQueueType: "quorum", InterNodeTLS: true}
+		s.StreamTLSPort = 5551
+		// The second member discovers its seed at boot, exercising the bounded
+		// temporary Erlang discovery peer; the third uses the explicit join route.
+		if member == "rmqtwo" {
+			s.Peers = []string{peers[0], peers[1]}
+		}
 		raw, _ := json.Marshal(s)
 		c := agentapi.MemberConfig{Engine: "rabbitmq", Cluster: "integration", Member: member, EngineSpec: raw, AgentTLS: agentapi.Certificate{CertPEM: string(cert), KeyPEM: string(key)}, TLS: agentapi.TLSConfig{Mode: "requireTLS", CAPEM: string(ca.CertPEM), CertPEM: string(cert), KeyPEM: string(key)}, SystemUsers: map[string]agentapi.Credentials{"karakoram": {Username: "karakoram", Password: "integration-control"}, "admin": {Username: "admin", Password: "integration-admin"}}, DesiredProcesses: []string{"rabbitmq-server"}, ConfigVersion: 1}
 		mu.Lock()
 		configs[member] = c
 		mu.Unlock()
 		name := network + "-" + member
-		docker("run", "-d", "--name", name, "--hostname", member, "--network", network, "--network-alias", member, "--add-host", "controlplane:host-gateway", "--user", "1000:1000", "--tmpfs", "/data:uid=1000,gid=1000,mode=0700", "--memory", "1g", "-p", "127.0.0.1::9443", "-p", "127.0.0.1::5671", "-p", "127.0.0.1::15671", "-v", binary+":/karakoram:ro", "-e", "ERL_AFLAGS=+S 2:2", "-e", "KARAKORAM_ENGINE=rabbitmq", "-e", "KARAKORAM_URL="+cpURL, "-e", "KARAKORAM_INTERNAL_CA="+string(ca.CertPEM), "-e", "KARAKORAM_AGENT_TOKEN=integration-"+member, "-e", "KARAKORAM_CLUSTER=integration", "-e", "KARAKORAM_MEMBER="+member, "-e", "KARAKORAM_DATA_DIR=/data", rabbitMQImage, "/karakoram", "agent")
+		// Use an init reaper for orphaned Erlang CLI descendants instead of
+		// making the Go supervisor PID 1 in this constrained test container.
+		docker("run", "-d", "--init", "--name", name, "--hostname", member, "--network", network, "--network-alias", member, "--add-host", "controlplane:host-gateway", "--user", "1000:1000", "--tmpfs", "/data:uid=1000,gid=1000,mode=0700", "--cpus", "2", "--pids-limit", "96", "--memory", "1g", "-p", "127.0.0.1::9443", "-p", "127.0.0.1::5671", "-p", "127.0.0.1::15671", "-p", "127.0.0.1::5551", "-v", binary+":/karakoram:ro", "-e", "KARAKORAM_ENGINE=rabbitmq", "-e", "KARAKORAM_URL="+cpURL, "-e", "KARAKORAM_INTERNAL_CA="+string(ca.CertPEM), "-e", "KARAKORAM_AGENT_TOKEN=integration-"+member, "-e", "KARAKORAM_CLUSTER=integration", "-e", "KARAKORAM_MEMBER="+member, "-e", "KARAKORAM_DATA_DIR=/data", rabbitMQImage, "/karakoram", "agent")
 		t.Cleanup(func() {
 			if t.Failed() {
 				out, _ := exec.Command("docker", "logs", name).CombinedOutput()
@@ -168,6 +176,34 @@ func TestRabbitMQAgent(t *testing.T) {
 			t.Fatal("TLS AMQP listener", err)
 		}
 		conn.Close()
+		streamConn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", docker("port", name, "5551/tcp"), &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12})
+		if err != nil {
+			t.Fatal("TLS stream listener", err)
+		}
+		streamConn.Close()
+		// Verify effective broker settings, not only rendered file contents.
+		effective := docker("exec", "-e", "HOME=/data/karakoram/home", "-e", "LANG=C.UTF-8", "-e", "LC_ALL=C.UTF-8", "-e", "RABBITMQ_NODENAME=rabbit@"+member, "-e", "RABBITMQ_CTL_ERL_ARGS=+S 2:2 +SDcpu 2:2 +SDio 2 +A 4 -proto_dist inet6_tls -ssl_dist_optfile /data/karakoram/inter_node_tls.config", name, "/usr/lib/rabbitmq/bin/rabbitmqctl", "eval", `#{transport => application:get_env(osiris, replication_transport), agent_token => os:getenv("KARAKORAM_AGENT_TOKEN"), tcp => application:get_env(rabbitmq_stream,tcp_listeners), tls => application:get_env(rabbitmq_stream,ssl_listeners)}.`, "--quiet", "--formatter", "json")
+		var security struct {
+			Result string `json:"result"`
+			Value  struct {
+				Transport  []string          `json:"transport"`
+				AgentToken json.RawMessage   `json:"agent_token"`
+				TCP        []json.RawMessage `json:"tcp"`
+				TLS        []json.RawMessage `json:"tls"`
+			} `json:"value"`
+		}
+		if err := json.Unmarshal([]byte(effective), &security); err != nil {
+			t.Fatal("effective broker security JSON", err)
+		}
+		if security.Result != "ok" || !slices.Equal(security.Value.Transport, []string{"ok", "ssl"}) {
+			t.Fatal("Osiris replication is not TLS")
+		}
+		if string(security.Value.AgentToken) != "false" {
+			t.Fatal("broker inherited control-plane credentials")
+		}
+		if len(security.Value.TCP) != 2 || string(security.Value.TCP[1]) != "[]" || len(security.Value.TLS) != 2 || string(security.Value.TLS[1]) != "[5551]" {
+			t.Fatal("stream listener TLS policy was not applied")
+		}
 	}
 	first := nodes[0].client
 	action := func(client *agentapi.Client, name string, req any) {
@@ -176,7 +212,7 @@ func TestRabbitMQAgent(t *testing.T) {
 			for _, n := range nodes {
 				if n.client == client {
 					diagnosticCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					out, _ := exec.CommandContext(diagnosticCtx, "docker", "exec", "-e", "HOME=/data/karakoram/home", "-e", "RABBITMQ_NODENAME=rabbit@"+n.name, "-e", "RABBITMQ_CTL_ERL_ARGS=-proto_dist inet6_tls -ssl_dist_optfile /data/karakoram/inter_node_tls.config", n.container, "/usr/lib/rabbitmq/bin/rabbitmqctl", "-t", "5", "list_users", "--quiet", "--formatter", "json").CombinedOutput()
+					out, _ := exec.CommandContext(diagnosticCtx, "docker", "exec", "-e", "HOME=/data/karakoram/home", "-e", "LANG=C.UTF-8", "-e", "LC_ALL=C.UTF-8", "-e", "RABBITMQ_NODENAME=rabbit@"+n.name, "-e", "RABBITMQ_CTL_ERL_ARGS=+S 2:2 +SDcpu 2:2 +SDio 2 +A 4 -proto_dist inet6_tls -ssl_dist_optfile /data/karakoram/inter_node_tls.config", n.container, "/usr/lib/rabbitmq/bin/rabbitmqctl", "-t", "5", "list_users", "--quiet", "--formatter", "json").CombinedOutput()
 					cancel()
 					t.Logf("RabbitMQ CLI diagnostics: %s", out)
 				}
@@ -190,10 +226,27 @@ func TestRabbitMQAgent(t *testing.T) {
 		action(n.client, "join", rmqspec.JoinRequest{Seed: peers[0]})
 		action(n.client, "join", rmqspec.JoinRequest{Seed: peers[0]})
 	}
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(ca.CertPEM)
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}, Timeout: 10 * time.Second}
+	defer httpClient.CloseIdleConnections()
 	for _, n := range nodes {
+		statusURL := "https://" + docker("port", n.container, "9443/tcp") + "/v1/rabbitmq/status"
 		wait("joined cluster "+n.name, func() error {
 			var status rmqspec.StatusResponse
-			if err := n.client.Engine(ctx, "rabbitmq", "status", rmqspec.EmptyRequest{}, &status); err != nil {
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, statusURL, strings.NewReader("{}"))
+			req.Header.Set("Authorization", "Bearer integration-"+n.name)
+			res, err := httpClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer res.Body.Close()
+			if res.StatusCode != 200 {
+				var failure agentapi.ErrorResponse
+				_ = json.NewDecoder(res.Body).Decode(&failure)
+				return fmt.Errorf("RabbitMQ status HTTP %d: %s", res.StatusCode, failure.Error)
+			}
+			if err := json.NewDecoder(res.Body).Decode(&status); err != nil {
 				return err
 			}
 			if len(status.RunningNodes) != 3 {
@@ -208,10 +261,6 @@ func TestRabbitMQAgent(t *testing.T) {
 			return nil
 		})
 	}
-	roots := x509.NewCertPool()
-	roots.AppendCertsFromPEM(ca.CertPEM)
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}, Timeout: 10 * time.Second}
-	defer httpClient.CloseIdleConnections()
 	management := func(method, path, body string) []byte {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(ctx, method, nodes[0].management+"/api/"+path, strings.NewReader(body))
@@ -328,8 +377,13 @@ func TestRabbitMQAgent(t *testing.T) {
 		return err
 	})
 	action(leaving.client, "revive", rmqspec.EmptyRequest{})
-	action(leaving.client, "stop", rmqspec.EmptyRequest{})
+	action(leaving.client, "stop-app", rmqspec.EmptyRequest{})
+	appStopped, err := leaving.client.Status(ctx)
+	if err != nil || appStopped.Processes["rabbitmq-server"].PID == 0 {
+		t.Fatal("stop-app stopped Erlang runtime", appStopped, err)
+	}
 	action(first, "forget", rmqspec.NodeRequest{Node: peers[2]})
+	action(leaving.client, "stop", rmqspec.EmptyRequest{})
 	var status rmqspec.StatusResponse
 	if err = first.Engine(ctx, "rabbitmq", "status", rmqspec.EmptyRequest{}, &status); err != nil || len(status.DiskNodes) != 2 {
 		t.Fatal("forget", status, err)

@@ -109,11 +109,12 @@ func TestScaleUpDownOrderingAndMonotonicNames(t *testing.T) {
 		}
 		shrink := "agent:demom0:shrink:rabbit@" + name
 		drain := "agent:" + name + ":drain"
+		stopApp := "agent:" + name + ":stop-app"
 		stop := "agent:" + name + ":stop"
 		del := "infra:" + name + ":delete"
 		volume := "infra:" + name + "v:delete"
 		assertBefore(t, memberCalls, shrink, drain)
-		assertBefore(t, memberCalls, drain, stop)
+		assertBefore(t, memberCalls, drain, stopApp)
 		assertBefore(t, memberCalls, stop, del)
 		assertBefore(t, memberCalls, del, volume)
 		for _, survivor := range []string{"demom0", "demom1", "demom2"} {
@@ -121,8 +122,8 @@ func TestScaleUpDownOrderingAndMonotonicNames(t *testing.T) {
 			assertBefore(t, memberCalls, grow, shrink)
 		}
 		forget := "agent:demom0:forget:rabbit@" + name
-		assertBefore(t, memberCalls, stop, forget)
-		assertBefore(t, memberCalls, forget, del)
+		assertBefore(t, memberCalls, stopApp, forget)
+		assertBefore(t, memberCalls, forget, stop)
 		if f.services[name] != nil || f.services[name+"v"] != nil {
 			t.Fatalf("removed resources survive: %s", name)
 		}
@@ -492,6 +493,9 @@ func TestRetainedCleanupResumesExistingVolumeIdentities(t *testing.T) {
 		calls := a.log.snapshot()
 		assertBefore(t, calls, "infra:"+m.Name+":deploy", "agent:"+m.Name+":start")
 		assertBefore(t, calls, "agent:"+m.Name+":start", "agent:"+m.Name+":revive")
+		for _, peer := range after.Members {
+			assertBefore(t, calls, "agent:"+peer.Name+":start", "agent:"+m.Name+":revive")
+		}
 	}
 	if len(f.imports)-importCount != len(before.Members) {
 		t.Fatal("resume did not provision exactly the missing runtimes")

@@ -14,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,11 +32,12 @@ var nodePattern = regexp.MustCompile(`^rabbit@[a-z][a-z0-9]{1,24}$`)
 var plugins = []string{"rabbitmq_management", "rabbitmq_prometheus", "rabbitmq_shovel", "rabbitmq_shovel_management", "rabbitmq_federation", "rabbitmq_federation_management", "rabbitmq_stream", "rabbitmq_stream_management"}
 
 type Runner struct {
-	mu          sync.Mutex
-	fingerprint [32]byte
-	applied     bool
-	stopped     bool
-	env         []string
+	mu            sync.Mutex
+	fingerprint   [32]byte
+	applied       bool
+	stopped       bool
+	appStoppedPID int
+	env           []string
 }
 
 func New() *Runner                  { return &Runner{} }
@@ -47,6 +50,28 @@ func binary(name string) string {
 	}
 	return filepath.Join(dir, name)
 }
+func cpuSchedulers() int {
+	data, err := os.ReadFile("/sys/fs/cgroup/cpu.max")
+	if err != nil {
+		return schedulersFromQuota("", runtime.NumCPU())
+	}
+	return schedulersFromQuota(string(data), runtime.NumCPU())
+}
+func schedulersFromQuota(cpuMax string, fallback int) int {
+	fields := strings.Fields(cpuMax)
+	if len(fields) == 2 && fields[0] != "max" {
+		quota, qerr := strconv.ParseInt(fields[0], 10, 64)
+		period, perr := strconv.ParseInt(fields[1], 10, 64)
+		if qerr == nil && perr == nil && quota > 0 && period > 0 {
+			n := quota / period
+			if quota%period != 0 {
+				n++
+			}
+			return int(min(int64(4), max(int64(1), n)))
+		}
+	}
+	return min(4, max(1, fallback))
+}
 func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	var s rmqspec.MemberSpec
 	if err := json.Unmarshal(c.EngineSpec, &s); err != nil {
@@ -55,7 +80,7 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	if !nodePattern.MatchString(s.NodeName) {
 		return s, errors.New("invalid node name")
 	}
-	if len(s.Peers) > 7 || len(s.Peers) == 0 {
+	if len(s.Peers) > 8 || len(s.Peers) == 0 {
 		return s, errors.New("invalid peer count")
 	}
 	for _, peer := range s.Peers {
@@ -69,7 +94,7 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	if len(s.Cookie) < 16 || len(s.Cookie) > 255 || strings.ContainsAny(s.Cookie, "\r\n\x00") {
 		return s, errors.New("invalid cookie")
 	}
-	for _, p := range []int{s.AMQPPort, s.AMQPSPort, s.ManagementPort, s.ManagementTLSPort, s.PrometheusPort} {
+	for _, p := range []int{s.AMQPPort, s.AMQPSPort, s.ManagementPort, s.ManagementTLSPort, s.PrometheusPort, s.StreamPort, s.StreamTLSPort} {
 		if p < 0 || p > 65535 {
 			return s, errors.New("invalid listener port")
 		}
@@ -97,7 +122,25 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	if c.TLS.Mode != "disabled" && c.TLS.Mode != "preferTLS" && c.TLS.Mode != "requireTLS" {
 		return s, errors.New("invalid TLS mode")
 	}
-	if (s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.InterNodeTLS) && (c.TLS.CAPEM == "" || c.TLS.CertPEM == "" || c.TLS.KeyPEM == "") {
+	if slices.Contains(s.Plugins, "rabbitmq_stream") {
+		switch c.TLS.Mode {
+		case "disabled":
+			if s.StreamPort == 0 || s.StreamTLSPort != 0 {
+				return s, errors.New("invalid disabled-TLS stream listeners")
+			}
+		case "preferTLS":
+			if s.StreamPort == 0 || s.StreamTLSPort == 0 {
+				return s, errors.New("both stream listeners required for preferTLS")
+			}
+		case "requireTLS":
+			if s.StreamPort != 0 || s.StreamTLSPort == 0 {
+				return s, errors.New("only TLS stream listener permitted for requireTLS")
+			}
+		}
+	} else if s.StreamPort != 0 || s.StreamTLSPort != 0 {
+		return s, errors.New("stream listener requires stream plugin")
+	}
+	if (s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.StreamTLSPort > 0 || s.InterNodeTLS) && (c.TLS.CAPEM == "" || c.TLS.CertPEM == "" || c.TLS.KeyPEM == "") {
 		return s, errors.New("TLS material required")
 	}
 	return s, nil
@@ -121,16 +164,16 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	if s.AMQPSPort > 0 {
 		line("listeners.ssl.default", s.AMQPSPort)
 	}
-	if s.AMQPSPort > 0 || s.ManagementTLSPort > 0 {
+	if s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.StreamTLSPort > 0 {
 		for _, pair := range [][2]string{{"cacertfile", "tls/ca.pem"}, {"certfile", "tls/server.pem"}, {"keyfile", "tls/server.key"}} {
-			if s.AMQPSPort > 0 {
+			if s.AMQPSPort > 0 || s.StreamTLSPort > 0 {
 				line("ssl_options."+pair[0], path(pair[1]))
 			}
 			if s.ManagementTLSPort > 0 {
 				line("management.ssl."+pair[0], path(pair[1]))
 			}
 		}
-		if s.AMQPSPort > 0 {
+		if s.AMQPSPort > 0 || s.StreamTLSPort > 0 {
 			line("ssl_options.verify", "verify_none")
 			line("ssl_options.fail_if_no_peer_cert", "false")
 		}
@@ -144,6 +187,17 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	if s.PrometheusPort > 0 {
 		line("prometheus.tcp.port", s.PrometheusPort)
 		line("prometheus.tcp.ip", "127.0.0.1")
+	}
+	if slices.Contains(s.Plugins, "rabbitmq_stream") {
+		if s.StreamPort == 0 {
+			line("stream.listeners.tcp", "none")
+		} else {
+			line("stream.listeners.tcp.default", s.StreamPort)
+		}
+		if s.StreamTLSPort > 0 {
+			// Stream TLS consumes the shared rabbit.ssl_options, not a plugin-specific key.
+			line("stream.listeners.ssl.default", s.StreamTLSPort)
+		}
 	}
 	line("cluster_formation.peer_discovery_backend", "classic_config")
 	for i, p := range s.Peers {
@@ -164,8 +218,9 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 		b.WriteByte('\n')
 	}
 	files := []renderedFile{{"rabbitmq.conf", b.String(), 0600}, {"enabled_plugins", "[" + strings.Join(s.Plugins, ",") + "].\n", 0600}, {"home/.erlang.cookie", s.Cookie, 0400}}
+	advanced := "[].\n"
 	dist := "-proto_dist inet6_tcp"
-	if s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.InterNodeTLS {
+	if s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.StreamTLSPort > 0 || s.InterNodeTLS {
 		files = append(files, renderedFile{"tls/ca.pem", c.TLS.CAPEM, 0600}, renderedFile{"tls/server.pem", c.TLS.CertPEM, 0600}, renderedFile{"tls/server.key", c.TLS.KeyPEM, 0600})
 	}
 	if s.InterNodeTLS {
@@ -173,9 +228,19 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 		quote := func(p string) string { v, _ := json.Marshal(path(p)); return string(v) }
 		opts := "[{server, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true}]},\n{client, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer}]}].\n"
 		files = append(files, renderedFile{"inter_node_tls.config", opts, 0600})
+		serverOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true}]"
+		clientOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer}]"
+		advanced = "[{osiris,[{replication_transport,ssl},{replication_server_ssl_options," + serverOptions + "},{replication_client_ssl_options," + clientOptions + "}]}].\n"
 		dist = "-proto_dist inet6_tls -ssl_dist_optfile " + path("inter_node_tls.config")
 	}
-	env := []string{"HOME=" + path("home"), "RABBITMQ_NODENAME=" + s.NodeName, "RABBITMQ_MNESIA_BASE=" + filepath.Join(dir, "rabbitmq"), "RABBITMQ_CONFIG_FILE=" + path("rabbitmq.conf"), "RABBITMQ_ENABLED_PLUGINS_FILE=" + path("enabled_plugins"), "RABBITMQ_LOG_BASE=" + path("logs"), "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=" + dist, "RABBITMQ_CTL_ERL_ARGS=" + dist}
+	files = append(files, renderedFile{"advanced.config", advanced, 0600})
+	schedulers := cpuSchedulers()
+	flags := fmt.Sprintf("+S %d:%d +SDcpu %d:%d +SDio 2 +A 4", schedulers, schedulers, schedulers, schedulers)
+	// Discovery peers inherit scheduler caps, but RabbitMQ explicitly replays
+	// distribution arguments into their argv. Keep dist options out of inherited
+	// ERL_FLAGS to avoid a duplicate ssl_dist_optfile, which aborts ssl_dist_sup.
+	// The CLI wrapper replaces ERL_FLAGS, so its dedicated flags include both.
+	env := []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C.UTF-8", "LC_ALL=C.UTF-8", "HOME=" + path("home"), "RABBITMQ_NODENAME=" + s.NodeName, "RABBITMQ_MNESIA_BASE=" + filepath.Join(dir, "rabbitmq"), "RABBITMQ_CONFIG_FILE=" + path("rabbitmq.conf"), "RABBITMQ_ADVANCED_CONFIG_FILE=" + path("advanced.config"), "RABBITMQ_ENABLED_PLUGINS_FILE=" + path("enabled_plugins"), "RABBITMQ_LOG_BASE=" + path("logs"), "ERL_FLAGS=" + flags, "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=" + dist, "RABBITMQ_CTL_ERL_ARGS=" + flags + " " + dist}
 	return files, env
 }
 func restartFingerprint(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) [32]byte {
@@ -216,6 +281,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	e.env = env
 	fingerprint := restartFingerprint(n.DataDir(), s, c)
 	states, maintenance := n.Snapshot()
+	if e.appStoppedPID != states[process].PID {
+		e.appStoppedPID = 0
+	}
 	// An explicit generic supervisor start also releases a transient stop.
 	if states[process].PID != 0 {
 		e.stopped = false

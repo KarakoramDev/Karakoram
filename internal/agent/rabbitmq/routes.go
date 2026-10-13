@@ -57,7 +57,10 @@ func command(ctx context.Context, env []string, tool string, stdin io.Reader, ti
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary(tool), args...)
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = env
+	if cmd.Env == nil {
+		cmd.Env = []string{}
+	}
 	cmd.Stdin = stdin
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
@@ -92,6 +95,25 @@ func (e *Runner) cli(ctx context.Context, tool string, stdin io.Reader, args ...
 	return command(ctx, env, tool, stdin, 60*time.Second, args...)
 }
 func jsonArgs(args ...string) []string { return append(args, "--quiet", "--formatter", "json") }
+func checkQueueResults(out []byte) error {
+	var results []struct {
+		VHost  string `json:"vhost"`
+		Name   string `json:"name"`
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal(out, &results); err != nil {
+		return fmt.Errorf("invalid queue membership JSON: %w", err)
+	}
+	if bytes.Equal(bytes.TrimSpace(out), []byte("null")) {
+		return errors.New("missing queue membership results")
+	}
+	for _, result := range results {
+		if result.Result != "ok" {
+			return fmt.Errorf("queue membership change failed for %q in %q: %s", result.Name, result.VHost, result.Result)
+		}
+	}
+	return nil
+}
 func decode(r *http.Request, v any) error {
 	data, err := io.ReadAll(io.LimitReader(r.Body, 16385))
 	if err != nil || len(data) > 16384 || len(bytes.TrimSpace(data)) == 0 || bytes.TrimSpace(data)[0] != '{' {
@@ -112,7 +134,7 @@ func validName(s string) bool {
 	return len(s) > 0 && len(s) <= 255 && utf8.ValidString(s) && !strings.HasPrefix(s, "-") && !strings.ContainsAny(s, "\x00\r\n")
 }
 func (e *Runner) Routes(mux *http.ServeMux, n *agent.Node) {
-	for _, action := range []string{"status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
+	for _, action := range []string{"status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "stop-app", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
 		mux.HandleFunc("POST /v1/rabbitmq/"+action, func(w http.ResponseWriter, r *http.Request) {
 			var request any
 			switch action {
@@ -308,26 +330,65 @@ func (e *Runner) execute(ctx context.Context, n *agent.Node, action string, requ
 			e.mu.Unlock()
 			return ok, n.Action(ctx, process, "stop")
 		}
-		if err := run("rabbitmq-upgrade", "drain"); err != nil {
-			return nil, err
+		e.mu.Lock()
+		appStopped := e.appStoppedPID == states[process].PID
+		e.mu.Unlock()
+		if !appStopped {
+			if err := run("rabbitmq-upgrade", "drain"); err != nil {
+				return nil, err
+			}
 		}
 		// Disarm supervision before shutdown, otherwise the exit schedules a restart.
 		e.mu.Lock()
 		e.stopped = true
 		e.mu.Unlock()
 		return ok, n.Action(ctx, process, "stop")
+	case "stop-app":
+		if err := run("rabbitmqctl", "stop_app"); err != nil {
+			return nil, err
+		}
+		states, _ := n.Snapshot()
+		e.mu.Lock()
+		e.appStoppedPID = states[process].PID
+		e.mu.Unlock()
+		return ok, nil
 	case "start":
+		// Application-level starts must honor the same holds as process starts.
+		if n.Maintenance() || n.Stopped(process) {
+			return ok, nil
+		}
+		if desired := n.Config().DesiredProcesses; desired != nil && !slices.Contains(desired, process) {
+			return ok, nil
+		}
+		states, _ := n.Snapshot()
+		e.mu.Lock()
+		appStopped := e.appStoppedPID != 0 && e.appStoppedPID == states[process].PID
+		e.mu.Unlock()
 		if err := n.Action(ctx, process, "start"); err != nil {
 			return nil, err
 		}
+		if appStopped {
+			if err := run("rabbitmqctl", "start_app"); err != nil {
+				return nil, err
+			}
+		}
 		e.mu.Lock()
 		e.stopped = false
+		e.appStoppedPID = 0
 		e.mu.Unlock()
 		return ok, nil
 	case "grow":
-		return ok, run("rabbitmq-queues", "grow", request.(*rmqspec.NodeRequest).Node, "all")
+		out, err := e.cli(ctx, "rabbitmq-queues", nil, jsonArgs("grow", request.(*rmqspec.NodeRequest).Node, "all")...)
+		if err != nil {
+			return nil, err
+		}
+		return ok, checkQueueResults(out)
 	case "shrink":
-		return ok, run("rabbitmq-queues", "shrink", request.(*rmqspec.NodeRequest).Node)
+		out, err := e.cli(ctx, "rabbitmq-queues", nil, jsonArgs("shrink", request.(*rmqspec.NodeRequest).Node)...)
+		if err != nil {
+			return nil, err
+		}
+		return ok, checkQueueResults(out)
 	case "rebalance":
 		return ok, run("rabbitmq-queues", "rebalance", "all")
 	case "enable-feature-flags":

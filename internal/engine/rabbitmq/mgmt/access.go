@@ -114,13 +114,15 @@ func (c *Client) DeleteVhostLimit(ctx context.Context, vhost, name string) error
 	return c.request(ctx, "DELETE", []string{"vhost-limits", vhost, name}, nil, nil)
 }
 
-// Queue describes replica placement needed for safe stream membership changes.
+// Queue describes queue durability and placement needed for safe membership changes.
 type Queue struct {
 	Name    string   `json:"name"`
 	Vhost   string   `json:"vhost"`
 	Type    string   `json:"type"`
 	Members []string `json:"members"`
 	Leader  string   `json:"leader"`
+	Durable bool     `json:"durable"`
+	Node    string   `json:"node"`
 }
 
 func (c *Client) Queues(ctx context.Context) ([]Queue, error) {
