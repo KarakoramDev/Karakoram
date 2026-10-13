@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-// Package backupstorage verifies S3-compatible backup destinations without exposing credentials.
+// Package backupstorage provides guarded S3 clients, storage verification and retained-snapshot cleanup.
 package backupstorage
 
 import (
@@ -122,6 +122,13 @@ func verify(ctx context.Context, s domain.BackupStorage, c domain.StorageCredent
 		return probeError("delete probe "+key, deleteErr)
 	}
 	return nil
+}
+
+// NewClient constructs an S3 client with the same endpoint, TLS and redirect
+// policy as storage verification. Credentials must come from the sealed store.
+// The returned cleanup function releases the client's idle connections.
+func NewClient(s domain.BackupStorage, c domain.StorageCredentials) (*minio.Client, func(), error) {
+	return newClient(s, c, nil)
 }
 
 // newClient shares the verifier's outbound policy with retained-snapshot cleanup.
