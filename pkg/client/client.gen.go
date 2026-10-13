@@ -136,6 +136,18 @@ const (
 	IPV6 ExposurePatchIpType = "IPV6"
 )
 
+// Defines values for ExtraResourcesInputCpuMode.
+const (
+	ExtraResourcesInputCpuModeDEDICATED ExtraResourcesInputCpuMode = "DEDICATED"
+	ExtraResourcesInputCpuModeSHARED    ExtraResourcesInputCpuMode = "SHARED"
+)
+
+// Defines values for ExtraResourcesPatchCpuMode.
+const (
+	ExtraResourcesPatchCpuModeDEDICATED ExtraResourcesPatchCpuMode = "DEDICATED"
+	ExtraResourcesPatchCpuModeSHARED    ExtraResourcesPatchCpuMode = "SHARED"
+)
+
 // Defines values for HealthStatus.
 const (
 	Ok HealthStatus = "ok"
@@ -1097,9 +1109,11 @@ type ElasticAPIKey struct {
 // ElasticAPIKeyCreate defines model for ElasticAPIKeyCreate.
 type ElasticAPIKeyCreate struct {
 	// Expiration Elasticsearch duration, for example 1d.
-	Expiration      *string                           `json:"expiration,omitempty"`
-	Name            string                            `json:"name"`
-	RoleDescriptors *map[string]ElasticRoleDescriptor `json:"roleDescriptors,omitempty"`
+	Expiration *string `json:"expiration,omitempty"`
+	Name       string  `json:"name"`
+
+	// RoleDescriptors Explicit scoped permissions are required; keys cannot inherit the control-plane identity's privileges.
+	RoleDescriptors map[string]ElasticRoleDescriptor `json:"roleDescriptors"`
 }
 
 // ElasticAPIKeyCreated Sensitive one-time API key secret; never cached. Store it securely.
@@ -1126,11 +1140,23 @@ type ElasticApplicationPrivileges struct {
 	Resources   []string `json:"resources"`
 }
 
+// ElasticFieldSecurity Field-level security; omitted lists and explicitly empty lists are distinct.
+type ElasticFieldSecurity struct {
+	Except *[]string `json:"except,omitempty"`
+	Grant  *[]string `json:"grant,omitempty"`
+}
+
 // ElasticIndexPrivileges defines model for ElasticIndexPrivileges.
 type ElasticIndexPrivileges struct {
-	AllowRestrictedIndices bool     `json:"allowRestrictedIndices"`
-	Names                  []string `json:"names"`
-	Privileges             []string `json:"privileges"`
+	AllowRestrictedIndices bool `json:"allowRestrictedIndices"`
+
+	// FieldSecurity Field-level security; omitted lists and explicitly empty lists are distinct.
+	FieldSecurity *ElasticFieldSecurity `json:"fieldSecurity,omitempty"`
+	Names         []string              `json:"names"`
+	Privileges    []string              `json:"privileges"`
+
+	// Query Opaque Elasticsearch document-level security query JSON.
+	Query *string `json:"query,omitempty"`
 }
 
 // ElasticRole Built-in roles are readable but immutable; Karakoram-managed roles are hidden.
@@ -1298,15 +1324,49 @@ type ExposurePatchIpType string
 // ExtraComponentInput defines model for ExtraComponentInput.
 type ExtraComponentInput struct {
 	// Replicas Zero disables an optional component when supported by the provider.
-	Replicas  *int            `json:"replicas,omitempty"`
-	Resources *ResourcesInput `json:"resources,omitempty"`
+	Replicas *int `json:"replicas,omitempty"`
+
+	// Resources Resources for provider extension components, including stateless components with no data disk.
+	Resources *ExtraResourcesInput `json:"resources,omitempty"`
 }
 
 // ExtraComponentPatch defines model for ExtraComponentPatch.
 type ExtraComponentPatch struct {
-	Replicas  *int            `json:"replicas"`
-	Resources *ResourcesPatch `json:"resources"`
+	Replicas *int `json:"replicas"`
+
+	// Resources Partial resources for provider extension components, including stateless components with no data disk.
+	Resources *ExtraResourcesPatch `json:"resources"`
 }
+
+// ExtraResourcesInput Resources for provider extension components, including stateless components with no data disk.
+type ExtraResourcesInput struct {
+	CpuMode  *ExtraResourcesInputCpuMode `json:"cpuMode,omitempty"`
+	MaxCpu   *float32                    `json:"maxCpu,omitempty"`
+	MaxDisk  *float32                    `json:"maxDisk,omitempty"`
+	MaxRam   *float32                    `json:"maxRam,omitempty"`
+	MinCpu   *float32                    `json:"minCpu,omitempty"`
+	MinDisk  *float32                    `json:"minDisk,omitempty"`
+	MinRam   *float32                    `json:"minRam,omitempty"`
+	StartCpu *float32                    `json:"startCpu,omitempty"`
+}
+
+// ExtraResourcesInputCpuMode defines model for ExtraResourcesInput.CpuMode.
+type ExtraResourcesInputCpuMode string
+
+// ExtraResourcesPatch Partial resources for provider extension components, including stateless components with no data disk.
+type ExtraResourcesPatch struct {
+	CpuMode  *ExtraResourcesPatchCpuMode `json:"cpuMode"`
+	MaxCpu   *float32                    `json:"maxCpu"`
+	MaxDisk  *float32                    `json:"maxDisk"`
+	MaxRam   *float32                    `json:"maxRam"`
+	MinCpu   *float32                    `json:"minCpu"`
+	MinDisk  *float32                    `json:"minDisk"`
+	MinRam   *float32                    `json:"minRam"`
+	StartCpu *float32                    `json:"startCpu"`
+}
+
+// ExtraResourcesPatchCpuMode defines model for ExtraResourcesPatch.CpuMode.
+type ExtraResourcesPatchCpuMode string
 
 // Health defines model for Health.
 type Health struct {

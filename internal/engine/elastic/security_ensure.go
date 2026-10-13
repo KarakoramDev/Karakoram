@@ -46,19 +46,6 @@ func (p *Provider) es(ctx context.Context, rc *engine.Context, s *state) (*esapi
 	}
 	return esapi.New(cfg)
 }
-func nativeRole(r Role) esapi.Role {
-	out := esapi.Role{Cluster: r.Cluster, Indices: make([]esapi.IndexPrivileges, len(r.Indices))}
-	for i, index := range r.Indices {
-		out.Indices[i] = esapi.IndexPrivileges(index)
-	}
-	if len(r.Applications) > 0 {
-		out.Applications = make([]esapi.ApplicationPrivileges, len(r.Applications))
-		for i, application := range r.Applications {
-			out.Applications[i] = esapi.ApplicationPrivileges(application)
-		}
-	}
-	return out
-}
 func (p *Provider) ensureSecurity(ctx context.Context, rc *engine.Context, s *state, force bool) error {
 	values := map[string]string{}
 	for _, key := range []string{secretElastic, secretLogstash, secretAPM} {
@@ -161,7 +148,7 @@ func (p *Provider) ensureSecurity(ctx context.Context, rc *engine.Context, s *st
 		role, user, key string
 		definition      Role
 	}{{LogstashWriterRole, LogstashUser, secretLogstash, LogstashRoleDefinition()}, {APMWriterRole, APMUser, secretAPM, APMRoleDefinition()}} {
-		if err = c.PutRole(ctx, entry.role, nativeRole(entry.definition)); err != nil {
+		if err = c.PutRole(ctx, entry.role, roleToES(entry.definition)); err != nil {
 			return err
 		}
 		enabled := true

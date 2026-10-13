@@ -2377,7 +2377,8 @@ export type components = {
             /** @description Elasticsearch duration, for example 1d. */
             expiration?: string;
             name: string;
-            roleDescriptors?: {
+            /** @description Explicit scoped permissions are required; keys cannot inherit the control-plane identity's privileges. */
+            roleDescriptors: {
                 [key: string]: components["schemas"]["ElasticRoleDescriptor"];
             };
         };
@@ -2402,10 +2403,18 @@ export type components = {
             privileges: string[];
             resources: string[];
         };
+        /** @description Field-level security; omitted lists and explicitly empty lists are distinct. */
+        ElasticFieldSecurity: {
+            except?: string[];
+            grant?: string[];
+        };
         ElasticIndexPrivileges: {
             allowRestrictedIndices: boolean;
+            fieldSecurity?: components["schemas"]["ElasticFieldSecurity"];
             names: string[];
             privileges: string[];
+            /** @description Opaque Elasticsearch document-level security query JSON. */
+            query?: string;
         };
         /** @description Built-in roles are readable but immutable; Karakoram-managed roles are hidden. */
         ElasticRole: {
@@ -2551,11 +2560,35 @@ export type components = {
         ExtraComponentInput: {
             /** @description Zero disables an optional component when supported by the provider. */
             replicas?: number;
-            resources?: components["schemas"]["ResourcesInput"];
+            resources?: components["schemas"]["ExtraResourcesInput"];
         };
         ExtraComponentPatch: {
             replicas?: number | null;
-            resources?: components["schemas"]["ResourcesPatch"];
+            resources?: components["schemas"]["ExtraResourcesPatch"];
+        } | null;
+        /** @description Resources for provider extension components, including stateless components with no data disk. */
+        ExtraResourcesInput: {
+            /** @enum {string} */
+            cpuMode?: "SHARED" | "DEDICATED";
+            maxCpu?: number;
+            maxDisk?: number;
+            maxRam?: number;
+            minCpu?: number;
+            minDisk?: number;
+            minRam?: number;
+            startCpu?: number;
+        };
+        /** @description Partial resources for provider extension components, including stateless components with no data disk. */
+        ExtraResourcesPatch: {
+            /** @enum {string|null} */
+            cpuMode?: "SHARED" | "DEDICATED" | null;
+            maxCpu?: number | null;
+            maxDisk?: number | null;
+            maxRam?: number | null;
+            minCpu?: number | null;
+            minDisk?: number | null;
+            minRam?: number | null;
+            startCpu?: number | null;
         } | null;
         Health: {
             database: boolean;

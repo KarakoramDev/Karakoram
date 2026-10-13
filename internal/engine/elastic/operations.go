@@ -71,6 +71,14 @@ func (p *Provider) runOperation(ctx context.Context, rc *engine.Context, s *stat
 		}
 	}
 	switch op.Kind {
+	case domain.OperationBackup, domain.OperationRestore, domain.OperationRotateTLS, domain.OperationRotateSystemUser:
+		if cp.Stage == "" {
+			if err := disruptiveOperationReady(rc, s); err != nil {
+				return operationResult(cp, true), err
+			}
+		}
+	}
+	switch op.Kind {
 	case domain.OperationBackup:
 		return p.runBackup(ctx, rc, s, op, cp, payload["backup"])
 	case domain.OperationDeleteBackup:
@@ -195,7 +203,7 @@ func (p *Provider) runReplaceMember(ctx context.Context, rc *engine.Context, s *
 
 func disruptiveOperationReady(rc *engine.Context, s *state) error {
 	if s.ClusterUUID == "" || s.Suspended || rc.Cluster.Deleting || rc.Cluster.Status.Phase == domain.PhaseDeleting || rc.Cluster.Status.Phase == domain.PhaseSuspended {
-		return fmt.Errorf("%w: restart and replacement require a formed, active cluster", engine.ErrConflict)
+		return fmt.Errorf("%w: operation requires a formed, active cluster", engine.ErrConflict)
 	}
 	for _, m := range s.esNodes() {
 		if m.Stage != stageJoined {

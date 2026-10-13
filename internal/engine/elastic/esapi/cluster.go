@@ -252,8 +252,9 @@ func (c *Client) ReloadSecureSettings(ctx context.Context) error {
 	return nil
 }
 
-// MaxIndexReplicas returns the largest replica requirement, including auto-expand.
-func (c *Client) MaxIndexReplicas(ctx context.Context) (int, error) {
+// MaxIndexReplicas returns the largest replica requirement for the projected
+// data-node count after removal, including auto-expand bounds.
+func (c *Client) MaxIndexReplicas(ctx context.Context, dataNodes int) (int, error) {
 	var indices map[string]struct {
 		Settings map[string]json.RawMessage `json:"settings"`
 	}
@@ -261,7 +262,7 @@ func (c *Client) MaxIndexReplicas(ctx context.Context) (int, error) {
 	if err := c.do(ctx, "GET", "/_all/_settings", q, nil, &indices); err != nil {
 		return 0, err
 	}
-	maximum, dataNodes := 0, -1
+	maximum := 0
 	for _, index := range indices {
 		raw, ok := index.Settings["index.number_of_replicas"]
 		if !ok {
@@ -290,20 +291,13 @@ func (c *Client) MaxIndexReplicas(ctx context.Context) (int, error) {
 				if !ok || e != nil || minimum < 0 {
 					return 0, errors.New("invalid index auto-expand replicas")
 				}
-				if upper == "all" {
-					if dataNodes < 0 {
-						h, e := c.Health(ctx, HealthOptions{})
-						if e != nil {
-							return 0, e
-						}
-						dataNodes = h.NumberOfDataNodes
-					}
-					count = max(0, dataNodes-1)
-				} else {
-					count, err = strconv.Atoi(upper)
-					if err != nil || count < minimum {
+				count = max(minimum, dataNodes-1)
+				if upper != "all" {
+					limit, err := strconv.Atoi(upper)
+					if err != nil || limit < minimum {
 						return 0, errors.New("invalid index auto-expand replicas")
 					}
+					count = min(count, limit)
 				}
 			}
 		}

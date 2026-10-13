@@ -139,8 +139,8 @@ func TestRESTMethods(t *testing.T) {
 			}
 			return e
 		}},
-		{name: "key-create", method: "POST", path: "/_security/api_key", body: `{"name":"key","expiration":"1h"}`, response: `{"id":"id","name":"key","api_key":"secret","encoded":"encoded","expiration":42}`, call: func(c *Client) error {
-			v, e := c.CreateAPIKey(ctx, APIKeyRequest{Name: "key", Expiration: "1h"})
+		{name: "key-create", method: "POST", path: "/_security/api_key", body: `{"name":"key","expiration":"1h","role_descriptors":{"monitor":{"cluster":["monitor"]}}}`, response: `{"id":"id","name":"key","api_key":"secret","encoded":"encoded","expiration":42}`, call: func(c *Client) error {
+			v, e := c.CreateAPIKey(ctx, APIKeyRequest{Name: "key", Expiration: "1h", RoleDescriptors: map[string]Role{"monitor": {Cluster: []string{"monitor"}}}})
 			if v.ID != "id" || v.APIKey != "secret" || v.Encoded != "encoded" || v.Expiration != 42 {
 				t.Error(v)
 			}
@@ -475,16 +475,20 @@ func TestMalformedAndStringErrors(t *testing.T) {
 
 func TestMaxIndexReplicas(t *testing.T) {
 	for _, tc := range []struct {
-		name, settings string
-		nodes, want    int
-		fail           bool
+		name, settings       string
+		projectedNodes, want int
+		fail                 bool
 	}{
 		{"analyzer-arrays", `"index.number_of_replicas":"2","index.analysis.analyzer.custom.filter":["lowercase","stop"]`, 3, 2, false},
 		{"numeric", `"index.number_of_replicas":3`, 4, 3, false},
 		{"disabled", `"index.number_of_replicas":"2","index.auto_expand_replicas":false`, 3, 2, false},
 		{"disabled-string", `"index.number_of_replicas":"2","index.auto_expand_replicas":"false"`, 3, 2, false},
-		{"bounded", `"index.number_of_replicas":"1","index.auto_expand_replicas":"1-5"`, 3, 5, false},
-		{"all", `"index.number_of_replicas":"0","index.auto_expand_replicas":"0-all"`, 4, 3, false},
+		{"bounded", `"index.number_of_replicas":"1","index.auto_expand_replicas":"1-5"`, 2, 1, false},
+		{"bounded-current-above-projection", `"index.number_of_replicas":"5","index.auto_expand_replicas":"0-5"`, 2, 1, false},
+		{"bounded-at-upper", `"index.number_of_replicas":"1","index.auto_expand_replicas":"1-5"`, 8, 5, false},
+		{"bounded-at-lower", `"index.number_of_replicas":"2","index.auto_expand_replicas":"2-5"`, 1, 2, false},
+		{"all", `"index.number_of_replicas":"3","index.auto_expand_replicas":"0-all"`, 3, 2, false},
+		{"all-at-lower", `"index.number_of_replicas":"3","index.auto_expand_replicas":"2-all"`, 2, 2, false},
 		{"single-all", `"index.number_of_replicas":"0","index.auto_expand_replicas":"0-all"`, 1, 0, false},
 		{"missing", `"index.analysis.filter.stop.stopwords":["a","the"]`, 3, 0, true},
 		{"negative", `"index.number_of_replicas":"-1"`, 3, 0, true},
@@ -499,14 +503,12 @@ func TestMaxIndexReplicas(t *testing.T) {
 						t.Error("replica settings request is not restricted", r.URL)
 					}
 					fmt.Fprintf(w, `{"logs":{"settings":{%s}},"other":{"settings":{"index.number_of_replicas":"0"}}}`, tc.settings)
-				case "/_cluster/health":
-					fmt.Fprintf(w, `{"number_of_data_nodes":%d}`, tc.nodes)
 				default:
 					t.Error("unexpected request", r.URL)
 					http.Error(w, "unexpected", 500)
 				}
 			})
-			got, err := c.MaxIndexReplicas(context.Background())
+			got, err := c.MaxIndexReplicas(context.Background(), tc.projectedNodes)
 			if (err != nil) != tc.fail || (!tc.fail && got != tc.want) {
 				t.Fatalf("replicas=%d err=%v, want %d failure=%v", got, err, tc.want, tc.fail)
 			}

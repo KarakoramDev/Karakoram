@@ -14,12 +14,16 @@ import (
 )
 
 func elasticUserAPI(u elastic.User) api.ElasticUser {
-	return api.ElasticUser{Username: u.Username, Roles: u.Roles, FullName: optionalString(u.FullName), Email: optionalString(u.Email), Enabled: u.Enabled}
+	return api.ElasticUser{Username: u.Username, Roles: nonNil(u.Roles), FullName: optionalString(u.FullName), Email: optionalString(u.Email), Enabled: u.Enabled}
 }
 func elasticDescriptorDomain(cluster []string, indices []api.ElasticIndexPrivileges, applications []api.ElasticApplicationPrivileges) elastic.Role {
 	r := elastic.Role{Cluster: cluster, Indices: make([]elastic.IndexPrivileges, 0, len(indices)), Applications: make([]elastic.ApplicationPrivileges, 0, len(applications))}
 	for _, v := range indices {
-		r.Indices = append(r.Indices, elastic.IndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices})
+		index := elastic.IndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices, Query: v.Query}
+		if v.FieldSecurity != nil {
+			index.FieldSecurity = &elastic.FieldSecurity{Grant: v.FieldSecurity.Grant, Except: v.FieldSecurity.Except}
+		}
+		r.Indices = append(r.Indices, index)
 	}
 	for _, v := range applications {
 		r.Applications = append(r.Applications, elastic.ApplicationPrivileges{Application: v.Application, Privileges: v.Privileges, Resources: v.Resources})
@@ -27,12 +31,16 @@ func elasticDescriptorDomain(cluster []string, indices []api.ElasticIndexPrivile
 	return r
 }
 func elasticRoleAPI(r elastic.AccessRole) api.ElasticRole {
-	out := api.ElasticRole{Name: r.Name, Reserved: ptr(r.Reserved), Cluster: r.Cluster, Indices: make([]api.ElasticIndexPrivileges, 0, len(r.Indices)), Applications: make([]api.ElasticApplicationPrivileges, 0, len(r.Applications))}
+	out := api.ElasticRole{Name: r.Name, Reserved: ptr(r.Reserved), Cluster: nonNil(r.Cluster), Indices: make([]api.ElasticIndexPrivileges, 0, len(r.Indices)), Applications: make([]api.ElasticApplicationPrivileges, 0, len(r.Applications))}
 	for _, v := range r.Indices {
-		out.Indices = append(out.Indices, api.ElasticIndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices})
+		index := api.ElasticIndexPrivileges{Names: nonNil(v.Names), Privileges: nonNil(v.Privileges), AllowRestrictedIndices: v.AllowRestrictedIndices, Query: v.Query}
+		if v.FieldSecurity != nil {
+			index.FieldSecurity = &api.ElasticFieldSecurity{Grant: v.FieldSecurity.Grant, Except: v.FieldSecurity.Except}
+		}
+		out.Indices = append(out.Indices, index)
 	}
 	for _, v := range r.Applications {
-		out.Applications = append(out.Applications, api.ElasticApplicationPrivileges{Application: v.Application, Privileges: v.Privileges, Resources: v.Resources})
+		out.Applications = append(out.Applications, api.ElasticApplicationPrivileges{Application: v.Application, Privileges: nonNil(v.Privileges), Resources: nonNil(v.Resources)})
 	}
 	return out
 }
@@ -146,12 +154,12 @@ func (s *Server) elasticAccess(ctx context.Context, name string, in input) respo
 		return listResponse(s, ctx, out, nil)
 	case "CreateElasticAPIKey":
 		b := in.Body.(*api.ElasticAPIKeyCreate)
-		req := elastic.APIKeyCreate{Name: b.Name, Expiration: value(b.Expiration)}
-		if b.RoleDescriptors != nil {
-			req.RoleDescriptors = make(map[string]elastic.RoleDescriptor, len(*b.RoleDescriptors))
-			for name, r := range *b.RoleDescriptors {
-				req.RoleDescriptors[name] = elasticDescriptorDomain(r.Cluster, r.Indices, r.Applications)
-			}
+		if len(b.RoleDescriptors) == 0 {
+			return invalid()
+		}
+		req := elastic.APIKeyCreate{Name: b.Name, Expiration: value(b.Expiration), RoleDescriptors: make(map[string]elastic.RoleDescriptor, len(b.RoleDescriptors))}
+		for name, r := range b.RoleDescriptors {
+			req.RoleDescriptors[name] = elasticDescriptorDomain(r.Cluster, r.Indices, r.Applications)
 		}
 		k, err := access.CreateAPIKey(ctx, rc, req)
 		if err != nil {

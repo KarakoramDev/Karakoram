@@ -6,12 +6,14 @@ package elastic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -180,5 +182,44 @@ func TestRestoreVersionCompatibility(t *testing.T) {
 		if got := restoreVersionCompatible(tc.source, tc.target); got != tc.want {
 			t.Fatalf("%s -> %s: %v", tc.source, tc.target, got)
 		}
+	}
+}
+
+type restoreBackupLookupStore struct {
+	*opsStore
+	lookups int
+}
+
+func (s *restoreBackupLookupStore) GetBackup(context.Context, domain.ClusterRef, string) (*domain.Backup, error) {
+	s.lookups++
+	return nil, engine.ErrNotFound
+}
+
+func TestRestoreRejectsInvalidSourceBeforeBackupLookup(t *testing.T) {
+	for _, source := range []string{"pitr", "missing-backup"} {
+		t.Run(source, func(t *testing.T) {
+			st := &restoreBackupLookupStore{opsStore: &opsStore{restore: domain.Restore{Name: "invalid-source", Phase: domain.PhasePending}}}
+			if source == "pitr" {
+				at := operationNow(&engine.Context{})
+				st.restore.Source.PITRTime = &at
+			}
+			rc := &engine.Context{Cluster: &domain.Cluster{Name: "test"}, Store: st}
+			s := &state{ClusterUUID: "formed"}
+			op := &domain.Operation{Kind: domain.OperationRestore, Payload: []byte(`{"restore":"invalid-source"}`)}
+			p := New(ProviderOptions{})
+			result, err := p.runOperation(context.Background(), rc, s, op)
+			if !result.Done || !errors.Is(err, engine.ErrInvalid) || st.lookups != 0 || st.restore.Phase != domain.PhaseFailed || st.restore.CompletedAt == nil || st.restore.Error == "" || s.RestoreActive {
+				t.Fatalf("invalid source was not terminal before lookup: %+v %v %+v lookups=%d", result, err, st.restore, st.lookups)
+			}
+			cp := opsCheckpoint(t, result)
+			if cp.Stage != "done" || cp.Failure == "" {
+				t.Fatal("terminal failure checkpoint missing", cp)
+			}
+			op.Checkpoint = result.Checkpoint
+			result, err = p.runOperation(context.Background(), rc, s, op)
+			if !result.Done || err == nil || st.lookups != 0 {
+				t.Fatal("terminal failure retried backup lookup", result, err)
+			}
+		})
 	}
 }

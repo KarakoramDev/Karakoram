@@ -5,6 +5,7 @@ package esapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 )
@@ -21,9 +22,48 @@ type User struct {
 
 // IndexPrivileges grants privileges to the selected index patterns.
 type IndexPrivileges struct {
-	Names                  []string `json:"names"`
-	Privileges             []string `json:"privileges"`
-	AllowRestrictedIndices bool     `json:"allow_restricted_indices"`
+	Names                  []string       `json:"names"`
+	Privileges             []string       `json:"privileges"`
+	AllowRestrictedIndices bool           `json:"allow_restricted_indices"`
+	Query                  *string        `json:"query,omitempty"`
+	FieldSecurity          *FieldSecurity `json:"field_security,omitempty"`
+}
+
+// FieldSecurity preserves absent and explicitly empty field lists separately.
+// An empty grant list must not become an omitted (unrestricted) grant.
+type FieldSecurity struct {
+	Grant  *[]string `json:"grant,omitempty"`
+	Except *[]string `json:"except,omitempty"`
+}
+
+// UnmarshalJSON accepts Elasticsearch's string and object forms of a DLS query.
+// The public API carries both as opaque query JSON strings.
+func (p *IndexPrivileges) UnmarshalJSON(data []byte) error {
+	type privileges IndexPrivileges
+	var v struct {
+		*privileges
+		Query json.RawMessage `json:"query"`
+	}
+	v.privileges = (*privileges)(p)
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	p.Query = nil
+	if len(v.Query) == 0 || string(v.Query) == "null" {
+		return nil
+	}
+	var query string
+	if v.Query[0] == '"' {
+		if err := json.Unmarshal(v.Query, &query); err != nil {
+			return err
+		}
+	} else if v.Query[0] == '{' {
+		query = string(v.Query)
+	} else {
+		return errors.New("document-level query must be a string or object")
+	}
+	p.Query = &query
+	return nil
 }
 
 // ApplicationPrivileges grants application-defined privileges.
@@ -133,11 +173,11 @@ func (c *Client) Authenticate(ctx context.Context) (Authentication, error) {
 	return v, err
 }
 
-// APIKeyRequest specifies a new API key and optional scoped permissions.
+// APIKeyRequest specifies a new API key with explicit scoped permissions.
 type APIKeyRequest struct {
 	Name            string          `json:"name"`
 	Expiration      string          `json:"expiration,omitempty"`
-	RoleDescriptors map[string]Role `json:"role_descriptors,omitempty"`
+	RoleDescriptors map[string]Role `json:"role_descriptors"`
 	Metadata        map[string]any  `json:"metadata,omitempty"`
 }
 
@@ -164,6 +204,9 @@ type APIKeyInfo struct {
 
 // CreateAPIKey creates a key, returning its secret only in this response.
 func (c *Client) CreateAPIKey(ctx context.Context, req APIKeyRequest) (APIKey, error) {
+	if len(req.RoleDescriptors) == 0 {
+		return APIKey{}, errors.New("API key requires at least one role descriptor")
+	}
 	var v APIKey
 	err := c.do(ctx, "POST", "/_security/api_key", nil, req, &v)
 	return v, err

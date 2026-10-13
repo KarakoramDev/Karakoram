@@ -34,9 +34,17 @@ type Role struct {
 
 // IndexPrivileges grants privileges over a set of index patterns.
 type IndexPrivileges struct {
-	Names                  []string `json:"names" yaml:"names"`
-	Privileges             []string `json:"privileges" yaml:"privileges"`
-	AllowRestrictedIndices bool     `json:"allow_restricted_indices" yaml:"allow_restricted_indices"`
+	Names                  []string       `json:"names" yaml:"names"`
+	Privileges             []string       `json:"privileges" yaml:"privileges"`
+	AllowRestrictedIndices bool           `json:"allow_restricted_indices" yaml:"allow_restricted_indices"`
+	Query                  *string        `json:"query,omitempty" yaml:"query,omitempty"`
+	FieldSecurity          *FieldSecurity `json:"field_security,omitempty" yaml:"field_security,omitempty"`
+}
+
+// FieldSecurity distinguishes omitted field lists from explicit empty lists.
+type FieldSecurity struct {
+	Grant  *[]string `json:"grant,omitempty" yaml:"grant,omitempty"`
+	Except *[]string `json:"except,omitempty" yaml:"except,omitempty"`
 }
 
 // ApplicationPrivileges grants application-defined privileges.

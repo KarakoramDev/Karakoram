@@ -15,6 +15,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
@@ -212,6 +213,22 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *stat
 			return true, 5 * time.Second, err
 		}
 	}
+	if m := s.find(v.Member); m != nil && m.Removing && isES(m) && (v.Action == "stop-removal" || v.Action == "delete-runtime" || v.Action == "delete-volume") {
+		c, err := p.es(ctx, rc, s)
+		if err != nil {
+			return true, 5 * time.Second, err
+		}
+		defer c.Close()
+		h, err := c.Health(ctx, esapi.HealthOptions{})
+		if err != nil {
+			return true, 5 * time.Second, err
+		}
+		if h.Status != "green" && h.Status != "yellow" {
+			s.DrainBlocked = "removal requires all primary shards to be allocated"
+			return true, 5 * time.Second, errWaiting
+		}
+		s.DrainBlocked = ""
+	}
 	s.Retry = nil
 	err := p.issueAction(ctx, rc, s, v)
 	return true, 5 * time.Second, err
@@ -351,6 +368,19 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	if s.Suspended {
+		if s.RestoreActive || s.InitialRestore == "initial-restore" {
+			if rc.Events != nil {
+				if e := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "RestoreAbandoned", Message: "Deletion interrupted snapshot restore; retained data may be partially restored. The restore will not resume automatically", CreatedAt: now(rc)}); e != nil {
+					return result, e
+				}
+			}
+			s.RestoreActive = false
+			s.ResumeRestoreReset = true
+			if s.InitialRestore == "initial-restore" {
+				s.InitialRestore = "abandoned"
+			}
+			p.bumpConfig(s)
+		}
 		s.Suspended = false
 		s.CleanupBackups = false
 		s.CleanupSecrets = false
@@ -359,6 +389,11 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		}
 		s.Phase = "provisioning"
 		return result, nil
+	}
+	// Retire unused clients before resolving settings, including storages whose
+	// inventory entry was already deleted while the cluster was suspended.
+	if changed, e := p.reconcileStorages(ctx, rc, s); changed || e != nil {
+		return result, e
 	}
 	if err = p.skipOccupiedPlans(ctx, rc, s); err != nil {
 		return result, err
@@ -401,6 +436,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if e != nil {
 		return result, e
 	}
+	missingMember := false
 	for _, m := range s.esNodes() {
 		found := false
 		for _, node := range nodes {
@@ -410,9 +446,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			}
 		}
 		if !found {
-			s.Phase = "forming"
-			return result, nil
+			missingMember = true
 		}
+	}
+	if missingMember {
+		s.Phase = "forming"
+		return result, nil
 	}
 	if s.ClusterUUID == "" {
 		info, e := c.Info(ctx)
@@ -459,7 +498,14 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.ResumeVotingReset = false
 		return result, nil
 	}
-	if rc.Cluster.Spec.DataSource != nil && s.InitialRestore != "done" {
+	if s.ResumeRestoreReset {
+		if e = c.PutClusterSettings(ctx, nil, map[string]any{"action.destructive_requires_name": nil}); e != nil {
+			return result, e
+		}
+		s.ResumeRestoreReset = false
+		return result, nil
+	}
+	if rc.Cluster.Spec.DataSource != nil && s.InitialRestore != "done" && s.InitialRestore != "abandoned" {
 		if s.InitialRestore == "" {
 			d := rc.Cluster.Spec.DataSource
 			ns := d.Namespace

@@ -36,6 +36,8 @@ Optional components use one service with multiple containers: Kibana 0–3, Logs
 
 Public API RAM/disk fields are GiB; CPU fields are cores. The starting provider defaults are modest, not production throughput guarantees:
 
+Stateless extension components may report and request zero `minDisk`/`maxDisk`; provider validation still enforces the data-disk requirements of Elasticsearch nodes. Request objects reject undeclared fields, including nested role privileges and field-security objects. Role writes omit the response-only `reserved` flag.
+
 | Component | Starting RAM | Validation floor |
 |---|---|---|
 | Combined/data Elasticsearch node | Fixed 2 GiB | 1.5 GiB |
@@ -258,6 +260,8 @@ Create a role before the user referencing it. Example `role.json`:
 
 A user create body is `{username, password, roles, fullName, email, enabled}`; supply a password of at least eight characters securely on create. Passwords are write-only. Reads cannot recover application passwords. User roles are string names, not MongoDB role/database tuples. Role bodies include `cluster`, `indices` and `applications` privilege arrays; use an empty array where no grant is needed.
 
+Index privileges can also include a document-level `query` (an opaque Elasticsearch query JSON string) and `fieldSecurity` with optional `grant` and `except` field-pattern arrays. Reads and role edits preserve these restrictions, including explicitly empty grant arrays. The UI accepts a JSON array for index privileges when these restrictions are needed, in addition to the simple one-entry-per-line format. API-key descriptors support the same fields.
+
 The Elasticsearch CLI uses these commands and flags:
 
 ```sh
@@ -276,7 +280,7 @@ karactl elasticsearch roles delete search orders-reader
 
 Supply `APP_PASSWORD` securely and keep shell tracing disabled; use `--password-stdin` for password changes rather than an argument containing the secret. For API creation, submit protected JSON with the user body above. Protect `elastic`, built-in users/roles and `karakoram*` identities: the provider owns control, monitor, Kibana and writer credentials and rejects their ordinary CRUD modification.
 
-API-key create bodies use `name`, optional `expiration` and optional `roleDescriptors`. Example for a read-only workload:
+API-key create bodies use `name`, optional `expiration` and a required, nonempty `roleDescriptors` map. Missing or empty descriptors are rejected: keys must never inherit the control-plane superuser identity's permissions. Example for a read-only workload:
 
 ```json
 {
@@ -301,7 +305,7 @@ karactl elasticsearch api-keys list search
 karactl elasticsearch api-keys invalidate search KEY_ID
 ```
 
-Creation returns `id`, `apiKey` and `encoded` **once**; store them immediately and securely. Lists do not reveal key secrets. Prefer explicit expiry and narrow role descriptors rather than an unscoped administrative key. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
+Creation returns `id`, `apiKey` and `encoded` **once**; store them immediately and securely. Lists do not reveal key secrets. Prefer explicit expiry and narrow role descriptors. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
 
 Managed rotation uses the existing system-user operation with identity `elastic`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
 
@@ -309,7 +313,7 @@ Managed rotation uses the existing system-user operation with identity `elastic`
 
 Elasticsearch supports backup type **`snapshot`**, not PBM logical/physical backups or PITR. Register an existing S3 BackupStorage in **Settings → Backup storages** with endpoint, signing region, bucket, prefix and protected keys; see [storage registration](backups-and-restore.md#register-s3-storage). Snapshot traffic goes directly from nodes to storage.
 
-Karakoram creates a named S3 client and verified repository for each referenced storage, with a cluster-UID-unique base path and one writer. Adding/removing a client/storage or changing static endpoint settings requires rolling Elasticsearch maintenance; changing keystore credentials is reloadable without restart. Do not register another writable cluster over the same repository prefix or delete repository files directly.
+Karakoram creates a named S3 client and verified repository for each referenced storage, with a cluster-UID-unique base path and one writer. Adding/removing a client/storage or changing static endpoint settings requires rolling Elasticsearch maintenance; changing keystore credentials is reloadable without restart. Removing a storage from the spec retires its repository registrations and client only after no backup inventory, queued/running restore, or unfinished initial-restore source references it. Repository unregistration does not delete snapshots. An already deleted, unreferenced storage does not block configuration pulls or this retirement rollout. Do not register another writable cluster over the same repository prefix or delete repository files directly.
 
 On 2026-10-13, Elasticsearch 9.5.5 `_verify` and `_analyze` passed against Zerops Object Storage with `blob_count=100`, `max_blob_size=1mb` and `register_operation_count=20`. This is limited compatibility evidence, not a production durability guarantee. Elasticsearch 9.3+ needs S3 conditional writes; incompatible storage must be fixed, not enabled with an unsafe workaround. See [security/snapshot rationale](../adr/0028-elasticsearch-security-and-snapshots.md).
 
@@ -417,7 +421,9 @@ Restart and replace-member operations are rejected until the cluster has formed 
 
 Replacement adds/joins a new node before draining/deleting the old one and needs temporary capacity. Single-node replacement is rejected; recover through snapshot restore. One-node restarts/upgrades have downtime, and two combined nodes cannot maintain quorum with one stopped. Persistent volumes are separate from runtime disks; deleting a cluster with `keepVolumes` and/or `keepBackups` is an explicit retention choice, not a backup guarantee.
 
-With `keepBackups: false`, cleanup first deletes native snapshots in **owned writable** repositories while Elasticsearch remains reachable, before removing infrastructure. It never deletes snapshots from read-only source repositories. If Elasticsearch is unreachable, cleanup records a `SnapshotsRetained` warning, continues infrastructure deletion and leaves snapshots in object storage; this choice is not a promise that object storage was emptied. `keepBackups: true` preserves backups explicitly.
+Deleting with `keepVolumes: true` during a snapshot restore abandons that restore rather than resuming its destructive steps. On resume, Karakoram records a `RestoreAbandoned` warning, clears the restore-owned destructive setting after Elasticsearch rejoins, restores component process intent and skips an interrupted initial-restore checkpoint. **Retained data may be partially restored**; inspect it before allowing workloads and request a fresh explicit snapshot restore if needed. Automatic initial restore is not retried.
+
+With `keepBackups: false`, cleanup first deletes native snapshots in **owned writable** repositories while Elasticsearch remains reachable, before removing infrastructure. Corresponding Backup inventory records are removed only after native snapshot absence is confirmed. It never deletes snapshots from read-only source repositories. If Elasticsearch is unreachable, cleanup records a `SnapshotsRetained` warning, continues infrastructure deletion and leaves snapshots and their inventory records retained; this choice is not a promise that object storage was emptied. `keepBackups: true` preserves backups and their records explicitly.
 
 ## Monitoring
 

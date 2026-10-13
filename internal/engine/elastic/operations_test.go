@@ -181,7 +181,7 @@ func TestSnapshotLocationAndNames(t *testing.T) {
 }
 
 func TestDisruptiveOperationsRequireFormation(t *testing.T) {
-	for _, kind := range []string{domain.OperationRestart, domain.OperationReplaceMember} {
+	for _, kind := range []string{domain.OperationRestart, domain.OperationReplaceMember, domain.OperationBackup, domain.OperationRestore, domain.OperationRotateTLS, domain.OperationRotateSystemUser} {
 		for _, problem := range []string{"uuid", "planned", "imported", "deployed", "deleting", "suspended", "phase-suspended"} {
 			t.Run(string(kind)+"/"+problem, func(t *testing.T) {
 				p := New(ProviderOptions{})

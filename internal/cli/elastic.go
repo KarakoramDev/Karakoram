@@ -158,14 +158,14 @@ func (a *app) runElastic(cmd *cobra.Command, s elasticCommand, args []string) er
 			if cmd.Flags().Changed("expiration") {
 				body["expiration"], _ = cmd.Flags().GetString("expiration")
 			}
-			file, _ := cmd.Flags().GetString("file")
-			if file != "" {
-				descriptors, err := a.fileBody(cmd)
-				if err != nil {
-					return err
-				}
-				body["roleDescriptors"] = descriptors
+			descriptors, err := a.fileBody(cmd)
+			if err != nil {
+				return err
 			}
+			if len(descriptors) == 0 {
+				return fmt.Errorf("API key requires at least one role descriptor")
+			}
+			body["roleDescriptors"] = descriptors
 		}
 	}
 	result, err := a.request(cmd.Context(), s.operation, args, q, body)

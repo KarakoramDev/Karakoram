@@ -44,7 +44,7 @@ type RoleDescriptor = Role
 type APIKeyCreate struct {
 	Name            string                    `json:"name"`
 	Expiration      string                    `json:"expiration,omitempty"`
-	RoleDescriptors map[string]RoleDescriptor `json:"roleDescriptors,omitempty"`
+	RoleDescriptors map[string]RoleDescriptor `json:"roleDescriptors"`
 }
 
 // APIKeyCreated contains a secret returned only when a key is created.
@@ -241,7 +241,10 @@ func roleFromES(name string, r esapi.Role) AccessRole {
 		out.Cluster = []string{}
 	}
 	for i, v := range r.Indices {
-		out.Indices[i] = IndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices}
+		out.Indices[i] = IndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices, Query: v.Query}
+		if v.FieldSecurity != nil {
+			out.Indices[i].FieldSecurity = &FieldSecurity{Grant: v.FieldSecurity.Grant, Except: v.FieldSecurity.Except}
+		}
 	}
 	for i, v := range r.Applications {
 		out.Applications[i] = ApplicationPrivileges{Application: v.Application, Privileges: v.Privileges, Resources: v.Resources}
@@ -251,7 +254,10 @@ func roleFromES(name string, r esapi.Role) AccessRole {
 func roleToES(r Role) esapi.Role {
 	out := esapi.Role{Cluster: r.Cluster, Indices: make([]esapi.IndexPrivileges, len(r.Indices)), Applications: make([]esapi.ApplicationPrivileges, len(r.Applications))}
 	for i, v := range r.Indices {
-		out.Indices[i] = esapi.IndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices}
+		out.Indices[i] = esapi.IndexPrivileges{Names: v.Names, Privileges: v.Privileges, AllowRestrictedIndices: v.AllowRestrictedIndices, Query: v.Query}
+		if v.FieldSecurity != nil {
+			out.Indices[i].FieldSecurity = &esapi.FieldSecurity{Grant: v.FieldSecurity.Grant, Except: v.FieldSecurity.Except}
+		}
 	}
 	for i, v := range r.Applications {
 		out.Applications[i] = esapi.ApplicationPrivileges{Application: v.Application, Privileges: v.Privileges, Resources: v.Resources}
@@ -382,17 +388,17 @@ func (p *Provider) CreateAPIKey(ctx context.Context, rc *engine.Context, req API
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, engine.ErrInvalid
 	}
+	if len(req.RoleDescriptors) == 0 {
+		return nil, invalidAccess(errors.New("API key requires at least one role descriptor"))
+	}
 	c, err := p.accessClient(ctx, rc)
 	if err != nil {
 		return nil, err
 	}
 	defer c.Close()
-	var roles map[string]esapi.Role
-	if req.RoleDescriptors != nil {
-		roles = make(map[string]esapi.Role, len(req.RoleDescriptors))
-		for name, r := range req.RoleDescriptors {
-			roles[name] = roleToES(r)
-		}
+	roles := make(map[string]esapi.Role, len(req.RoleDescriptors))
+	for name, r := range req.RoleDescriptors {
+		roles[name] = roleToES(r)
 	}
 	k, err := c.CreateAPIKey(ctx, esapi.APIKeyRequest{Name: req.Name, Expiration: req.Expiration, RoleDescriptors: roles, Metadata: map[string]any{"karakoram": true}})
 	if err != nil {

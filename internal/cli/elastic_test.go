@@ -16,11 +16,11 @@ import (
 
 func TestElasticCLIRequests(t *testing.T) {
 	roleFile := filepath.Join(t.TempDir(), "role.json")
-	if err := os.WriteFile(roleFile, []byte(`{"cluster":["monitor"],"indices":[{"names":["logs-*"],"privileges":["read"],"allowRestrictedIndices":false}],"applications":[{"application":"apm","privileges":["event:write","config_agent:read"],"resources":["*"]}]}`), 0600); err != nil {
+	if err := os.WriteFile(roleFile, []byte(`{"cluster":["monitor"],"indices":[{"names":["logs-*"],"privileges":["read"],"allowRestrictedIndices":false,"query":"{\"term\":{\"tenant\":\"mine\"}}","fieldSecurity":{"grant":[],"except":["secret"]}}],"applications":[{"application":"apm","privileges":["event:write","config_agent:read"],"resources":["*"]}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	descriptors := filepath.Join(t.TempDir(), "descriptors.json")
-	if err := os.WriteFile(descriptors, []byte(`{"apm":{"cluster":[],"indices":[],"applications":[{"application":"apm","privileges":["event:write"],"resources":["*"]}]}}`), 0600); err != nil {
+	if err := os.WriteFile(descriptors, []byte(`{"apm":{"cluster":[],"indices":[{"names":["logs-*"],"privileges":["read"],"allowRestrictedIndices":false,"query":"{\"term\":{\"tenant\":\"mine\"}}","fieldSecurity":{"grant":[],"except":["secret"]}}],"applications":[{"application":"apm","privileges":["event:write"],"resources":["*"]}]}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cases := []struct {
@@ -47,14 +47,16 @@ func TestElasticCLIRequests(t *testing.T) {
 			if b["name"] != "ingest" || b["applications"].([]any)[0].(map[string]any)["application"] != "apm" {
 				t.Fatal(b)
 			}
+			assertElasticCLIRestrictions(t, b)
 		}},
-		{args: []string{"roles", "update", "search", "ingest", "-f", roleFile}, method: "PUT", path: "roles/ingest?namespace=project"},
+		{args: []string{"roles", "update", "search", "ingest", "-f", roleFile}, method: "PUT", path: "roles/ingest?namespace=project", check: assertElasticCLIRestrictions},
 		{args: []string{"roles", "delete", "search", "ingest"}, method: "DELETE", path: "roles/ingest?namespace=project"},
 		{args: []string{"api-keys", "list", "search"}, method: "GET", path: "api-keys?namespace=project"},
 		{args: []string{"api-keys", "create", "search", "--name", "agent", "--expiration", "1d", "-f", descriptors}, method: "POST", path: "api-keys?namespace=project", check: func(t *testing.T, b map[string]any) {
 			if b["name"] != "agent" || b["expiration"] != "1d" || b["roleDescriptors"].(map[string]any)["apm"] == nil {
 				t.Fatal(b)
 			}
+			assertElasticCLIRestrictions(t, b["roleDescriptors"].(map[string]any)["apm"].(map[string]any))
 		}},
 		{args: []string{"api-keys", "invalidate", "search", "key"}, method: "DELETE", path: "api-keys/key?namespace=project"},
 	}
@@ -113,7 +115,7 @@ func TestElasticCLIRequests(t *testing.T) {
 	}
 }
 func TestElasticCLIInputValidation(t *testing.T) {
-	for _, args := range [][]string{{"users", "create", "search", "app"}, {"roles", "create", "search", "ingest"}, {"api-keys", "create", "search"}, {"users", "get", "search"}, {"api-keys", "invalidate", "search"}} {
+	for _, args := range [][]string{{"users", "create", "search", "app"}, {"roles", "create", "search", "ingest"}, {"api-keys", "create", "search"}, {"api-keys", "create", "search", "--name", "unscoped"}, {"users", "get", "search"}, {"api-keys", "invalidate", "search"}} {
 		var out bytes.Buffer
 		cmd := NewCommand(Options{ConfigPath: filepath.Join(t.TempDir(), "config.yaml"), Out: &out, Err: &out, In: strings.NewReader("")})
 		cmd.SetArgs(append([]string{"--server", "http://example.invalid", "elasticsearch"}, args...))
@@ -132,5 +134,28 @@ func TestElasticCLIRoleNameMismatch(t *testing.T) {
 	cmd.SetArgs([]string{"--server", "http://example.invalid", "elasticsearch", "roles", "create", "search", "ingest", "-f", path})
 	if err := cmd.ExecuteContext(t.Context()); err == nil || !strings.Contains(err.Error(), "must match") {
 		t.Fatal(err)
+	}
+}
+
+func assertElasticCLIRestrictions(t *testing.T, body map[string]any) {
+	t.Helper()
+	index := body["indices"].([]any)[0].(map[string]any)
+	fields := index["fieldSecurity"].(map[string]any)
+	grant, exists := fields["grant"]
+	if index["query"] != `{"term":{"tenant":"mine"}}` || !exists || len(grant.([]any)) != 0 || fields["except"].([]any)[0] != "secret" {
+		t.Fatal("CLI weakened security restrictions", body)
+	}
+}
+
+func TestElasticCLIRejectsEmptyAPIKeyDescriptors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "descriptors.json")
+	if err := os.WriteFile(path, []byte(`{}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := NewCommand(Options{ConfigPath: filepath.Join(t.TempDir(), "config.yaml"), Out: &out, Err: &out})
+	cmd.SetArgs([]string{"--server", "http://example.invalid", "elasticsearch", "api-keys", "create", "search", "--name", "unscoped", "-f", path})
+	if err := cmd.ExecuteContext(t.Context()); err == nil || !strings.Contains(err.Error(), "at least one role descriptor") {
+		t.Fatal("empty descriptors must be rejected before sending a request", err)
 	}
 }

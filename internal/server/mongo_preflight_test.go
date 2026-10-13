@@ -26,6 +26,12 @@ type preflightProvider struct {
 	fcvErr       error
 }
 
+func (p *preflightProvider) Describe() domain.ProviderInfo {
+	info := p.fakeProvider.Describe()
+	info.Capabilities = append(info.Capabilities, "pitr")
+	return info
+}
+
 func (p *preflightProvider) ValidatePITRRestore(_ context.Context, rc *engine.Context, target time.Time) ([]domain.TimeWindow, error) {
 	if p.initializing || len(p.windows) == 0 {
 		return nil, domain.Conflict("cluster", rc.Cluster.Name, domain.ReasonInvalidState, engine.ErrConflict, "source.pitrTime cannot be restored until initialization and PITR coverage are ready")

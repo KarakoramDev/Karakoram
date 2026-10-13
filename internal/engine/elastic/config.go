@@ -6,11 +6,14 @@ package elastic
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"slices"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
+	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -79,6 +82,15 @@ func (p *Provider) staticSettings(ctx context.Context, rc *engine.Context, s *st
 		namespace, storageName := storageRef(rc.Cluster.Ref().Namespace, name)
 		storage, err := rc.Store.GetBackupStorage(ctx, namespace, storageName)
 		if err != nil {
+			if missing(err) {
+				refs, e := p.storageReferences(ctx, rc, s)
+				if e != nil {
+					return nil, nil, e
+				}
+				if !refs[namespace+"/"+storageName] {
+					continue
+				}
+			}
 			return nil, nil, err
 		}
 		client := S3ClientName(domain.NormalizedNamespace(storage.Namespace), storage.Name)
@@ -90,6 +102,121 @@ func (p *Provider) staticSettings(ctx context.Context, rc *engine.Context, s *st
 		}
 	}
 	return settings, secure, nil
+}
+
+// Keep clients needed by inventory or queued/running work, not only the spec.
+// Stores without operation enumeration conservatively retain existing clients.
+func (p *Provider) storageReferences(ctx context.Context, rc *engine.Context, s *state) (map[string]bool, error) {
+	refs := map[string]bool{}
+	namespace := rc.Cluster.Ref().Namespace
+	for _, name := range configuredStorages(rc.Cluster.Spec) {
+		refs[namespace+"/"+name] = true
+	}
+	backups, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range backups {
+		refs[domain.NormalizedNamespace(b.Namespace)+"/"+b.Storage] = true
+	}
+	addSource := func(source domain.ClusterRef, name string) error {
+		if source.Namespace == "" {
+			source.Namespace = namespace
+		}
+		if source.Name == "" {
+			source.Name = rc.Cluster.Name
+		}
+		b, e := rc.Store.GetBackup(ctx, source, name)
+		if missing(e) {
+			return nil
+		}
+		if e != nil {
+			return e
+		}
+		refs[source.Namespace+"/"+b.Storage] = true
+		return nil
+	}
+	if d := rc.Cluster.Spec.DataSource; d != nil && s.InitialRestore != "done" && s.InitialRestore != "abandoned" {
+		if err = addSource(domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, d.Backup); err != nil {
+			return nil, err
+		}
+	}
+	operations, ok := rc.Store.(interface {
+		ListOperations(context.Context, domain.ClusterRef, ...domain.Phase) ([]domain.Operation, error)
+	})
+	if !ok {
+		for _, key := range s.Storages {
+			ns, name := storageRef(namespace, key)
+			refs[ns+"/"+name] = true
+		}
+		return refs, nil
+	}
+	active, err := operations.ListOperations(ctx, rc.Cluster.Ref(), domain.PhasePending, domain.PhaseRunning)
+	if err != nil {
+		return nil, err
+	}
+	for _, op := range active {
+		if op.Kind != domain.OperationRestore {
+			continue
+		}
+		var payload struct {
+			Restore string `json:"restore"`
+		}
+		if err = json.Unmarshal(op.Payload, &payload); err != nil {
+			return nil, err
+		}
+		r, e := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), payload.Restore)
+		if missing(e) {
+			continue
+		}
+		if e != nil {
+			return nil, e
+		}
+		if err = addSource(domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}, r.Source.Backup); err != nil {
+			return nil, err
+		}
+	}
+	return refs, nil
+}
+
+func (p *Provider) reconcileStorages(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	if len(s.Storages) == 0 || s.Rolling != nil {
+		return false, nil
+	}
+	refs, err := p.storageReferences(ctx, rc, s)
+	if err != nil {
+		return false, err
+	}
+	for _, key := range s.Storages {
+		ns, name := storageRef(rc.Cluster.Ref().Namespace, key)
+		if refs[ns+"/"+name] {
+			continue
+		}
+		for _, repoKey := range sortedKeys(s.Repositories) {
+			repo := s.Repositories[repoKey]
+			if repoKey != key && repoKey != key+"/source" {
+				continue
+			}
+			c, e := p.es(ctx, rc, s)
+			if errors.Is(e, errWaiting) {
+				return false, nil
+			}
+			if e != nil {
+				return false, e
+			}
+			e = c.DeleteRepository(ctx, repo.Name)
+			c.Close()
+			if e != nil && !esapi.IsNotFound(e) {
+				return false, e
+			}
+			delete(s.Repositories, repoKey)
+			return true, nil
+		}
+		s.Storages = slices.DeleteFunc(s.Storages, func(value string) bool { return value == key })
+		p.rollingStart(rc, s, "config", rc.Cluster.Spec.Version, "")
+		return true, nil
+	}
+	return false, nil
 }
 func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state, m *member, version string) (agentspec.Spec, error) {
 	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)

@@ -328,10 +328,36 @@ export function memberKind(member: Pick<Schemas['Member'], 'role'>): MemberKind 
   return undefined;
 }
 
-export interface IndexPrivileges {
-  names: string[];
-  privileges: string[];
-  allowRestrictedIndices: boolean;
+export type IndexPrivileges = Schemas['ElasticIndexPrivileges'];
+
+/** Match the API/provider's Unicode character count, not UTF-16 code units. */
+export function validUserPassword(password: string, updating: boolean): boolean {
+  return (updating && password === '') || Array.from(password).length >= 8;
+}
+
+function parseIndexPrivilege(value: unknown): IndexPrivileges | null {
+  const entry = record(value);
+  const out: IndexPrivileges = { names: strings(entry.names), privileges: strings(entry.privileges), allowRestrictedIndices: entry.allow_restricted_indices === true || entry.allowRestrictedIndices === true };
+  if (!out.names.length || !out.privileges.length) return null;
+  if (entry.query !== undefined) {
+    if (typeof entry.query === 'string') out.query = entry.query;
+    else if (entry.query && typeof entry.query === 'object' && !Array.isArray(entry.query)) out.query = JSON.stringify(entry.query);
+    else return null;
+  }
+  if (entry.field_security !== undefined && entry.fieldSecurity !== undefined) return null;
+  const fields = entry.field_security ?? entry.fieldSecurity;
+  if (fields !== undefined) {
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
+    const f = record(fields);
+    out.fieldSecurity = {};
+    for (const key of ['grant', 'except'] as const) {
+      if (f[key] !== undefined) {
+        if (!Array.isArray(f[key]) || !f[key].every((v: unknown) => typeof v === 'string')) return null;
+        out.fieldSecurity[key] = f[key] as string[];
+      }
+    }
+  }
+  return out;
 }
 
 function list(text: string): string[] {
@@ -344,9 +370,20 @@ function list(text: string): string[] {
 /**
  * Parse one index privilege entry per line: `<index patterns> <privileges> [restricted]`,
  * both lists comma-separated, e.g. `logs-*,metrics-* read,view_index_metadata`.
+ * A JSON array also accepts document/field restrictions without interpreting query JSON.
  * Returns null when a non-empty line is malformed.
  */
 export function parseIndexPrivileges(text: string): IndexPrivileges[] | null {
+  if (text.trim().startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (!Array.isArray(parsed)) return null;
+      const entries = parsed.map(parseIndexPrivilege);
+      return entries.every((e): e is IndexPrivileges => e !== null) ? entries : null;
+    } catch {
+      return null;
+    }
+  }
   const out: IndexPrivileges[] = [];
   for (const raw of text.split('\n')) {
     const line = raw.trim();
@@ -362,6 +399,7 @@ export function parseIndexPrivileges(text: string): IndexPrivileges[] | null {
 }
 
 export function formatIndexPrivileges(entries: IndexPrivileges[]): string {
+  if (entries.some((e) => e.query !== undefined || e.fieldSecurity !== undefined)) return JSON.stringify(entries, null, 2);
   return entries.map((e) => `${e.names.join(',')} ${e.privileges.join(',')}${e.allowRestrictedIndices ? ' restricted' : ''}`).join('\n');
 }
 
@@ -371,9 +409,9 @@ export const USERNAME_RE = /^[\x21-\x7e][\x20-\x7e]{0,505}[\x21-\x7e]$|^[\x21-\x
 /** Elasticsearch time value accepted as API key expiration (e.g. 30d, 12h, 90m). */
 export const EXPIRATION_RE = /^[1-9][0-9]*(d|h|m|s|ms|micros|nanos)$/;
 
-/** Parse the optional API-key role descriptors JSON; returns an error message when invalid. */
+/** Parse required, explicitly scoped API-key role descriptors without dropping restrictions. */
 export function parseRoleDescriptors(text: string): { value?: Record<string, Schemas['ElasticRoleDescriptor']>; error?: string } {
-  if (!text.trim()) return {};
+  if (!text.trim()) return { error: 'At least one role descriptor is required.' };
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -381,12 +419,19 @@ export function parseRoleDescriptors(text: string): { value?: Record<string, Sch
     return { error: 'Role descriptors must be valid JSON.' };
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: 'Role descriptors must be a JSON object keyed by role name.' };
-  const value: Record<string, Schemas['ElasticRoleDescriptor']> = {};
+  if (Object.keys(parsed).length === 0) return { error: 'At least one role descriptor is required.' };
+  const value: Record<string, Schemas['ElasticRoleDescriptor']> = Object.create(null);
   for (const [name, descriptor] of Object.entries(parsed as Record<string, unknown>)) {
     const d = record(descriptor);
+    const indices: IndexPrivileges[] = [];
+    for (const raw of Array.isArray(d.indices) ? d.indices : []) {
+      const index = parseIndexPrivilege(raw);
+      if (!index) return { error: `Invalid index privileges or security restrictions in descriptor "${name}".` };
+      indices.push(index);
+    }
     value[name] = {
       cluster: strings(d.cluster),
-      indices: Array.isArray(d.indices) ? d.indices.map((i) => ({ names: strings(record(i).names), privileges: strings(record(i).privileges), allowRestrictedIndices: record(i).allow_restricted_indices === true || record(i).allowRestrictedIndices === true })) : [],
+      indices,
       applications: Array.isArray(d.applications) ? d.applications.map((a) => ({ application: String(record(a).application ?? ''), privileges: strings(record(a).privileges), resources: strings(record(a).resources) })) : [],
     };
   }

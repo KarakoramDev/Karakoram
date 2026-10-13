@@ -74,18 +74,22 @@ type state struct {
 	DrainBlocked string `json:"drainBlocked,omitempty"`
 	// PlatformRetries tracks durable backoff per action key.
 	PlatformRetries map[string]*platformRetry `json:"platformRetries,omitempty"`
-	// InitialRestore tracks the spec.dataSource restore for a new cluster.
+	// InitialRestore tracks spec.dataSource: empty, initial-restore, done, or
+	// abandoned when deletion interrupts it; abandoned is never retried implicitly.
 	InitialRestore string `json:"initialRestore,omitempty"`
-	// RestoreActive suspends component restarts and security re-ensure while
-	// a restore operation runs; set/cleared by the restore operation.
+	// RestoreActive suspends component restarts and security re-ensure while a
+	// restore runs; retained-volume resume abandons and clears retired intent.
 	RestoreActive bool `json:"restoreActive,omitempty"`
 	// Suspended is set when a cluster was deleted with retained volumes.
 	Suspended bool `json:"suspended,omitempty"`
-	// Resume reconciles allocation changes owned by retired operations after
+	// Resume reconciles database settings owned by retired operations after
 	// retained members have been reprovisioned and joined.
 	ResumeAllocationReset bool     `json:"resumeAllocationReset,omitempty"`
 	ResumeExcludeNames    []string `json:"resumeExcludeNames,omitempty"`
 	ResumeVotingReset     bool     `json:"resumeVotingReset,omitempty"`
+	// ResumeRestoreReset clears the restore-owned destructive setting after
+	// retained Elasticsearch nodes rejoin; the retired restore is not resumed.
+	ResumeRestoreReset bool `json:"resumeRestoreReset,omitempty"`
 	// Cleanup progress.
 	CleanupBackups bool `json:"cleanupBackups,omitempty"`
 	CleanupSecrets bool `json:"cleanupSecrets,omitempty"`

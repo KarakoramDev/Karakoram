@@ -212,6 +212,7 @@ type coreES struct {
 	uuid, master, health     string
 	shards                   map[string]int
 	replicas                 int
+	autoExpand               string
 	persistent               map[string]any
 	transient                map[string]any
 	mutations                []string
@@ -256,9 +257,11 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"status": f.health, "number_of_nodes": len(f.infra.nodes), "number_of_data_nodes": len(f.infra.nodes), "relocating_shards": f.relocating, "initializing_shards": f.initializing})
 	case r.URL.Path == "/_cat/allocation":
 		rows := []map[string]any{}
-		for node, count := range f.shards {
-			rows = append(rows, map[string]any{"node": node, "shards": strconv.Itoa(count)})
+		f.infra.mu.Lock()
+		for node := range f.infra.nodes {
+			rows = append(rows, map[string]any{"node": node, "shards": strconv.Itoa(f.shards[node])})
 		}
+		f.infra.mu.Unlock()
 		reply(rows)
 	case r.URL.Path == "/_cat/shards":
 		rows := f.shardRows
@@ -287,7 +290,11 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(rows)
 	case r.URL.Path == "/_all/_settings":
-		reply(map[string]any{"logs": map[string]any{"settings": map[string]string{"index.number_of_replicas": strconv.Itoa(f.replicas)}}})
+		settings := map[string]string{"index.number_of_replicas": strconv.Itoa(f.replicas)}
+		if f.autoExpand != "" {
+			settings["index.auto_expand_replicas"] = f.autoExpand
+		}
+		reply(map[string]any{"logs": map[string]any{"settings": settings}})
 	case r.URL.Path == "/_cluster/settings":
 		if r.Method == "PUT" {
 			var body struct {

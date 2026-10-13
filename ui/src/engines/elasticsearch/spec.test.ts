@@ -21,6 +21,7 @@ import {
   specPatch,
   specSummary,
   validateComponents,
+  validUserPassword,
   validatePipelines,
   validateSpec,
   withReplicas,
@@ -144,14 +145,53 @@ test('index privileges parse and format symmetrically', () => {
 });
 
 test('API key role descriptors accept both snake and camel case restricted flags', () => {
-  assert.deepEqual(parseRoleDescriptors('  '), {});
+  assert.match(parseRoleDescriptors('  ').error ?? '', /At least one/);
   assert.match(parseRoleDescriptors('{').error ?? '', /valid JSON/);
   assert.match(parseRoleDescriptors('[]').error ?? '', /object/);
   const parsed = parseRoleDescriptors('{"r":{"cluster":["monitor"],"indices":[{"names":["logs-*"],"privileges":["read"],"allow_restricted_indices":true}],"applications":[{"application":"kibana-.kibana","privileges":["read"],"resources":["*"]}]},"empty":{}}');
-  assert.deepEqual(parsed.value, {
+  assert.deepEqual(JSON.parse(JSON.stringify(parsed.value)), {
     r: { cluster: ['monitor'], indices: [{ names: ['logs-*'], privileges: ['read'], allowRestrictedIndices: true }], applications: [{ application: 'kibana-.kibana', privileges: ['read'], resources: ['*'] }] },
     empty: { cluster: [], indices: [], applications: [] },
   });
+});
+
+test('restricted index privileges round-trip through the role editor and API key descriptors', () => {
+  const entries = [
+    { names: ['logs-*'], privileges: ['read'], allowRestrictedIndices: false, query: '{"term":{"tenant":"mine"}}', fieldSecurity: { grant: ['public.*'], except: ['public.secret'] } },
+    { names: ['private-*'], privileges: ['read'], allowRestrictedIndices: false, fieldSecurity: { grant: [] } },
+    { names: ['other-*'], privileges: ['read'], allowRestrictedIndices: true },
+  ];
+  assert.deepEqual(parseIndexPrivileges(formatIndexPrivileges(entries)), entries);
+  const parsed = parseRoleDescriptors(JSON.stringify({ restricted: { indices: entries } }));
+  assert.deepEqual(parsed.value?.restricted?.indices, entries);
+  const snake = parseRoleDescriptors('{"r":{"indices":[{"names":["logs-*"],"privileges":["read"],"query":{"term":{"tenant":"mine"}},"field_security":{"grant":[],"except":["secret"]}}]}}');
+  assert.deepEqual(snake.value?.r?.indices[0], { ...entries[0], query: '{"term":{"tenant":"mine"}}', fieldSecurity: { grant: [], except: ['secret'] } });
+  for (const restrictions of [{ query: 42 }, { fieldSecurity: [] }, { fieldSecurity: { grant: 'public.*' } }, { field_security: {}, fieldSecurity: { grant: [] } }]) {
+    assert.match(parseRoleDescriptors(JSON.stringify({ r: { indices: [{ ...entries[2], ...restrictions }] } })).error ?? '', /security restrictions/);
+    assert.equal(parseIndexPrivileges(JSON.stringify([{ ...entries[2], ...restrictions }])), null);
+  }
+});
+
+test('API key descriptors retain __proto__ as an own scoped role and require a nonempty set', () => {
+  for (const text of ['', '  ', '{}']) assert.match(parseRoleDescriptors(text).error ?? '', /At least one/);
+  const parsed = parseRoleDescriptors('{"__proto__":{"indices":[{"names":["logs-*"],"privileges":["read"],"field_security":{"grant":[]}}]}}');
+  assert.equal(parsed.error, undefined);
+  assert.equal(Object.getPrototypeOf(parsed.value), null);
+  assert.equal(Object.hasOwn(parsed.value!, '__proto__'), true);
+  const sent = JSON.parse(JSON.stringify(parsed.value));
+  assert.deepEqual(Object.keys(sent), ['__proto__']);
+  assert.deepEqual(sent.__proto__.indices[0].fieldSecurity, { grant: [] });
+});
+
+test('user passwords require eight Unicode characters, with empty updates preserving the password', () => {
+  for (const password of ['', '123456', '1234567', '🔒'.repeat(7)]) assert.equal(validUserPassword(password, false), false);
+  for (const password of ['12345678', '🔒'.repeat(8)]) {
+    assert.equal(validUserPassword(password, false), true);
+    assert.equal(validUserPassword(password, true), true);
+  }
+  assert.equal(validUserPassword('', true), true);
+  assert.equal(validUserPassword('1234567', true), false);
+  assert.equal(validUserPassword('🔒'.repeat(7), true), false);
 });
 
 test('merge patch carries only changed components, whole engine options with nulls, TLS, exposure and monitoring', () => {

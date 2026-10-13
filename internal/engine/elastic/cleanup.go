@@ -5,10 +5,12 @@ package elastic
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
 
 // Cleanup removes owned snapshots while the cluster is alive, then components,
@@ -90,6 +92,9 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			}
 			snapshots, e := c.ListSnapshots(ctx, repo.Name)
 			if e != nil {
+				return false, e
+			}
+			if e = p.cleanupSnapshotRecords(ctx, rc, repo, snapshots); e != nil {
 				return false, e
 			}
 			if len(snapshots) > 0 {
@@ -178,4 +183,30 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		s.CleanupSecrets = true
 	}
 	return true, nil
+}
+
+// Inventory is removed only after Elasticsearch confirms that the corresponding
+// snapshot is absent. Re-listing makes crashes between native and record deletion
+// retryable without discarding records for read-only or unreachable repositories.
+func (p *Provider) cleanupSnapshotRecords(ctx context.Context, rc *engine.Context, repo *repository, snapshots []esapi.SnapshotInfo) error {
+	backups, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return err
+	}
+	for _, b := range backups {
+		location, err := url.Parse(b.Location)
+		if err != nil || b.Provider != "elasticsearch" || location.Query().Get("repository") != repo.Name || strings.TrimPrefix(location.Path, "/") != repo.BasePath || location.Fragment == "" {
+			continue
+		}
+		present := false
+		for _, snapshot := range snapshots {
+			present = present || snapshot.Snapshot == location.Fragment
+		}
+		if !present {
+			if err = rc.Store.DeleteBackup(ctx, rc.Cluster.Ref(), b.Name); err != nil && !missing(err) {
+				return err
+			}
+		}
+	}
+	return nil
 }

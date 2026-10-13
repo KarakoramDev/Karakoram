@@ -7483,6 +7483,24 @@ components:
             type: string
         allowRestrictedIndices:
           type: boolean
+        query:
+          type: string
+          description: Opaque Elasticsearch document-level security query JSON.
+        fieldSecurity:
+          $ref: '#/components/schemas/ElasticFieldSecurity'
+    ElasticFieldSecurity:
+      type: object
+      additionalProperties: false
+      description: Field-level security; omitted lists and explicitly empty lists are distinct.
+      properties:
+        grant:
+          type: array
+          items:
+            type: string
+        except:
+          type: array
+          items:
+            type: string
     ElasticApplicationPrivileges:
       type: object
       additionalProperties: false
@@ -7565,7 +7583,7 @@ components:
     ElasticAPIKeyCreate:
       type: object
       additionalProperties: false
-      required: [name]
+      required: [name, roleDescriptors]
       properties:
         name:
           type: string
@@ -7576,6 +7594,8 @@ components:
           description: Elasticsearch duration, for example 1d.
         roleDescriptors:
           type: object
+          minProperties: 1
+          description: Explicit scoped permissions are required; keys cannot inherit the control-plane identity's privileges.
           additionalProperties:
             $ref: '#/components/schemas/ElasticRoleDescriptor'
     ElasticAPIKeyCreated:
@@ -8883,7 +8903,7 @@ components:
           minimum: 0
           description: Zero disables an optional component when supported by the provider.
         resources:
-          $ref: '#/components/schemas/ResourcesInput'
+          $ref: '#/components/schemas/ExtraResourcesInput'
     ComponentsInput:
       type: object
       properties:
@@ -9066,7 +9086,7 @@ components:
           minimum: 0
           nullable: true
         resources:
-          $ref: '#/components/schemas/ResourcesPatch'
+          $ref: '#/components/schemas/ExtraResourcesPatch'
     ComponentsPatch:
       type: object
       properties:
@@ -9345,3 +9365,30 @@ components:
       additionalProperties: false
       nullable: true
       description: 'PSMDB config-server replica set: 1, 3, 5 or 7 members.'
+    ExtraResourcesInput:
+      type: object
+      additionalProperties: false
+      description: Resources for provider extension components, including stateless components with no data disk.
+      properties:
+        cpuMode: {type: string, enum: [SHARED, DEDICATED]}
+        minCpu: {type: number, minimum: 1}
+        maxCpu: {type: number, minimum: 1}
+        minRam: {type: number, minimum: 0.25}
+        maxRam: {type: number, minimum: 0.25}
+        minDisk: {type: number, minimum: 0}
+        maxDisk: {type: number, minimum: 0}
+        startCpu: {type: number, minimum: 1}
+    ExtraResourcesPatch:
+      type: object
+      additionalProperties: false
+      nullable: true
+      description: Partial resources for provider extension components, including stateless components with no data disk.
+      properties:
+        cpuMode: {type: string, enum: [SHARED, DEDICATED], nullable: true}
+        minCpu: {type: number, minimum: 1, nullable: true}
+        maxCpu: {type: number, minimum: 1, nullable: true}
+        minRam: {type: number, minimum: 0.25, nullable: true}
+        maxRam: {type: number, minimum: 0.25, nullable: true}
+        minDisk: {type: number, minimum: 0, nullable: true}
+        maxDisk: {type: number, minimum: 0, nullable: true}
+        startCpu: {type: number, minimum: 1, nullable: true}

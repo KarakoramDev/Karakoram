@@ -12,7 +12,7 @@ import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Me
 import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
 import { hasCapability } from '../index';
-import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, type MemberKind } from './spec';
+import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, type MemberKind } from './spec';
 
 type ElasticUser = Schemas['ElasticUser'];
 type ElasticRole = Schemas['ElasticRole'];
@@ -215,6 +215,8 @@ export function ElasticAccessTab() {
                         <div key={i} className="mono xs">
                           {p.names.join(', ')}: {p.privileges.join(', ')}
                           {p.allowRestrictedIndices ? ' (restricted)' : ''}
+                          {p.query !== undefined ? <div>Document query: {p.query}</div> : null}
+                          {p.fieldSecurity !== undefined ? <div>Field security: {JSON.stringify(p.fieldSecurity)}</div> : null}
                         </div>
                       ))}
                       {r.indices.length === 0 ? '—' : null}
@@ -473,7 +475,7 @@ function UserDialog({ namespace, cluster, existing, roleNames, onClose, onSaved 
   const [roles, setRoles] = useState(existing?.roles.join(', ') ?? '');
   const [enabled, setEnabled] = useState(existing?.enabled ?? true);
   const parsedRoles = list(roles);
-  const passwordOk = existing ? !password || password.length >= 6 : password.length >= 6;
+  const passwordOk = validUserPassword(password, Boolean(existing));
   const valid = USERNAME_RE.test(username) && parsedRoles.length > 0 && passwordOk;
 
   const save = useMutation({
@@ -515,8 +517,8 @@ function UserDialog({ namespace, cluster, existing, roleNames, onClose, onSaved 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required={!existing}
-          minLength={6}
-          hint="At least 6 characters (Elasticsearch minimum)."
+          minLength={8}
+          hint="At least 8 characters (Elasticsearch minimum)."
         />
       </div>
       <div className="grid-2">
@@ -537,7 +539,7 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [error, setError] = useState<string | null>(null);
   const indices = parseIndexPrivileges(indicesText);
   const clusterList = list(clusterPrivileges);
-  const valid = ROLE_NAME_RE.test(name) && indices !== null && (indices.length > 0 || clusterList.length > 0);
+  const valid = ROLE_NAME_RE.test(name) && indices !== null && (indices.length > 0 || clusterList.length > 0 || Boolean(existing?.applications.length));
 
   const save = useMutation({
     mutationFn: () => {
@@ -574,13 +576,13 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
       <TextField label="Role name" mono value={name} onChange={(e) => setName(e.target.value)} required disabled={Boolean(existing)} autoFocus={!existing} error={name && !ROLE_NAME_RE.test(name) ? 'Letters, digits, _ . and - only.' : undefined} />
       <TextField label="Cluster privileges (comma-separated)" mono value={clusterPrivileges} onChange={(e) => setClusterPrivileges(e.target.value)} hint="For example monitor, manage_index_templates, manage_ilm." />
       <TextAreaField
-        label="Index privileges (one entry per line)"
+        label="Index privileges (one entry per line or JSON array)"
         mono
         rows={5}
         value={indicesText}
         onChange={(e) => setIndicesText(e.target.value)}
-        hint="Each line: <index patterns> <privileges> [restricted], lists comma-separated, e.g. `logs-*,metrics-* read,view_index_metadata`. Append `restricted` to allow restricted indices."
-        error={indicesText.trim() && indices === null ? 'Each line: <patterns> <privileges> [restricted]' : undefined}
+        hint="Each line: <index patterns> <privileges> [restricted], lists comma-separated. Use a JSON array with query and fieldSecurity for document- or field-level restrictions; these are preserved when editing."
+        error={indicesText.trim() && indices === null ? 'Use <patterns> <privileges> [restricted] per line or a JSON array of index privileges with valid security restrictions.' : undefined}
       />
       {existing?.applications.length ? <p className="xs faint">Application privileges ({existing.applications.length}) are kept unchanged.</p> : null}
     </Dialog>
@@ -598,7 +600,7 @@ function APIKeyDialog({ namespace, cluster, onClose, onSaved }: { namespace: str
   const valid = name.trim().length > 0 && !parsed.error && expirationOk;
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/elasticsearch/api-keys', { params: { path: { cluster }, query: { namespace } }, body: { name: name.trim(), ...(expiration.trim() ? { expiration: expiration.trim() } : {}), ...(parsed.value ? { roleDescriptors: parsed.value } : {}) } })),
+    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/elasticsearch/api-keys', { params: { path: { cluster }, query: { namespace } }, body: { name: name.trim(), ...(expiration.trim() ? { expiration: expiration.trim() } : {}), roleDescriptors: parsed.value! } })),
     onSuccess: (key) => {
       toast.success('API key created.');
       onSaved();
@@ -650,13 +652,13 @@ function APIKeyDialog({ namespace, cluster, onClose, onSaved }: { namespace: str
         <TextField label="Expiration (optional)" mono value={expiration} onChange={(e) => setExpiration(e.target.value)} placeholder="30d" hint="Elasticsearch time value such as 30d or 12h; empty means never." error={!expirationOk ? 'Use a number followed by d, h, m or s.' : undefined} />
       </div>
       <TextAreaField
-        label="Role descriptors (optional JSON)"
+        label="Role descriptors (required JSON)"
         mono
         rows={6}
         value={descriptors}
         onChange={(e) => setDescriptors(e.target.value)}
         placeholder={'{\n  "logs-reader": { "cluster": ["monitor"], "indices": [{ "names": ["logs-*"], "privileges": ["read"] }] }\n}'}
-        hint="Limits the key to a subset of the creating user's privileges. Empty inherits all of them."
+        hint="Provide at least one descriptor with narrowly scoped permissions. Keys cannot inherit the control-plane identity's privileges."
         error={parsed.error}
       />
     </Dialog>

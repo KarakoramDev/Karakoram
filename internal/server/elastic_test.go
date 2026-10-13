@@ -217,3 +217,41 @@ func TestElasticMemberRoles(t *testing.T) {
 		}
 	}
 }
+
+func TestRestorePITRAdmissionUsesProviderCapability(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		name := "unsupported-elasticsearch"
+		if supported {
+			name = "supported-provider"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			info := (&fakeProvider{}).Describe()
+			info.Capabilities = elastic.New(elastic.ProviderOptions{}).Describe().Capabilities
+			wantStatus, wantRecords := http.StatusBadRequest, 0
+			if supported {
+				info.Capabilities = append(info.Capabilities, "pitr")
+				wantStatus, wantRecords = http.StatusAccepted, 1
+			}
+			var err error
+			s.Registry, err = engine.NewRegistry(&fakeProvider{info: &info})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := `{"name":"point-in-time","source":{"pitrTime":"2026-10-12T12:00:00Z"}}`
+			w := call(s, http.MethodPost, "/api/v1/clusters/prod/restores", body, token)
+			if w.Code != wantStatus {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			ref := domain.ClusterRef{Name: "prod"}
+			restores, err := s.Store.ListRestores(t.Context(), ref)
+			if err != nil || len(restores) != wantRecords {
+				t.Fatal("unexpected restore inventory", restores, err)
+			}
+			ops, err := s.Store.ListOperations(t.Context(), ref)
+			if err != nil || len(ops) != wantRecords {
+				t.Fatal("unexpected restore queue", ops, err)
+			}
+		})
+	}
+}

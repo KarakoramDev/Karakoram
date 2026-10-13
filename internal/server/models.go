@@ -46,6 +46,16 @@ func componentDomain(c *api.ComponentInput) domain.ComponentSpec {
 func componentAPI(c domain.ComponentSpec) api.Component {
 	return api.Component{Replicas: c.Replicas, Resources: resourcesAPI(c.Resources)}
 }
+func extraResourcesDomain(r *api.ExtraResourcesInput) domain.Resources {
+	if r == nil {
+		return domain.Resources{}
+	}
+	o := domain.Resources{CPUMode: string(value(r.CpuMode)), MinCPU: resourceDecimal(value(r.MinCpu)), MaxCPU: resourceDecimal(value(r.MaxCpu)), MinRAM: resourceDecimal(value(r.MinRam)), MaxRAM: resourceDecimal(value(r.MaxRam)), MinDisk: resourceDecimal(value(r.MinDisk)), MaxDisk: resourceDecimal(value(r.MaxDisk))}
+	if r.StartCpu != nil {
+		o.StartCPU = ptr(resourceDecimal(*r.StartCpu))
+	}
+	return o
+}
 func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	// Presence is retained in the generated input model: the validator rejects
 	// explicit zero before conversion, while nil values remain provider defaults.
@@ -61,7 +71,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	if a.Components != nil && a.Components.Extra != nil {
 		s.Components.Extra = make(map[string]domain.ComponentSpec, len(*a.Components.Extra))
 		for name, c := range *a.Components.Extra {
-			s.Components.Extra[name] = domain.ComponentSpec{Replicas: value(c.Replicas), Resources: resourcesDomain(c.Resources)}
+			s.Components.Extra[name] = domain.ComponentSpec{Replicas: value(c.Replicas), Resources: extraResourcesDomain(c.Resources)}
 		}
 	}
 	if a.EngineOptions != nil {

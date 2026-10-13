@@ -88,6 +88,20 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 	}
 	defer c.Close()
 	eligible := masterEligible(rc.Cluster.Spec, m)
+	// Recheck primary safety at every destructive checkpoint, including resumed
+	// removals: zero shard counts do not prove an unavailable primary is safe.
+	switch m.Stage {
+	case stageExcluded, stageDeleting, "delete-volume":
+		h, err := c.Health(ctx, esapi.HealthOptions{})
+		if err != nil {
+			return err
+		}
+		if h.Status != "green" && h.Status != "yellow" {
+			s.DrainBlocked = "removal requires all primary shards to be allocated"
+			return nil
+		}
+		s.DrainBlocked = ""
+	}
 	switch m.Stage {
 	case stageJoined, stageDeployed:
 		remaining := 0
@@ -107,7 +121,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return invalid("cannot remove last master")
 		}
 		if m.Kind == kindNode {
-			replicas, err := c.MaxIndexReplicas(ctx)
+			replicas, err := c.MaxIndexReplicas(ctx, remaining)
 			if err != nil {
 				return err
 			}
@@ -139,8 +153,24 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 		if err != nil {
 			return err
 		}
+		if h.Status != "green" && h.Status != "yellow" {
+			s.DrainBlocked = "removal requires all primary shards to be allocated"
+			return nil
+		}
+		s.DrainBlocked = ""
 		if counts[m.Name] != 0 || h.RelocatingShards != 0 || h.InitializingShards != 0 {
 			return nil
+		}
+		if _, present := counts[m.Name]; !present {
+			nodes, err := c.Nodes(ctx)
+			if err != nil {
+				return err
+			}
+			for _, node := range nodes {
+				if node.Name == m.Name {
+					return nil
+				}
+			}
 		}
 		if eligible {
 			if err = c.AddVotingExclusion(ctx, []string{m.Name}, 10*time.Second); err != nil {

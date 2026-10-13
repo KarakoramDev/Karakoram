@@ -56,6 +56,14 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		}
 		runErr = errors.Join(runErr, rc.Store.UpdateRestore(ctx, r))
 	}()
+	if r.Source.PITRTime != nil {
+		cp.Stage, cp.Failure = "done", "Elasticsearch does not support point-in-time restore"
+		return operationResult(cp, true), operationInvalid(cp.Failure)
+	}
+	if r.Source.Backup == "" {
+		cp.Stage, cp.Failure = "done", "snapshot backup name is required"
+		return operationResult(cp, true), operationInvalid(cp.Failure)
+	}
 	source := domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}
 	if source.Namespace == "" {
 		source.Namespace = rc.Cluster.Ref().Namespace
@@ -67,7 +75,7 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 	if err != nil {
 		return operationResult(cp, false), err
 	}
-	if cp.Stage == "" && (r.Source.PITRTime != nil || b.Type != "snapshot" || b.Provider != "elasticsearch" || b.Phase != domain.PhaseSucceeded || !restoreVersionCompatible(b.SourceVersion, rc.Cluster.Spec.Version)) {
+	if cp.Stage == "" && (b.Type != "snapshot" || b.Provider != "elasticsearch" || b.Phase != domain.PhaseSucceeded || !restoreVersionCompatible(b.SourceVersion, rc.Cluster.Spec.Version)) {
 		stamp := operationNow(rc)
 		r.Phase = domain.PhaseFailed
 		r.CompletedAt = &stamp
