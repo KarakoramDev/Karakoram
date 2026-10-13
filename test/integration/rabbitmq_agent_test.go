@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/mgmt"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
@@ -285,6 +286,27 @@ func TestRabbitMQAgent(t *testing.T) {
 	users := management("GET", "users", "")
 	if bytes.Contains(users, []byte(`"guest"`)) || !bytes.Contains(users, []byte(`"karakoram"`)) || !bytes.Contains(users, []byte(`"admin"`)) {
 		t.Fatal("bootstrap users", string(users))
+	}
+	// Drive the control plane's Management API client against the real broker,
+	// including writes without a response representation (vhost limits).
+	admin, err := mgmt.New(nodes[0].management, "karakoram", "integration-control", httpClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = admin.PutVhost(ctx, mgmt.Vhost{Name: "integration-limits", DefaultQueueType: "quorum"}); err != nil {
+		t.Fatal("create vhost:", err)
+	}
+	if err = admin.SetVhostLimit(ctx, "integration-limits", "max-queues", 5); err != nil {
+		t.Fatal("set vhost limit:", err)
+	}
+	if limits, err := admin.GetVhostLimits(ctx, "integration-limits"); err != nil || len(limits) != 1 || limits[0].Value["max-queues"] != 5 {
+		t.Fatalf("vhost limits %+v: %v", limits, err)
+	}
+	if err = admin.DeleteVhostLimit(ctx, "integration-limits", "max-queues"); err != nil {
+		t.Fatal("delete vhost limit:", err)
+	}
+	if err = admin.DeleteVhost(ctx, "integration-limits"); err != nil {
+		t.Fatal("delete vhost:", err)
 	}
 	management("PUT", "queues/%2F/integration-quorum", `{"durable":true,"arguments":{"x-queue-type":"quorum","x-quorum-initial-group-size":1}}`)
 	for _, peer := range peers[1:] {

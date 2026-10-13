@@ -74,7 +74,13 @@ func (c *Client) request(ctx context.Context, method string, parts []string, bod
 		return err
 	}
 	req.SetBasicAuth(c.username, c.password)
-	req.Header.Set("Accept", "application/json")
+	// Some write resources (e.g. vhost-limits) produce no representation and
+	// answer 406 to a strict JSON Accept header, so only demand JSON when decoding.
+	if out != nil {
+		req.Header.Set("Accept", "application/json")
+	} else {
+		req.Header.Set("Accept", "*/*")
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

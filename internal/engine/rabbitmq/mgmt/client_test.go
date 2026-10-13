@@ -206,3 +206,37 @@ func TestQueuePlacementMetadata(t *testing.T) {
 		t.Fatal(queues[1])
 	}
 }
+
+// RabbitMQ's vhost-limits resource has no representation and rejects a strict
+// JSON Accept header with 406, which once failed every vhost limit write.
+func TestWritesWithoutResponseAcceptAnyRepresentation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/vhost-limits/") && r.Method != http.MethodGet && r.Header.Get("Accept") == "application/json" {
+			w.WriteHeader(http.StatusNotAcceptable)
+			return
+		}
+		if r.Method == http.MethodGet {
+			if r.Header.Get("Accept") != "application/json" {
+				t.Errorf("decoded %s request did not ask for JSON", r.URL.Path)
+			}
+			fmt.Fprint(w, `[{"vhost":"app","value":{"max-queues":5}}]`)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	c, err := New(server.URL, "karakoram", "secret", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := c.SetVhostLimit(ctx, "app", "max-queues", 5); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteVhostLimit(ctx, "app", "max-queues"); err != nil {
+		t.Fatal(err)
+	}
+	if limits, err := c.GetVhostLimits(ctx, "app"); err != nil || len(limits) != 1 || limits[0].Value["max-queues"] != 5 {
+		t.Fatalf("limits=%+v err=%v", limits, err)
+	}
+}
