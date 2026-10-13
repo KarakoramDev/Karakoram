@@ -314,6 +314,8 @@ func (*Provider) SystemUsers(context.Context, *engine.Context) ([]domain.SystemU
 }
 
 // Placement reports best-effort placement without promising anti-affinity.
+// Members whose runtime is not imported yet, or whose containers cannot be
+// listed, are omitted rather than failing status reconciliation.
 func (*Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Placement, error) {
 	s, err := load(rc.Cluster)
 	v := domain.Placement{Warning: "Infrastructure placement is best effort; independent failure domains are not guaranteed", Groups: map[string][]string{}}
@@ -321,9 +323,12 @@ func (*Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Plac
 		return v, err
 	}
 	for _, m := range s.Members {
+		if m.Stage == stagePlanned {
+			continue
+		}
 		containers, err := rc.Backend.Containers(ctx, m.Name)
 		if err != nil {
-			return v, err
+			continue
 		}
 		for _, container := range containers {
 			if container.PlacementGroup != "" {

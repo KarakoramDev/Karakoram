@@ -151,7 +151,14 @@ func (f *coreInfra) DeletePublicPorts(_ context.Context, name string) error {
 	f.public = slices.DeleteFunc(f.public, func(r infra.PublicPortRoute) bool { return r.Hostname == name })
 	return nil
 }
-func (*coreInfra) Containers(context.Context, string) ([]infra.Container, error) {
+
+// Containers fails for a missing service like the Zerops backend does.
+func (f *coreInfra) Containers(_ context.Context, name string) ([]infra.Container, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.services[name] == nil {
+		return nil, errors.New("service " + name + " not found")
+	}
 	return []infra.Container{{Status: "ACTIVE", PlacementGroup: "group-a", Resources: &domain.ObservedResources{CPUCores: 1, MemoryGB: 2, DiskGB: 5}}}, nil
 }
 func (*coreInfra) Logs(context.Context, string, infra.LogQuery) ([]infra.LogLine, error) {
@@ -613,6 +620,32 @@ func TestInitialProvisioningPendingBootstrapAndSecurity(t *testing.T) {
 	}
 	if strings.Contains(string(rc.Cluster.Internal), "test-kibana-token") || strings.Contains(string(rc.Cluster.Internal), "BEGIN PRIVATE KEY") || strings.Contains(string(rc.Cluster.Internal), "password") {
 		t.Fatal("secrets persisted in Internal")
+	}
+}
+
+// Zerops reports unknown services as errors; status during provisioning
+// must not fail on members whose runtime is not imported yet.
+func TestStatusToleratesUnimportedMembers(t *testing.T) {
+	p, rc, _, _ := coreSetup(t, 3)
+	ctx := context.Background()
+	for range 3 {
+		if _, err := p.Sync(ctx, rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, _ := load(rc.Cluster)
+	if s.Members[len(s.Members)-1].Stage != stagePlanned {
+		t.Fatal("expected an unimported member")
+	}
+	status, err := p.Status(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Members) != 3 {
+		t.Fatalf("members=%d", len(status.Members))
+	}
+	if _, err = p.Placement(ctx, rc); err != nil {
+		t.Fatal(err)
 	}
 }
 func TestStackComponentProvisioningOrderAndReplicaChanges(t *testing.T) {
