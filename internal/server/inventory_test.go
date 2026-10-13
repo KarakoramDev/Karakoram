@@ -14,7 +14,7 @@ import (
 // TestEveryOperationHasImplementedHandler traverses the actual generated routes,
 // authenticated as administrator, so authorization cannot hide absent handlers.
 func TestEveryOperationHasImplementedHandler(t *testing.T) {
-	s, _, token := testServer(t)
+	s, token := namespaceTestServer(t)
 	routes := []struct{ name, method, path, body string }{
 		{"ListAccounts", "GET", "/api/v1/accounts", ""},
 		{"CreateAccount", "POST", "/api/v1/accounts", "{\"name\":\"other\",\"password\":\"other-test-password\"}"},
@@ -40,6 +40,13 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"GetBackupStorage", "GET", "/api/v1/backup-storages/storage", ""},
 		{"ReplaceBackupStorage", "PUT", "/api/v1/backup-storages/storage", "{\"type\":\"s3\",\"endpointURL\":\"http://127.0.0.1:1\",\"region\":\"us-east-1\",\"bucket\":\"test\",\"forcePathStyle\":true,\"verifyTLS\":true}"},
 		{"VerifyBackupStorage", "POST", "/api/v1/backup-storages/storage/verify", "{}"},
+		{"ListNamespaces", "GET", "/api/v1/namespaces", ""},
+		{"CreateNamespace", "POST", "/api/v1/namespaces", `{"name":"inventoryns","projectId":"proj-inventory","token":"synthetic-token"}`},
+		{"GetNamespace", "GET", "/api/v1/namespaces/inventoryns", ""},
+		{"UpdateNamespace", "PATCH", "/api/v1/namespaces/inventoryns", `{"description":"Inventory namespace"}`},
+		{"RotateNamespaceToken", "PUT", "/api/v1/namespaces/inventoryns/token", `{"token":"replacement-token"}`},
+		{"ValidateNamespace", "POST", "/api/v1/namespaces/inventoryns/validate", ""},
+		{"DeleteNamespace", "DELETE", "/api/v1/namespaces/inventoryns", ""},
 		{"ListClusters", "GET", "/api/v1/clusters", ""},
 		{"CreateCluster", "POST", "/api/v1/clusters", "{\"name\":\"inventory\",\"spec\":{\"provider\":\"fake\",\"version\":\"8.0\",\"topology\":{\"type\":\"replicaSet\"},\"components\":{\"engine\":{\"replicas\":1,\"resources\":{\"cpuMode\":\"SHARED\",\"minCpu\":1,\"maxCpu\":1,\"minRam\":1,\"maxRam\":1,\"minDisk\":5,\"maxDisk\":5}}}}}"},
 		{"DeleteCluster", "DELETE", "/api/v1/clusters/prod", ""},

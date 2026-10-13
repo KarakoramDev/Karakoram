@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
@@ -96,7 +97,7 @@ func TestCertificatePublicationIntentSurvivesReconcileCrashes(t *testing.T) {
 	p, rc, agents, ca := renewalCluster(t, 3)
 	ctx := context.Background()
 	st := rc.Store.(*store.Store)
-	if err := st.UpdateClusterSpec(ctx, rc.Cluster.Name, rc.Cluster.Spec); err != nil {
+	if err := st.UpdateClusterSpec(ctx, domain.ClusterRef{Name: rc.Cluster.Name}, rc.Cluster.Spec); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.UpdateClusterState(ctx, rc.Cluster); err != nil {
@@ -122,7 +123,7 @@ func TestCertificatePublicationIntentSurvivesReconcileCrashes(t *testing.T) {
 	}
 	restartController := func() {
 		t.Helper()
-		c, err := st.GetCluster(ctx, rc.Cluster.Name)
+		c, err := st.GetCluster(ctx, domain.ClusterRef{Name: rc.Cluster.Name})
 		if err != nil {
 			t.Fatal(err)
 		}

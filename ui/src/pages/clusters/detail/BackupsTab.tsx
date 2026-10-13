@@ -19,20 +19,20 @@ import { useClusterContext } from './ClusterDetail';
 type BackupType = Schemas['CreateBackupRequest']['type'];
 
 export function BackupsTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const storages = useBackupStorages();
+  const storages = useBackupStorages(namespace);
   const providers = useProviders();
   const backups = useQuery({
-    queryKey: keys.clusterSub(name, 'backups'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster: name }, query: { limit: 200 } } })),
+    queryKey: keys.clusterSub(namespace, name, 'backups'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster: name }, query: { namespace, limit: 200 } } })),
     refetchInterval: 15_000,
   });
   const pitr = useQuery({
-    queryKey: keys.clusterSub(name, 'pitr'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/pitr', { params: { path: { cluster: name } } })),
+    queryKey: keys.clusterSub(namespace, name, 'pitr'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/pitr', { params: { path: { cluster: name }, query: { namespace } } })),
     refetchInterval: 60_000,
   });
 
@@ -47,11 +47,11 @@ export function BackupsTab() {
   const canRestore = can('create', 'restores');
 
   const del = useMutation({
-    mutationFn: (backup: string) => unwrap(api.DELETE('/clusters/{cluster}/backups/{backup}', { params: { path: { cluster: name, backup } } })),
+    mutationFn: (backup: string) => unwrap(api.DELETE('/clusters/{cluster}/backups/{backup}', { params: { path: { cluster: name, backup }, query: { namespace } } })),
     onSuccess: () => {
       toast.success('Backup deletion queued.');
       setDeleteName(null);
-      void queryClient.invalidateQueries({ queryKey: keys.clusterSub(name, 'backups') });
+      void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, name, 'backups') });
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -154,10 +154,10 @@ export function BackupsTab() {
                     <td className="actions">
                       {canRestore || canDelete || can('create') ? (
                         <Menu>
-                          <MenuItem disabled={!canRestore || b.phase !== 'Succeeded'} onClick={() => navigate(`/clusters/${encodeURIComponent(name)}/restores?backup=${encodeURIComponent(b.name)}`)}>
+                          <MenuItem disabled={!canRestore || b.phase !== 'Succeeded'} onClick={() => navigate(`${base}/restores?backup=${encodeURIComponent(b.name)}`)}>
                             Restore in place…
                           </MenuItem>
-                          <MenuItem disabled={!can('create') || b.phase !== 'Succeeded'} onClick={() => navigate(`/clusters/new?from=${encodeURIComponent(name)}&backup=${encodeURIComponent(b.name)}`)}>
+                          <MenuItem disabled={!can('create') || b.phase !== 'Succeeded'} onClick={() => navigate(`/clusters/new?namespace=${encodeURIComponent(namespace)}&from=${encodeURIComponent(name)}&backup=${encodeURIComponent(b.name)}`)}>
                             Restore into new cluster…
                           </MenuItem>
                           <MenuItem danger disabled={!canDelete || b.phase === 'Deleting' || b.phase === 'Running'} onClick={() => setDeleteName(b.name)}>
@@ -176,7 +176,7 @@ export function BackupsTab() {
 
       <BackupPolicyCard storageNames={storageNames} backupTypes={backupTypes} />
 
-      {createOpen ? <CreateBackupDialog cluster={name} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
+      {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
 
       <ConfirmDialog open={deleteName !== null} onClose={() => setDeleteName(null)} onConfirm={() => deleteName && del.mutate(deleteName)} title={`Delete backup ${deleteName ?? ''}`} confirmLabel="Delete" danger busy={del.isPending}>
         <p className="small">Backup data is removed from object storage. If PITR depends on this base backup, the restorable window shrinks accordingly.</p>
@@ -185,17 +185,17 @@ export function BackupsTab() {
   );
 }
 
-function CreateBackupDialog({ cluster, storages, defaultStorage, backupTypes, onClose }: { cluster: string; storages: string[]; defaultStorage?: string; backupTypes: BackupType[]; onClose: () => void }) {
+function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, backupTypes, onClose }: { namespace: string; cluster: string; storages: string[]; defaultStorage?: string; backupTypes: BackupType[]; onClose: () => void }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState(() => `manual-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
   const [storage, setStorage] = useState(defaultStorage ?? storages[0] ?? '');
   const [type, setType] = useState<BackupType>(backupTypes[0] ?? 'logical');
   const create = useMutation({
-    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/backups', { params: { path: { cluster } }, body: { name, storage, type } })),
+    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/backups', { params: { path: { cluster }, query: { namespace } }, body: { name, storage, type } })),
     onSuccess: (b) => {
       toast.success(`Backup ${b.name} queued.`);
-      void queryClient.invalidateQueries({ queryKey: keys.clusterSub(cluster, 'backups') });
+      void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, cluster, 'backups') });
       onClose();
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -240,7 +240,7 @@ function CreateBackupDialog({ cluster, storages, defaultStorage, backupTypes, on
 }
 
 function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[]; backupTypes: BackupType[] }) {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, can } = useClusterContext();
   const toast = useToast();
   const queryClient = useQueryClient();
   const persisted = useMemo(() => cluster.spec.backup ?? {}, [cluster.spec.backup]);
@@ -270,12 +270,12 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     mutationFn: () =>
       unwrap(
         api.PATCH('/clusters/{cluster}', {
-          params: { path: { cluster: name } },
+          params: { path: { cluster: name }, query: { namespace } },
           body: { spec: { backup: { storage: storage || null, schedules, pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } } },
         }),
       ),
     onSuccess: (c) => {
-      queryClient.setQueryData(keys.cluster(name), c);
+      queryClient.setQueryData(keys.cluster(namespace, name), c);
       toast.success('Backup policy updated.');
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -310,7 +310,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
       <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
         {storageNames.length === 0 ? (
           <Callout tone="warn">
-            No backup storages exist. <Link to="/settings/backup-storages">Create one in Settings</Link>.
+            No backup storages exist in namespace <span className="mono">{namespace}</span>. <Link to={`/settings/backup-storages?namespace=${encodeURIComponent(namespace)}`}>Create one in Settings</Link>.
           </Callout>
         ) : null}
         <div className="grid-3" style={{ alignItems: 'end' }}>

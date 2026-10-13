@@ -45,7 +45,7 @@ func TestScalingUpgrade(t *testing.T) {
 		// immediate changes to container allocation.
 		s.poll("observed Zerops CPU/RAM autoscaling configuration", 5*time.Minute, func() bool {
 			var members api.MemberList
-			s.expect(&members)(s.client.ListClusterMembers(s.ctx, name))
+			s.expect(&members)(s.client.ListClusterMembers(s.ctx, name, nil))
 			if len(members.Items) != 3 {
 				return false
 			}
@@ -165,7 +165,7 @@ func TestScalingUpgrade(t *testing.T) {
 			}
 			s.poll("observed Zerops CPU mode "+string(mode), 5*time.Minute, func() bool {
 				var members api.MemberList
-				s.expect(&members)(s.client.ListClusterMembers(s.ctx, name))
+				s.expect(&members)(s.client.ListClusterMembers(s.ctx, name, nil))
 				if len(members.Items) != 1 || members.Items[0].Autoscaling == nil || members.Items[0].Autoscaling.CpuMode != mode {
 					return false
 				}

@@ -13,14 +13,16 @@ import (
 
 // EventFilter selects an ascending durable event page.
 type EventFilter struct {
-	Cluster string
-	Type    string
-	Limit   int
-	SinceID int64
+	Namespace string
+	Cluster   string
+	Type      string
+	Limit     int
+	SinceID   int64
 }
 
 // AppendEvent appends an event and assigns its monotonic durable ID.
 func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
+	event.Namespace = domain.NormalizedNamespace(event.Namespace)
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now().UTC()
 	}
@@ -28,7 +30,7 @@ func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
 	if err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "INSERT INTO events(cluster,type,data,created) VALUES(?,?,?,?)", event.Cluster, event.Type, data, event.CreatedAt.UnixNano())
+	r, err := s.writer.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,data,created) VALUES(?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, data, event.CreatedAt.UnixNano())
 	if err != nil {
 		return err
 	}
@@ -40,6 +42,10 @@ func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
 func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Event, error) {
 	q := "SELECT id,data FROM events WHERE id>?"
 	args := []any{filter.SinceID}
+	if filter.Namespace != "" {
+		q += " AND namespace=?"
+		args = append(args, filter.Namespace)
+	}
 	if filter.Cluster != "" {
 		q += " AND cluster=?"
 		args = append(args, filter.Cluster)
@@ -81,11 +87,12 @@ func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Ev
 
 // MetricQuery selects member metric samples in an inclusive time range.
 type MetricQuery struct {
-	Cluster string
-	Member  string
-	Metric  string
-	Start   time.Time
-	End     time.Time
+	Namespace string
+	Cluster   string
+	Member    string
+	Metric    string
+	Start     time.Time
+	End       time.Time
 }
 
 // InsertMetricSamples inserts a transactional batch of metric samples.
@@ -98,17 +105,18 @@ func (s *Store) InsertMetricSamples(ctx context.Context, samples []domain.Metric
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO metrics(cluster,member,metric,timestamp,data) VALUES(?,?,?,?,?)")
+	stmt, err := tx.PrepareContext(ctx, "INSERT INTO metrics(namespace,cluster,member,metric,timestamp,data) VALUES(?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, v := range samples {
+		v.Namespace = domain.NormalizedNamespace(v.Namespace)
 		data, err := json.Marshal(v)
 		if err != nil {
 			return err
 		}
-		if _, err = stmt.ExecContext(ctx, v.Cluster, v.Member, v.Metric, v.Timestamp.UnixNano(), data); err != nil {
+		if _, err = stmt.ExecContext(ctx, v.Namespace, v.Cluster, v.Member, v.Metric, v.Timestamp.UnixNano(), data); err != nil {
 			return err
 		}
 	}
@@ -117,8 +125,16 @@ func (s *Store) InsertMetricSamples(ctx context.Context, samples []domain.Metric
 
 // QueryMetricSamples reads filtered metric samples.
 func (s *Store) QueryMetricSamples(ctx context.Context, q MetricQuery) ([]domain.MetricSample, error) {
-	sql := "SELECT data FROM metrics WHERE cluster=? AND timestamp>=?"
-	args := []any{q.Cluster, q.Start.UnixNano()}
+	sql := "SELECT data FROM metrics WHERE timestamp>=?"
+	args := []any{q.Start.UnixNano()}
+	if q.Namespace != "" {
+		sql += " AND namespace=?"
+		args = append(args, q.Namespace)
+	}
+	if q.Cluster != "" {
+		sql += " AND cluster=?"
+		args = append(args, q.Cluster)
+	}
 	if !q.End.IsZero() {
 		sql += " AND timestamp<=?"
 		args = append(args, q.End.UnixNano())

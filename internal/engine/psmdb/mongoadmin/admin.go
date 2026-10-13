@@ -27,6 +27,7 @@ type DialOptions struct {
 	CAPEM              []byte
 	TLS                bool
 	Timeout            time.Duration
+	Dialer             options.ContextDialer
 }
 
 // Dial connects and verifies that the authenticated endpoint responds.
@@ -38,6 +39,9 @@ func Dial(ctx context.Context, o DialOptions) (*mongo.Client, error) {
 		o.Timeout = 10 * time.Second
 	}
 	opt := options.Client().SetHosts(o.Hosts).SetDirect(o.Direct).SetServerSelectionTimeout(o.Timeout).SetConnectTimeout(o.Timeout)
+	if o.Dialer != nil {
+		opt.SetDialer(o.Dialer)
+	}
 	if o.ReplicaSet != "" {
 		opt.SetReplicaSet(o.ReplicaSet)
 	}

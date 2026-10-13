@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -114,18 +115,18 @@ func DeleteAll(ctx context.Context, env Env) (engine.OpResult, error) {
 				return finish(false, nil)
 			}
 		}
-		records, err := env.RC.Store.ListBackups(ctx, env.RC.Cluster.Name)
+		records, err := env.RC.Store.ListBackups(ctx, env.RC.Cluster.Ref())
 		if err != nil {
 			return finish(false, err)
 		}
 		for _, b := range records {
 			if b.PBMName == cp.PBMName && b.Storage == env.Storage.Name {
 				if b.RecoveryIdentity != "" {
-					if err := env.RC.Secrets.DeleteClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin"); err != nil && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, store.ErrNotFound) {
+					if err := env.RC.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); err != nil && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, store.ErrNotFound) {
 						return finish(false, err)
 					}
 				}
-				if err := env.RC.Store.DeleteBackup(ctx, b.Cluster, b.Name); err != nil {
+				if err := env.RC.Store.DeleteBackup(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster}, b.Name); err != nil {
 					return finish(false, err)
 				}
 			}

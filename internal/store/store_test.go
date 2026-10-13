@@ -40,18 +40,18 @@ func TestClusterLifecycle(t *testing.T) {
 	if err := s.CreateCluster(ctx, &c); !errors.Is(err, ErrConflict) {
 		t.Fatalf("conflict %v", err)
 	}
-	if err := s.UpdateClusterSpec(ctx, c.Name, c.Spec); err != nil {
+	if err := s.UpdateClusterSpec(ctx, domain.ParseClusterKey(c.Name), c.Spec); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetCluster(ctx, c.Name)
+	got, _ := s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if got.Generation != 1 {
 		t.Fatal(got.Generation)
 	}
 	c.Spec.Version = "8.0"
-	if err := s.UpdateClusterSpec(ctx, c.Name, c.Spec); err != nil {
+	if err := s.UpdateClusterSpec(ctx, domain.ParseClusterKey(c.Name), c.Spec); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetCluster(ctx, c.Name)
+	got, _ = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if got.Generation != 2 {
 		t.Fatal(got.Generation)
 	}
@@ -61,31 +61,31 @@ func TestClusterLifecycle(t *testing.T) {
 	if err := s.UpdateClusterState(ctx, &c); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetCluster(ctx, c.Name)
+	got, _ = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if got.Generation != 2 || got.Status.ObservedGeneration != 1 || got.Spec.Version != "8.0" || string(got.Internal) != `{"step":2}` {
 		t.Fatalf("state %+v", got)
 	}
-	if err := s.MarkClusterDeleting(ctx, c.Name, domain.DeleteOptions{KeepVolumes: true}); err != nil {
+	if err := s.MarkClusterDeleting(ctx, domain.ParseClusterKey(c.Name), domain.DeleteOptions{KeepVolumes: true}); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetCluster(ctx, c.Name)
+	got, _ = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if !got.Deleting || !got.DeleteOptions.KeepVolumes {
 		t.Fatal("deletion flags")
 	}
 	if err := s.SuspendCluster(ctx, got); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ResumeCluster(ctx, c.Name); err != nil {
+	if err := s.ResumeCluster(ctx, domain.ParseClusterKey(c.Name)); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetCluster(ctx, c.Name)
+	got, _ = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if got.Generation != 3 || got.Status.Phase != domain.PhaseCreating {
 		t.Fatal("resume")
 	}
-	if err := s.DeleteCluster(ctx, c.Name); err != nil {
+	if err := s.DeleteCluster(ctx, domain.ParseClusterKey(c.Name)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetCluster(ctx, c.Name); !errors.Is(err, ErrNotFound) {
+	if _, err := s.GetCluster(ctx, domain.ParseClusterKey(c.Name)); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }
@@ -96,11 +96,11 @@ func TestResourcesAndSealedStorage(t *testing.T) {
 	if err := s.CreateBackupStorage(ctx, &storage); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.GetBackupStorage(ctx, storage.Name)
+	got, err := s.GetBackupStorage(ctx, domain.DefaultNamespace, storage.Name)
 	if err != nil || got.Credentials != storage.Credentials {
 		t.Fatalf("storage %+v %v", got, err)
 	}
-	storages, _ := s.ListBackupStorages(ctx)
+	storages, _ := s.ListBackupStorages(ctx, "")
 	if storages[0].Credentials.SecretAccessKey != "" {
 		t.Fatal("list exposed credentials")
 	}
@@ -108,10 +108,10 @@ func TestResourcesAndSealedStorage(t *testing.T) {
 	if err = s.UpdateBackupStorage(ctx, &storage); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.SetClusterSecret(ctx, "demo", "key", []byte("unique-cluster-key")); err != nil {
+	if err = s.SetClusterSecret(ctx, domain.ParseClusterKey("demo"), "key", []byte("unique-cluster-key")); err != nil {
 		t.Fatal(err)
 	}
-	plain, err := s.GetClusterSecret(ctx, "demo", "key")
+	plain, err := s.GetClusterSecret(ctx, domain.ParseClusterKey("demo"), "key")
 	if err != nil || string(plain) != "unique-cluster-key" {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestResourcesAndSealedStorage(t *testing.T) {
 	if err = s.UpdateBackup(ctx, &b); err != nil {
 		t.Fatal(err)
 	}
-	bg, _ := s.GetBackup(ctx, "demo", "b1")
+	bg, _ := s.GetBackup(ctx, domain.ParseClusterKey("demo"), "b1")
 	if bg.Phase != domain.PhaseSucceeded {
 		t.Fatal(bg)
 	}
@@ -147,24 +147,24 @@ func TestResourcesAndSealedStorage(t *testing.T) {
 	if err = s.CreateRestore(ctx, &r); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.GetRestore(ctx, "demo", "r1"); err != nil {
+	if _, err = s.GetRestore(ctx, domain.ParseClusterKey("demo"), "r1"); err != nil {
 		t.Fatal(err)
 	}
 	v := domain.RetainedVolume{Cluster: "demo", Member: "demom0", Hostname: "demom0v"}
 	if err = s.CreateRetainedVolume(ctx, &v); err != nil {
 		t.Fatal(err)
 	}
-	volumes, _ := s.ListRetainedVolumes(ctx, "demo")
+	volumes, _ := s.ListRetainedVolumes(ctx, domain.ParseClusterKey("demo"))
 	if len(volumes) != 1 {
 		t.Fatal(volumes)
 	}
-	if err = s.DeleteRetainedVolume(ctx, "demo", "demom0"); err != nil {
+	if err = s.DeleteRetainedVolume(ctx, domain.ParseClusterKey("demo"), "demom0"); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.DeleteClusterSecret(ctx, "demo", "key"); err != nil {
+	if err = s.DeleteClusterSecret(ctx, domain.ParseClusterKey("demo"), "key"); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.DeleteAgentToken(ctx, "demo", "demom0"); err != nil {
+	if err = s.DeleteAgentToken(ctx, domain.ParseClusterKey("demo"), "demom0"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -231,7 +231,7 @@ func TestOperationsResumeAndAtomicBackup(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	op, err := s.ClaimOperation(ctx, "demo")
+	op, err := s.ClaimOperation(ctx, domain.ParseClusterKey("demo"))
 	if err != nil || op.ID != "first" {
 		t.Fatal(op, err)
 	}
@@ -245,7 +245,7 @@ func TestOperationsResumeAndAtomicBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer other.Close()
-	resumed, err := other.ClaimOperation(ctx, "demo")
+	resumed, err := other.ClaimOperation(ctx, domain.ParseClusterKey("demo"))
 	if err != nil || resumed.ID != "first" || resumed.Attempts != 2 || string(resumed.Checkpoint) != string(op.Checkpoint) {
 		t.Fatal(resumed, err)
 	}
@@ -253,7 +253,7 @@ func TestOperationsResumeAndAtomicBackup(t *testing.T) {
 	if err = other.UpdateOperation(ctx, resumed); err != nil {
 		t.Fatal(err)
 	}
-	op, err = s.ClaimOperation(ctx, "demo")
+	op, err = s.ClaimOperation(ctx, domain.ParseClusterKey("demo"))
 	if err != nil || op.ID != "second" {
 		t.Fatal(op, err)
 	}
@@ -262,10 +262,10 @@ func TestOperationsResumeAndAtomicBackup(t *testing.T) {
 	if err = s.EnqueueBackup(ctx, &b, &duplicate); !errors.Is(err, ErrConflict) {
 		t.Fatal(err)
 	}
-	if _, err = s.GetBackup(ctx, "demo", "rollback"); !errors.Is(err, ErrNotFound) {
+	if _, err = s.GetBackup(ctx, domain.ParseClusterKey("demo"), "rollback"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("transaction partial", err)
 	}
-	ops, err := s.ListOperations(ctx, "demo", domain.PhaseRunning)
+	ops, err := s.ListOperations(ctx, domain.ParseClusterKey("demo"), domain.PhaseRunning)
 	if err != nil || len(ops) != 1 {
 		t.Fatal(ops, err)
 	}
@@ -325,7 +325,7 @@ func TestEventsSettingsPoliciesMetricsAndConcurrency(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err = s.ListClusters(cancelled); !errors.Is(err, context.Canceled) {
+	if _, err = s.ListClusters(cancelled, ""); !errors.Is(err, context.Canceled) {
 		t.Fatal("context", err)
 	}
 	var journal string
@@ -336,5 +336,87 @@ func TestEventsSettingsPoliciesMetricsAndConcurrency(t *testing.T) {
 	s.reader.QueryRow("PRAGMA foreign_keys").Scan(&fk)
 	if fk != 1 {
 		t.Fatal("foreign keys disabled")
+	}
+}
+
+func TestNamespacePersistenceIsolation(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, namespace := range []string{domain.DefaultNamespace, "dev"} {
+		c := domain.Cluster{Namespace: namespace, Name: "orders", Spec: domain.ClusterSpec{Provider: "psmdb"}}
+		if err := s.CreateClusterWithSecrets(ctx, &c, map[string][]byte{"password": []byte(namespace + "-secret")}); err != nil {
+			t.Fatal(err)
+		}
+		storage := domain.BackupStorage{Namespace: namespace, Name: "archive", Credentials: domain.StorageCredentials{AccessKeyID: namespace, SecretAccessKey: namespace + "-storage-secret"}}
+		if err := s.CreateBackupStorage(ctx, &storage); err != nil {
+			t.Fatal(err)
+		}
+		backup := domain.Backup{Namespace: namespace, Cluster: c.Name, Name: "snapshot", Storage: storage.Name}
+		op := domain.Operation{Namespace: namespace, Cluster: c.Name, ID: namespace + "-backup"}
+		if err := s.EnqueueBackup(ctx, &backup, &op); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetAgentToken(ctx, &domain.AgentToken{Namespace: namespace, Cluster: c.Name, Member: "ordersm0", Token: namespace + "-member-token"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.AppendEvent(ctx, &domain.Event{Namespace: namespace, Cluster: c.Name, Type: "Normal"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.InsertMetricSamples(ctx, []domain.MetricSample{{Namespace: namespace, Cluster: c.Name, Member: "ordersm0", Metric: "cpu", Timestamp: now}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.PutOrphanedVolume(ctx, &domain.OrphanedVolume{Namespace: namespace, Cluster: c.Name, Hostname: "ordersm0v", ProcessPending: true, JanitorFailures: 2}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := s.ListClusters(ctx, "")
+	if err != nil || len(all) != 2 {
+		t.Fatal(all, err)
+	}
+	for _, namespace := range []string{domain.DefaultNamespace, "dev"} {
+		ref := domain.ClusterRef{Namespace: namespace, Name: "orders"}
+		cluster, err := s.GetCluster(ctx, ref)
+		if err != nil || cluster.Namespace != namespace {
+			t.Fatal(cluster, err)
+		}
+		secret, err := s.GetClusterSecret(ctx, ref, "password")
+		if err != nil || string(secret) != namespace+"-secret" {
+			t.Fatal("wrong cluster secret", err)
+		}
+		storage, err := s.GetBackupStorage(ctx, namespace, "archive")
+		if err != nil || storage.Credentials.AccessKeyID != namespace {
+			t.Fatal(storage, err)
+		}
+		token, err := s.FindAgentTokenByHash(ctx, secrets.Hash(namespace+"-member-token"))
+		if err != nil || token.Namespace != namespace || token.Cluster != "orders" {
+			t.Fatal(token, err)
+		}
+		backups, err := s.ListBackups(ctx, domain.ClusterRef{Namespace: namespace})
+		if err != nil || len(backups) != 1 || backups[0].Namespace != namespace {
+			t.Fatal(backups, err)
+		}
+		events, err := s.ListEvents(ctx, EventFilter{Namespace: namespace})
+		if err != nil || len(events) != 1 || events[0].Namespace != namespace {
+			t.Fatal(events, err)
+		}
+		metrics, err := s.QueryMetricSamples(ctx, MetricQuery{Namespace: namespace, Cluster: "orders"})
+		if err != nil || len(metrics) != 1 || metrics[0].Namespace != namespace {
+			t.Fatal(metrics, err)
+		}
+		orphan, err := s.GetOrphanedVolume(ctx, namespace, "ordersm0v")
+		if err != nil || orphan.Namespace != namespace || !orphan.ProcessPending || orphan.JanitorFailures != 2 {
+			t.Fatal(orphan, err)
+		}
+	}
+	if err := s.DeleteCluster(ctx, domain.ClusterRef{Namespace: "dev", Name: "orders"}); err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.GetOperation(ctx, "default-backup")
+	if err != nil || op.Phase != domain.PhasePending {
+		t.Fatal("deletion crossed namespace", op, err)
+	}
+	if _, err := s.GetCluster(ctx, domain.ClusterRef{Name: "orders"}); err != nil {
+		t.Fatal("default cluster deleted", err)
 	}
 }

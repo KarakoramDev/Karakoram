@@ -179,11 +179,11 @@ func TestOrphanedVolumesList(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("unexpected table %q", out)
 	}
-	const header = "HOSTNAME SERVICE ID CLUSTER MEMBER ATTEMPTS NEXT ATTEMPT LAST PROCESS"
+	const header = "NAMESPACE HOSTNAME SERVICE ID CLUSTER MEMBER ATTEMPTS NEXT ATTEMPT LAST PROCESS"
 	if got := strings.Join(strings.Fields(lines[0]), " "); got != header {
 		t.Fatalf("header = %q; want %q", got, header)
 	}
-	const row = "prodm0v service-one prod prodm0 7 2024-01-07T10:32:00Z process-one"
+	const row = "- prodm0v service-one prod prodm0 7 2024-01-07T10:32:00Z process-one"
 	if got := strings.Join(strings.Fields(lines[1]), " "); got != row {
 		t.Fatalf("row = %q; want %q", got, row)
 	}

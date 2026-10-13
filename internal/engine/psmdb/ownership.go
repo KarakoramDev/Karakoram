@@ -21,7 +21,7 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 		return nil
 	}
 	if volume {
-		retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Name)
+		retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 		if err != nil {
 			return err
 		}
@@ -31,7 +31,7 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 			}
 		}
 	}
-	tok, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name)
+	tok, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 	if err != nil {
 		return err
 	}

@@ -4,23 +4,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, unwrap } from '@/api/client';
+import { api, ApiError, errorMessage, unwrap } from '@/api/client';
+import { useNamespaceOptions } from '@/api/hooks';
 import { keys } from '@/api/keys';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, TextField } from '@/components/ui/Field';
 import { Callout, Card, ErrorBlock, Loading, Time, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
-import { BackupPicker, PitrPicker } from '../ClusterWizard';
+import { BackupPicker, PitrPicker, SourceClusterPicker } from '../ClusterWizard';
 import { OpPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
 
 export function RestoresTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
   const [params, setParams] = useSearchParams();
   const restores = useQuery({
-    queryKey: keys.clusterSub(name, 'restores'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/restores', { params: { path: { cluster: name }, query: { limit: 200 } } })),
+    queryKey: keys.clusterSub(namespace, name, 'restores'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/restores', { params: { path: { cluster: name }, query: { namespace, limit: 200 } } })),
     refetchInterval: 15_000,
   });
   const [open, setOpen] = useState(params.has('backup') || params.has('pitr'));
@@ -35,7 +36,7 @@ export function RestoresTab() {
         </p>
         <div className="row">
           {can('create') ? (
-            <LinkButton to={`/clusters/new?from=${encodeURIComponent(name)}`} size="md">
+            <LinkButton to={`/clusters/new?namespace=${encodeURIComponent(namespace)}&from=${encodeURIComponent(name)}`} size="md">
               Restore into new cluster
             </LinkButton>
           ) : null}
@@ -99,7 +100,9 @@ export function RestoresTab() {
 
       {open ? (
         <RestoreDialog
+          namespace={namespace}
           cluster={name}
+          base={base}
           initialBackup={params.get('backup') ?? undefined}
           onClose={() => {
             setOpen(false);
@@ -111,36 +114,45 @@ export function RestoresTab() {
   );
 }
 
-function RestoreDialog({ cluster, initialBackup, onClose }: { cluster: string; initialBackup?: string; onClose: () => void }) {
+function RestoreDialog({ namespace, cluster, base, initialBackup, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; onClose: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<'backup' | 'pitr'>(initialBackup ? 'backup' : 'backup');
+  const namespaceOptions = useNamespaceOptions();
+  const [mode, setMode] = useState<'backup' | 'pitr'>('backup');
+  const [sourceNamespace, setSourceNamespace] = useState(namespace);
+  const [sourceCluster, setSourceCluster] = useState(cluster);
   const [backup, setBackup] = useState(initialBackup ?? '');
   const [pitrTime, setPitrTime] = useState('');
   const [name, setName] = useState(() => `restore-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (initialBackup) setBackup(initialBackup);
   }, [initialBackup]);
 
+  const cross = sourceNamespace !== namespace;
   const create = useMutation({
     mutationFn: () =>
       unwrap(
         api.POST('/clusters/{cluster}/restores', {
-          params: { path: { cluster } },
-          body: { name, source: { sourceCluster: cluster, ...(mode === 'backup' ? { backup } : { pitrTime }) } },
+          params: { path: { cluster }, query: { namespace } },
+          body: {
+            name,
+            ...(cross ? { sourceNamespace } : {}),
+            source: { sourceCluster, ...(mode === 'backup' ? { backup } : { pitrTime }) },
+          },
         }),
       ),
     onSuccess: (r) => {
       toast.success(`Restore ${r.name} started.`);
-      void queryClient.invalidateQueries({ queryKey: keys.cluster(cluster) });
+      void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, cluster) });
       onClose();
-      navigate(`/clusters/${encodeURIComponent(cluster)}/operations`);
+      navigate(`${base}/operations`);
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => setError(e instanceof ApiError && e.status === 403 ? `Not permitted: ${e.message}` : errorMessage(e)),
   });
 
-  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && (mode === 'backup' ? backup !== '' : pitrTime !== '');
+  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '');
 
   return (
     <Dialog
@@ -161,7 +173,21 @@ function RestoreDialog({ cluster, initialBackup, onClose }: { cluster: string; i
       <Callout tone="danger" title="Current data will be replaced">
         The cluster becomes unavailable while the restore runs. Members are stopped (physical) or data is dropped and reloaded (logical). Take a fresh backup first if you may need the current state.
       </Callout>
+      {error ? <Callout tone="danger">{error}</Callout> : null}
       <TextField label="Restore name" mono value={name} onChange={(e) => setName(e.target.value)} required />
+      <SourceClusterPicker
+        targetNamespace={namespace}
+        namespaces={namespaceOptions}
+        namespace={sourceNamespace}
+        cluster={sourceCluster}
+        onChange={(ns, c) => {
+          setSourceNamespace(ns);
+          setSourceCluster(c);
+          setBackup('');
+          setPitrTime('');
+          setError(null);
+        }}
+      />
       <ChoiceGroup<'backup' | 'pitr'>
         name="restore-mode"
         legend="Restore point"
@@ -172,7 +198,7 @@ function RestoreDialog({ cluster, initialBackup, onClose }: { cluster: string; i
           { value: 'pitr', title: 'Point in time', description: 'Any instant within the PITR window.' },
         ]}
       />
-      {mode === 'backup' ? <BackupPicker cluster={cluster} value={backup} onChange={setBackup} /> : <PitrPicker cluster={cluster} value={pitrTime} onChange={setPitrTime} />}
+      {mode === 'backup' ? <BackupPicker namespace={sourceNamespace} cluster={sourceCluster} value={backup} onChange={setBackup} /> : <PitrPicker namespace={sourceNamespace} cluster={sourceCluster} value={pitrTime} onChange={setPitrTime} />}
     </Dialog>
   );
 }

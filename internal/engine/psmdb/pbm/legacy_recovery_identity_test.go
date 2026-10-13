@@ -21,7 +21,7 @@ type credentialCheckingHooks struct {
 }
 
 func (h *credentialCheckingHooks) ResetSystemUsers(ctx context.Context, identity string) error {
-	pw, err := h.rc.Secrets.GetClusterSecret(ctx, identity, "users/userAdmin")
+	pw, err := h.rc.Secrets.GetClusterSecret(ctx, domain.ParseClusterKey(identity), "users/userAdmin")
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func TestLegacyPhysicalCloneProtectsSourceRecoveryIdentity(t *testing.T) {
 			if err := st.CreateCluster(ctx, source); err != nil {
 				t.Fatal(err)
 			}
-			if err := st.SetClusterSecret(ctx, source.Name, "users/userAdmin", []byte("source-snapshot-password")); err != nil {
+			if err := st.SetClusterSecret(ctx, domain.ClusterRef{Name: source.Name}, "users/userAdmin", []byte("source-snapshot-password")); err != nil {
 				t.Fatal(err)
 			}
 			last := time.Unix(1704453059, 0).UTC()
@@ -63,7 +63,7 @@ func TestLegacyPhysicalCloneProtectsSourceRecoveryIdentity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			persisted, err := st.GetBackup(ctx, source.Name, b.Name)
+			persisted, err := st.GetBackup(ctx, domain.ClusterRef{Name: source.Name}, b.Name)
 			if err != nil || persisted.RecoveryIdentity == "" || persisted.RecoveryIdentity == source.Name {
 				t.Fatalf("protected provenance=%+v error=%v", persisted, err)
 			}
@@ -71,12 +71,12 @@ func TestLegacyPhysicalCloneProtectsSourceRecoveryIdentity(t *testing.T) {
 				t.Fatal("restore performed side effects before durable identity resolution")
 			}
 			// Recovery no longer depends on the source cluster surviving the clone.
-			if err := st.DeleteCluster(ctx, source.Name); err != nil {
+			if err := st.DeleteCluster(ctx, domain.ClusterRef{Name: source.Name}); err != nil {
 				t.Fatal(err)
 			}
 			op.Checkpoint = first.Checkpoint
 			drive(t, env, op, RunRestore, false)
-			got, err := st.GetRestore(ctx, "target", r.Name)
+			got, err := st.GetRestore(ctx, domain.ClusterRef{Name: "target"}, r.Name)
 			if err != nil || got.Phase != domain.PhaseSucceeded || fake.starts != 1 {
 				t.Fatalf("clone=%+v starts=%d error=%v", got, fake.starts, err)
 			}
@@ -101,7 +101,7 @@ func TestLegacyPhysicalRestoreRejectsUnrecoverableIdentityBeforeSideEffects(t *t
 				}
 			}
 			if mode == "empty-source-secret" {
-				if err := st.SetClusterSecret(ctx, "source", "users/userAdmin", nil); err != nil {
+				if err := st.SetClusterSecret(ctx, domain.ClusterRef{Name: "source"}, "users/userAdmin", nil); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -122,7 +122,7 @@ func TestLegacyPhysicalRestoreRejectsUnrecoverableIdentityBeforeSideEffects(t *t
 			if fake.starts != 0 || len(fake.requests) != 0 || len(fake.actions) != 0 || len(hooks.reset) != 0 || len(hooks.balancers) != 0 {
 				t.Fatal("unrecoverable clone modified the target")
 			}
-			got, err := st.GetRestore(ctx, "target", "clone")
+			got, err := st.GetRestore(ctx, domain.ClusterRef{Name: "target"}, "clone")
 			if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil {
 				t.Fatalf("unrecoverable clone was started: %+v error=%v", got, err)
 			}

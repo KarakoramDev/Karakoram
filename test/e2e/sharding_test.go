@@ -35,7 +35,7 @@ func TestSharding(t *testing.T) {
 			t.Fatalf("mongos sees %d shards want=3", len(shards.Shards))
 		}
 		var initial api.Balancer
-		s.expect(&initial)(s.client.GetClusterBalancer(s.ctx, name))
+		s.expect(&initial)(s.client.GetClusterBalancer(s.ctx, name, nil))
 		if initial.Mode == nil || initial.Running == nil {
 			t.Fatal("balancer status lacks mode/running observations")
 		}
@@ -43,7 +43,7 @@ func TestSharding(t *testing.T) {
 			var changed api.Balancer
 			s.expect(&changed)(s.client.ReplaceClusterBalancer(s.ctx, name, &api.ReplaceClusterBalancerParams{}, api.Balancer{Enabled: enabled}))
 			var observed api.Balancer
-			s.expect(&observed)(s.client.GetClusterBalancer(s.ctx, name))
+			s.expect(&observed)(s.client.GetClusterBalancer(s.ctx, name, nil))
 			if observed.Enabled != enabled {
 				t.Fatalf("balancer=%t want=%t", observed.Enabled, enabled)
 			}

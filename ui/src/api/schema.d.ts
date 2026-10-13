@@ -237,7 +237,10 @@ export type paths = {
     };
     "/backup-storages": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -255,7 +258,10 @@ export type paths = {
     };
     "/backup-storages/{storage}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
                 storage: string;
@@ -279,7 +285,10 @@ export type paths = {
     };
     "/backup-storages/{storage}/verify": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
                 storage: string;
@@ -298,20 +307,23 @@ export type paths = {
     };
     "/clusters": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         /**
          * List readable clusters
-         * @description Filters each cluster by clusters read on its name; a global * check must not prevent scoped users from listing permitted clusters.
+         * @description Filters each cluster by clusters read on namespace/name; a global '*' check must not prevent scoped users from listing permitted clusters.
          */
         get: operations["listClusters"];
         put?: never;
         /**
          * Create and reconcile a cluster
-         * @description Also authorize clusters create against the submitted name. Returns desired state immediately; status tracks asynchronous reconciliation.
+         * @description Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata.
          */
         post: operations["createCluster"];
         delete?: never;
@@ -322,10 +334,13 @@ export type paths = {
     };
     "/clusters/{cluster}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -348,10 +363,13 @@ export type paths = {
     };
     "/clusters/{cluster}/backups": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -372,11 +390,14 @@ export type paths = {
     };
     "/clusters/{cluster}/backups/{backup}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
                 backup: string;
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -400,10 +421,13 @@ export type paths = {
     };
     "/clusters/{cluster}/balancer": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -421,10 +445,13 @@ export type paths = {
     };
     "/clusters/{cluster}/connection": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -441,10 +468,13 @@ export type paths = {
     };
     "/clusters/{cluster}/database-roles": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -465,10 +495,13 @@ export type paths = {
     };
     "/clusters/{cluster}/database-roles/{database}/{role}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 role: string;
@@ -489,10 +522,13 @@ export type paths = {
     };
     "/clusters/{cluster}/database-users": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -510,10 +546,13 @@ export type paths = {
     };
     "/clusters/{cluster}/database-users/{database}/{username}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 username: string;
@@ -534,10 +573,13 @@ export type paths = {
     };
     "/clusters/{cluster}/members": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -554,10 +596,13 @@ export type paths = {
     };
     "/clusters/{cluster}/members/{member}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 member: string;
             };
@@ -575,10 +620,13 @@ export type paths = {
     };
     "/clusters/{cluster}/members/{member}/logs": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 member: string;
             };
@@ -596,10 +644,13 @@ export type paths = {
     };
     "/clusters/{cluster}/members/{member}/replace": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 member: string;
             };
@@ -617,10 +668,13 @@ export type paths = {
     };
     "/clusters/{cluster}/metrics": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -637,10 +691,13 @@ export type paths = {
     };
     "/clusters/{cluster}/operations": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -657,10 +714,13 @@ export type paths = {
     };
     "/clusters/{cluster}/pitr": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -677,10 +737,13 @@ export type paths = {
     };
     "/clusters/{cluster}/placement": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -697,10 +760,13 @@ export type paths = {
     };
     "/clusters/{cluster}/raise-fcv": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -717,10 +783,13 @@ export type paths = {
     };
     "/clusters/{cluster}/restart": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -737,10 +806,13 @@ export type paths = {
     };
     "/clusters/{cluster}/restores": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -750,7 +822,7 @@ export type paths = {
         put?: never;
         /**
          * Queue in-place backup or point-in-time restore
-         * @description Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead.
+         * @description Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata.
          */
         post: operations["createRestore"];
         delete?: never;
@@ -761,10 +833,13 @@ export type paths = {
     };
     "/clusters/{cluster}/restores/{restore}": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 restore: string;
             };
@@ -782,10 +857,13 @@ export type paths = {
     };
     "/clusters/{cluster}/resume": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -802,10 +880,13 @@ export type paths = {
     };
     "/clusters/{cluster}/rotate-tls": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -825,10 +906,13 @@ export type paths = {
     };
     "/clusters/{cluster}/status": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -845,10 +929,13 @@ export type paths = {
     };
     "/clusters/{cluster}/system-users": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -865,10 +952,13 @@ export type paths = {
     };
     "/clusters/{cluster}/system-users/{user}/rotate": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
             };
@@ -886,7 +976,10 @@ export type paths = {
     };
     "/events": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -903,7 +996,10 @@ export type paths = {
     };
     "/events/stream": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -940,7 +1036,10 @@ export type paths = {
     };
     "/metrics": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -958,9 +1057,107 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/operations": {
+    "/namespaces": {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List readable project namespaces
+         * @description Filters each namespace by namespaces/read on its name before pagination; a global wildcard grant is not required.
+         */
+        get: operations["listNamespaces"];
+        put?: never;
+        /**
+         * Register a project namespace and deploy its relay
+         * @description Requires namespaces/create on '*'. Validates the token and project synchronously, then starts relay deployment asynchronously. The name default is reserved and each project may belong to only one namespace.
+         */
+        post: operations["createNamespace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/namespaces/{namespace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        /** Read namespace project, token status and relay health */
+        get: operations["getNamespace"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove an empty namespace and its relay
+         * @description Returns 409 for default or while any cluster (including deleting), backup storage, retained backup record or pending orphaned-volume record exists. Once accepted, deletes the relay service before removing the namespace and its sealed token and relay secrets.
+         */
+        delete: operations["deleteNamespace"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a namespace description
+         * @description Changes only description. Name, project identity, token and relay status cannot be changed by this patch.
+         */
+        patch: operations["updateNamespace"];
+        trace?: never;
+    };
+    "/namespaces/{namespace}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Validate and atomically rotate a namespace token
+         * @description The new token must see the same projectId. Rotation does not restart the relay. The default namespace token is environment-managed; returns 409 and must instead be rotated by updating the service secret and restarting.
+         */
+        put: operations["rotateNamespaceToken"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/namespaces/{namespace}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revalidate a namespace token and project */
+        post: operations["validateNamespace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -989,7 +1186,7 @@ export type paths = {
         };
         /**
          * Read a durable operation
-         * @description Resolve the operation first, then authorize operations read against its persisted cluster name. The global route has no cluster path parameter.
+         * @description Resolve the globally unique operation ID first, then authorize operations read against its persisted namespace/cluster object.
          */
         get: operations["getOperation"];
         put?: never;
@@ -1002,7 +1199,10 @@ export type paths = {
     };
     "/orphaned-volumes": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1201,6 +1401,7 @@ export type components = {
             /** Format: date-time */
             lastWriteTime?: string;
             name: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             pbmName?: string;
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed" | "Deleting";
@@ -1247,6 +1448,7 @@ export type components = {
             /** @default true */
             forcePathStyle: boolean;
             name: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             prefix?: string;
             region: string;
             /** @enum {string} */
@@ -1269,7 +1471,7 @@ export type components = {
         };
         CanRequest: {
             /** @enum {string} */
-            action: "create" | "read" | "update" | "delete" | "*";
+            action: "create" | "read" | "update" | "delete" | "export" | "*";
             object: string;
             resource: string;
             /** @description Optional subject; checking another subject requires rbac read permission. */
@@ -1290,6 +1492,7 @@ export type components = {
             /** Format: int64 */
             generation: number;
             name: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             spec: components["schemas"]["ClusterSpec"];
             status: components["schemas"]["ClusterStatus"];
             /** Format: date-time */
@@ -1447,6 +1650,8 @@ export type components = {
         CreateRestoreRequest: {
             name: string;
             source: components["schemas"]["RestoreSource"];
+            /** @description Source namespace; defaults to the target cluster namespace. */
+            sourceNamespace?: components["schemas"]["NamespaceName"];
         };
         CurrentUser: {
             /** @description Present for cookie sessions, including OIDC sessions. Safe authenticated GET discovery allows the UI to authorize subsequent unsafe requests. Absent for bearer API-token authentication. */
@@ -1481,6 +1686,8 @@ export type components = {
         DataSource: {
             backup?: string;
             cluster: string;
+            /** @description Source namespace; defaults to the target cluster namespace. */
+            namespace?: components["schemas"]["NamespaceName"];
             /** Format: date-time */
             pitrTime?: string;
         };
@@ -1500,6 +1707,7 @@ export type components = {
             /** Format: int64 */
             id: number;
             message: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             operationId?: string;
             reason?: string;
             /** @description Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim. */
@@ -1595,6 +1803,44 @@ export type components = {
             /** @default true */
             enabled: boolean;
         };
+        Namespace: {
+            readonly clusterCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            default: boolean;
+            description?: string;
+            name: components["schemas"]["NamespaceName"];
+            /** @enum {string} */
+            phase: "Pending" | "Ready" | "Error" | "Deleting";
+            projectId: string;
+            projectName: string;
+            relay: components["schemas"]["RelayStatus"];
+            token: components["schemas"]["TokenStatus"];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        NamespaceCreate: {
+            description?: string;
+            name: components["schemas"]["NamespaceName"];
+            projectId: string;
+            /** Format: password */
+            token: string;
+        };
+        NamespaceList: {
+            items: components["schemas"]["Namespace"][];
+            /** @description Opaque continuation cursor; absent at the end. */
+            nextCursor?: string;
+        };
+        /** @description Project namespace name, 2–32 lowercase letters, digits or hyphens. */
+        NamespaceName: string;
+        NamespaceTokenRotate: {
+            /** Format: password */
+            token: string;
+        };
+        NamespaceUpdate: {
+            /** @description New description; an empty string clears the description. */
+            description: string;
+        };
         /** @description Current infrastructure allocation, distinct from desired autoscaling limits. */
         ObservedResources: {
             /** @description Allocated CPU cores. */
@@ -1627,6 +1873,7 @@ export type components = {
             error?: components["schemas"]["Error"];
             id: string;
             message?: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed";
             progress?: number;
@@ -1652,6 +1899,7 @@ export type components = {
             lastError: string;
             lastProcessId: string;
             member: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             /** Format: date-time */
             nextAttemptAt: string;
             /** Format: date-time */
@@ -1759,6 +2007,25 @@ export type components = {
             /** @description Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. */
             policy: string;
         };
+        /** @description Relay health; the default namespace uses direct networking. */
+        RelayStatus: {
+            /** Format: date-time */
+            certNotAfter?: string;
+            connected: boolean;
+            /** Format: date-time */
+            connectedSince?: string;
+            desiredVersion?: string;
+            hostname?: string;
+            lastError?: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            /** @enum {string} */
+            phase: "NotRequired" | "Pending" | "Deploying" | "Ready" | "Error";
+            /** Format: int64 */
+            reconnects: number;
+            serviceId?: string;
+            version?: string;
+        };
         /** @description Replaces the full desired spec; server-owned name, generation, status and timestamps cannot be replaced. */
         ReplaceClusterRequest: {
             spec: components["schemas"]["ClusterSpec"];
@@ -1790,6 +2057,7 @@ export type components = {
             completedAt?: string;
             error?: string;
             name: string;
+            readonly namespace: components["schemas"]["NamespaceName"];
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed";
             source: components["schemas"]["RestoreSource"];
@@ -1867,6 +2135,17 @@ export type components = {
             mode: "preferTLS" | "requireTLS" | "disabled";
             /** Format: password */
             privateKey?: string;
+        };
+        /** @description Secret-safe token health; never contains a token or fingerprint. */
+        TokenStatus: {
+            lastError?: string;
+            /** Format: date-time */
+            lastValidatedAt?: string;
+            /** Format: date-time */
+            rotatedAt?: string;
+            /** @enum {string} */
+            source: "env" | "stored";
+            valid: boolean;
         };
         Topology: {
             shards?: number;
@@ -1977,9 +2256,18 @@ export type components = {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description Invalid namespace token, project mismatch or duplicate project. */
+        UnprocessableEntity: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
     };
     parameters: {
-        /** @description Managed cluster name. RBAC object is this name. */
+        /** @description Managed cluster name; the RBAC object is namespace/cluster. */
         ClusterPath: string;
         /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
         CSRF: string;
@@ -1987,6 +2275,10 @@ export type components = {
         Cursor: string;
         /** @description Maximum results per page. Results are authorization-filtered before pagination. */
         Limit: number;
+        /** @description Project namespace name; the RBAC object is this name. */
+        NamespacePath: components["schemas"]["NamespaceName"];
+        /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+        NamespaceQuery: components["schemas"]["NamespaceName"];
     };
     requestBodies: never;
     headers: never;
@@ -2556,6 +2848,8 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
             path?: never;
@@ -2582,7 +2876,10 @@ export interface operations {
     };
     createBackupStorage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -2615,7 +2912,10 @@ export interface operations {
     };
     getBackupStorage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
                 storage: string;
@@ -2643,7 +2943,10 @@ export interface operations {
     };
     replaceBackupStorage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -2678,7 +2981,10 @@ export interface operations {
     };
     deleteBackupStorage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -2707,7 +3013,10 @@ export interface operations {
     };
     verifyBackupStorage: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -2743,6 +3052,8 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
             path?: never;
@@ -2769,7 +3080,10 @@ export interface operations {
     };
     createCluster: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -2802,10 +3116,13 @@ export interface operations {
     };
     getCluster: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -2831,13 +3148,16 @@ export interface operations {
     };
     replaceCluster: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -2870,13 +3190,15 @@ export interface operations {
             query?: {
                 keepBackups?: boolean;
                 keepVolumes?: boolean;
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -2900,13 +3222,16 @@ export interface operations {
     };
     patchCluster: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -2941,10 +3266,12 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -2970,13 +3297,16 @@ export interface operations {
     };
     createBackup: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3006,11 +3336,14 @@ export interface operations {
     };
     getBackup: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
                 backup: string;
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3036,14 +3369,17 @@ export interface operations {
     };
     deleteBackup: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
                 backup: string;
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3076,10 +3412,13 @@ export interface operations {
     };
     getClusterBalancer: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3105,13 +3444,16 @@ export interface operations {
     };
     replaceClusterBalancer: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3141,10 +3483,13 @@ export interface operations {
     };
     getClusterConnection: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3177,10 +3522,12 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3206,13 +3553,16 @@ export interface operations {
     };
     createDatabaseRole: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3242,10 +3592,13 @@ export interface operations {
     };
     getDatabaseRole: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 role: string;
@@ -3273,13 +3626,16 @@ export interface operations {
     };
     replaceDatabaseRole: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 role: string;
@@ -3311,13 +3667,16 @@ export interface operations {
     };
     deleteDatabaseRole: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 role: string;
@@ -3348,10 +3707,12 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3377,13 +3738,16 @@ export interface operations {
     };
     createDatabaseUser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3415,10 +3779,13 @@ export interface operations {
     };
     getDatabaseUser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 username: string;
@@ -3446,13 +3813,16 @@ export interface operations {
     };
     replaceDatabaseUser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 username: string;
@@ -3484,13 +3854,16 @@ export interface operations {
     };
     deleteDatabaseUser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 database: string;
                 username: string;
@@ -3516,10 +3889,13 @@ export interface operations {
     };
     listClusterMembers: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3545,10 +3921,13 @@ export interface operations {
     };
     getClusterMember: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 member: string;
             };
@@ -3578,12 +3957,14 @@ export interface operations {
             query?: {
                 cursor?: string;
                 lines?: number;
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
                 process?: "mongod" | "mongos" | "pbm-agent" | "agent";
                 since?: string;
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 member: string;
             };
@@ -3610,13 +3991,16 @@ export interface operations {
     };
     replaceClusterMember: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 member: string;
             };
@@ -3644,6 +4028,8 @@ export interface operations {
     getClusterMetrics: {
         parameters: {
             query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
                 /** @description Lookback from now. */
                 range?: string;
                 /** @description Aggregation interval. */
@@ -3651,7 +4037,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3682,11 +4068,13 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
                 phase?: string;
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3712,10 +4100,13 @@ export interface operations {
     };
     getPITRWindow: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3741,10 +4132,13 @@ export interface operations {
     };
     getClusterPlacement: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3770,13 +4164,16 @@ export interface operations {
     };
     raiseClusterFCV: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3806,13 +4203,16 @@ export interface operations {
     };
     restartCluster: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3843,10 +4243,12 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3872,13 +4274,16 @@ export interface operations {
     };
     createRestore: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3908,10 +4313,13 @@ export interface operations {
     };
     getRestore: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 restore: string;
             };
@@ -3938,13 +4346,16 @@ export interface operations {
     };
     resumeCluster: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -3970,13 +4381,16 @@ export interface operations {
     };
     rotateClusterTLS: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -4002,10 +4416,13 @@ export interface operations {
     };
     getClusterStatus: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -4031,10 +4448,13 @@ export interface operations {
     };
     listSystemUsers: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
             };
             cookie?: never;
@@ -4060,13 +4480,16 @@ export interface operations {
     };
     rotateSystemUser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
-                /** @description Managed cluster name. RBAC object is this name. */
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
             };
@@ -4099,6 +4522,8 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 type?: string;
             };
@@ -4131,6 +4556,8 @@ export interface operations {
                 cluster?: string;
                 /** @description Replay events after this durable event cursor. */
                 cursor?: string;
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 type?: string;
             };
@@ -4188,7 +4615,10 @@ export interface operations {
     };
     getPrometheusMetrics: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4212,6 +4642,230 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listNamespaces: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NamespaceList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createNamespace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamespaceCreate"];
+            };
+        };
+        responses: {
+            /** @description Registered; relay deployment continues asynchronously. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getNamespace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteNamespace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Namespace removal accepted; relay cleanup continues asynchronously. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateNamespace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamespaceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    rotateNamespaceToken: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NamespaceTokenRotate"];
+            };
+        };
+        responses: {
+            /** @description Successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    validateNamespace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Project namespace name; the RBAC object is this name. */
+                namespace: components["parameters"]["NamespacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listOperations: {
         parameters: {
             query?: {
@@ -4220,6 +4874,8 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
                 phase?: string;
             };
             header?: never;
@@ -4275,7 +4931,10 @@ export interface operations {
     };
     listOrphanedVolumes: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
             header?: never;
             path?: never;
             cookie?: never;

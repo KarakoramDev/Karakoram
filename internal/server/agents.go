@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -28,39 +29,46 @@ type cachedAgent struct {
 
 // AgentDialer caches member clients while invalidating them on CA/token rotation.
 type AgentDialer struct {
-	store   *store.Store
-	mu      sync.Mutex
-	clients map[string]cachedAgent
+	store      *store.Store
+	namespaces engine.Namespaces
+	mu         sync.Mutex
+	clients    map[string]cachedAgent
 }
 
 // NewAgentDialer constructs a cluster-scoped pinned HTTPS dialer.
-func NewAgentDialer(st *store.Store) *AgentDialer {
-	return &AgentDialer{store: st, clients: map[string]cachedAgent{}}
+func NewAgentDialer(st *store.Store, namespaces engine.Namespaces) *AgentDialer {
+	return &AgentDialer{store: st, namespaces: namespaces, clients: map[string]cachedAgent{}}
 }
 
 var memberHostname = regexp.MustCompile(`^[a-z][a-z0-9]{0,39}$`)
 
 // Dial returns a member client whose trust roots and token come from sealed persistence.
-func (d *AgentDialer) Dial(ctx context.Context, cluster, member string) (*agentapi.Client, error) {
+func (d *AgentDialer) Dial(ctx context.Context, ref domain.ClusterRef, member string) (*agentapi.Client, error) {
 	if !memberHostname.MatchString(member) {
 		return nil, engine.ErrInvalid
 	}
-	ca, err := d.store.GetClusterSecret(ctx, cluster, "tls/ca.crt")
+	ca, err := d.store.GetClusterSecret(ctx, ref, "tls/ca.crt")
 	if err != nil {
 		return nil, err
 	}
-	tok, err := d.store.GetAgentToken(ctx, cluster, member)
+	tok, err := d.store.GetAgentToken(ctx, ref, member)
 	if err != nil {
 		return nil, err
 	}
 	fingerprint := secrets.Hash(string(ca)) + secrets.Hash(tok.Token)
-	key := cluster + "/" + member
+	key := ref.Key() + "/" + member
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if c, exists := d.clients[key]; exists && c.fingerprint == fingerprint {
 		return c.client, nil
 	}
-	client, err := agentapi.NewClient(agentapi.ClientOptions{BaseURL: "https://" + member + ":9443", Token: tok.Token, CAPEM: ca})
+	opts := agentapi.ClientOptions{BaseURL: "https://" + member + ":9443", Token: tok.Token, CAPEM: ca}
+	if d.namespaces != nil {
+		if dialer := d.namespaces.Dialer(ref.Namespace); dialer != nil {
+			opts.DialContext = dialer.DialContext
+		}
+	}
+	client, err := agentapi.NewClient(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +105,7 @@ func (s *Server) InternalHandler() http.Handler {
 			_ = fail(401, "unauthorized", "Agent authentication required").write(w)
 			return
 		}
-		rc, p, err := s.context(r.Context(), token.Cluster)
+		rc, p, err := s.context(r.Context(), domain.ClusterRef{Namespace: token.Namespace, Name: token.Cluster})
 		if err != nil {
 			_ = s.failure(err).write(w)
 			return
@@ -119,7 +127,8 @@ func (s *Server) InternalHandler() http.Handler {
 
 type internalIdentity struct{ CACert, CAKey, Cert, Key []byte }
 
-func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, hostname string) (*tls.Config, string, error) {
+func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, hostname string, additionalNames ...string) (*tls.Config, string, error) {
+	dnsNames := append([]string{hostname, "karakoram", "localhost"}, additionalNames...)
 	const setting = "server/internal-pki"
 	raw, err := st.GetSetting(ctx, setting)
 	var identity internalIdentity
@@ -128,7 +137,7 @@ func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, h
 		if e != nil {
 			return nil, "", e
 		}
-		cert, key, e := ca.Issue(pki.CertRequest{CommonName: hostname, DNSNames: []string{hostname, "karakoram", "localhost"}, IPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, Validity: 365 * 24 * time.Hour, Server: true})
+		cert, key, e := ca.Issue(pki.CertRequest{CommonName: hostname, DNSNames: dnsNames, IPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, Validity: 365 * 24 * time.Hour, Server: true})
 		if e != nil {
 			return nil, "", e
 		}
@@ -156,12 +165,20 @@ func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, h
 	if err != nil {
 		return nil, "", err
 	}
-	if leaf || cert.Leaf == nil || cert.Leaf.VerifyHostname(hostname) != nil {
+	missingSAN := cert.Leaf == nil
+	if cert.Leaf != nil {
+		for _, name := range dnsNames {
+			if cert.Leaf.VerifyHostname(name) != nil {
+				missingSAN = true
+			}
+		}
+	}
+	if leaf || missingSAN {
 		ca, e := pki.LoadCA(identity.CACert, identity.CAKey)
 		if e != nil {
 			return nil, "", e
 		}
-		identity.Cert, identity.Key, e = ca.Issue(pki.CertRequest{CommonName: hostname, DNSNames: []string{hostname, "karakoram", "localhost"}, IPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, Validity: 365 * 24 * time.Hour, Server: true})
+		identity.Cert, identity.Key, e = ca.Issue(pki.CertRequest{CommonName: hostname, DNSNames: dnsNames, IPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, Validity: 365 * 24 * time.Hour, Server: true})
 		if e != nil {
 			return nil, "", e
 		}
@@ -187,7 +204,7 @@ func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, h
 		if err != nil {
 			return nil, err
 		}
-		certPEM, keyPEM, err := ca.Issue(pki.CertRequest{CommonName: hostname, DNSNames: []string{hostname, "karakoram", "localhost"}, IPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, Validity: 365 * 24 * time.Hour, Server: true})
+		certPEM, keyPEM, err := ca.Issue(pki.CertRequest{CommonName: hostname, DNSNames: dnsNames, IPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}, Validity: 365 * 24 * time.Hour, Server: true})
 		if err != nil {
 			return nil, err
 		}

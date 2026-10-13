@@ -157,6 +157,171 @@
   color: #fff;
 }
 
+/* ---------- Namespace switcher ---------- */
+.ns-switch {
+  position: relative;
+  padding: 10px 8px 0;
+}
+
+.ns-switch-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 1px solid var(--ridge-600);
+  border-radius: var(--radius);
+  background: var(--ridge-900);
+  color: var(--ridge-100);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+
+.ns-switch-btn:hover,
+.ns-switch-btn[aria-expanded="true"] {
+  border-color: var(--ridge-300);
+  background: var(--ridge-700);
+}
+
+.ns-switch-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ns-switch-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.2;
+}
+
+.ns-switch-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ridge-300);
+}
+
+.ns-switch-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ns-switch-caret {
+  flex: none;
+  color: var(--ridge-300);
+  font-size: var(--fs-xs);
+}
+
+.ns-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ridge-300);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.ns-dot-ok {
+  background: #3ccf7a;
+}
+
+.ns-dot-warn {
+  background: #f0b429;
+}
+
+.ns-dot-danger {
+  background: #ef5350;
+}
+
+.ns-dot-all {
+  background: conic-gradient(#3ccf7a 0 120deg, var(--accent) 120deg 240deg, #f0b429 240deg 360deg);
+}
+
+.ns-menu {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: calc(100% + 4px);
+  z-index: 30;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.ns-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ns-menu button:hover {
+  background: var(--surface-3);
+}
+
+.ns-menu button[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.ns-menu .ns-dot {
+  box-shadow: none;
+}
+
+.ns-menu-tag {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.ns-menu-note {
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* The rail clips overflow, so the collapsed menu floats beside it. */
+.collapsed .ns-switch-btn {
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.collapsed .ns-menu {
+  position: fixed;
+  left: calc(var(--sidebar-w-collapsed) + 4px);
+  right: auto;
+  top: calc(var(--topbar-h) + 10px);
+  min-width: 220px;
+}
+
 .main {
   min-width: 0;
   display: flex;
@@ -390,6 +555,8 @@
   .brand-text,
   .nav-section,
   .nav-link span,
+  .ns-switch-text,
+  .ns-switch-caret,
   .user-chip > div,
   .sidebar-foot .btn span {
     display: none;
@@ -409,6 +576,19 @@
   .user-chip {
     justify-content: center;
     padding: 6px 0;
+  }
+
+  .ns-switch-btn {
+    justify-content: center;
+    padding: 6px 0;
+  }
+
+  .ns-menu {
+    position: fixed;
+    left: calc(var(--sidebar-w-collapsed) + 4px);
+    right: auto;
+    top: calc(var(--topbar-h) + 10px);
+    min-width: 220px;
   }
 
   .page {

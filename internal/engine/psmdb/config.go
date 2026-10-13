@@ -27,7 +27,12 @@ import (
 
 const pbmVersion = "2.16.0-1.noble"
 
-func (p *Provider) zeropsYAML(c *domain.Cluster, m *member, version string) (string, error) {
+func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (string, error) {
+	c := rc.Cluster
+	agentURL := rc.AgentURL
+	if agentURL == "" {
+		agentURL = p.options.ControlPlaneURL
+	}
 	series := strings.ReplaceAll(major(version), ".", "")
 	shell := "2.10.0.noble"
 	if series == "60" {
@@ -38,7 +43,7 @@ func (p *Provider) zeropsYAML(c *domain.Cluster, m *member, version string) (str
 	if m.Volume != "" {
 		dir = "/mnt/" + m.Volume
 	}
-	run := map[string]any{"base": "ubuntu@24.04", "ports": []map[string]any{{"port": 27017, "protocol": "tcp"}}, "prepareCommands": prepare, "envVariables": map[string]string{"KARAKORAM_URL": p.options.ControlPlaneURL, "KARAKORAM_CLUSTER": c.Name, "KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM, "KARAKORAM_DATA_DIR": dir, "PERCONA_TELEMETRY_DISABLE": "1"}, "start": "./karakoram agent"}
+	run := map[string]any{"base": "ubuntu@24.04", "ports": []map[string]any{{"port": 27017, "protocol": "tcp"}}, "prepareCommands": prepare, "envVariables": map[string]string{"KARAKORAM_URL": agentURL, "KARAKORAM_CLUSTER": c.Name, "KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM, "KARAKORAM_DATA_DIR": dir, "PERCONA_TELEMETRY_DISABLE": "1"}, "start": "./karakoram agent"}
 	if m.Volume != "" {
 		run["volume"] = map[string]string{"hostname": m.Volume}
 	}
@@ -63,10 +68,10 @@ func missing(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound)
 }
 func secret(ctx context.Context, rc *engine.Context, key string) ([]byte, error) {
-	return rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Name, key)
+	return rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), key)
 }
 func putSecret(ctx context.Context, rc *engine.Context, key string, value []byte) error {
-	return rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Name, key, value)
+	return rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), key, value)
 }
 func ensureSecret(ctx context.Context, rc *engine.Context, key string, generate func() (string, error)) error {
 	_, e := secret(ctx, rc, key)
@@ -140,13 +145,13 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 				return err
 			}
 		}
-		tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name)
+		tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 		if missing(e) || e == nil && tok == nil {
 			v, e := secrets.Token()
 			if e != nil {
 				return e
 			}
-			if e = rc.Secrets.SetAgentToken(ctx, &domain.AgentToken{Cluster: rc.Cluster.Name, Member: m.Name, Hash: secrets.Hash(v), Token: v}); e != nil {
+			if e = rc.Secrets.SetAgentToken(ctx, &domain.AgentToken{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Member: m.Name, Hash: secrets.Hash(v), Token: v}); e != nil {
 				return e
 			}
 		} else if e != nil {
@@ -156,7 +161,7 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 			base := "tls/" + kind + "/" + m.Name
 			if kind == "members" && providedLeaf {
 				// Supplied leaves belong to the operator, not the auto-renewer.
-				if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Name, base+".pending.pem"); err != nil && !missing(err) {
+				if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+".pending.pem"); err != nil && !missing(err) {
 					return err
 				}
 				continue
@@ -324,7 +329,7 @@ func publishRenewedCertificates(ctx context.Context, rc *engine.Context, m *memb
 		if err = putSecret(ctx, rc, base+".pem", bundle); err != nil {
 			return err
 		}
-		if err = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Name, base+".pending.pem"); err != nil && !missing(err) {
+		if err = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+".pending.pem"); err != nil && !missing(err) {
 			return err
 		}
 	}

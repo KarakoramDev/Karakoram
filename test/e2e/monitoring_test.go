@@ -62,7 +62,7 @@ func (s *suite) assertPrometheus(name string) {
 	s.t.Helper()
 	members := s.members(name)
 	s.poll("labelled Prometheus metrics", 5*time.Minute, func() bool {
-		r, err := s.root.GetPrometheusMetrics(s.ctx)
+		r, err := s.root.GetPrometheusMetrics(s.ctx, nil)
 		if err != nil {
 			s.t.Fatalf("Prometheus transport: %s", s.redact(err.Error()))
 		}

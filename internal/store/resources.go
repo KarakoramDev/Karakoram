@@ -21,16 +21,17 @@ func (s *Store) CreateBackup(ctx context.Context, v *domain.Backup) error {
 	if v.Phase == "" {
 		v.Phase = domain.PhasePending
 	}
-	return put(ctx, s.writer, "backup", v.Cluster, v.Name, v, "", "", string(v.Phase), true)
+	return put(ctx, s.writer, "backup", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Name, v, "", "", string(v.Phase), true)
 }
 
 // UpdateBackup persists changes to backup.
 func (s *Store) UpdateBackup(ctx context.Context, v *domain.Backup) error {
-	return s.update(ctx, "backup", v.Cluster, v.Name, v, "", "", string(v.Phase))
+	return s.update(ctx, "backup", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Name, v, "", "", string(v.Phase))
 }
 
 // GetBackup loads backup.
-func (s *Store) GetBackup(ctx context.Context, cluster, name string) (*domain.Backup, error) {
+func (s *Store) GetBackup(ctx context.Context, ref domain.ClusterRef, name string) (*domain.Backup, error) {
+	cluster := ref.Key()
 	var v domain.Backup
 	_, _, err := s.get(ctx, "backup", cluster, name, &v)
 	if err != nil {
@@ -40,12 +41,13 @@ func (s *Store) GetBackup(ctx context.Context, cluster, name string) (*domain.Ba
 }
 
 // ListBackups returns ordered backups.
-func (s *Store) ListBackups(ctx context.Context, cluster string) ([]domain.Backup, error) {
-	return list[domain.Backup](ctx, s, "backup", cluster)
+func (s *Store) ListBackups(ctx context.Context, ref domain.ClusterRef) ([]domain.Backup, error) {
+	return listClusterRecords[domain.Backup](ctx, s, "backup", ref)
 }
 
 // DeleteBackup removes backup.
-func (s *Store) DeleteBackup(ctx context.Context, cluster, name string) error {
+func (s *Store) DeleteBackup(ctx context.Context, ref domain.ClusterRef, name string) error {
+	cluster := ref.Key()
 	return s.remove(ctx, "backup", cluster, name)
 }
 
@@ -57,16 +59,17 @@ func (s *Store) CreateRestore(ctx context.Context, v *domain.Restore) error {
 	if v.Phase == "" {
 		v.Phase = domain.PhasePending
 	}
-	return put(ctx, s.writer, "restore", v.Cluster, v.Name, v, "", "", string(v.Phase), true)
+	return put(ctx, s.writer, "restore", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Name, v, "", "", string(v.Phase), true)
 }
 
 // UpdateRestore persists changes to restore.
 func (s *Store) UpdateRestore(ctx context.Context, v *domain.Restore) error {
-	return s.update(ctx, "restore", v.Cluster, v.Name, v, "", "", string(v.Phase))
+	return s.update(ctx, "restore", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Name, v, "", "", string(v.Phase))
 }
 
 // GetRestore loads restore.
-func (s *Store) GetRestore(ctx context.Context, cluster, name string) (*domain.Restore, error) {
+func (s *Store) GetRestore(ctx context.Context, ref domain.ClusterRef, name string) (*domain.Restore, error) {
+	cluster := ref.Key()
 	var v domain.Restore
 	_, _, err := s.get(ctx, "restore", cluster, name, &v)
 	if err != nil {
@@ -76,27 +79,29 @@ func (s *Store) GetRestore(ctx context.Context, cluster, name string) (*domain.R
 }
 
 // ListRestores returns ordered restores.
-func (s *Store) ListRestores(ctx context.Context, cluster string) ([]domain.Restore, error) {
-	return list[domain.Restore](ctx, s, "restore", cluster)
+func (s *Store) ListRestores(ctx context.Context, ref domain.ClusterRef) ([]domain.Restore, error) {
+	return listClusterRecords[domain.Restore](ctx, s, "restore", ref)
 }
 
 // DeleteRestore removes restore.
-func (s *Store) DeleteRestore(ctx context.Context, cluster, name string) error {
+func (s *Store) DeleteRestore(ctx context.Context, ref domain.ClusterRef, name string) error {
+	cluster := ref.Key()
 	return s.remove(ctx, "restore", cluster, name)
 }
 
 // CreateRetainedVolume inserts a new retained volume.
 func (s *Store) CreateRetainedVolume(ctx context.Context, v *domain.RetainedVolume) error {
-	return put(ctx, s.writer, "volume", v.Cluster, v.Member, v, "", "", "", true)
+	return put(ctx, s.writer, "volume", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Member, v, "", "", "", true)
 }
 
 // UpdateRetainedVolume persists changes to retained volume.
 func (s *Store) UpdateRetainedVolume(ctx context.Context, v *domain.RetainedVolume) error {
-	return s.update(ctx, "volume", v.Cluster, v.Member, v, "", "", "")
+	return s.update(ctx, "volume", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Member, v, "", "", "")
 }
 
 // GetRetainedVolume loads retained volume.
-func (s *Store) GetRetainedVolume(ctx context.Context, cluster, name string) (*domain.RetainedVolume, error) {
+func (s *Store) GetRetainedVolume(ctx context.Context, ref domain.ClusterRef, name string) (*domain.RetainedVolume, error) {
+	cluster := ref.Key()
 	var v domain.RetainedVolume
 	_, _, err := s.get(ctx, "volume", cluster, name, &v)
 	if err != nil {
@@ -106,54 +111,67 @@ func (s *Store) GetRetainedVolume(ctx context.Context, cluster, name string) (*d
 }
 
 // ListRetainedVolumes returns ordered retained volumes.
-func (s *Store) ListRetainedVolumes(ctx context.Context, cluster string) ([]domain.RetainedVolume, error) {
-	return list[domain.RetainedVolume](ctx, s, "volume", cluster)
+func (s *Store) ListRetainedVolumes(ctx context.Context, ref domain.ClusterRef) ([]domain.RetainedVolume, error) {
+	return listClusterRecords[domain.RetainedVolume](ctx, s, "volume", ref)
 }
 
 // DeleteRetainedVolume removes retained volume.
-func (s *Store) DeleteRetainedVolume(ctx context.Context, cluster, name string) error {
+func (s *Store) DeleteRetainedVolume(ctx context.Context, ref domain.ClusterRef, name string) error {
+	cluster := ref.Key()
 	return s.remove(ctx, "volume", cluster, name)
 }
 
 // CreateBackupStorage inserts a new backup storage.
 func (s *Store) CreateBackupStorage(ctx context.Context, v *domain.BackupStorage) error {
-	sealed, err := s.seal("storage/"+v.Name, v.Credentials)
+	v.Namespace = domain.NormalizedNamespace(v.Namespace)
+	if err := domain.ValidateNamespaceName(v.Namespace); err != nil {
+		return err
+	}
+	sealed, err := s.seal("storage/"+domain.ClusterRef{Namespace: v.Namespace, Name: v.Name}.Key(), v.Credentials)
 	if err != nil {
 		return err
 	}
-	return put(ctx, s.writer, "storage", "", v.Name, v, sealed, "", "", true)
+	return put(ctx, s.writer, "storage", namespaceScope(v.Namespace), v.Name, v, sealed, "", "", true)
 }
 
 // UpdateBackupStorage persists changes to backup storage.
 func (s *Store) UpdateBackupStorage(ctx context.Context, v *domain.BackupStorage) error {
-	sealed, err := s.seal("storage/"+v.Name, v.Credentials)
+	v.Namespace = domain.NormalizedNamespace(v.Namespace)
+	if err := domain.ValidateNamespaceName(v.Namespace); err != nil {
+		return err
+	}
+	sealed, err := s.seal("storage/"+domain.ClusterRef{Namespace: v.Namespace, Name: v.Name}.Key(), v.Credentials)
 	if err != nil {
 		return err
 	}
-	return s.update(ctx, "storage", "", v.Name, v, sealed, "", "")
+	return s.update(ctx, "storage", namespaceScope(v.Namespace), v.Name, v, sealed, "", "")
 }
 
 // GetBackupStorage loads backup storage.
-func (s *Store) GetBackupStorage(ctx context.Context, name string) (*domain.BackupStorage, error) {
+func (s *Store) GetBackupStorage(ctx context.Context, namespace, name string) (*domain.BackupStorage, error) {
 	var v domain.BackupStorage
-	sealed, _, err := s.get(ctx, "storage", "", name, &v)
+	sealed, _, err := s.get(ctx, "storage", namespaceScope(namespace), name, &v)
 	if err != nil {
 		return nil, err
 	}
-	if err = s.unseal("storage/"+name, sealed, &v.Credentials); err != nil {
+	if err = s.unseal("storage/"+domain.ClusterRef{Namespace: namespace, Name: name}.Key(), sealed, &v.Credentials); err != nil {
 		return nil, err
 	}
 	return &v, nil
 }
 
 // ListBackupStorages intentionally omits credentials.
-func (s *Store) ListBackupStorages(ctx context.Context) ([]domain.BackupStorage, error) {
-	return list[domain.BackupStorage](ctx, s, "storage", "")
+func (s *Store) ListBackupStorages(ctx context.Context, namespace string) ([]domain.BackupStorage, error) {
+	scope := "*"
+	if namespace != "" {
+		scope = namespaceScope(namespace)
+	}
+	return list[domain.BackupStorage](ctx, s, "storage", scope)
 }
 
 // DeleteBackupStorage removes backup storage.
-func (s *Store) DeleteBackupStorage(ctx context.Context, name string) error {
-	return s.remove(ctx, "storage", "", name)
+func (s *Store) DeleteBackupStorage(ctx context.Context, namespace, name string) error {
+	return s.remove(ctx, "storage", namespaceScope(namespace), name)
 }
 
 // CreateAccount inserts a new account.
@@ -319,7 +337,8 @@ func (s *Store) RotateSession(ctx context.Context, id, oldHash, newHash string, 
 }
 
 // SetClusterSecret persists cluster secret.
-func (s *Store) SetClusterSecret(ctx context.Context, cluster, key string, value []byte) error {
+func (s *Store) SetClusterSecret(ctx context.Context, ref domain.ClusterRef, key string, value []byte) error {
+	cluster := ref.Key()
 	sealed, err := s.sealer.SealFor("cluster/"+cluster+"/"+key, value)
 	if err != nil {
 		return err
@@ -329,7 +348,8 @@ func (s *Store) SetClusterSecret(ctx context.Context, cluster, key string, value
 
 // SetClusterSecrets persists several cluster secrets in one transaction, so
 // related material (e.g. a certificate and its key) is never stored half-way.
-func (s *Store) SetClusterSecrets(ctx context.Context, cluster string, values map[string][]byte) error {
+func (s *Store) SetClusterSecrets(ctx context.Context, ref domain.ClusterRef, values map[string][]byte) error {
+	cluster := ref.Key()
 	sealed := make(map[string]string, len(values))
 	for key, value := range values {
 		v, err := s.sealer.SealFor("cluster/"+cluster+"/"+key, value)
@@ -352,7 +372,8 @@ func (s *Store) SetClusterSecrets(ctx context.Context, cluster string, values ma
 }
 
 // GetClusterSecret loads cluster secret.
-func (s *Store) GetClusterSecret(ctx context.Context, cluster, key string) ([]byte, error) {
+func (s *Store) GetClusterSecret(ctx context.Context, ref domain.ClusterRef, key string) ([]byte, error) {
+	cluster := ref.Key()
 	var v struct{}
 	sealed, _, err := s.get(ctx, "secret", cluster, key, &v)
 	if err != nil {
@@ -362,7 +383,8 @@ func (s *Store) GetClusterSecret(ctx context.Context, cluster, key string) ([]by
 }
 
 // DeleteClusterSecret removes cluster secret.
-func (s *Store) DeleteClusterSecret(ctx context.Context, cluster, key string) error {
+func (s *Store) DeleteClusterSecret(ctx context.Context, ref domain.ClusterRef, key string) error {
+	cluster := ref.Key()
 	return s.remove(ctx, "secret", cluster, key)
 }
 
@@ -371,15 +393,16 @@ func (s *Store) SetAgentToken(ctx context.Context, v *domain.AgentToken) error {
 	if v.Token != "" {
 		v.Hash = secrets.Hash(v.Token)
 	}
-	sealed, err := s.seal("agent/"+v.Cluster+"/"+v.Member, v.Token)
+	sealed, err := s.seal("agent/"+domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key()+"/"+v.Member, v.Token)
 	if err != nil {
 		return err
 	}
-	return put(ctx, s.writer, "agent-token", v.Cluster, v.Member, v, sealed, v.Hash, "", false)
+	return put(ctx, s.writer, "agent-token", domain.ClusterRef{Namespace: v.Namespace, Name: v.Cluster}.Key(), v.Member, v, sealed, v.Hash, "", false)
 }
 
 // GetAgentToken loads agent token.
-func (s *Store) GetAgentToken(ctx context.Context, cluster, member string) (*domain.AgentToken, error) {
+func (s *Store) GetAgentToken(ctx context.Context, ref domain.ClusterRef, member string) (*domain.AgentToken, error) {
+	cluster := ref.Key()
 	var v domain.AgentToken
 	sealed, hash, err := s.get(ctx, "agent-token", cluster, member, &v)
 	if err != nil {
@@ -399,11 +422,12 @@ func (s *Store) FindAgentTokenByHash(ctx context.Context, hash string) (*domain.
 	if err != nil {
 		return nil, typed(err)
 	}
-	return s.GetAgentToken(ctx, cluster, member)
+	return s.GetAgentToken(ctx, domain.ParseClusterKey(cluster), member)
 }
 
 // DeleteAgentToken removes agent token.
-func (s *Store) DeleteAgentToken(ctx context.Context, cluster, member string) error {
+func (s *Store) DeleteAgentToken(ctx context.Context, ref domain.ClusterRef, member string) error {
+	cluster := ref.Key()
 	return s.remove(ctx, "agent-token", cluster, member)
 }
 

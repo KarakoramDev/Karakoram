@@ -5,19 +5,25 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useClusters } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
+import { DEFAULT_NAMESPACE } from '@/auth/permissions';
+import { spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
 import { LinkButton } from '@/components/ui/Button';
 import { Badge, Card, Empty, ErrorBlock, Loading, PageHeader, Time } from '@/components/ui/Primitives';
 import { BackupSummary, HealthSummary, PhaseBadge, topologySummary } from './cluster-utils';
+import { clusterPath } from './detail/ClusterDetail';
 
 export function ClustersListPage() {
   const auth = useAuth();
-  const clusters = useClusters();
+  const { namespace } = useNamespace();
+  const clusters = useClusters(namespace);
   const [filter, setFilter] = useState('');
+  const allNamespaces = !namespace && spansNamespaces(clusters.data?.items ?? []);
+  const newClusterTo = namespace ? `/clusters/new?namespace=${encodeURIComponent(namespace)}` : '/clusters/new';
 
   const items = useMemo(() => {
     const all = clusters.data?.items ?? [];
     const q = filter.trim().toLowerCase();
-    return q ? all.filter((c) => c.name.includes(q) || c.spec.version.includes(q) || c.status.phase.toLowerCase().includes(q)) : all;
+    return q ? all.filter((c) => c.name.includes(q) || (c.namespace || DEFAULT_NAMESPACE).includes(q) || c.spec.version.includes(q) || c.status.phase.toLowerCase().includes(q)) : all;
   }, [clusters.data, filter]);
 
   const counts = useMemo(() => {
@@ -32,10 +38,10 @@ export function ClustersListPage() {
     <div className="page">
       <PageHeader
         title="Clusters"
-        description="Database clusters managed in this Zerops project."
+        description={namespace ? `Database clusters managed in namespace ${namespace}.` : allNamespaces ? 'Database clusters managed across every namespace you can see.' : 'Database clusters managed in this Zerops project.'}
         actions={
           auth.can('clusters', 'create') ? (
-            <LinkButton to="/clusters/new" variant="primary">
+            <LinkButton to={newClusterTo} variant="primary">
               + New cluster
             </LinkButton>
           ) : null
@@ -86,7 +92,7 @@ export function ClustersListPage() {
             className="input"
             style={{ width: 240 }}
             type="search"
-            placeholder="Filter by name, version, phase"
+            placeholder={allNamespaces ? 'Filter by name, namespace, version, phase' : 'Filter by name, version, phase'}
             aria-label="Filter clusters"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -100,7 +106,7 @@ export function ClustersListPage() {
             <ErrorBlock error={clusters.error} retry={() => clusters.refetch()} />
           </div>
         ) : items.length === 0 ? (
-          <Empty title={filter ? 'No clusters match' : 'No clusters yet'} action={!filter && auth.can('clusters', 'create') ? <LinkButton to="/clusters/new" variant="primary">Create your first cluster</LinkButton> : null}>
+          <Empty title={filter ? 'No clusters match' : 'No clusters yet'} action={!filter && auth.can('clusters', 'create') ? <LinkButton to={newClusterTo} variant="primary">Create your first cluster</LinkButton> : null}>
             {filter ? 'Try a different filter.' : 'Create a replica set or sharded cluster to get started.'}
           </Empty>
         ) : (
@@ -109,6 +115,7 @@ export function ClustersListPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  {allNamespaces ? <th>Namespace</th> : null}
                   <th>Phase</th>
                   <th>Version</th>
                   <th>Topology</th>
@@ -121,13 +128,15 @@ export function ClustersListPage() {
               <tbody>
                 {items.map((c) => {
                   const colocated = c.status.placement?.groups.some((g) => g.members.length > 1);
+                  const ns = c.namespace || DEFAULT_NAMESPACE;
                   return (
-                    <tr key={c.name}>
+                    <tr key={`${ns}/${c.name}`}>
                       <td>
-                        <Link to={`/clusters/${encodeURIComponent(c.name)}`} className="strong mono">
+                        <Link to={clusterPath(ns, c.name)} className="strong mono">
                           {c.name}
                         </Link>
                       </td>
+                      {allNamespaces ? <td className="mono small">{ns}</td> : null}
                       <td>
                         <PhaseBadge phase={c.status.phase} message={c.status.message} />
                       </td>

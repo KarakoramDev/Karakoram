@@ -19,7 +19,7 @@ func (s *Server) ListOrphanedVolumes(ctx context.Context, request api.ListOrphan
 func (r response) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error { return r.write(w) }
 
 func (s *Server) orphanedVolumes(ctx context.Context) response {
-	items, err := s.Store.ListOrphanedVolumes(ctx)
+	items, err := s.Store.ListOrphanedVolumes(ctx, namespaceFilter(ctx))
 	if err != nil {
 		return s.failure(err)
 	}
@@ -27,7 +27,7 @@ func (s *Server) orphanedVolumes(ctx context.Context) response {
 	for _, volume := range items {
 		// The originating cluster may already be deleted; its name remains the
 		// authorization object, just as for retained backups.
-		if s.allowed(ctx, "clusters", "read", volume.Cluster) {
+		if s.allowed(ctx, "clusters", "read", clusterObject(volume.Namespace, volume.Cluster)) {
 			out.Items = append(out.Items, orphanedVolumeAPI(volume))
 		}
 	}
@@ -36,6 +36,7 @@ func (s *Server) orphanedVolumes(ctx context.Context) response {
 
 func orphanedVolumeAPI(v domain.OrphanedVolume) api.OrphanedVolume {
 	return api.OrphanedVolume{
+		Namespace:     ptr(domain.NormalizedNamespace(v.Namespace)),
 		Hostname:      v.Hostname,
 		ServiceId:     v.ServiceID,
 		Cluster:       v.Cluster,

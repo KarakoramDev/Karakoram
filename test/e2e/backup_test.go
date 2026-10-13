@@ -113,7 +113,7 @@ func (s *suite) waitPITR(name string, target time.Time) {
 	s.t.Helper()
 	s.poll("PITR window covers target", 20*time.Minute, func() bool {
 		var window api.PITRWindow
-		s.expect(&window)(s.client.GetPITRWindow(s.ctx, name))
+		s.expect(&window)(s.client.GetPITRWindow(s.ctx, name, nil))
 		s.t.Logf("cluster=%s pitrAvailable=%t start=%v end=%v target=%s", name, window.Available, window.Start, window.End, target.Format(time.RFC3339))
 		if window.Available && window.Start != nil && window.End != nil && !target.Before(*window.Start) && target.Before(*window.End) {
 			s.snapshot(name+"-pitr", window)

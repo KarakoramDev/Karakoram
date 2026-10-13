@@ -6,8 +6,10 @@
 package api
 
 // RBACRule declares authorization for a generated operation. ObjectParam is
-// a cluster path parameter name or * for a global route. Global collections
-// must additionally filter each result against its persisted cluster object.
+// cluster, namespace or storage for the corresponding path parameter, or *
+// for a global route. Cluster and storage objects include the namespace query
+// (defaulting to default): namespace/name. Namespace objects use their path name.
+// Collections must additionally filter each item against its persisted object.
 // Public routes require no authentication. Authenticated self-service routes
 // are handled by the identity layer before administrative policy enforcement.
 type RBACRule struct {
@@ -29,18 +31,20 @@ var OperationRBAC = map[string]RBACRule{
 	"createCluster":          {Resource: "clusters", Action: "create", ObjectParam: "*", Public: false},
 	"createDatabaseRole":     {Resource: "database-users", Action: "create", ObjectParam: "cluster", Public: false},
 	"createDatabaseUser":     {Resource: "database-users", Action: "create", ObjectParam: "cluster", Public: false},
+	"createNamespace":        {Resource: "namespaces", Action: "create", ObjectParam: "*", Public: false},
 	"createRestore":          {Resource: "restores", Action: "create", ObjectParam: "cluster", Public: false},
 	"deleteAPIToken":         {Resource: "api-tokens", Action: "delete", ObjectParam: "*", Public: false},
 	"deleteAccount":          {Resource: "accounts", Action: "delete", ObjectParam: "*", Public: false},
 	"deleteBackup":           {Resource: "backups", Action: "delete", ObjectParam: "cluster", Public: false},
-	"deleteBackupStorage":    {Resource: "backup-storages", Action: "delete", ObjectParam: "*", Public: false},
+	"deleteBackupStorage":    {Resource: "backup-storages", Action: "delete", ObjectParam: "storage", Public: false},
 	"deleteCluster":          {Resource: "clusters", Action: "delete", ObjectParam: "cluster", Public: false},
 	"deleteDatabaseRole":     {Resource: "database-users", Action: "delete", ObjectParam: "cluster", Public: false},
 	"deleteDatabaseUser":     {Resource: "database-users", Action: "delete", ObjectParam: "cluster", Public: false},
+	"deleteNamespace":        {Resource: "namespaces", Action: "delete", ObjectParam: "namespace", Public: false},
 	"getAPIToken":            {Resource: "api-tokens", Action: "read", ObjectParam: "*", Public: false},
 	"getAccount":             {Resource: "accounts", Action: "read", ObjectParam: "*", Public: false},
 	"getBackup":              {Resource: "backups", Action: "read", ObjectParam: "cluster", Public: false},
-	"getBackupStorage":       {Resource: "backup-storages", Action: "read", ObjectParam: "*", Public: false},
+	"getBackupStorage":       {Resource: "backup-storages", Action: "read", ObjectParam: "storage", Public: false},
 	"getCluster":             {Resource: "clusters", Action: "read", ObjectParam: "cluster", Public: false},
 	"getClusterBalancer":     {Resource: "clusters", Action: "read", ObjectParam: "cluster", Public: false},
 	"getClusterConnection":   {Resource: "cluster-credentials", Action: "read", ObjectParam: "cluster", Public: false},
@@ -53,6 +57,7 @@ var OperationRBAC = map[string]RBACRule{
 	"getDatabaseUser":        {Resource: "database-users", Action: "read", ObjectParam: "cluster", Public: false},
 	"getHealth":              {Resource: "", Action: "", ObjectParam: "", Public: true},
 	"getMemberLogs":          {Resource: "monitoring", Action: "read", ObjectParam: "cluster", Public: false},
+	"getNamespace":           {Resource: "namespaces", Action: "read", ObjectParam: "namespace", Public: false},
 	"getOperation":           {Resource: "operations", Action: "read", ObjectParam: "*", Public: false},
 	"getPITRWindow":          {Resource: "backups", Action: "read", ObjectParam: "cluster", Public: false},
 	"getPermissions":         {Resource: "rbac", Action: "read", ObjectParam: "*", Public: false},
@@ -72,6 +77,7 @@ var OperationRBAC = map[string]RBACRule{
 	"listDatabaseRoles":      {Resource: "database-users", Action: "read", ObjectParam: "cluster", Public: false},
 	"listDatabaseUsers":      {Resource: "database-users", Action: "read", ObjectParam: "cluster", Public: false},
 	"listEvents":             {Resource: "events", Action: "read", ObjectParam: "*", Public: false},
+	"listNamespaces":         {Resource: "namespaces", Action: "read", ObjectParam: "*", Public: false},
 	"listOperations":         {Resource: "operations", Action: "read", ObjectParam: "*", Public: false},
 	"listOrphanedVolumes":    {Resource: "clusters", Action: "read", ObjectParam: "*", Public: false},
 	"listProviders":          {Resource: "providers", Action: "read", ObjectParam: "*", Public: false},
@@ -86,7 +92,7 @@ var OperationRBAC = map[string]RBACRule{
 	"refreshSession":         {Resource: "accounts", Action: "update", ObjectParam: "*", Public: false},
 	"replaceAPIToken":        {Resource: "api-tokens", Action: "update", ObjectParam: "*", Public: false},
 	"replaceAccount":         {Resource: "accounts", Action: "update", ObjectParam: "*", Public: false},
-	"replaceBackupStorage":   {Resource: "backup-storages", Action: "update", ObjectParam: "*", Public: false},
+	"replaceBackupStorage":   {Resource: "backup-storages", Action: "update", ObjectParam: "storage", Public: false},
 	"replaceCluster":         {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"replaceClusterBalancer": {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"replaceClusterMember":   {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
@@ -98,7 +104,10 @@ var OperationRBAC = map[string]RBACRule{
 	"restartCluster":         {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"resumeCluster":          {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"rotateClusterTLS":       {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
+	"rotateNamespaceToken":   {Resource: "namespaces", Action: "update", ObjectParam: "namespace", Public: false},
 	"rotateSystemUser":       {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"streamEvents":           {Resource: "events", Action: "read", ObjectParam: "*", Public: false},
-	"verifyBackupStorage":    {Resource: "backup-storages", Action: "update", ObjectParam: "*", Public: false},
+	"updateNamespace":        {Resource: "namespaces", Action: "update", ObjectParam: "namespace", Public: false},
+	"validateNamespace":      {Resource: "namespaces", Action: "update", ObjectParam: "namespace", Public: false},
+	"verifyBackupStorage":    {Resource: "backup-storages", Action: "update", ObjectParam: "storage", Public: false},
 }

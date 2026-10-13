@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
+import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 import { Card, ErrorBlock, Loading, Segmented, Time } from '@/components/ui/Primitives';
 import { OpPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
@@ -12,13 +13,15 @@ import { useClusterContext } from './ClusterDetail';
 type Operation = Schemas['Operation'];
 type PhaseFilter = 'all' | 'active' | 'Failed';
 
-export function OperationsTable({ items, showCluster }: { items: Operation[]; showCluster?: boolean }) {
+export function OperationsTable({ items, showCluster, showNamespace }: { items: Operation[]; showCluster?: boolean; showNamespace?: boolean }) {
+  const extra = (showNamespace ? 1 : 0) + (showCluster ? 1 : 0);
   return (
     <div className="table-wrap">
       <table className="table">
         <thead>
           <tr>
             <th>Operation</th>
+            {showNamespace ? <th>Namespace</th> : null}
             {showCluster ? <th>Cluster</th> : null}
             <th>Type</th>
             <th>Phase</th>
@@ -32,6 +35,7 @@ export function OperationsTable({ items, showCluster }: { items: Operation[]; sh
           {items.map((op) => (
             <tr key={op.id}>
               <td className="mono xs">{op.id}</td>
+              {showNamespace ? <td className="mono small">{op.namespace || DEFAULT_NAMESPACE}</td> : null}
               {showCluster ? <td className="mono small">{op.cluster}</td> : null}
               <td className="small">{op.type}</td>
               <td>
@@ -69,7 +73,7 @@ export function OperationsTable({ items, showCluster }: { items: Operation[]; sh
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={showCluster ? 8 : 7} className="table-empty">
+              <td colSpan={7 + extra} className="table-empty">
                 No operations.
               </td>
             </tr>
@@ -81,11 +85,11 @@ export function OperationsTable({ items, showCluster }: { items: Operation[]; sh
 }
 
 export function OperationsTab() {
-  const { name, can } = useClusterContext();
+  const { namespace, name, can } = useClusterContext();
   const [filter, setFilter] = useState<PhaseFilter>('all');
   const ops = useQuery({
-    queryKey: keys.clusterSub(name, 'operations'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/operations', { params: { path: { cluster: name }, query: { limit: 200 } } })),
+    queryKey: keys.clusterSub(namespace, name, 'operations'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/operations', { params: { path: { cluster: name }, query: { namespace, limit: 200 } } })),
     refetchInterval: (q) => (q.state.data?.items.some((o) => o.phase === 'Running' || o.phase === 'Pending') ? 3000 : 15_000),
     enabled: can('read', 'operations'),
   });

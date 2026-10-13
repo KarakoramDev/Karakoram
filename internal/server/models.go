@@ -70,7 +70,7 @@ func specDomain(a api.ClusterSpec) domain.ClusterSpec {
 		s.Monitoring.Enabled = a.Monitoring.Enabled
 	}
 	if a.DataSource != nil {
-		s.DataSource = &domain.DataSource{Cluster: a.DataSource.Cluster, Backup: value(a.DataSource.Backup), PITRTime: a.DataSource.PitrTime}
+		s.DataSource = &domain.DataSource{Namespace: value(a.DataSource.Namespace), Cluster: a.DataSource.Cluster, Backup: value(a.DataSource.Backup), PITRTime: a.DataSource.PitrTime}
 	}
 	return s
 }
@@ -87,14 +87,14 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	}
 	a.Backup = &api.BackupSpec{Storage: &s.Backup.Storage, Schedules: &schedules, Pitr: &api.PITRSpec{Enabled: s.Backup.PITR.Enabled, OplogSpanMinutes: &s.Backup.PITR.OplogSpanMinutes}}
 	if s.DataSource != nil {
-		a.DataSource = &api.DataSource{Cluster: s.DataSource.Cluster, Backup: &s.DataSource.Backup, PitrTime: s.DataSource.PITRTime}
+		a.DataSource = &api.DataSource{Namespace: ptr(domain.NormalizedNamespace(s.DataSource.Namespace)), Cluster: s.DataSource.Cluster, Backup: &s.DataSource.Backup, PitrTime: s.DataSource.PITRTime}
 	}
 	return a
 }
 func connectionAPI(c domain.Connection) api.ConnectionSummary {
 	return api.ConnectionSummary{Hosts: c.Hosts, ReplicaSet: &c.ReplicaSet, Uri: c.URI, PublicHosts: &c.PublicHosts}
 }
-func (s *Server) memberAPI(cluster string, m domain.MemberStatus) api.Member {
+func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api.Member {
 	usage := s.Monitoring.MemberUsage(cluster, m.Name)
 	a := api.Member{Name: m.Name, Set: m.Set, Role: memberRole(m), State: m.State, Health: m.Health, Version: &m.Version, LagSeconds: ptr(float32(m.LagSeconds)), Optime: &m.Optime, Uptime: &m.Uptime, RamUsageBytes: usage.RAMBytes, DiskUsageBytes: usage.DiskBytes, DiskTotalBytes: usage.DiskTotalBytes, PlacementGroup: &m.PlacementGroup, Agent: &api.AgentStatus{Connected: m.Agent.Healthy, ConfigVersion: &m.Agent.ConfigVersion, LastSeenAt: &m.Agent.LastSeen}}
 	if usage.CPUPercent != nil {
@@ -149,7 +149,7 @@ func placementAPI(p domain.Placement) api.Placement {
 	}
 	return a
 }
-func (s *Server) statusAPI(cluster string, status domain.ClusterStatus) api.ClusterStatus {
+func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatus) api.ClusterStatus {
 	a := api.ClusterStatus{Phase: api.ClusterStatusPhase(status.Phase), Message: &status.Message, ObservedGeneration: status.ObservedGeneration, Version: &status.Version, Fcv: &status.FCV, Connection: ptr(connectionAPI(status.Connection)), Placement: ptr(placementAPI(status.Placement)), Conditions: []api.Condition{}, Members: []api.Member{}}
 	for _, c := range status.Conditions {
 		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: c.Message, LastTransitionTime: c.LastTransitionTime})
@@ -168,19 +168,19 @@ func (s *Server) statusAPI(cluster string, status domain.ClusterStatus) api.Clus
 	return a
 }
 func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
-	return api.Cluster{Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(c.Name, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	return api.Cluster{Namespace: ptr(domain.NormalizedNamespace(c.Namespace)), Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(domain.ClusterRef{Namespace: c.Namespace, Name: c.Name}, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
 }
 func operationAPI(o domain.Operation) api.Operation {
-	return api.Operation{Id: o.ID, Cluster: o.Cluster, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
+	return api.Operation{Namespace: ptr(domain.NormalizedNamespace(o.Namespace)), Id: o.ID, Cluster: o.Cluster, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
 }
 func backupAPI(b domain.Backup) api.Backup {
-	return api.Backup{Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: &b.Schedule, Phase: api.BackupPhase(b.Phase), PbmName: &b.PBMName, StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: &b.Error}
+	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: &b.Schedule, Phase: api.BackupPhase(b.Phase), PbmName: &b.PBMName, StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: &b.Error}
 }
 func restoreAPI(r domain.Restore) api.Restore {
-	return api.Restore{Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: &r.Source.Backup, PitrTime: r.Source.PITRTime, SourceCluster: r.Source.SourceCluster}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: &r.Error}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: &r.Source.Backup, PitrTime: r.Source.PITRTime, SourceCluster: r.Source.SourceCluster}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: &r.Error}
 }
 func eventAPI(e domain.Event) api.Event {
-	return api.Event{Id: e.ID, Cluster: &e.Cluster, OperationId: &e.Operation, Type: e.Type, Reason: &e.Reason, Message: e.Message, Actor: &e.Actor, CreatedAt: e.CreatedAt}
+	return api.Event{Namespace: ptr(domain.NormalizedNamespace(e.Namespace)), Id: e.ID, Cluster: &e.Cluster, OperationId: &e.Operation, Type: e.Type, Reason: &e.Reason, Message: e.Message, Actor: &e.Actor, CreatedAt: e.CreatedAt}
 }
 func rolesDomain(a []api.RoleReference) []domain.RoleRef {
 	out := make([]domain.RoleRef, 0, len(a))

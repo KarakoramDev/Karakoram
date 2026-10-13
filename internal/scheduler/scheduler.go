@@ -22,7 +22,7 @@ import (
 )
 
 // Trigger coalesces reconciliation requests for a cluster without blocking.
-type Trigger interface{ Trigger(string) }
+type Trigger interface{ Trigger(domain.ClusterRef) }
 
 // Options configures schedule persistence, clock, and reconciliation triggering.
 type Options struct {
@@ -101,12 +101,12 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 // Reload is safe to call immediately after a cluster spec or backup status edit.
 func (s *Scheduler) Reload(ctx context.Context) error {
-	clusters, err := s.opts.Store.ListClusters(ctx)
+	clusters, err := s.opts.Store.ListClusters(ctx, "")
 	if err != nil {
 		return err
 	}
 	desired := map[string]struct {
-		cluster string
+		cluster domain.ClusterRef
 		spec    domain.BackupSchedule
 	}{}
 	for _, c := range clusters {
@@ -120,10 +120,10 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 			if _, err = s.parser.Parse(spec.Cron); err != nil {
 				return fmt.Errorf("cluster %s schedule %s: %w", c.Name, spec.Name, err)
 			}
-			desired[c.Name+"/"+spec.Name] = struct {
-				cluster string
+			desired[c.Ref().Key()+"/"+spec.Name] = struct {
+				cluster domain.ClusterRef
 				spec    domain.BackupSchedule
-			}{c.Name, spec}
+			}{c.Ref(), spec}
 		}
 	}
 	s.mu.Lock()
@@ -161,7 +161,7 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 		if c.Deleting || c.Status.Phase == domain.PhaseSuspended {
 			continue
 		}
-		if err = s.EnforceRetention(ctx, c.Name); err != nil {
+		if err = s.EnforceRetention(ctx, c.Ref()); err != nil {
 			return err
 		}
 	}
@@ -170,7 +170,7 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 
 // Fire re-reads the current spec, so removed or disabled schedules cannot fire
 // from a stale cron callback. Clock and Trigger are injectable for tests.
-func (s *Scheduler) Fire(ctx context.Context, cluster, schedule string) error {
+func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedule string) error {
 	c, err := s.opts.Store.GetCluster(ctx, cluster)
 	if err != nil {
 		return err
@@ -199,9 +199,9 @@ func (s *Scheduler) Fire(ctx context.Context, cluster, schedule string) error {
 		storage = c.Spec.Backup.Storage
 	}
 	name := "scheduled-" + now.Format("20060102t150405") + "-" + strings.ToLower(suffix)
-	backup := domain.Backup{Name: name, Cluster: cluster, Storage: storage, Type: spec.Type, Trigger: "schedule", Schedule: schedule, Phase: domain.PhasePending, CreatedAt: now}
+	backup := domain.Backup{Namespace: c.Namespace, Name: name, Cluster: c.Name, Storage: storage, Type: spec.Type, Trigger: "schedule", Schedule: schedule, Phase: domain.PhasePending, CreatedAt: now}
 	payload, _ := json.Marshal(map[string]string{"backup": name})
-	op := domain.Operation{Cluster: cluster, Kind: domain.OperationBackup, Payload: payload, Actor: "scheduler", CreatedAt: now}
+	op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationBackup, Payload: payload, Actor: "scheduler", CreatedAt: now}
 	if err = s.opts.Store.EnqueueBackup(ctx, &backup, &op); err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func (s *Scheduler) Fire(ctx context.Context, cluster, schedule string) error {
 }
 
 // EnforceRetention enqueues deletion of the oldest successful scheduled backups.
-func (s *Scheduler) EnforceRetention(ctx context.Context, cluster string) error {
+func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.ClusterRef) error {
 	c, err := s.opts.Store.GetCluster(ctx, cluster)
 	if err != nil {
 		return err
@@ -265,7 +265,7 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster string) error 
 		for i := 0; i < len(successful)-spec.RetainCount; i++ {
 			b := successful[i]
 			payload, _ := json.Marshal(map[string]string{"backup": b.Name})
-			op := domain.Operation{Cluster: cluster, Kind: domain.OperationDeleteBackup, Payload: payload, Actor: "scheduler", CreatedAt: s.opts.Clock.Now()}
+			op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationDeleteBackup, Payload: payload, Actor: "scheduler", CreatedAt: s.opts.Clock.Now()}
 			if err = s.opts.Store.EnqueueBackupDeletion(ctx, &b, &op); errors.Is(err, store.ErrConflict) {
 				continue
 			} else if err != nil {

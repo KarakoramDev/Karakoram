@@ -23,6 +23,7 @@ var errClusterGone = fmt.Errorf("cluster removed: %w", store.ErrNotFound)
 type Options struct {
 	Store          *store.Store
 	Registry       *engine.Registry
+	Namespaces     engine.Namespaces
 	Context        engine.Context
 	ResyncInterval time.Duration
 	BackoffMin     time.Duration
@@ -71,11 +72,15 @@ func New(opts Options) (*Manager, error) {
 	if opts.Context.Secrets == nil {
 		opts.Context.Secrets = opts.Store
 	}
+	if opts.Namespaces == nil {
+		opts.Namespaces = engine.StaticNamespaces{DefaultBackend: opts.Context.Backend, DefaultAgentURL: opts.Context.AgentURL}
+	}
 	return &Manager{opts: opts, workers: make(map[string]*worker)}, nil
 }
 
 // Trigger coalesces reconciliation requests for a cluster without blocking.
-func (m *Manager) Trigger(cluster string) {
+func (m *Manager) Trigger(ref domain.ClusterRef) {
+	cluster := ref.Key()
 	m.mu.Lock()
 	w := m.workers[cluster]
 	if w == nil {
@@ -85,7 +90,7 @@ func (m *Manager) Trigger(cluster string) {
 	if m.ctx != nil && !w.started && m.ctx.Err() == nil {
 		w.started = true
 		m.wg.Add(1)
-		go m.work(m.ctx, cluster, w)
+		go m.work(m.ctx, ref, w)
 	}
 	select {
 	case w.trigger <- struct{}{}:
@@ -106,7 +111,7 @@ func (m *Manager) Run(ctx context.Context) error {
 	for name, w := range m.workers {
 		w.started = true
 		m.wg.Add(1)
-		go m.work(runCtx, name, w)
+		go m.work(runCtx, domain.ParseClusterKey(name), w)
 	}
 	m.mu.Unlock()
 	defer func() {
@@ -132,16 +137,17 @@ func (m *Manager) Run(ctx context.Context) error {
 	}
 }
 func (m *Manager) discover(ctx context.Context) error {
-	clusters, err := m.opts.Store.ListClusters(ctx)
+	clusters, err := m.opts.Store.ListClusters(ctx, "")
 	if err != nil {
 		return err
 	}
 	for _, c := range clusters {
-		m.Trigger(c.Name)
+		m.Trigger(c.Ref())
 	}
 	return nil
 }
-func (m *Manager) work(ctx context.Context, name string, w *worker) {
+func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
+	name := ref.Key()
 	defer m.wg.Done()
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -158,7 +164,7 @@ func (m *Manager) work(ctx context.Context, name string, w *worker) {
 		case <-triggers:
 		case <-timer.C:
 		}
-		delay, err := m.reconcile(ctx, name)
+		delay, err := m.reconcile(ctx, ref)
 		if errors.Is(err, errClusterGone) {
 			m.mu.Lock()
 			if m.workers[name] == w {
@@ -178,7 +184,7 @@ func (m *Manager) work(ctx context.Context, name string, w *worker) {
 				return
 			}
 			m.opts.Context.Logger.Error("reconcile cluster", "cluster", name, "error", err)
-			if eventErr := m.record(ctx, domain.Event{Cluster: name, Type: "Warning", Reason: "ReconcileError", Message: err.Error()}); eventErr != nil {
+			if eventErr := m.record(ctx, domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Type: "Warning", Reason: "ReconcileError", Message: err.Error()}); eventErr != nil {
 				m.opts.Context.Logger.Error("record reconcile error", "error", eventErr)
 			}
 			delay = backoff
@@ -213,12 +219,12 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 		return err
 	}
 	if previous != c.Status.Phase {
-		return m.record(ctx, domain.Event{Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)})
+		return m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)})
 	}
 	return nil
 }
-func (m *Manager) reconcile(ctx context.Context, name string) (time.Duration, error) {
-	c, err := m.opts.Store.GetCluster(ctx, name)
+func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (time.Duration, error) {
+	c, err := m.opts.Store.GetCluster(ctx, ref)
 	if errors.Is(err, store.ErrNotFound) {
 		return 0, errClusterGone
 	}
@@ -237,6 +243,9 @@ func (m *Manager) reconcile(ctx context.Context, name string) (time.Duration, er
 		if err = m.state(ctx, c, previous); err != nil {
 			return 0, err
 		}
+		if err = m.resolve(ctx, &rc); err != nil {
+			return 0, err
+		}
 		done, cleanupErr := p.Cleanup(ctx, &rc, c.DeleteOptions)
 		if err = m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 			return 0, err
@@ -251,12 +260,12 @@ func (m *Manager) reconcile(ctx context.Context, name string) (time.Duration, er
 			if err = m.opts.Store.SuspendCluster(ctx, c); err != nil {
 				return 0, err
 			}
-			return 0, m.record(ctx, domain.Event{Cluster: name, Type: "Normal", Reason: "PhaseChanged", Message: "Deleting → Suspended"})
+			return 0, m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: "Deleting → Suspended"})
 		}
-		if err = m.record(ctx, domain.Event{Cluster: name, Type: "Normal", Reason: "Deleted", Message: "Cluster deleted"}); err != nil {
+		if err = m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "Deleted", Message: "Cluster deleted"}); err != nil {
 			return 0, err
 		}
-		if err = m.opts.Store.DeleteCluster(ctx, name); err != nil {
+		if err = m.opts.Store.DeleteCluster(ctx, ref); err != nil {
 			return 0, err
 		}
 		return 0, errClusterGone
@@ -264,23 +273,26 @@ func (m *Manager) reconcile(ctx context.Context, name string) (time.Duration, er
 	if c.Status.Phase == domain.PhaseSuspended {
 		return 0, nil
 	}
+	if err = m.resolve(ctx, &rc); err != nil {
+		return 0, err
+	}
 	// Resume active work before convergence: restore may deliberately have every
 	// database process stopped, making ordinary Sync/Status unsafe or impossible.
-	op, err := m.opts.Store.ClaimRunningOperation(ctx, name)
+	op, err := m.opts.Store.ClaimRunningOperation(ctx, ref)
 	if err == nil {
 		return m.runOperation(ctx, p, &rc, op)
 	}
 	if !errors.Is(err, store.ErrNotFound) {
 		return 0, err
 	}
-	result, syncErr := synchronize(ctx, p, &rc)
+	result, syncErr := m.synchronize(ctx, p, &rc)
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}
 	if syncErr != nil {
 		return 0, syncErr
 	}
-	op, err = m.opts.Store.ClaimOperation(ctx, name)
+	op, err = m.opts.Store.ClaimOperation(ctx, ref)
 	if errors.Is(err, store.ErrNotFound) {
 		return result.RequeueAfter, nil
 	}
@@ -290,8 +302,57 @@ func (m *Manager) reconcile(ctx context.Context, name string) (time.Duration, er
 	return m.runOperation(ctx, p, &rc, op)
 }
 
-func synchronize(ctx context.Context, p engine.Provider, rc *engine.Context) (engine.Result, error) {
+// resolve refreshes project dependencies immediately before each provider call.
+func (m *Manager) resolve(ctx context.Context, rc *engine.Context) error {
+	rc.Namespace = domain.NormalizedNamespace(rc.Cluster.Namespace)
+	backend, err := m.opts.Namespaces.Backend(rc.Namespace)
+	if err != nil {
+		c := rc.Cluster
+		message := fmt.Sprintf("namespace %q unavailable: %v", rc.Namespace, err)
+		c.Status.Phase = domain.PhaseDegraded
+		c.Status.Message = message
+		condition := domain.Condition{Type: "NamespaceReady", Status: "False", Reason: "NamespaceUnavailable", Message: message, LastTransitionTime: rc.Clock.Now()}
+		found := false
+		for i := range c.Status.Conditions {
+			if c.Status.Conditions[i].Type == condition.Type {
+				if c.Status.Conditions[i].Status == condition.Status && c.Status.Conditions[i].Message == condition.Message {
+					condition.LastTransitionTime = c.Status.Conditions[i].LastTransitionTime
+				}
+				c.Status.Conditions[i] = condition
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Status.Conditions = append(c.Status.Conditions, condition)
+		}
+		saveErr := m.opts.Store.UpdateClusterState(ctx, c)
+		eventErr := m.record(ctx, domain.Event{Namespace: rc.Namespace, Cluster: c.Name, Type: "Warning", Reason: "NamespaceUnavailable", Message: message})
+		return errors.Join(fmt.Errorf("%s: %w", message, err), saveErr, eventErr)
+	}
+	rc.Backend = backend
+	rc.Dialer = m.opts.Namespaces.Dialer(rc.Namespace)
+	rc.AgentURL = m.opts.Namespaces.AgentURL(rc.Namespace)
+	for i := range rc.Cluster.Status.Conditions {
+		condition := &rc.Cluster.Status.Conditions[i]
+		if condition.Type == "NamespaceReady" && condition.Status != "True" {
+			if rc.Cluster.Status.Message == condition.Message {
+				rc.Cluster.Status.Message = ""
+			}
+			*condition = domain.Condition{Type: "NamespaceReady", Status: "True", Reason: "NamespaceAvailable", LastTransitionTime: rc.Clock.Now()}
+		}
+	}
+	return nil
+}
+
+func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine.Context) (engine.Result, error) {
+	if err := m.resolve(ctx, rc); err != nil {
+		return engine.Result{}, err
+	}
 	result, syncErr := p.Sync(ctx, rc)
+	if err := m.resolve(ctx, rc); err != nil {
+		return result, errors.Join(syncErr, err)
+	}
 	status, statusErr := p.Status(ctx, rc)
 	if statusErr == nil {
 		rc.Cluster.Status = status
@@ -305,6 +366,9 @@ func synchronize(ctx context.Context, p engine.Provider, rc *engine.Context) (en
 func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engine.Context, op *domain.Operation) (time.Duration, error) {
 	c := rc.Cluster
 	previous := c.Status.Phase
+	if err := m.resolve(ctx, rc); err != nil {
+		return 0, err
+	}
 	opResult, opErr := p.RunOperation(ctx, rc, op)
 	if opResult.Checkpoint != nil {
 		op.Checkpoint = opResult.Checkpoint
@@ -329,7 +393,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	var result engine.Result
 	var syncErr error
 	if policy, ok := p.(engine.OperationSyncPolicy); ok && !opResult.Done && opErr == nil && policy.SyncDuringOperation(op) {
-		result, syncErr = synchronize(ctx, p, rc)
+		result, syncErr = m.synchronize(ctx, p, rc)
 	}
 	// Persist even on provider error, atomically with the state referenced by
 	// the checkpoint, so a completed external step is never forgotten.
@@ -337,12 +401,12 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		return 0, err
 	}
 	if previous != c.Status.Phase {
-		if err := m.record(ctx, domain.Event{Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)}); err != nil {
+		if err := m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)}); err != nil {
 			return 0, err
 		}
 	}
 	if opResult.Done {
-		event := domain.Event{Cluster: c.Name, Operation: op.ID, Type: "Normal", Reason: "OperationSucceeded", Message: op.Kind + " completed"}
+		event := domain.Event{Namespace: c.Namespace, Cluster: c.Name, Operation: op.ID, Type: "Normal", Reason: "OperationSucceeded", Message: op.Kind + " completed"}
 		if opErr != nil {
 			event.Type = "Warning"
 			event.Reason = "OperationFailed"
@@ -360,7 +424,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		if scheduledPlatformWait(opErr) != nil {
 			return 0, opErr
 		}
-		if err := m.record(ctx, domain.Event{Cluster: c.Name, Operation: op.ID, Type: "Warning", Reason: "OperationError", Message: opErr.Error()}); err != nil {
+		if err := m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Operation: op.ID, Type: "Warning", Reason: "OperationError", Message: opErr.Error()}); err != nil {
 			return 0, err
 		}
 		return 0, opErr

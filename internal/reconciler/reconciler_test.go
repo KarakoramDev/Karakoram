@@ -19,6 +19,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -122,13 +123,13 @@ func TestWorkersCheckpointFIFOAndErrors(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- m.Run(ctx) }()
 	for i := 0; i < 20; i++ {
-		m.Trigger("one")
+		m.Trigger(domain.ClusterRef{Name: "one"})
 	}
 	eventually(t, func() bool {
 		op, err := s.GetOperation(ctx, "second")
 		return err == nil && op.Phase == domain.PhaseSucceeded
 	})
-	c, err := s.GetCluster(ctx, "one")
+	c, err := s.GetCluster(ctx, domain.ClusterRef{Name: "one"})
 	if err != nil || c.Status.Phase != domain.PhaseReady || c.Status.ObservedGeneration != c.Generation || string(c.Internal) != `{"synced":true}` {
 		t.Fatal(c, err)
 	}
@@ -170,7 +171,7 @@ func TestResumeRunningOperationAndDeleteSuspend(t *testing.T) {
 	if err := s.EnqueueOperation(ctx, &op); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.reconcile(ctx, "demo"); err != nil {
+	if _, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := s.GetOperation(ctx, op.ID)
@@ -180,26 +181,26 @@ func TestResumeRunningOperationAndDeleteSuspend(t *testing.T) {
 	if value := <-p.resume; value != `{"persisted":true}` {
 		t.Fatal(value)
 	}
-	if err := s.MarkClusterDeleting(ctx, "demo", domain.DeleteOptions{KeepVolumes: true}); err != nil {
+	if err := s.MarkClusterDeleting(ctx, domain.ClusterRef{Name: "demo"}, domain.DeleteOptions{KeepVolumes: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.reconcile(ctx, "demo"); err != nil {
+	if _, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.reconcile(ctx, "demo"); err != nil {
+	if _, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
-	cluster, _ := s.GetCluster(ctx, "demo")
+	cluster, _ := s.GetCluster(ctx, domain.ClusterRef{Name: "demo"})
 	if cluster.Deleting || cluster.Status.Phase != domain.PhaseSuspended {
 		t.Fatal(cluster)
 	}
-	if err := s.MarkClusterDeleting(ctx, "demo", domain.DeleteOptions{}); err != nil {
+	if err := s.MarkClusterDeleting(ctx, domain.ClusterRef{Name: "demo"}, domain.DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.reconcile(ctx, "demo"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err := s.GetCluster(ctx, "demo"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.GetCluster(ctx, domain.ClusterRef{Name: "demo"}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal(err)
 	}
 }
@@ -282,7 +283,7 @@ func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 		}
 	}
 	for range 2 {
-		if _, err := m.reconcile(ctx, "demo"); err != nil {
+		if _, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -293,11 +294,11 @@ func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 	if err != nil || op.Phase != domain.PhaseSucceeded || op.Attempts != 2 {
 		t.Fatal(op, err)
 	}
-	c, err := s.GetCluster(ctx, "demo")
+	c, err := s.GetCluster(ctx, domain.ClusterRef{Name: "demo"})
 	if err != nil || c.Status.Phase != domain.PhaseRestoring || string(c.Internal) != `{"processes":"recovered"}` {
 		t.Fatal(c, err)
 	}
-	if _, err = m.reconcile(ctx, "demo"); err == nil {
+	if _, err = m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err == nil {
 		t.Fatal("ordinary synchronization did not resume")
 	}
 	if strings.Join(calls, ",") != "restore,restore,sync,status" {
@@ -341,7 +342,7 @@ func TestOperationSyncPolicyProvisionsReplacement(t *testing.T) {
 	if err := s.EnqueueOperation(ctx, &op); err != nil {
 		t.Fatal(err)
 	}
-	delay, err := m.reconcile(ctx, "demo")
+	delay, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"})
 	if err != nil || delay != time.Second {
 		t.Fatal(delay, err)
 	}
@@ -349,7 +350,7 @@ func TestOperationSyncPolicyProvisionsReplacement(t *testing.T) {
 	if err != nil || string(got.Checkpoint) != `{"stage":"join"}` {
 		t.Fatal(got, err)
 	}
-	if _, err = m.reconcile(ctx, "demo"); err != nil {
+	if _, err = m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(calls, ",") != "operation,sync,status,operation" {
@@ -385,7 +386,7 @@ func TestCompletedFailureUnblocksQueueAndRecordsEvent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if delay, err := m.reconcile(ctx, "demo"); err != nil || delay != time.Millisecond {
+	if delay, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil || delay != time.Millisecond {
 		t.Fatal("terminal failure should not retry", delay, err)
 	}
 	op, err := s.GetOperation(ctx, "failed")
@@ -399,7 +400,7 @@ func TestCompletedFailureUnblocksQueueAndRecordsEvent(t *testing.T) {
 	if !strings.Contains(logs.String(), "operation failed") || !strings.Contains(logs.String(), "PBM backup failed") {
 		t.Fatal(logs.String())
 	}
-	if _, err = m.reconcile(ctx, "demo"); err != nil {
+	if _, err = m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
 	next, err := s.GetOperation(ctx, "next")
@@ -434,7 +435,7 @@ func TestNonterminalErrorsPersistCheckpointAndAttempts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for attempt := 1; attempt <= 3; attempt++ {
-		_, err := m.reconcile(ctx, "demo")
+		_, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"})
 		if attempt < 3 && !errors.Is(err, temporary) || attempt == 3 && err != nil {
 			t.Fatal(attempt, err)
 		}
@@ -458,7 +459,7 @@ func TestCleanupIgnoresUnfinishedOperations(t *testing.T) {
 	m, s := newTestManager(t, p)
 	createOperationCluster(t, s)
 	p.cleanupFn = func(*engine.Context) (bool, error) {
-		ops, err := s.ListOperations(ctx, "demo", domain.PhasePending, domain.PhaseRunning)
+		ops, err := s.ListOperations(ctx, domain.ClusterRef{Name: "demo"}, domain.PhasePending, domain.PhaseRunning)
 		if err != nil || len(ops) != 0 {
 			t.Fatal("unfinished work blocked cleanup", ops, err)
 		}
@@ -470,10 +471,10 @@ func TestCleanupIgnoresUnfinishedOperations(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.MarkClusterDeleting(ctx, "demo", domain.DeleteOptions{}); err != nil {
+	if err := s.MarkClusterDeleting(ctx, domain.ClusterRef{Name: "demo"}, domain.DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.reconcile(ctx, "demo"); !errors.Is(err, errClusterGone) {
+	if _, err := m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); !errors.Is(err, errClusterGone) {
 		t.Fatal(err)
 	}
 }
@@ -502,7 +503,7 @@ func TestOperationWorkerUsesBoundedBackoff(t *testing.T) {
 		select {
 		case now := <-calls:
 			times = append(times, now)
-			m.Trigger("demo")
+			m.Trigger(domain.ClusterRef{Name: "demo"})
 		case <-time.After(3 * time.Second):
 			t.Fatal("operation retry stalled")
 		}
@@ -556,7 +557,7 @@ func TestScheduledPlatformWaitDoesNotRepeatFailureEvents(t *testing.T) {
 	// refresh status but must not manufacture failures while the deadline waits.
 	eventually(t, func() bool { return calls.Load() >= 2 })
 	for n := int32(3); n <= 6; n++ {
-		m.Trigger("demo")
+		m.Trigger(domain.ClusterRef{Name: "demo"})
 		eventually(t, func() bool { return calls.Load() >= n })
 	}
 	events, err := s.ListEvents(context.Background(), store.EventFilter{Cluster: "demo", Limit: 100})
@@ -625,7 +626,7 @@ func TestScheduledWaitDoesNotSuppressStatusFailure(t *testing.T) {
 	// A real status failure must retry via bounded error backoff, not wait an
 	// hour. Once observation succeeds the ordinary scheduled wait is preserved.
 	eventually(t, func() bool {
-		c, err := s.GetCluster(context.Background(), "demo")
+		c, err := s.GetCluster(context.Background(), domain.ClusterRef{Name: "demo"})
 		return err == nil && c.Status.Message == "CPU-mode cooldown"
 	})
 	cancel()
@@ -650,5 +651,128 @@ func TestScheduledWaitDoesNotSuppressStatusFailure(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "ListServices authentication failed") {
 		t.Fatal("observation failure missing from log", logs.String())
+	}
+}
+
+type testNamespaces struct {
+	engine.StaticNamespaces
+	mu       sync.Mutex
+	calls    map[string]int
+	failures []time.Time
+}
+
+func (n *testNamespaces) Backend(namespace string) (infra.Backend, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.calls[namespace]++
+	if namespace == "broken" {
+		n.failures = append(n.failures, time.Now())
+		return nil, errors.New("project token invalid")
+	}
+	return n.DefaultBackend, nil
+}
+
+func (n *testNamespaces) AgentURL(namespace string) string {
+	return "https://" + namespace + ".example.com"
+}
+
+func TestNamespaceFailureIsolatedAndWorkersDistinct(t *testing.T) {
+	p := &fakeProvider{calls: map[string]int{}, active: map[string]bool{}}
+	m, s := newTestManager(t, p)
+	m.opts.Namespaces = &testNamespaces{calls: map[string]int{}}
+	m.opts.BackoffMin = 25 * time.Millisecond
+	m.opts.BackoffMax = 50 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for _, namespace := range []string{"healthy", "broken"} {
+		c := domain.Cluster{Namespace: namespace, Name: "same", Spec: domain.ClusterSpec{Provider: "fake"}}
+		if err := s.CreateCluster(ctx, &c); err != nil {
+			t.Fatal(err)
+		}
+		m.Trigger(c.Ref())
+	}
+	if len(m.workers) != 2 || m.workers["healthy:same"] == m.workers["broken:same"] {
+		t.Fatal("namespace workers collided", m.workers)
+	}
+	done := make(chan error, 1)
+	go func() { done <- m.Run(ctx) }()
+	eventually(t, func() bool {
+		good, err := s.GetCluster(ctx, domain.ClusterRef{Namespace: "healthy", Name: "same"})
+		bad, badErr := s.GetCluster(ctx, domain.ClusterRef{Namespace: "broken", Name: "same"})
+		return err == nil && badErr == nil && good.Status.Phase == domain.PhaseReady && bad.Status.Phase == domain.PhaseDegraded
+	})
+	eventually(t, func() bool {
+		ns := m.opts.Namespaces.(*testNamespaces)
+		ns.mu.Lock()
+		defer ns.mu.Unlock()
+		return len(ns.failures) >= 2
+	})
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	ns := m.opts.Namespaces.(*testNamespaces)
+	if ns.failures[1].Sub(ns.failures[0]) < 20*time.Millisecond {
+		t.Fatal("namespace retry bypassed backoff", ns.failures)
+	}
+	bad, err := s.GetCluster(context.Background(), domain.ClusterRef{Namespace: "broken", Name: "same"})
+	if err != nil || len(bad.Status.Conditions) != 1 || bad.Status.Conditions[0].Reason != "NamespaceUnavailable" || !strings.Contains(bad.Status.Message, "project token invalid") {
+		t.Fatal(bad, err)
+	}
+	items, err := s.ListEvents(context.Background(), store.EventFilter{Namespace: "broken"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range items {
+		if event.Namespace != "broken" || event.Cluster != "same" {
+			t.Fatal(event)
+		}
+		found = found || event.Reason == "NamespaceUnavailable"
+	}
+	if !found || p.overlap {
+		t.Fatal("missing namespace error or crossed workers", items)
+	}
+}
+
+func TestNamespaceDependenciesResolvedBeforeProviderCalls(t *testing.T) {
+	ns := &testNamespaces{calls: map[string]int{}}
+	p := &operationProvider{fakeProvider: &fakeProvider{}}
+	expected := 0
+	check := func(rc *engine.Context) {
+		t.Helper()
+		if rc.Namespace != "healthy" || rc.AgentURL != "https://healthy.example.com" || ns.calls["healthy"] <= expected {
+			t.Fatal("provider dependencies not refreshed", rc.Namespace, rc.AgentURL, ns.calls)
+		}
+		expected = ns.calls["healthy"]
+	}
+	p.syncFn = func(rc *engine.Context) (engine.Result, error) { check(rc); return engine.Result{}, nil }
+	p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+		check(rc)
+		return domain.ClusterStatus{Phase: domain.PhaseReady}, nil
+	}
+	p.runFn = func(rc *engine.Context, _ *domain.Operation) (engine.OpResult, error) {
+		check(rc)
+		return engine.OpResult{Done: true}, nil
+	}
+	p.cleanupFn = func(rc *engine.Context) (bool, error) { check(rc); return true, nil }
+	m, s := newTestManager(t, p)
+	m.opts.Namespaces = ns
+	c := domain.Cluster{Namespace: "healthy", Name: "same", Spec: domain.ClusterSpec{Provider: "fake"}}
+	ctx := context.Background()
+	if err := s.CreateCluster(ctx, &c); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnqueueOperation(ctx, &domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkClusterDeleting(ctx, c.Ref(), domain.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(ctx, c.Ref()); !errors.Is(err, errClusterGone) {
+		t.Fatal(err)
 	}
 }

@@ -6,6 +6,11 @@
 // Migrations are embedded and ordered. Methods accept contexts and return
 // ErrNotFound or ErrConflict for resource-level failures.
 //
+// Cluster identities use domain.ClusterRef, with names unique per namespace.
+// Empty collection namespace filters include all namespaces; omitted namespaces
+// on individual identities resolve to default. Default records preserve legacy
+// scopes and encryption identities, so namespace migration never re-seals secrets.
+//
 // Operation checkpoints and provider-owned cluster state are committed together.
 // Running work is resumed before Pending work; only the reconciler owns claims.
 // Deletion intent and hard deletion retire unfinished operations transactionally,

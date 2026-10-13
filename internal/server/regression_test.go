@@ -383,7 +383,7 @@ func TestMemberRolesMapToPublicEnum(t *testing.T) {
 		{"recovering", "rs0", "RECOVERING", "unknown"}, {"mongod-rs", "rs0", "", "unknown"},
 		{"arbiter", "rs0", "ARBITER", "arbiter"},
 	} {
-		member := (&Server{}).memberAPI("", domain.MemberStatus{Role: tc.role, Set: tc.set, State: tc.state})
+		member := (&Server{}).memberAPI(domain.ClusterRef{Name: ""}, domain.MemberStatus{Role: tc.role, Set: tc.set, State: tc.state})
 		if string(member.Role) != tc.want || member.State != tc.state {
 			t.Fatalf("%+v: %+v", tc, member)
 		}

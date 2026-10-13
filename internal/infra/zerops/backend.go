@@ -54,6 +54,28 @@ func New(o Options) (*Backend, error) {
 // Name returns the infrastructure backend identifier.
 func (b *Backend) Name() string { return "zerops" }
 
+// SetToken swaps the live client's credential without restarting services.
+func (b *Backend) SetToken(token string) { b.client.SetToken(token) }
+
+// ValidateProject confirms both project identity and service-list permissions.
+func ValidateProject(ctx context.Context, o Options) (*Backend, infra.Project, error) {
+	b, err := New(o)
+	if err != nil {
+		return nil, infra.Project{}, err
+	}
+	p, err := b.ProjectInfo(ctx)
+	if err != nil {
+		return nil, infra.Project{}, errors.New("zerops: token cannot access the project")
+	}
+	if p.ID != o.ProjectID {
+		return nil, infra.Project{}, errors.New("zerops: token project does not match the requested project")
+	}
+	if _, err = b.ListServices(ctx, ""); err != nil {
+		return nil, infra.Project{}, errors.New("zerops: token cannot list project services")
+	}
+	return b, p, nil
+}
+
 // ProjectInfo returns the project identity and public addresses.
 func (b *Backend) ProjectInfo(ctx context.Context) (infra.Project, error) {
 	p, err := b.client.ProjectInfo(ctx)
@@ -277,7 +299,7 @@ func (b *Backend) GetService(ctx context.Context, name string) (*infra.Service, 
 	v.Ownership = map[string]string{}
 	for _, item := range items {
 		switch item.Key {
-		case "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_AGENT_TOKEN", "KARAKORAM_DATA_DIR":
+		case "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_AGENT_TOKEN", "KARAKORAM_DATA_DIR", "KARAKORAM_RELAY_OWNER":
 			v.Ownership[item.Key] = item.Content
 		}
 	}

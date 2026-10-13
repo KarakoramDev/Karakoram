@@ -202,7 +202,7 @@ func TestCloneUsesExplicitBackupStorage(t *testing.T) {
 	if cp.Storage != "alternate" {
 		t.Fatal(cp.Storage)
 	}
-	source, err := sourceEnv(context.Background(), env, cp.Source, cp.Storage)
+	source, err := sourceEnv(context.Background(), env, domain.ClusterRef{Namespace: cp.SourceNamespace, Name: cp.Source}, cp.Storage)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,6 +49,8 @@ The default output is a table; `-o json` preserves the structured `{items: [...]
 
 Use `karactl --help` and each subcommand's `--help` for the current command and flag reference. Make installs the CLI as `bin/karactl`. `[flags]` and inherited global flags are omitted from tree rows for readability.
 
+Use `--namespace NAME` (`-n NAME`) to select a project namespace. Single-object, create and mutation commands resolve **flag > saved context namespace > `default`**. Unfiltered collections show all authorized namespaces and a `NAMESPACE` table column; an explicit `-n` filters them even when a context has a namespace saved. Set that optional context value with `karactl config set-context NAME --namespace PROJECT`. Namespace tokens are accepted only through `namespaces create/rotate-token --token-file FILE` (`-` reads stdin). Restore and clone commands accept `--source-namespace`; `restores create --into-new` creates its target in the namespace selected by `-n`.
+
 ```text
 karactl
   accounts
@@ -97,6 +99,8 @@ karactl
     fish
     powershell
     zsh
+  config
+    set-context <name>
   db-roles
     create <cluster>
     delete <cluster> <database> <role>
@@ -116,6 +120,14 @@ karactl
   login
   logout
   metrics
+  namespaces
+    create
+    delete <namespace>
+    get <namespace>
+    list
+    rotate-token <namespace>
+    update <namespace>
+    validate <namespace>
   operations
     cluster <cluster>
     get <id>

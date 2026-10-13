@@ -40,7 +40,7 @@ func TestSecurity(t *testing.T) {
 			t.Fatalf("revealed credentials=%d want databaseAdmin only", len(connection.Credentials))
 		}
 		var systems api.SystemUserList
-		s.expect(&systems)(s.client.ListSystemUsers(s.ctx, name))
+		s.expect(&systems)(s.client.ListSystemUsers(s.ctx, name, nil))
 		if len(systems.Items) != 5 {
 			t.Fatal("system user inventory incomplete")
 		}
@@ -134,7 +134,7 @@ func (s *suite) exerciseUsersRoles(name string) {
 	var createdRole api.DatabaseRole
 	s.expect(&createdRole, 201)(s.client.CreateDatabaseRole(s.ctx, name, &api.CreateDatabaseRoleParams{}, role))
 	var fetchedRole api.DatabaseRole
-	s.expect(&fetchedRole)(s.client.GetDatabaseRole(s.ctx, name, "e2e", role.Name))
+	s.expect(&fetchedRole)(s.client.GetDatabaseRole(s.ctx, name, "e2e", role.Name, nil))
 	if fetchedRole.Name != role.Name {
 		t.Fatal("role read mismatch")
 	}
@@ -148,7 +148,7 @@ func (s *suite) exerciseUsersRoles(name string) {
 	password := s.name() + s.name()
 	var user api.DatabaseUser
 	s.expect(&user, 201)(s.client.CreateDatabaseUser(s.ctx, name, &api.CreateDatabaseUserParams{}, api.CreateDatabaseUserRequest{Database: "e2e", Username: "application", Password: &password, Roles: []api.RoleReference{{Db: "e2e", Role: role.Name}}}))
-	s.expect(&user)(s.client.GetDatabaseUser(s.ctx, name, "e2e", "application"))
+	s.expect(&user)(s.client.GetDatabaseUser(s.ctx, name, "e2e", "application", nil))
 	var users api.DatabaseUserList
 	s.expect(&users)(s.client.ListDatabaseUsers(s.ctx, name, &api.ListDatabaseUsersParams{}))
 	if len(users.Items) != 1 {
@@ -168,9 +168,9 @@ func (s *suite) exerciseUsersRoles(name string) {
 	s.authenticatedWrite(name, "application", newPassword, "e2e")
 	s.expect(nil, 204)(s.client.DeleteDatabaseUser(s.ctx, name, "e2e", "application", &api.DeleteDatabaseUserParams{}))
 	s.rejectedAuth(name, "application", newPassword, "e2e", true)
-	s.expect(nil, 404)(s.client.GetDatabaseUser(s.ctx, name, "e2e", "application"))
+	s.expect(nil, 404)(s.client.GetDatabaseUser(s.ctx, name, "e2e", "application", nil))
 	s.expect(nil, 204)(s.client.DeleteDatabaseRole(s.ctx, name, "e2e", role.Name, &api.DeleteDatabaseRoleParams{}))
-	s.expect(nil, 404)(s.client.GetDatabaseRole(s.ctx, name, "e2e", role.Name))
+	s.expect(nil, 404)(s.client.GetDatabaseRole(s.ctx, name, "e2e", role.Name, nil))
 }
 
 func (s *suite) assertMemberTransport(name string) {

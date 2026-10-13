@@ -21,8 +21,9 @@ func ensureRecoveryIdentity(ctx context.Context, env Env, b *domain.Backup) erro
 	if b.Type != "physical" {
 		return nil
 	}
+	source := domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster}
 	if b.RecoveryIdentity != "" {
-		pw, err := env.RC.Secrets.GetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin")
+		pw, err := env.RC.Secrets.GetClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin")
 		if err != nil {
 			return fmt.Errorf("physical backup %s/%s recovery identity is unavailable: %w", b.Cluster, b.Name, err)
 		}
@@ -35,19 +36,20 @@ func ensureRecoveryIdentity(ctx context.Context, env Env, b *domain.Backup) erro
 	// Keep a prior protected value if persistence of the backup record failed.
 	// A retry must not replace it with a subsequently rotated source password.
 	identity := "backup-" + secrets.Hash(b.Cluster + "/" + b.Storage + "/" + b.PBMPrefix + "/" + b.Name)[:32]
-	pw, err := env.RC.Secrets.GetClusterSecret(ctx, identity, "users/userAdmin")
+	recovery := domain.ClusterRef{Namespace: b.Namespace, Name: identity}
+	pw, err := env.RC.Secrets.GetClusterSecret(ctx, recovery, "users/userAdmin")
 	if errors.Is(err, engine.ErrNotFound) || errors.Is(err, store.ErrNotFound) {
-		if b.Cluster != env.RC.Cluster.Name {
-			if _, err := env.RC.Store.GetCluster(ctx, b.Cluster); err != nil {
+		if source.Key() != env.RC.Cluster.Ref().Key() {
+			if _, err := env.RC.Store.GetCluster(ctx, source); err != nil {
 				return fmt.Errorf("legacy physical backup %s/%s has no recovery identity and its source cluster is unavailable; restore rejected before modifying the target: %w", b.Cluster, b.Name, err)
 			}
 		}
-		pw, err = env.RC.Secrets.GetClusterSecret(ctx, b.Cluster, "users/userAdmin")
+		pw, err = env.RC.Secrets.GetClusterSecret(ctx, source, "users/userAdmin")
 		if err != nil {
 			return fmt.Errorf("legacy physical backup %s/%s has no recovery identity and its source userAdmin credential is unavailable; restore rejected before modifying the target: %w", b.Cluster, b.Name, err)
 		}
 		if len(pw) > 0 {
-			if err := env.RC.Secrets.SetClusterSecret(ctx, identity, "users/userAdmin", pw); err != nil {
+			if err := env.RC.Secrets.SetClusterSecret(ctx, recovery, "users/userAdmin", pw); err != nil {
 				return fmt.Errorf("protect legacy physical backup %s/%s recovery identity: %w", b.Cluster, b.Name, err)
 			}
 		}

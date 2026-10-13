@@ -118,6 +118,36 @@ func load(c *domain.Cluster) (*internalState, error) {
 	}
 	return s, nil
 }
+
+// RelayTargets includes observed and planned database endpoints, including replacements.
+func RelayTargets(c *domain.Cluster) []string {
+	if c == nil {
+		return nil
+	}
+	targets := make(map[string]struct{})
+	add := func(host string) {
+		if host != "" {
+			targets[host+":27017"] = struct{}{}
+			targets[host+":9443"] = struct{}{}
+		}
+	}
+	var state internalState
+	_ = json.Unmarshal(c.Internal, &state)
+	for _, m := range state.Members {
+		if m != nil {
+			add(m.Name)
+		}
+	}
+	for _, m := range c.Status.Members {
+		add(m.Name)
+	}
+	result := make([]string, 0, len(targets))
+	for target := range targets {
+		result = append(result, target)
+	}
+	sort.Strings(result)
+	return result
+}
 func save(c *domain.Cluster, s *internalState) error {
 	raw := map[string]json.RawMessage{}
 	if len(c.Internal) > 0 {

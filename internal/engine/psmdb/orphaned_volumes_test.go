@@ -68,7 +68,7 @@ func TestVolumeOrphanRuleRequiresAllConditions(t *testing.T) {
 			if !busy || (variant != "unowned" && !errors.As(err, &wait)) || err == nil {
 				t.Fatal(busy, err)
 			}
-			items, listErr := rc.Store.ListOrphanedVolumes(context.Background())
+			items, listErr := rc.Store.ListOrphanedVolumes(context.Background(), rc.Cluster.Ref().Namespace)
 			if listErr != nil || len(items) != 0 || len(events.items) != 0 || m.VolumeOrphaned || f.mutations != before {
 				t.Fatal("orphan rule bypassed", items, listErr)
 			}
@@ -130,7 +130,7 @@ func TestLegacyVolumeRetryStartsThirtyMinuteClockOnObservation(t *testing.T) {
 	if _, err := p.Sync(context.Background(), rc); err != nil {
 		t.Fatal(err)
 	}
-	items, err := rc.Store.ListOrphanedVolumes(context.Background())
+	items, err := rc.Store.ListOrphanedVolumes(context.Background(), rc.Cluster.Ref().Namespace)
 	if err != nil || len(items) != 1 || !items[0].FirstFailedAt.Equal(observed) || items[0].Attempts != 130 {
 		t.Fatal(items, err)
 	}
@@ -170,7 +170,7 @@ func TestOrphanedRemovalConvergesAndNeverReusesIndex(t *testing.T) {
 	if len(f.deletes) != 0 {
 		t.Fatal("orphan handoff reissued deletion")
 	}
-	if _, err := rc.Secrets.GetAgentToken(context.Background(), rc.Cluster.Name, removed.Name); !errors.Is(err, store.ErrNotFound) {
+	if _, err := rc.Secrets.GetAgentToken(context.Background(), rc.Cluster.Ref(), removed.Name); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("member token retained", err)
 	}
 	rc.Cluster.Spec.Components.Engine.Replicas = 2
@@ -234,10 +234,10 @@ func TestCleanupOrphanContinuesLaterMembersAndCompletes(t *testing.T) {
 			if len(events.items) != 1 || events.items[0].Reason != "VolumeOrphaned" {
 				t.Fatal(events.items)
 			}
-			if err := rc.Store.(*store.Store).DeleteCluster(context.Background(), rc.Cluster.Name); err != nil {
+			if err := rc.Store.(*store.Store).DeleteCluster(context.Background(), rc.Cluster.Ref()); err != nil {
 				t.Fatal(err)
 			}
-			items, err := rc.Store.ListOrphanedVolumes(context.Background())
+			items, err := rc.Store.ListOrphanedVolumes(context.Background(), rc.Cluster.Ref().Namespace)
 			if err != nil || len(items) != 1 {
 				t.Fatal(items, err)
 			}
@@ -250,7 +250,7 @@ func TestSameNamedClusterCreationSkipsOrphansAndExistingServices(t *testing.T) {
 		t.Run(collision, func(t *testing.T) {
 			p, rc, f, _ := setup(t)
 			ctx := context.Background()
-			if err := rc.Store.(*store.Store).DeleteCluster(ctx, rc.Cluster.Name); err != nil {
+			if err := rc.Store.(*store.Store).DeleteCluster(ctx, rc.Cluster.Ref()); err != nil {
 				t.Fatal(err)
 			}
 			if collision == "orphan-record" {
@@ -295,8 +295,8 @@ func TestKeepVolumesDoesNotOrphanPendingScaleDownVolume(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	items, err := rc.Store.ListOrphanedVolumes(context.Background())
-	retained, retainedErr := rc.Store.ListRetainedVolumes(context.Background(), rc.Cluster.Name)
+	items, err := rc.Store.ListOrphanedVolumes(context.Background(), rc.Cluster.Ref().Namespace)
+	retained, retainedErr := rc.Store.ListRetainedVolumes(context.Background(), rc.Cluster.Ref())
 	if err != nil || retainedErr != nil || len(items) != 0 || len(retained) != 1 || retained[0].Hostname != m.Volume || len(events.items) != 0 {
 		t.Fatal(items, retained, err, retainedErr)
 	}
@@ -321,7 +321,7 @@ func TestKeepVolumesWaitsForSubmittedVolumeDeletion(t *testing.T) {
 						t.Fatal("retention completed while volume deletion was in flight", done, err)
 					}
 					current := retryState(t, rc)
-					retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Name)
+					retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 					if err != nil || len(retained) != 0 || current.Pending == nil || current.Pending.Op.ID != "submitted-volume-delete" || current.Retry != nil || rc.Cluster.Status.Phase == domain.PhaseSuspended {
 						t.Fatal("submitted deletion was discarded or retained prematurely", current, retained, err)
 					}
@@ -353,7 +353,7 @@ func TestKeepVolumesWaitsForSubmittedVolumeDeletion(t *testing.T) {
 						break
 					}
 				}
-				retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Name)
+				retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 				want := 0
 				if outcome == "failed" {
 					want = 1

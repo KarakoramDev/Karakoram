@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -79,7 +80,7 @@ func TestSeriesRatesResetsAndBuckets(t *testing.T) {
 	if err := st.InsertMetricSamples(ctx, samples); err != nil {
 		t.Fatal(err)
 	}
-	series, err := c.Series(ctx, "demo", []string{"opcounters.total", "connections.current"}, start, start.Add(40*time.Second), 20*time.Second)
+	series, err := c.Series(ctx, domain.ClusterRef{Name: "demo"}, []string{"opcounters.total", "connections.current"}, start, start.Add(40*time.Second), 20*time.Second)
 	if err != nil || len(series) != 2 {
 		t.Fatal(series, err)
 	}
@@ -107,7 +108,7 @@ type testDialer struct {
 	err error
 }
 
-func (d testDialer) Dial(context.Context, string, string) (*agentapi.Client, error) {
+func (d testDialer) Dial(context.Context, domain.ClusterRef, string) (*agentapi.Client, error) {
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -140,7 +141,7 @@ func TestScrapeFederationAndRetention(t *testing.T) {
 		t.Fatal(samples, err)
 	}
 	var output bytes.Buffer
-	if err = c.WritePrometheus(ctx, &output, func(cluster string) bool { return cluster == "demo" }); err != nil {
+	if err = c.WritePrometheus(ctx, &output, func(cluster domain.ClusterRef) bool { return cluster.Namespace == "default" && cluster.Name == "demo" }); err != nil {
 		t.Fatal(err)
 	}
 	text := output.String()
@@ -199,7 +200,7 @@ func TestFailedMemberScrapeInvalidatesCachedMetrics(t *testing.T) {
 					t.Fatal(output.String(), err)
 				}
 				signal := families["karakoram_member_scrape_success"]
-				usage := c.MemberUsage("demo", "m0")
+				usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0")
 				if success && (usage.RAMBytes == nil || usage.DiskBytes == nil) {
 					t.Fatal("successful scrape missing member usage", usage)
 				}
@@ -271,44 +272,44 @@ func TestMemberUsageFreshnessAndMissingValues(t *testing.T) {
 			t.Fatalf("expected absent usage, got %+v", usage)
 		}
 	}
-	assertAbsent(c.MemberUsage("demo", "m0"))
-	assertAbsent((*Collector)(nil).MemberUsage("demo", "m0"))
+	assertAbsent(c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"))
+	assertAbsent((*Collector)(nil).MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"))
 
 	now := time.Now().UTC()
 	cacheUsage(t, c, target, now.Add(-30*time.Second), usageExposition)
-	first := c.MemberUsage("demo", "m0")
+	first := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0")
 	if first.CPUPercent != nil || first.RAMBytes == nil || *first.RAMBytes != 209715200 || first.DiskBytes == nil || *first.DiskBytes != 1073741824 {
 		t.Fatalf("first scrape should omit CPU rate only: %+v", first)
 	}
 	cacheUsage(t, c, target, now, strings.Replace(usageExposition, "total 10", "total 10.6", 1))
-	usage := c.MemberUsage("demo", "m0")
+	usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0")
 	if usage.CPUPercent == nil || *usage.CPUPercent < 1.999 || *usage.CPUPercent > 2.001 {
 		t.Fatalf("expected 2%% process CPU: %+v", usage)
 	}
-	assertAbsent(c.MemberUsage("other", "m0"))
-	assertAbsent(c.MemberUsage("demo", "other"))
+	assertAbsent(c.MemberUsage(domain.ClusterRef{Name: "other"}, "m0"))
+	assertAbsent(c.MemberUsage(domain.ClusterRef{Name: "demo"}, "other"))
 
 	c.cacheScrape(target, nil, nil, now)
-	assertAbsent(c.MemberUsage("demo", "m0"))
+	assertAbsent(c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"))
 	cacheUsage(t, c, target, now.Add(time.Second), usageExposition)
-	if c.MemberUsage("demo", "m0").CPUPercent != nil {
+	if c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0").CPUPercent != nil {
 		t.Fatal("failed scrape retained the CPU baseline")
 	}
 
 	cacheUsage(t, c, target, now.Add(-61*time.Second), usageExposition)
-	assertAbsent(c.MemberUsage("demo", "m0"))
+	assertAbsent(c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"))
 	cacheUsage(t, c, target, now, usageExposition)
-	if c.MemberUsage("demo", "m0").CPUPercent != nil {
+	if c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0").CPUPercent != nil {
 		t.Fatal("stale CPU baseline produced a fresh rate")
 	}
 
 	cacheUsage(t, c, target, now, "# TYPE karakoram_ram_used_bytes gauge\nkarakoram_ram_used_bytes 0\n")
-	usage = c.MemberUsage("demo", "m0")
+	usage = c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0")
 	if usage.CPUPercent != nil || usage.DiskBytes != nil || usage.RAMBytes == nil || *usage.RAMBytes != 0 {
 		t.Fatalf("missing metrics must be absent and measured zero must be present: %+v", usage)
 	}
 	cacheUsage(t, c, target, now, "# TYPE unknown_metric gauge\nunknown_metric 1\n")
-	assertAbsent(c.MemberUsage("demo", "m0"))
+	assertAbsent(c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"))
 }
 
 func TestMemberUsageMatchesCanonicalCPU(t *testing.T) {
@@ -334,8 +335,8 @@ func TestMemberUsageMatchesCanonicalCPU(t *testing.T) {
 			if err := st.InsertMetricSamples(ctx, append(previous, current...)); err != nil {
 				t.Fatal(err)
 			}
-			series, err := c.Series(ctx, "demo", []string{"cpu.percent"}, now, now.Add(time.Second), 30*time.Second)
-			usage := c.MemberUsage("demo", "m0")
+			series, err := c.Series(ctx, domain.ClusterRef{Name: "demo"}, []string{"cpu.percent"}, now, now.Add(time.Second), 30*time.Second)
+			usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0")
 			if err != nil || len(series) != 1 || len(series[0].Points) != 1 || usage.CPUPercent == nil {
 				t.Fatal(series, usage, err)
 			}
@@ -343,5 +344,63 @@ func TestMemberUsageMatchesCanonicalCPU(t *testing.T) {
 				t.Fatalf("CPU usage %v differs from series %v or expected %v", *usage.CPUPercent, series[0].Points[0].Value, tc.want)
 			}
 		})
+	}
+}
+
+func TestNamespaceMetricIsolationAndAuthoritativeLabels(t *testing.T) {
+	ctx := context.Background()
+	st := monitoringStore(t)
+	c := New(Options{Store: st})
+	now := time.Now().UTC()
+	for i, namespace := range []string{"default", "other"} {
+		text := fmt.Sprintf("# TYPE karakoram_ram_used_bytes gauge\nkarakoram_ram_used_bytes{namespace=\"spoofed\",cluster=\"spoofed\",member=\"spoofed\"} %d\n", i+1)
+		samples := cacheUsage(t, c, Target{Namespace: namespace, Cluster: "demo", Member: "m0"}, now, text)
+		if err := st.InsertMetricSamples(ctx, samples); err != nil {
+			t.Fatal(err)
+		}
+		ref := domain.ClusterRef{Namespace: namespace, Name: "demo"}
+		series, err := c.Series(ctx, ref, nil, now, now.Add(time.Second), time.Second)
+		if err != nil || len(series) != 1 || len(series[0].Points) != 1 || series[0].Points[0].Value != float64(i+1) {
+			t.Fatal(series, err)
+		}
+		usage := c.MemberUsage(ref, "m0")
+		if usage.RAMBytes == nil || *usage.RAMBytes != int64(i+1) {
+			t.Fatal(usage)
+		}
+	}
+	var out bytes.Buffer
+	var objects []string
+	if err := c.WritePrometheus(ctx, &out, func(ref domain.ClusterRef) bool {
+		objects = append(objects, ref.Namespace+"/"+ref.Name)
+		return ref.Namespace == "other"
+	}); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	if len(objects) != 2 || !strings.Contains(text, `namespace="other"`) || strings.Contains(text, `namespace="default"`) || strings.Contains(text, "spoofed") {
+		t.Fatal(objects, text)
+	}
+}
+
+type recordingDialer struct{ refs []domain.ClusterRef }
+
+func (d *recordingDialer) Dial(_ context.Context, ref domain.ClusterRef, _ string) (*agentapi.Client, error) {
+	d.refs = append(d.refs, ref)
+	return nil, errors.New("member unavailable")
+}
+
+func TestScrapeDialsNamespacedReferences(t *testing.T) {
+	d := &recordingDialer{}
+	c := New(Options{Store: monitoringStore(t), Dialer: d, Targets: func(context.Context) ([]Target, error) {
+		return []Target{{Cluster: "same", Member: "m0"}, {Namespace: "other", Cluster: "same", Member: "m0"}}, nil
+	}})
+	if err := c.scrape(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.refs) != 2 || d.refs[0] != (domain.ClusterRef{Namespace: "default", Name: "same"}) || d.refs[1] != (domain.ClusterRef{Namespace: "other", Name: "same"}) {
+		t.Fatal(d.refs)
+	}
+	if len(c.latest) != 2 {
+		t.Fatal("namespace scrape caches collided", c.latest)
 	}
 }

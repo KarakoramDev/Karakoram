@@ -6,8 +6,9 @@ package domain
 import "time"
 
 // OrphanedVolume records a verified volume detached from cluster lifecycle work.
-// Its hostname is the global key; the service ID fences janitor deletion.
+// Its hostname is unique within its namespace; the service ID fences deletion.
 type OrphanedVolume struct {
+	Namespace     string    `json:"namespace,omitempty"`
 	Hostname      string    `json:"hostname"`
 	ServiceID     string    `json:"serviceId"`
 	Cluster       string    `json:"cluster"`

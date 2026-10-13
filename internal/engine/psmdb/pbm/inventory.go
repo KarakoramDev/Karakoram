@@ -120,7 +120,7 @@ func SyncInventory(ctx context.Context, env Env) (domain.BackupStatus, []domain.
 	for _, b := range status.Backups.Snapshot {
 		detailed[b.Name] = b
 	}
-	stored, err := env.RC.Store.ListBackups(ctx, env.RC.Cluster.Name)
+	stored, err := env.RC.Store.ListBackups(ctx, env.RC.Cluster.Ref())
 	if err != nil {
 		return summary, nil, err
 	}
@@ -138,7 +138,7 @@ func SyncInventory(ctx context.Context, env Env) (domain.BackupStatus, []domain.
 		}
 		b, exists := known[s.Name]
 		if !exists {
-			b = domain.Backup{Name: s.Name, Cluster: env.RC.Cluster.Name, Storage: env.Storage.Name, PBMName: s.Name, Type: s.Type, Trigger: "manual", CreatedAt: now(env)}
+			b = domain.Backup{Namespace: env.RC.Cluster.Ref().Namespace, Name: s.Name, Cluster: env.RC.Cluster.Name, Storage: env.Storage.Name, PBMName: s.Name, Type: s.Type, Trigger: "manual", CreatedAt: now(env)}
 		}
 		if b.PBMPrefix == "" {
 			b.PBMPrefix, b.SourceTopology, b.SourceVersion = env.Prefix, env.RC.Cluster.Spec.Topology, env.RC.Cluster.Spec.Version

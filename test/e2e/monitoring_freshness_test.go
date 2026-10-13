@@ -37,7 +37,7 @@ func TestMetricsFreshnessRejectsRebucketedHistoricalSamples(t *testing.T) {
 	query := func(queryEnd time.Time) api.ClusterMetrics {
 		t.Helper()
 		start := queryEnd.Add(-15 * time.Minute)
-		series, err := collector.Series(ctx, "demo", nil, start, queryEnd, 30*time.Second)
+		series, err := collector.Series(ctx, domain.ClusterRef{Namespace: domain.DefaultNamespace, Name: "demo"}, nil, start, queryEnd, 30*time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}

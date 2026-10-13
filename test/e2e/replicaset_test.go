@@ -97,7 +97,7 @@ func (s *suite) assertReplicaMembers(name string, want int) {
 	primary := 0
 	for _, m := range members {
 		var individual api.Member
-		s.expect(&individual)(s.client.GetClusterMember(s.ctx, name, m.Name))
+		s.expect(&individual)(s.client.GetClusterMember(s.ctx, name, m.Name, nil))
 		if individual.Name != m.Name || !m.Health || m.State == "" || m.Set == "" || m.LagSeconds == nil || *m.LagSeconds < 0 {
 			s.t.Fatalf("member=%s lacks healthy state/set/nonnegative lag", m.Name)
 		}

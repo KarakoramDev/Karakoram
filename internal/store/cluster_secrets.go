@@ -42,6 +42,10 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 	if err := domain.ValidateClusterName(c.Name); err != nil {
 		return err
 	}
+	c.Namespace = domain.NormalizedNamespace(c.Namespace)
+	if err := domain.ValidateNamespaceName(c.Namespace); err != nil {
+		return err
+	}
 	c.Generation = 1
 	c.CreatedAt = time.Now().UTC()
 	c.UpdatedAt = c.CreatedAt
@@ -67,7 +71,7 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 	if !json.Valid(internal) {
 		return errors.New("invalid provider internal JSON")
 	}
-	sealed, err := s.sealClusterValues(c.Name, values)
+	sealed, err := s.sealClusterValues(c.Ref().Key(), values)
 	if err != nil {
 		return err
 	}
@@ -76,10 +80,10 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?)", c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano()); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano()); err != nil {
 		return typed(err)
 	}
-	if err = writeClusterValues(ctx, tx, c.Name, sealed); err != nil {
+	if err = writeClusterValues(ctx, tx, c.Ref().Key(), sealed); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -88,9 +92,10 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 // UpdateClusterSpecWithSecrets atomically updates desired state and related
 // certificate/key inputs. Changed secret material advances the generation even
 // when the public spec is unchanged; repeating identical inputs remains idempotent.
-func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, name string, spec domain.ClusterSpec, values map[string][]byte) error {
+func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.ClusterRef, spec domain.ClusterSpec, values map[string][]byte) error {
+	name := ref.Key()
 	if len(values) == 0 {
-		return s.UpdateClusterSpec(ctx, name, spec)
+		return s.UpdateClusterSpec(ctx, ref, spec)
 	}
 	data, err := json.Marshal(spec)
 	if err != nil {
@@ -124,7 +129,7 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, name string, s
 			changed = true
 		}
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? OR ? THEN 1 ELSE 0 END,spec=?,updated=? WHERE name=?", data, changed, data, time.Now().UTC().UnixNano(), name)
+	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? OR ? THEN 1 ELSE 0 END,spec=?,updated=? WHERE namespace=? AND name=?", data, changed, data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(result, err); err != nil {
 		return err
 	}

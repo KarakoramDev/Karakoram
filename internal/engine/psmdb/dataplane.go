@@ -265,7 +265,7 @@ func (h hooks) ResetSystemUsers(ctx context.Context, recoveryIdentity string) er
 	// Physical recovery may replace it; use the protected snapshot identity then.
 	var recoveryPassword []byte
 	if recoveryIdentity != "" {
-		recoveryPassword, e = rc.Secrets.GetClusterSecret(ctx, recoveryIdentity, "users/userAdmin")
+		recoveryPassword, e = rc.Secrets.GetClusterSecret(ctx, domain.ParseClusterKey(recoveryIdentity), "users/userAdmin")
 		if e != nil {
 			return e
 		}
@@ -284,7 +284,7 @@ func (h hooks) ResetSystemUsers(ctx context.Context, recoveryIdentity string) er
 		}
 		c, e := h.p.dial(ctx, rc, s, set, "backup")
 		if e != nil && len(recoveryPassword) > 0 {
-			c, e = mongoadmin.Dial(ctx, mongoadmin.DialOptions{Hosts: hosts(s.setMembers(set)), ReplicaSet: set, Username: "userAdmin", Password: string(recoveryPassword), CAPEM: ca, TLS: s.TLSMode != "disabled"})
+			c, e = mongoadmin.Dial(ctx, mongoadmin.DialOptions{Hosts: hosts(s.setMembers(set)), Dialer: rc.Dialer, ReplicaSet: set, Username: "userAdmin", Password: string(recoveryPassword), CAPEM: ca, TLS: s.TLSMode != "disabled"})
 		}
 		if e != nil {
 			// A resumed reset may already have restored the target userAdmin.
@@ -302,6 +302,10 @@ func (h hooks) ResetSystemUsers(ctx context.Context, recoveryIdentity string) er
 	return nil
 }
 func (p *Provider) pbmEnv(ctx context.Context, rc *engine.Context, s *internalState) (pbm.Env, error) {
+	return p.pbmEnvInNamespace(ctx, rc, s, rc.Cluster.Ref().Namespace)
+}
+
+func (p *Provider) pbmEnvInNamespace(ctx context.Context, rc *engine.Context, s *internalState, namespace string) (pbm.Env, error) {
 	env := pbm.Env{RC: rc, Sharded: rc.Cluster.Spec.Topology.Type == "sharded", Prefix: s.PBMPrefix, PITR: rc.Cluster.Spec.Backup.PITR, Hooks: hooks{p, rc}}
 	for _, m := range ordered(s) {
 		if m.Removing {
@@ -316,30 +320,37 @@ func (p *Provider) pbmEnv(ctx context.Context, rc *engine.Context, s *internalSt
 	name := rc.Cluster.Spec.Backup.Storage
 	if name == "" && rc.Cluster.Spec.DataSource != nil {
 		d := rc.Cluster.Spec.DataSource
+		sourceRef := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
+		if sourceRef.Namespace == "" {
+			sourceRef.Namespace = namespace
+		}
+		namespace = sourceRef.Namespace
 		if d.Backup != "" {
-			b, err := rc.Store.GetBackup(ctx, d.Cluster, d.Backup)
+			b, err := rc.Store.GetBackup(ctx, sourceRef, d.Backup)
 			if err != nil {
 				return env, err
 			}
 			name = b.Storage
 		} else {
-			source, err := rc.Store.GetCluster(ctx, d.Cluster)
+			source, err := rc.Store.GetCluster(ctx, sourceRef)
 			if err != nil {
 				return env, err
 			}
 			name = source.Spec.Backup.Storage
 		}
 	}
-	storage, e := rc.Store.GetBackupStorage(ctx, name)
+	storage, e := rc.Store.GetBackupStorage(ctx, namespace, name)
 	if e != nil {
 		return env, e
 	}
-	known := false
-	for _, used := range s.UsedStorages {
-		known = known || used == name
-	}
-	if !known {
-		s.UsedStorages = append(s.UsedStorages, name)
+	if namespace == rc.Cluster.Ref().Namespace {
+		known := false
+		for _, used := range s.UsedStorages {
+			known = known || used == name
+		}
+		if !known {
+			s.UsedStorages = append(s.UsedStorages, name)
+		}
 	}
 	env.Storage = *storage
 	env.Credentials = storage.Credentials

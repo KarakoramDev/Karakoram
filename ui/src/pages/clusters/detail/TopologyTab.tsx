@@ -91,10 +91,10 @@ function buildPatch(spec: Spec, d: Draft): Record<string, unknown> {
 }
 
 export function TopologyTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, can } = useClusterContext();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const clusters = useClusters();
+  const clusters = useClusters(namespace);
   const [draft, setDraft] = useState<Draft>(() => draftFrom(cluster.spec));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [replaceMember, setReplaceMember] = useState<string | null>(null);
@@ -127,9 +127,9 @@ export function TopologyTab() {
   errors.push(...validateTLS(draft.tls.ca === 'userProvided' && draft.tls.ca !== cluster.spec.tls?.ca ? draft.tls : undefined), ...validateExposure(draft.exposure));
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { params: { path: { cluster: name } }, body: { spec: patch } })),
+    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
     onSuccess: (c) => {
-      queryClient.setQueryData(keys.cluster(name), c);
+      queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success('Changes submitted; the cluster is reconciling.');
       setConfirmOpen(false);
@@ -140,11 +140,11 @@ export function TopologyTab() {
   });
 
   const replace = useMutation({
-    mutationFn: (member: string) => unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', { params: { path: { cluster: name, member } } })),
+    mutationFn: (member: string) => unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', { params: { path: { cluster: name, member }, query: { namespace } } })),
     onSuccess: (op) => {
       toast.success(`Replacement started (operation ${op.id}).`);
       setReplaceMember(null);
-      void queryClient.invalidateQueries({ queryKey: keys.cluster(name) });
+      void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
     },
     onError: (e) => toast.error(errorMessage(e)),
   });

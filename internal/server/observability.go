@@ -20,25 +20,23 @@ import (
 )
 
 func (s *Server) eventAllowed(ctx context.Context, e domain.Event) bool {
-	obj := e.Cluster
-	if obj == "" {
-		obj = "*"
+	namespace := domain.NormalizedNamespace(e.Namespace)
+	obj := clusterObject(namespace, e.Cluster)
+	if e.Cluster == "" {
+		// Namespace lifecycle events authorize events/read on the namespace itself.
+		obj = namespace
 	}
 	q := request(ctx).URL.Query()
-	return s.allowed(ctx, "events", "read", obj) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation)
+	return (q.Get("namespace") == "" || q.Get("namespace") == namespace) && s.allowed(ctx, "events", "read", obj) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation)
 }
 func (s *Server) observability(ctx context.Context, name string, in input) response {
 	q := request(ctx).URL.Query()
 	switch name {
 	case "ListOperations":
-		scope := q.Get("cluster")
-		if scope == "" {
-			scope = "*"
-		}
-		items, err := s.Store.ListOperations(ctx, scope)
+		items, err := s.Store.ListOperations(ctx, domain.ClusterRef{Namespace: namespaceFilter(ctx)})
 		out := make([]api.Operation, 0, len(items))
 		for _, o := range items {
-			if s.allowed(ctx, "operations", "read", o.Cluster) && (q.Get("phase") == "" || q.Get("phase") == string(o.Phase)) {
+			if (q.Get("cluster") == "" || q.Get("cluster") == o.Cluster) && s.allowed(ctx, "operations", "read", clusterObject(o.Namespace, o.Cluster)) && (q.Get("phase") == "" || q.Get("phase") == string(o.Phase)) {
 				out = append(out, operationAPI(o))
 			}
 		}
@@ -48,7 +46,10 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		if err != nil {
 			return s.failure(err)
 		}
-		if !s.allowed(ctx, "operations", "read", o.Cluster) {
+		if domain.NormalizedNamespace(o.Namespace) != domain.NormalizedNamespace(namespaceFilter(ctx)) {
+			return fail(404, "not_found", "Operation not found")
+		}
+		if !s.allowed(ctx, "operations", "read", clusterObject(o.Namespace, o.Cluster)) {
 			return fail(403, "forbidden", "Permission denied")
 		}
 		return ok(operationAPI(*o))
@@ -67,7 +68,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		}
 		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
 		for {
-			items, err := s.Store.ListEvents(ctx, store.EventFilter{Cluster: q.Get("cluster"), Type: q.Get("type"), Limit: 1000, SinceID: since})
+			items, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: namespaceFilter(ctx), Cluster: q.Get("cluster"), Type: q.Get("type"), Limit: 1000, SinceID: since})
 			if err != nil {
 				return s.failure(err)
 			}
@@ -95,13 +96,15 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		}
 		return response{noStore: true, serve: func(w http.ResponseWriter) error {
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-			return s.Monitoring.WritePrometheus(ctx, w, func(cluster string) bool { return s.allowed(ctx, "monitoring", "read", cluster) })
+			return s.Monitoring.WritePrometheus(ctx, w, func(ref domain.ClusterRef) bool {
+				return (namespaceFilter(ctx) == "" || namespaceFilter(ctx) == domain.NormalizedNamespace(ref.Namespace)) && s.allowed(ctx, "monitoring", "read", clusterObject(ref.Namespace, ref.Name))
+			})
 		}}
 	case "GetClusterMetrics":
-		if !s.allowed(ctx, "monitoring", "read", in.Cluster) {
+		if !s.allowed(ctx, "monitoring", "read", clusterObject(clusterRef(ctx, in.Cluster).Namespace, in.Cluster)) {
 			return fail(403, "forbidden", "Permission denied")
 		}
-		if _, err := s.Store.GetCluster(ctx, in.Cluster); err != nil {
+		if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, in.Cluster)); err != nil {
 			return s.failure(err)
 		}
 		if s.Monitoring == nil {
@@ -128,7 +131,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		if v := q.Get("metric"); v != "" {
 			metrics = strings.Split(v, ",")
 		}
-		series, err := s.Monitoring.Series(ctx, in.Cluster, metrics, start, end, step)
+		series, err := s.Monitoring.Series(ctx, clusterRef(ctx, in.Cluster), metrics, start, end, step)
 		if err != nil {
 			return s.failure(err)
 		}
@@ -192,11 +195,8 @@ func (s *Server) stream(ctx context.Context) response {
 	if err != nil {
 		return invalid()
 	}
-	if c := q.Get("cluster"); c != "" && !s.allowed(ctx, "events", "read", c) {
-		return fail(403, "forbidden", "Permission denied")
-	}
 	return response{noStore: true, serve: func(w http.ResponseWriter) error {
-		ch, cancel := s.Hub.Subscribe(q.Get("cluster"))
+		ch, cancel := s.Hub.Subscribe(namespaceFilter(ctx), q.Get("cluster"))
 		defer cancel()
 		controller := http.NewResponseController(w)
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -253,7 +253,7 @@ func (s *Server) stream(ctx context.Context) response {
 				return err
 			}
 			for {
-				items, err := s.Store.ListEvents(ctx, store.EventFilter{SinceID: since, Limit: 1000})
+				items, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: namespaceFilter(ctx), SinceID: since, Limit: 1000})
 				if err != nil {
 					return err
 				}

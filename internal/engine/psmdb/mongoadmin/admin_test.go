@@ -5,6 +5,9 @@ package mongoadmin
 
 import (
 	"context"
+	"errors"
+	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,6 +18,37 @@ func TestDialRejectsMissingHostsAndInvalidCA(t *testing.T) {
 	}
 	if _, e := Dial(context.Background(), DialOptions{Hosts: []string{"127.0.0.1:1"}, TLS: true, CAPEM: []byte("invalid")}); e == nil {
 		t.Fatal("invalid CA accepted")
+	}
+}
+
+type recordingDialer struct {
+	mu        sync.Mutex
+	addresses []string
+}
+
+func (d *recordingDialer) DialContext(_ context.Context, _ string, addr string) (net.Conn, error) {
+	d.mu.Lock()
+	d.addresses = append(d.addresses, addr)
+	d.mu.Unlock()
+	return nil, errors.New("synthetic connection failure")
+}
+
+func TestDialUsesProvidedDialer(t *testing.T) {
+	d := &recordingDialer{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := Dial(ctx, DialOptions{Hosts: []string{"database.example.com:27017"}, Direct: true, Timeout: 100 * time.Millisecond, Dialer: d}); err == nil {
+		t.Fatal("failing transport unexpectedly connected")
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(d.addresses) == 0 {
+		t.Fatal("MongoDB driver bypassed provided dialer")
+	}
+	for _, addr := range d.addresses {
+		if addr != "database.example.com:27017" {
+			t.Fatalf("dialed unexpected address %q", addr)
+		}
 	}
 }
 func TestReplicationLag(t *testing.T) {

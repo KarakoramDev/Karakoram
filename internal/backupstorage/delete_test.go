@@ -35,3 +35,15 @@ func TestSnapshotKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshotKeysRejectsAnotherNamespaceStorage(t *testing.T) {
+	s := domain.BackupStorage{Namespace: "other", Name: "archive"}
+	b := domain.Backup{Namespace: "default", Storage: "archive", PBMPrefix: "karakoram/source", PBMName: "snapshot"}
+	if _, _, err := SnapshotKeys(s, b); err == nil {
+		t.Fatal("accepted another namespace storage")
+	}
+	b.Namespace = s.Namespace
+	if _, _, err := SnapshotKeys(s, b); err != nil {
+		t.Fatal(err)
+	}
+}

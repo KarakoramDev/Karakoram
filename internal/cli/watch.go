@@ -81,7 +81,7 @@ func (a *app) waitMutation(ctx context.Context, op string, args []string, result
 	}
 }
 func (a *app) watch(ctx context.Context, q map[string]any) error {
-	resp, err := dispatch(ctx, a.client, a.root, "streamEvents", nil, q, nil)
+	resp, err := dispatch(ctx, a.client, a.root, "streamEvents", nil, a.namespaceQuery("streamEvents", q), nil)
 	if err != nil {
 		return err
 	}

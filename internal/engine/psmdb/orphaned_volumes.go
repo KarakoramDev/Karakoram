@@ -54,7 +54,7 @@ func (p *Provider) orphanVolume(ctx context.Context, rc *engine.Context, s *inte
 		return false, engine.ErrConflict
 	}
 	// Reuse an existing handoff after a crash, without resetting janitor state.
-	record, err := rc.Store.GetOrphanedVolume(ctx, m.Volume)
+	record, err := rc.Store.GetOrphanedVolume(ctx, rc.Cluster.Ref().Namespace, m.Volume)
 	created := missing(err)
 	if err != nil && !created {
 		return false, err
@@ -68,13 +68,13 @@ func (p *Provider) orphanVolume(ctx context.Context, rc *engine.Context, s *inte
 		if lastAttempt.IsZero() {
 			lastAttempt = r.FirstFailedAt
 		}
-		record = &domain.OrphanedVolume{Hostname: m.Volume, ServiceID: m.VolumeID, Cluster: rc.Cluster.Name, Member: m.Name, FirstError: r.FirstError, LastError: r.Message, FirstFailedAt: r.FirstFailedAt, OrphanedAt: at, LastAttemptAt: lastAttempt, NextAttemptAt: at.Add(orphanvolumes.InitialBackoff), Attempts: r.Failures, LastProcessID: r.LastProcessID}
+		record = &domain.OrphanedVolume{Namespace: rc.Cluster.Ref().Namespace, Hostname: m.Volume, ServiceID: m.VolumeID, Cluster: rc.Cluster.Name, Member: m.Name, FirstError: r.FirstError, LastError: r.Message, FirstFailedAt: r.FirstFailedAt, OrphanedAt: at, LastAttemptAt: lastAttempt, NextAttemptAt: at.Add(orphanvolumes.InitialBackoff), Attempts: r.Failures, LastProcessID: r.LastProcessID}
 		if err := rc.Store.PutOrphanedVolume(ctx, record); err != nil {
 			return false, err
 		}
 	}
 	if rc.Events != nil {
-		if err := rc.Events.Record(ctx, domain.Event{Cluster: record.Cluster, Type: "Warning", Reason: "VolumeOrphaned", Message: fmt.Sprintf("volume %s (%s) orphaned after %d delete failures; cluster work continues and the janitor keeps retrying", record.Hostname, record.ServiceID, record.Attempts), CreatedAt: now(rc)}); err != nil {
+		if err := rc.Events.Record(ctx, domain.Event{Namespace: record.Namespace, Cluster: record.Cluster, Type: "Warning", Reason: "VolumeOrphaned", Message: fmt.Sprintf("volume %s (%s) orphaned after %d delete failures; cluster work continues and the janitor keeps retrying", record.Hostname, record.ServiceID, record.Attempts), CreatedAt: now(rc)}); err != nil {
 			return false, err
 		}
 	}
@@ -101,7 +101,7 @@ func allocateNewPlans(ctx context.Context, rc *engine.Context, s *internalState,
 }
 
 func skipOccupiedPlans(ctx context.Context, rc *engine.Context, s *internalState, members []*member) error {
-	orphans, err := rc.Store.ListOrphanedVolumes(ctx)
+	orphans, err := rc.Store.ListOrphanedVolumes(ctx, rc.Cluster.Ref().Namespace)
 	if err != nil {
 		return err
 	}

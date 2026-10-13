@@ -2,10 +2,14 @@
 // Copyright 2026 The Karakoram Authors
 
 import { useOrphanedVolumes } from '@/api/hooks';
+import { DEFAULT_NAMESPACE } from '@/auth/permissions';
+import { spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
 import { Callout, Card, ErrorBlock, Loading, Time } from '@/components/ui/Primitives';
 
 export function OrphanedVolumesPage() {
-  const volumes = useOrphanedVolumes();
+  const { namespace } = useNamespace();
+  const volumes = useOrphanedVolumes(true, namespace);
+  const showNamespace = !namespace && spansNamespaces(volumes.data?.items ?? []);
 
   return (
     <>
@@ -17,7 +21,7 @@ export function OrphanedVolumesPage() {
           You can delete them manually in the Zerops GUI or with <code>zcli service delete {'<hostname>'}</code>. The record disappears on the next retry after deletion.
         </p>
       </Callout>
-      <Card title="Orphaned volumes" flush>
+      <Card title={namespace ? `Orphaned volumes in ${namespace}` : 'Orphaned volumes'} flush>
         {volumes.isPending ? (
           <Loading />
         ) : volumes.error ? (
@@ -33,6 +37,7 @@ export function OrphanedVolumesPage() {
                 <tr>
                   <th scope="col">Hostname</th>
                   <th scope="col">Zerops service ID</th>
+                  {showNamespace ? <th scope="col">Namespace</th> : null}
                   <th scope="col">Cluster</th>
                   <th scope="col">Member</th>
                   <th scope="col" className="num">Attempts</th>
@@ -47,9 +52,10 @@ export function OrphanedVolumesPage() {
               </thead>
               <tbody>
                 {volumes.data.items.map((volume) => (
-                  <tr key={volume.hostname}>
+                  <tr key={`${volume.namespace || DEFAULT_NAMESPACE}/${volume.hostname}`}>
                     <td className="mono nowrap">{volume.hostname}</td>
                     <td className="mono small nowrap">{volume.serviceId}</td>
+                    {showNamespace ? <td className="mono nowrap">{volume.namespace || DEFAULT_NAMESPACE}</td> : null}
                     <td className="mono nowrap">{volume.cluster}</td>
                     <td className="mono nowrap">{volume.member}</td>
                     <td className="num">{volume.attempts}</td>

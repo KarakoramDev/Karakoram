@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { API_BASE, type Schemas } from './client';
 import { keys } from './keys';
+import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 
 export type KEvent = Schemas['Event'];
 
@@ -89,7 +90,8 @@ export function subscribeSSE(url: string, onFrame: (f: SSEFrame) => void, onStat
 /**
  * Keeps TanStack Query caches fresh from the control-plane event stream. Any
  * event carrying a cluster name invalidates that cluster's queries and the
- * cluster list; global events invalidate the global collections.
+ * cluster list; namespace lifecycle events (namespace set, no cluster) refresh
+ * the namespace views; global events invalidate the global collections.
  */
 export function useLiveUpdates(enabled: boolean, onEvent?: (e: KEvent) => void, onState?: (connected: boolean) => void) {
   const queryClient = useQueryClient();
@@ -105,13 +107,17 @@ export function useLiveUpdates(enabled: boolean, onEvent?: (e: KEvent) => void, 
       onEvent?.(ev);
       void queryClient.invalidateQueries({ queryKey: keys.events });
       void queryClient.invalidateQueries({ queryKey: keys.operations });
+      const namespace = ev.namespace || DEFAULT_NAMESPACE;
       if (ev.cluster) {
-        void queryClient.invalidateQueries({ queryKey: keys.cluster(ev.cluster) });
+        void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, ev.cluster) });
         void queryClient.invalidateQueries({ queryKey: keys.clusters });
+      } else if (ev.namespace) {
+        void queryClient.invalidateQueries({ queryKey: keys.namespaces });
       }
       const t = ev.type.toLowerCase();
-      if (t.includes('storage')) void queryClient.invalidateQueries({ queryKey: keys.backupStorages });
       const reason = (ev.reason ?? '').toLowerCase();
+      if (t.includes('storage')) void queryClient.invalidateQueries({ queryKey: keys.backupStorages });
+      if (t.includes('namespace') || t.includes('relay') || reason.includes('namespace') || reason.includes('relay')) void queryClient.invalidateQueries({ queryKey: keys.namespaces });
       if (reason.includes('volumeorphaned') || reason.includes('orphanedvolume')) void queryClient.invalidateQueries({ queryKey: keys.orphanedVolumes });
       if (t.includes('account')) void queryClient.invalidateQueries({ queryKey: keys.accounts });
       if (t.includes('token')) void queryClient.invalidateQueries({ queryKey: keys.apiTokens });

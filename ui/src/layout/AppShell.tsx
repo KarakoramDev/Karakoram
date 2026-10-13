@@ -6,9 +6,11 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/session';
 import { useLiveUpdates } from '@/api/events';
 import { useOrphanedVolumes, useVersion } from '@/api/hooks';
+import { useNamespace } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/Logo';
 import { Callout } from '@/components/ui/Primitives';
+import { NamespaceSwitcher } from './NamespaceSwitcher';
 
 function Icon({ d }: { d: string }) {
   return (
@@ -32,7 +34,8 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [live, setLive] = useState(false);
   const version = useVersion();
-  const orphanedVolumes = useOrphanedVolumes(auth.status === 'authenticated' && auth.can('clusters', 'read'));
+  const { namespace } = useNamespace();
+  const orphanedVolumes = useOrphanedVolumes(auth.status === 'authenticated' && auth.can('clusters', 'read'), namespace);
   const orphanedCount = orphanedVolumes.error ? 0 : (orphanedVolumes.data?.items.length ?? 0);
   useLiveUpdates(auth.status === 'authenticated', undefined, setLive);
 
@@ -45,6 +48,7 @@ export function AppShell() {
           <Logo size={26} />
           <span className="brand-text">Karakoram</span>
         </NavLink>
+        <NamespaceSwitcher collapsed={collapsed} />
         <nav className="nav" aria-label="Primary">
           <NavLink to="/clusters" className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Clusters">
             <Icon d={ICONS.clusters} />
@@ -116,7 +120,7 @@ export function AppShell() {
         {orphanedCount > 0 ? (
           <div className="orphaned-volume-banner">
             <Callout tone="warn">
-              <Link to="/settings/orphaned-volumes">
+              <Link to={namespace ? `/settings/orphaned-volumes?namespace=${encodeURIComponent(namespace)}` : '/settings/orphaned-volumes'}>
                 {orphanedCount} orphaned platform {orphanedCount === 1 ? 'volume' : 'volumes'} awaiting deletion
               </Link>
             </Callout>

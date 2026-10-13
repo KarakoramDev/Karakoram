@@ -34,12 +34,12 @@ function rolesText(roles: RoleRef[]): string {
 }
 
 export function UsersTab() {
-  const { name, can } = useClusterContext();
+  const { namespace, name, can } = useClusterContext();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const users = useQuery({ queryKey: keys.clusterSub(name, 'database-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-users', { params: { path: { cluster: name }, query: { limit: 500 } } })) });
-  const roles = useQuery({ queryKey: keys.clusterSub(name, 'database-roles'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-roles', { params: { path: { cluster: name }, query: { limit: 500 } } })) });
-  const system = useQuery({ queryKey: keys.clusterSub(name, 'system-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/system-users', { params: { path: { cluster: name } } })) });
+  const users = useQuery({ queryKey: keys.clusterSub(namespace, name, 'database-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-users', { params: { path: { cluster: name }, query: { namespace, limit: 500 } } })) });
+  const roles = useQuery({ queryKey: keys.clusterSub(namespace, name, 'database-roles'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-roles', { params: { path: { cluster: name }, query: { namespace, limit: 500 } } })) });
+  const system = useQuery({ queryKey: keys.clusterSub(namespace, name, 'system-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/system-users', { params: { path: { cluster: name }, query: { namespace } } })) });
 
   const [userDialog, setUserDialog] = useState<null | { mode: 'create' } | { mode: 'edit'; user: DBUser }>(null);
   const [roleDialog, setRoleDialog] = useState<null | { mode: 'create' } | { mode: 'edit'; role: DBRole }>(null);
@@ -51,13 +51,13 @@ export function UsersTab() {
   const canDelete = can('delete', 'database-users');
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: keys.clusterSub(name, 'database-users') });
-    void queryClient.invalidateQueries({ queryKey: keys.clusterSub(name, 'database-roles') });
-    void queryClient.invalidateQueries({ queryKey: keys.clusterSub(name, 'system-users') });
+    void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, name, 'database-users') });
+    void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, name, 'database-roles') });
+    void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, name, 'system-users') });
   };
 
   const delUser = useMutation({
-    mutationFn: (u: DBUser) => unwrap(api.DELETE('/clusters/{cluster}/database-users/{database}/{username}', { params: { path: { cluster: name, database: u.database, username: u.username } } })),
+    mutationFn: (u: DBUser) => unwrap(api.DELETE('/clusters/{cluster}/database-users/{database}/{username}', { params: { path: { cluster: name, database: u.database, username: u.username }, query: { namespace } } })),
     onSuccess: () => {
       toast.success('User deleted.');
       setDeleteUser(null);
@@ -66,7 +66,7 @@ export function UsersTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
   const delRole = useMutation({
-    mutationFn: (r: DBRole) => unwrap(api.DELETE('/clusters/{cluster}/database-roles/{database}/{role}', { params: { path: { cluster: name, database: r.database, role: r.name } } })),
+    mutationFn: (r: DBRole) => unwrap(api.DELETE('/clusters/{cluster}/database-roles/{database}/{role}', { params: { path: { cluster: name, database: r.database, role: r.name }, query: { namespace } } })),
     onSuccess: () => {
       toast.success('Role deleted.');
       setDeleteRole(null);
@@ -75,7 +75,7 @@ export function UsersTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
   const rotateUser = useMutation({
-    mutationFn: (u: Schemas['SystemUser']) => unwrap(api.POST('/clusters/{cluster}/system-users/{user}/rotate', { params: { path: { cluster: name, user: u.name } } })),
+    mutationFn: (u: Schemas['SystemUser']) => unwrap(api.POST('/clusters/{cluster}/system-users/{user}/rotate', { params: { path: { cluster: name, user: u.name }, query: { namespace } } })),
     onSuccess: (op) => {
       toast.success(`Rotation started (operation ${op.id}).`);
       setRotate(null);
@@ -257,8 +257,8 @@ export function UsersTab() {
         )}
       </Card>
 
-      {userDialog ? <UserDialog cluster={name} existing={userDialog.mode === 'edit' ? userDialog.user : undefined} onClose={() => setUserDialog(null)} onSaved={invalidate} /> : null}
-      {roleDialog ? <RoleDialog cluster={name} existing={roleDialog.mode === 'edit' ? roleDialog.role : undefined} onClose={() => setRoleDialog(null)} onSaved={invalidate} /> : null}
+      {userDialog ? <UserDialog namespace={namespace} cluster={name} existing={userDialog.mode === 'edit' ? userDialog.user : undefined} onClose={() => setUserDialog(null)} onSaved={invalidate} /> : null}
+      {roleDialog ? <RoleDialog namespace={namespace} cluster={name} existing={roleDialog.mode === 'edit' ? roleDialog.role : undefined} onClose={() => setRoleDialog(null)} onSaved={invalidate} /> : null}
 
       <ConfirmDialog open={deleteUser !== null} onClose={() => setDeleteUser(null)} onConfirm={() => deleteUser && delUser.mutate(deleteUser)} title={`Delete user ${deleteUser?.username ?? ''}`} confirmLabel="Delete" danger busy={delUser.isPending}>
         <p className="small">Open connections authenticated as this user are closed.</p>
@@ -275,7 +275,7 @@ export function UsersTab() {
   );
 }
 
-function UserDialog({ cluster, existing, onClose, onSaved }: { cluster: string; existing?: DBUser; onClose: () => void; onSaved: () => void }) {
+function UserDialog({ namespace, cluster, existing, onClose, onSaved }: { namespace: string; cluster: string; existing?: DBUser; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [username, setUsername] = useState(existing?.username ?? '');
   const [database, setDatabase] = useState(existing?.database ?? 'admin');
@@ -291,11 +291,11 @@ function UserDialog({ cluster, existing, onClose, onSaved }: { cluster: string; 
       existing
         ? unwrap(
             api.PUT('/clusters/{cluster}/database-users/{database}/{username}', {
-              params: { path: { cluster, database: existing.database, username: existing.username } },
+              params: { path: { cluster, database: existing.database, username: existing.username }, query: { namespace } },
               body: { roles: parsed, ...(password ? { password } : {}) },
             }),
           )
-        : unwrap(api.POST('/clusters/{cluster}/database-users', { params: { path: { cluster } }, body: { username: username.trim(), database: database.trim(), ...(password ? { password } : {}), roles: parsed } })),
+        : unwrap(api.POST('/clusters/{cluster}/database-users', { params: { path: { cluster }, query: { namespace } }, body: { username: username.trim(), database: database.trim(), ...(password ? { password } : {}), roles: parsed } })),
     onSuccess: (user) => {
       toast.success(existing ? 'User updated.' : 'User created.');
       onSaved();
@@ -361,7 +361,7 @@ function UserDialog({ cluster, existing, onClose, onSaved }: { cluster: string; 
   );
 }
 
-function RoleDialog({ cluster, existing, onClose, onSaved }: { cluster: string; existing?: DBRole; onClose: () => void; onSaved: () => void }) {
+function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namespace: string; cluster: string; existing?: DBRole; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(existing?.name ?? '');
   const [database, setDatabase] = useState(existing?.database ?? 'admin');
@@ -400,8 +400,8 @@ function RoleDialog({ cluster, existing, onClose, onSaved }: { cluster: string; 
     mutationFn: () => {
       const body = { privileges: privileges ?? [], roles: inherited };
       return existing
-        ? unwrap(api.PUT('/clusters/{cluster}/database-roles/{database}/{role}', { params: { path: { cluster, database: existing.database, role: existing.name } }, body }))
-        : unwrap(api.POST('/clusters/{cluster}/database-roles', { params: { path: { cluster } }, body: { name, database: database.trim(), ...body } }));
+        ? unwrap(api.PUT('/clusters/{cluster}/database-roles/{database}/{role}', { params: { path: { cluster, database: existing.database, role: existing.name }, query: { namespace } }, body }))
+        : unwrap(api.POST('/clusters/{cluster}/database-roles', { params: { path: { cluster }, query: { namespace } }, body: { name, database: database.trim(), ...body } }));
     },
     onSuccess: () => {
       toast.success(existing ? 'Role updated.' : 'Role created.');

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,10 +32,11 @@ type Client struct {
 
 // ClientOptions supplies the HTTPS endpoint, token, trust roots, and request deadline.
 type ClientOptions struct {
-	BaseURL string
-	Token   string
-	CAPEM   []byte
-	Timeout time.Duration
+	BaseURL     string
+	Token       string
+	CAPEM       []byte
+	Timeout     time.Duration
+	DialContext func(context.Context, string, string) (net.Conn, error)
 }
 
 // NewClient trusts only the supplied private CA and verifies the hostname.
@@ -58,6 +60,9 @@ func NewClient(opts ClientOptions) (*Client, error) {
 		timeout = 30 * time.Second
 	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: timeout, IdleConnTimeout: 90 * time.Second}
+	if opts.DialContext != nil {
+		transport.DialContext = opts.DialContext
+	}
 	client := &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return &Client{base: base, token: opts.Token, http: client}, nil
 }

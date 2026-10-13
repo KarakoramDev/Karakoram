@@ -18,7 +18,7 @@ import (
 func SnapshotKeys(s domain.BackupStorage, b domain.Backup) (directory, metadata string, err error) {
 	prefix := strings.TrimRight(b.PBMPrefix, "/")
 	storagePrefix := strings.TrimRight(s.Prefix, "/")
-	if b.Storage != s.Name || prefix == "" || b.PBMName == "" || strings.ContainsAny(b.PBMName, "/\\") || b.PBMName == "." || b.PBMName == ".." {
+	if b.Storage != s.Name || domain.NormalizedNamespace(b.Namespace) != domain.NormalizedNamespace(s.Namespace) || prefix == "" || b.PBMName == "" || strings.ContainsAny(b.PBMName, "/\\") || b.PBMName == "." || b.PBMName == ".." {
 		return "", "", errors.New("backup lacks a safe recorded PBM snapshot identity")
 	}
 	if storagePrefix != "" && !strings.HasPrefix(prefix, storagePrefix+"/") {

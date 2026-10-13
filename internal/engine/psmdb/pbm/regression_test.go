@@ -119,13 +119,13 @@ func TestRestoreUsesProvenanceAfterSourceDeletionAndResetsAllModes(t *testing.T)
 			if err := st.CreateBackup(ctx, b); err != nil {
 				t.Fatal(err)
 			}
-			if err := st.SetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin", []byte("old-snapshot-password")); err != nil {
+			if err := st.SetClusterSecret(ctx, domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin", []byte("old-snapshot-password")); err != nil {
 				t.Fatal(err)
 			}
-			if err := st.DeleteCluster(ctx, "source"); err != nil {
+			if err := st.DeleteCluster(ctx, domain.ClusterRef{Name: "source"}); err != nil {
 				t.Fatal(err)
 			}
-			if err := st.SetClusterSecret(ctx, "target", "users/userAdmin", []byte("current-target-password")); err != nil {
+			if err := st.SetClusterSecret(ctx, domain.ClusterRef{Name: "target"}, "users/userAdmin", []byte("current-target-password")); err != nil {
 				t.Fatal(err)
 			}
 			if err := st.CreateRestore(ctx, &domain.Restore{Name: "retained", Cluster: "target", Source: domain.RestoreSource{SourceCluster: "source", Backup: b.Name}}); err != nil {
@@ -145,7 +145,7 @@ func TestRestoreUsesProvenanceAfterSourceDeletionAndResetsAllModes(t *testing.T)
 			if !strings.Contains(first, "prefix: old-storage-prefix/source-incarnation") {
 				t.Fatal("source deletion lost prefix")
 			}
-			password, err := st.GetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin")
+			password, err := st.GetClusterSecret(ctx, domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin")
 			if err != nil || string(password) != "old-snapshot-password" {
 				t.Fatal("source deletion lost protected recovery identity")
 			}
@@ -179,14 +179,14 @@ func TestBackupPersistsIndependentProtectedProvenance(t *testing.T) {
 	if _, err := RunBackup(ctx, env, op); err != nil {
 		t.Fatal(err)
 	}
-	b, err := st.GetBackup(ctx, "target", "protected")
+	b, err := st.GetBackup(ctx, domain.ClusterRef{Name: "target"}, "protected")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if b.PBMPrefix != env.Prefix || b.SourceVersion != "8.0.32-14" || b.SourceTopology.Type != "replicaSet" || b.RecoveryIdentity == "" {
 		t.Fatal("incomplete provenance")
 	}
-	password, err := st.GetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin")
+	password, err := st.GetClusterSecret(ctx, domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin")
 	if err != nil || string(password) != "snapshot-password" {
 		t.Fatal("missing encrypted snapshot identity")
 	}

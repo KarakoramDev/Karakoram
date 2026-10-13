@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from './ClusterDetail';
 
 export function DeleteTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -23,13 +23,13 @@ export function DeleteTab() {
   const [open, setOpen] = useState(false);
 
   const del = useMutation({
-    mutationFn: () => unwrap(api.DELETE('/clusters/{cluster}', { params: { path: { cluster: name }, query: { keepVolumes, keepBackups } } })),
+    mutationFn: () => unwrap(api.DELETE('/clusters/{cluster}', { params: { path: { cluster: name }, query: { namespace, keepVolumes, keepBackups } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
-      void queryClient.invalidateQueries({ queryKey: keys.cluster(name) });
+      void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
       toast.success(keepVolumes ? `${name} is being suspended; volumes retained.` : `${name} is being deleted.`);
       setOpen(false);
-      navigate(keepVolumes ? `/clusters/${encodeURIComponent(name)}` : '/clusters');
+      navigate(keepVolumes ? base : `/clusters?namespace=${encodeURIComponent(namespace)}`);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });

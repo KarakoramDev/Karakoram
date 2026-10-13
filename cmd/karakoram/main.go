@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/server"
 	"github.com/KarakoramDev/Karakoram/internal/store"
@@ -78,6 +79,19 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 			return err
 		}
 		return agent.Run(ctx, o)
+	case "relay":
+		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
+			return errUsage
+		}
+		if len(args) == 2 {
+			return relay.Readiness(ctx, relay.Options{})
+		}
+		o, err := relay.OptionsFromEnv()
+		if err != nil {
+			return err
+		}
+		o.Logger = slog.New(slog.NewJSONHandler(errOut, nil))
+		return relay.Run(ctx, o)
 	case "admin":
 		if len(args) != 3 || args[1] != "reset-password" {
 			return errUsage

@@ -180,7 +180,7 @@ func TestClusterPatchOperationPayloadsAndDeleteIntent(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	c, err := s.Store.GetCluster(context.Background(), "prod")
+	c, err := s.Store.GetCluster(context.Background(), domain.ClusterRef{Name: "prod"})
 	if err != nil || c.Generation != 2 || c.Spec.EngineConfig == "" {
 		t.Fatal(c, err)
 	}
@@ -193,14 +193,14 @@ func TestClusterPatchOperationPayloadsAndDeleteIntent(t *testing.T) {
 	if w = call(s, "POST", "/api/v1/clusters/prod/raise-fcv", `{"version":"8.0"}`, token); w.Code != 202 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	ops, err := s.Store.ListOperations(context.Background(), "prod")
+	ops, err := s.Store.ListOperations(context.Background(), domain.ClusterRef{Name: "prod"})
 	if err != nil || len(ops) != 1 || ops[0].Kind != "raise-fcv" || string(ops[0].Payload) != `{"version":"8.0"}` {
 		t.Fatal(ops, err)
 	}
 	if w = call(s, "DELETE", "/api/v1/clusters/prod?keepVolumes=true&keepBackups=true", "", token); w.Code != 202 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	c, err = s.Store.GetCluster(context.Background(), "prod")
+	c, err = s.Store.GetCluster(context.Background(), domain.ClusterRef{Name: "prod"})
 	if err != nil || !c.Deleting || !c.DeleteOptions.KeepVolumes || !c.DeleteOptions.KeepBackups {
 		t.Fatal(c, err)
 	}
@@ -313,7 +313,7 @@ func TestBackupStorageCredentialsStayWriteOnly(t *testing.T) {
 	if w.Code != 201 || strings.Contains(w.Body.String(), "private") {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	st, err := s.Store.GetBackupStorage(context.Background(), "storage")
+	st, err := s.Store.GetBackupStorage(context.Background(), domain.DefaultNamespace, "storage")
 	if err != nil || st.Credentials.SecretAccessKey != "secret-private" {
 		t.Fatal(st, err)
 	}

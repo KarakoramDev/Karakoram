@@ -166,9 +166,11 @@ func (s *Service) recoverAdminPolicy(ctx context.Context, name string) error {
 				continue
 			}
 		}
-		// Replace, rather than duplicate, the built-in unrestricted grant.
+		// Replace, rather than duplicate, the built-in unrestricted grant
+		// (stored policies normalize the object `*` to `**`).
 		if rule.PType == "p" && rule.Values[0] == "role:admin" &&
-			rule.Values[1] == "*" && rule.Values[2] == "*" && rule.Values[3] == "*" {
+			rule.Values[1] == "*" && rule.Values[2] == "*" &&
+			(rule.Values[3] == "*" || rule.Values[3] == "**") {
 			continue
 		}
 		row[0] = rule.PType
@@ -177,7 +179,7 @@ func (s *Service) recoverAdminPolicy(ctx context.Context, name string) error {
 			return err
 		}
 	}
-	if err = writer.Write([]string{"p", "role:admin", "*", "*", "*", "allow"}); err != nil {
+	if err = writer.Write([]string{"p", "role:admin", "*", "*", "**", "allow"}); err != nil {
 		return err
 	}
 	if err = writer.Write([]string{"g", user, "role:admin"}); err != nil {

@@ -3,9 +3,11 @@ module github.com/KarakoramDev/Karakoram
 go 1.24.0
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.66.1
+	github.com/xtaci/smux v1.5.57
 	go.mongodb.org/mongo-driver/v2 v2.4.3
 	golang.org/x/crypto v0.41.0
 	golang.org/x/sys v0.35.0

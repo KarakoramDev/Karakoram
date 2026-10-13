@@ -25,9 +25,19 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 	if err != nil {
 		return result(cp, false), err
 	}
-	r, err := env.RC.Store.GetRestore(ctx, env.RC.Cluster.Name, name)
+	r, err := env.RC.Store.GetRestore(ctx, env.RC.Cluster.Ref(), name)
 	if err != nil {
 		return result(cp, false), err
+	}
+	sourceRef := domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}
+	if sourceRef.Namespace == "" {
+		sourceRef.Namespace = env.RC.Cluster.Ref().Namespace
+	}
+	if sourceRef.Name == "" {
+		sourceRef.Name = env.RC.Cluster.Name
+	}
+	if cp.SourceNamespace == "" {
+		cp.SourceNamespace = sourceRef.Namespace
 	}
 	if cp.Step == "done" {
 		if cp.Failure != "" {
@@ -38,9 +48,9 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 	active := env
 	active.PITR.Enabled = false
 	if cp.Prefix != "" {
-		active, err = recordedEnv(ctx, env, cp.Storage, cp.Prefix)
+		active, err = recordedEnv(ctx, env, cp.SourceNamespace, cp.Storage, cp.Prefix)
 	} else if cp.Source != "" {
-		active, err = sourceEnv(ctx, env, cp.Source, cp.Storage)
+		active, err = sourceEnv(ctx, env, domain.ClusterRef{Namespace: cp.SourceNamespace, Name: cp.Source}, cp.Storage)
 	}
 	if err != nil {
 		return result(cp, false), err
@@ -50,20 +60,14 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		if env.Hooks == nil {
 			return result(cp, false), errors.New("restore requires system-user reset hooks")
 		}
-		if r.Source.SourceCluster != "" && r.Source.SourceCluster != env.RC.Cluster.Name {
-			if env.Hooks == nil {
-				return result(cp, false), errors.New("clone restore requires system-user reset hooks")
-			}
-			cp.Source = r.Source.SourceCluster
+		if sourceRef.Key() != env.RC.Cluster.Ref().Key() {
+			cp.Source = sourceRef.Name
 		}
 		if (r.Source.Backup == "") == (r.Source.PITRTime == nil) {
 			return result(cp, false), errors.New("restore requires exactly one backup or PITR time")
 		}
 		cp.TargetTime = r.Source.PITRTime
-		source := env.RC.Cluster.Name
-		if cp.Source != "" {
-			source = cp.Source
-		}
+		source := sourceRef
 		var b *domain.Backup
 		if r.Source.Backup != "" {
 			b, err = env.RC.Store.GetBackup(ctx, source, r.Source.Backup)
@@ -71,7 +75,7 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 			var backups []domain.Backup
 			primaryStorage := env.Storage.Name
 			if cp.Source != "" {
-				sourceCluster, e := env.RC.Store.GetCluster(ctx, cp.Source)
+				sourceCluster, e := env.RC.Store.GetCluster(ctx, source)
 				if e != nil {
 					return result(cp, false), e
 				}
@@ -111,7 +115,7 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		if cp.Prefix == "" {
 			recorded := env
 			var e error
-			if source != env.RC.Cluster.Name {
+			if source.Key() != env.RC.Cluster.Ref().Key() {
 				recorded, e = sourceEnv(ctx, env, source, cp.Storage)
 			}
 			if e != nil {
@@ -325,7 +329,11 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		cp.Step, cp.Index = "reset-users", 0
 	case "reset-users":
 		if cp.Failure == "" {
-			if err = env.Hooks.ResetSystemUsers(ctx, cp.RecoveryIdentity); err != nil {
+			identity := cp.RecoveryIdentity
+			if identity != "" {
+				identity = (domain.ClusterRef{Namespace: cp.SourceNamespace, Name: identity}).Key()
+			}
+			if err = env.Hooks.ResetSystemUsers(ctx, identity); err != nil {
 				return result(cp, false), err
 			}
 		}

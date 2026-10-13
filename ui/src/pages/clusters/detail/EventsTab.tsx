@@ -7,6 +7,8 @@ import { api, API_BASE, unwrap, type Schemas } from '@/api/client';
 import type { operations } from '@/api/schema';
 import { subscribeSSE } from '@/api/events';
 import { keys } from '@/api/keys';
+import { DEFAULT_NAMESPACE } from '@/auth/permissions';
+import { namespaceQuery } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
 import { Badge, Card, ErrorBlock, Loading, formatTime } from '@/components/ui/Primitives';
@@ -15,13 +17,15 @@ import { useClusterContext } from './ClusterDetail';
 type KEvent = Schemas['Event'];
 type Process = NonNullable<NonNullable<operations['getMemberLogs']['parameters']['query']>['process']>;
 
-export function EventTable({ items, showCluster }: { items: KEvent[]; showCluster?: boolean }) {
+export function EventTable({ items, showCluster, showNamespace }: { items: KEvent[]; showCluster?: boolean; showNamespace?: boolean }) {
+  const extra = (showNamespace ? 1 : 0) + (showCluster ? 1 : 0);
   return (
     <div className="table-wrap">
       <table className="table">
         <thead>
           <tr>
             <th>Time</th>
+            {showNamespace ? <th>Namespace</th> : null}
             {showCluster ? <th>Cluster</th> : null}
             <th>Type</th>
             <th>Message</th>
@@ -33,6 +37,7 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
           {items.map((e) => (
             <tr key={e.id}>
               <td className="small nowrap">{formatTime(e.createdAt)}</td>
+              {showNamespace ? <td className="mono small">{e.namespace || DEFAULT_NAMESPACE}</td> : null}
               {showCluster ? <td className="mono small">{e.cluster ?? '—'}</td> : null}
               <td>
                 <Badge plain tone={e.type.includes('fail') || e.type.includes('error') ? 'danger' : e.type.includes('warn') ? 'warn' : 'neutral'}>
@@ -49,7 +54,7 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={showCluster ? 6 : 5} className="table-empty">
+              <td colSpan={5 + extra} className="table-empty">
                 No events.
               </td>
             </tr>
@@ -60,11 +65,16 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
   );
 }
 
-/** Merges the durable event list with live frames filtered to one cluster. */
-export function useLiveEvents(cluster: string | undefined, enabled: boolean) {
+/**
+ * Merges the durable event list with live frames. Scoped to one cluster when
+ * given, otherwise to the selected namespace (undefined = every readable one).
+ */
+export function useLiveEvents(scope: { namespace?: string; cluster?: string }, enabled: boolean) {
+  const { namespace, cluster } = scope;
+  const query = { ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace) };
   const list = useQuery({
-    queryKey: cluster ? keys.clusterSub(cluster, 'events') : keys.events,
-    queryFn: () => unwrap(api.GET('/events', { params: { query: { ...(cluster ? { cluster } : {}), limit: 200 } } })),
+    queryKey: cluster ? keys.clusterSub(namespace ?? DEFAULT_NAMESPACE, cluster, 'events') : keys.eventList(namespace),
+    queryFn: () => unwrap(api.GET('/events', { params: { query: { ...query, limit: 200 } } })),
     enabled,
   });
   const [live, setLive] = useState<KEvent[]>([]);
@@ -72,7 +82,8 @@ export function useLiveEvents(cluster: string | undefined, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     setLive([]);
-    const url = `${API_BASE}/events/stream${cluster ? `?cluster=${encodeURIComponent(cluster)}` : ''}`;
+    const qs = new URLSearchParams({ ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace) }).toString();
+    const url = `${API_BASE}/events/stream${qs ? `?${qs}` : ''}`;
     return subscribeSSE(
       url,
       (f) => {
@@ -85,15 +96,15 @@ export function useLiveEvents(cluster: string | undefined, enabled: boolean) {
       },
       setConnected,
     );
-  }, [cluster, enabled]);
+  }, [namespace, cluster, enabled]);
   const ids = new Set(live.map((e) => e.id));
   const merged = [...live, ...(list.data?.items ?? []).filter((e) => !ids.has(e.id))].sort((a, b) => b.id - a.id);
   return { list, items: merged, connected };
 }
 
 export function EventsTab() {
-  const { cluster, name, can } = useClusterContext();
-  const events = useLiveEvents(name, can('read', 'events'));
+  const { cluster, namespace, name, can } = useClusterContext();
+  const events = useLiveEvents({ namespace, cluster: name }, can('read', 'events'));
   const members = cluster.status.members;
   const [member, setMember] = useState(members[0]?.name ?? '');
   const [process, setProcess] = useState<Process>('mongod');
@@ -109,8 +120,8 @@ export function EventsTab() {
   }, [defaultProcess]);
 
   const logs = useQuery({
-    queryKey: [...keys.clusterSub(name, 'logs'), member, process, lines],
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/members/{member}/logs', { params: { path: { cluster: name, member }, query: { process, lines } } })),
+    queryKey: [...keys.clusterSub(namespace, name, 'logs'), member, process, lines],
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/members/{member}/logs', { params: { path: { cluster: name, member }, query: { namespace, process, lines } } })),
     enabled: Boolean(member) && can('read'),
     refetchInterval: follow ? 5000 : false,
   });

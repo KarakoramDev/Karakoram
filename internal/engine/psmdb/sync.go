@@ -47,7 +47,7 @@ func (p *Provider) dial(ctx context.Context, rc *engine.Context, s *internalStat
 	// During disabled -> allowTLS, a TLS ping to an upgraded secondary can
 	// succeed while the still-disabled primary remains unreachable by that
 	// client. Plaintext reaches every member throughout the allowTLS pass.
-	opts := mongoadmin.DialOptions{Hosts: h, ReplicaSet: rs, Username: user, Password: string(pw), TLS: s.TLSMode != "disabled" && s.TLSMode != "allowTLS", CAPEM: ca}
+	opts := mongoadmin.DialOptions{Hosts: h, Dialer: rc.Dialer, ReplicaSet: rs, Username: user, Password: string(pw), TLS: s.TLSMode != "disabled" && s.TLSMode != "allowTLS", CAPEM: ca}
 	c, err := mongoadmin.Dial(ctx, opts)
 	if err != nil && s.TLSMode == "preferTLS" {
 		opts.TLS = false
@@ -56,7 +56,7 @@ func (p *Provider) dial(ctx context.Context, rc *engine.Context, s *internalStat
 	return c, err
 }
 func agent(ctx context.Context, rc *engine.Context, name string) (*agentapi.Client, error) {
-	return rc.Agents.Dial(ctx, rc.Cluster.Name, name)
+	return rc.Agents.Dial(ctx, rc.Cluster.Ref(), name)
 }
 func agentStatus(ctx context.Context, rc *engine.Context, name string) (agentapi.Status, error) {
 	a, e := agent(ctx, rc, name)
@@ -135,7 +135,7 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 	if e := save(rc.Cluster, s); e != nil {
 		return e
 	}
-	doc, e := p.zeropsYAML(rc.Cluster, m, version)
+	doc, e := p.zeropsYAML(rc, m, version)
 	if e != nil {
 		return e
 	}
@@ -159,7 +159,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		return err
 	}
 	specs := []infra.ServiceSpec{}
-	tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name)
+	tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 	if e != nil {
 		return e
 	}
@@ -741,7 +741,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		storage = s.PBMStorage
 	}
 	if storage != "" {
-		env, e := p.pbmEnvForStorage(ctx, rc, s, storage)
+		env, e := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, storage)
 		if e != nil {
 			return result, e
 		}
@@ -788,9 +788,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	}
 	if d := rc.Cluster.Spec.DataSource; d != nil && !s.CloneQueued {
 		name := "initial-restore"
-		r := &domain.Restore{Name: name, Cluster: rc.Cluster.Name, Source: domain.RestoreSource{Backup: d.Backup, PITRTime: d.PITRTime, SourceCluster: d.Cluster}, Phase: domain.PhasePending}
+		r := &domain.Restore{Namespace: rc.Cluster.Ref().Namespace, SourceNamespace: d.Namespace, Name: name, Cluster: rc.Cluster.Name, Source: domain.RestoreSource{Backup: d.Backup, PITRTime: d.PITRTime, SourceCluster: d.Cluster}, Phase: domain.PhasePending}
 		payload, _ := json.Marshal(map[string]string{"restore": name})
-		op := &domain.Operation{ID: rc.Cluster.Name + "-" + s.UID + "-initial-restore", Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: payload, Phase: domain.PhasePending}
+		op := &domain.Operation{Namespace: rc.Cluster.Ref().Namespace, ID: rc.Cluster.Ref().Key() + "-" + s.UID + "-initial-restore", Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: payload, Phase: domain.PhasePending}
 		if _, e = rc.Store.GetOperation(ctx, op.ID); missing(e) {
 			if e = rc.Store.EnqueueRestore(ctx, r, op); e != nil {
 				return result, e
@@ -801,12 +801,12 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		s.CloneQueued = true
 		return result, nil
 	}
-	retained, e := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Name)
+	retained, e := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 	if e != nil {
 		return result, e
 	}
 	for _, v := range retained {
-		if e = rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Name, v.Member); e != nil {
+		if e = rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), v.Member); e != nil {
 			return result, e
 		}
 	}

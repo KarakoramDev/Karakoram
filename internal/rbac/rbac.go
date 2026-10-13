@@ -47,7 +47,7 @@ type Enforcer struct {
 // DefaultPolicy grants the three built-in roles and the bootstrap administrator.
 func DefaultPolicy() string {
 	var b strings.Builder
-	b.WriteString("p, role:admin, *, *, *, allow\ng, user:admin, role:admin\n")
+	b.WriteString("p, role:admin, *, *, **, allow\ng, user:admin, role:admin\n")
 	operator := map[string]bool{}
 	for _, r := range []string{"clusters", "backups", "restores", "database-users", "operations", "events", "monitoring"} {
 		operator[r] = true
@@ -60,12 +60,12 @@ func DefaultPolicy() string {
 	sort.Strings(names)
 	for _, r := range names {
 		if operator[r] {
-			fmt.Fprintf(&b, "p, role:operator, %s, *, *, allow\n", r)
+			fmt.Fprintf(&b, "p, role:operator, %s, *, **, allow\n", r)
 		} else if r == "backup-storages" || r == "providers" {
-			fmt.Fprintf(&b, "p, role:operator, %s, read, *, allow\n", r)
+			fmt.Fprintf(&b, "p, role:operator, %s, read, **, allow\n", r)
 		}
 		if r != "cluster-credentials" && r != "accounts" && r != "api-tokens" && r != "rbac" && r != "settings" {
-			fmt.Fprintf(&b, "p, role:viewer, %s, read, *, allow\n", r)
+			fmt.Fprintf(&b, "p, role:viewer, %s, read, **, allow\n", r)
 		}
 	}
 	return b.String()
@@ -81,7 +81,33 @@ func vocabulary() map[string]map[string]bool {
 		}
 		out[r.Resource][r.Action] = true
 	}
+	// Export is checked alongside restore/clone permissions, not by a route.
+	out["backups"]["export"] = true
 	return out
+}
+
+// normalizeObject preserves legacy cluster globs in the default namespace.
+// Namespace rules use bare namespace names/globs; "*" historically meant all.
+func normalizeObject(resource, object string) string {
+	if object == "*" {
+		return "**"
+	}
+	if resource != "namespaces" && !strings.Contains(object, "/") && !strings.HasPrefix(object, "**") {
+		return "default/" + object
+	}
+	return object
+}
+
+func validateObject(object string) error {
+	if strings.Count(object, "/") > 1 && !strings.Contains(object, "**") {
+		return fmt.Errorf("invalid object glob %q: too many segments", object)
+	}
+	for segment := range strings.SplitSeq(object, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return fmt.Errorf("invalid object glob %q: invalid segment", object)
+		}
+	}
+	return nil
 }
 func parse(text string) ([]domain.PolicyRule, error) {
 	rd := csv.NewReader(strings.NewReader(text))
@@ -115,6 +141,10 @@ func parse(text string) ([]domain.PolicyRule, error) {
 			}
 			if len(row) != 6 || !subject(row[1]) || row[4] == "" || (row[5] != "allow" && row[5] != "deny") {
 				return nil, errors.New("invalid policy rule")
+			}
+			row[4] = normalizeObject(row[2], row[4])
+			if err := validateObject(row[4]); err != nil {
+				return nil, err
 			}
 			for _, pattern := range row[2:5] {
 				if _, err := util.GlobMatch("", pattern); err != nil {
@@ -195,7 +225,7 @@ func build(rules []domain.PolicyRule) (*casbin.Enforcer, error) {
 	return e, nil
 }
 
-// New loads policies, seeding defaults only when the persisted inventory is empty.
+// New loads and normalizes persisted policies, seeding defaults only when empty.
 func New(st *store.Store) (*Enforcer, error) {
 	if st == nil {
 		return nil, errors.New("store is required")
@@ -205,23 +235,24 @@ func New(st *store.Store) (*Enforcer, error) {
 	if err != nil {
 		return nil, err
 	}
+	persisted := encode(rules)
+	text := persisted
 	if len(rules) == 0 {
-		rules, err = parse(DefaultPolicy())
-		if err == nil {
-			err = st.ReplacePolicyRules(ctx, rules)
-		}
-		if err != nil {
-			return nil, err
-		}
+		text = DefaultPolicy()
 	}
-	// Validate persisted records through the same path as replacements.
-	rules, err = parse(encode(rules))
+	// Normalize before validating, just as for API policy replacements.
+	rules, err = parse(text)
 	if err != nil {
 		return nil, err
 	}
 	en, err := build(rules)
 	if err != nil {
 		return nil, err
+	}
+	if normalized := encode(rules); normalized != persisted {
+		if err := st.ReplacePolicyRules(ctx, rules); err != nil {
+			return nil, err
+		}
 	}
 	return &Enforcer{st: st, en: en, rules: rules}, nil
 }
@@ -267,10 +298,10 @@ func encode(rules []domain.PolicyRule) string {
 	return b.String()
 }
 
-// Policy returns canonical CSV including explicit effects.
+// Policy returns normalized canonical CSV including explicit effects.
 func (e *Enforcer) Policy() string { e.mu.RLock(); defer e.mu.RUnlock(); return encode(e.rules) }
 
-// ReplacePolicy validates and persists atomically before swapping the live model.
+// ReplacePolicy normalizes, validates and persists before swapping the live model.
 // At least one existing enabled account or verified OIDC group must retain
 // unrestricted administrative rights.
 func (e *Enforcer) ReplacePolicy(ctx context.Context, text string) error {
@@ -322,6 +353,21 @@ func (e *Enforcer) ReplacePolicy(ctx context.Context, text string) error {
 	for s, subjects := range candidates {
 		// The retained subject must itself be granted admin access; account roles
 		// and verified group subjects must not introduce a deny for that identity.
+		unrestricted := false
+		rows, err := en.GetImplicitPermissionsForUser(s)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if (r[1] == "*" || r[1] == "**") && (r[2] == "*" || r[2] == "**") &&
+				(r[3] == "**" || r[3] == "*") && r[4] == "allow" {
+				unrestricted = true
+				break
+			}
+		}
+		if !unrestricted {
+			continue
+		}
 		yes, err := en.Enforce([]string{s}, "*", "*", "*")
 		if err != nil || !yes {
 			continue

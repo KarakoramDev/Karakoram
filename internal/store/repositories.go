@@ -15,18 +15,18 @@ import (
 type BackupStorageRepository interface {
 	CreateBackupStorage(context.Context, *domain.BackupStorage) error
 	UpdateBackupStorage(context.Context, *domain.BackupStorage) error
-	GetBackupStorage(context.Context, string) (*domain.BackupStorage, error)
-	ListBackupStorages(context.Context) ([]domain.BackupStorage, error)
-	DeleteBackupStorage(context.Context, string) error
+	GetBackupStorage(context.Context, string, string) (*domain.BackupStorage, error)
+	ListBackupStorages(context.Context, string) ([]domain.BackupStorage, error)
+	DeleteBackupStorage(context.Context, string, string) error
 }
 
 // BackupRepository provides backup inventory and atomic operation enqueueing.
 type BackupRepository interface {
 	CreateBackup(context.Context, *domain.Backup) error
 	UpdateBackup(context.Context, *domain.Backup) error
-	GetBackup(context.Context, string, string) (*domain.Backup, error)
-	ListBackups(context.Context, string) ([]domain.Backup, error)
-	DeleteBackup(context.Context, string, string) error
+	GetBackup(context.Context, domain.ClusterRef, string) (*domain.Backup, error)
+	ListBackups(context.Context, domain.ClusterRef) ([]domain.Backup, error)
+	DeleteBackup(context.Context, domain.ClusterRef, string) error
 	EnqueueBackup(context.Context, *domain.Backup, *domain.Operation) error
 	EnqueueBackupDeletion(context.Context, *domain.Backup, *domain.Operation) error
 }
@@ -35,9 +35,9 @@ type BackupRepository interface {
 type RestoreRepository interface {
 	CreateRestore(context.Context, *domain.Restore) error
 	UpdateRestore(context.Context, *domain.Restore) error
-	GetRestore(context.Context, string, string) (*domain.Restore, error)
-	ListRestores(context.Context, string) ([]domain.Restore, error)
-	DeleteRestore(context.Context, string, string) error
+	GetRestore(context.Context, domain.ClusterRef, string) (*domain.Restore, error)
+	ListRestores(context.Context, domain.ClusterRef) ([]domain.Restore, error)
+	DeleteRestore(context.Context, domain.ClusterRef, string) error
 }
 
 // AccountRepository provides local account identity and password hash storage.
@@ -87,17 +87,17 @@ type SettingsRepository interface {
 
 // SecretRepository persists identity-bound encrypted cluster values.
 type SecretRepository interface {
-	SetClusterSecret(context.Context, string, string, []byte) error
-	GetClusterSecret(context.Context, string, string) ([]byte, error)
-	DeleteClusterSecret(context.Context, string, string) error
+	SetClusterSecret(context.Context, domain.ClusterRef, string, []byte) error
+	GetClusterSecret(context.Context, domain.ClusterRef, string) ([]byte, error)
+	DeleteClusterSecret(context.Context, domain.ClusterRef, string) error
 }
 
 // AgentTokenRepository persists both encrypted and hashed member tokens.
 type AgentTokenRepository interface {
 	SetAgentToken(context.Context, *domain.AgentToken) error
-	GetAgentToken(context.Context, string, string) (*domain.AgentToken, error)
+	GetAgentToken(context.Context, domain.ClusterRef, string) (*domain.AgentToken, error)
 	FindAgentTokenByHash(context.Context, string) (*domain.AgentToken, error)
-	DeleteAgentToken(context.Context, string, string) error
+	DeleteAgentToken(context.Context, domain.ClusterRef, string) error
 }
 
 // MetricRepository provides transactional ingestion, range reads, and retention.
@@ -111,7 +111,7 @@ type MetricRepository interface {
 type RetainedVolumeRepository interface {
 	CreateRetainedVolume(context.Context, *domain.RetainedVolume) error
 	UpdateRetainedVolume(context.Context, *domain.RetainedVolume) error
-	GetRetainedVolume(context.Context, string, string) (*domain.RetainedVolume, error)
-	ListRetainedVolumes(context.Context, string) ([]domain.RetainedVolume, error)
-	DeleteRetainedVolume(context.Context, string, string) error
+	GetRetainedVolume(context.Context, domain.ClusterRef, string) (*domain.RetainedVolume, error)
+	ListRetainedVolumes(context.Context, domain.ClusterRef) ([]domain.RetainedVolume, error)
+	DeleteRetainedVolume(context.Context, domain.ClusterRef, string) error
 }

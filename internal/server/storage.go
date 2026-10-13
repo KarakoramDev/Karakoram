@@ -14,7 +14,7 @@ import (
 
 func storageAPI(b domain.BackupStorage) api.BackupStorage {
 	configured := b.Credentials.AccessKeyID != "" && b.Credentials.SecretAccessKey != ""
-	return api.BackupStorage{Name: b.Name, Type: api.BackupStorageType(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: &b.Prefix, ForcePathStyle: b.ForcePathStyle, VerifyTLS: b.VerifyTLS, Description: &b.Description, CredentialsConfigured: &configured}
+	return api.BackupStorage{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Type: api.BackupStorageType(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: &b.Prefix, ForcePathStyle: b.ForcePathStyle, VerifyTLS: b.VerifyTLS, Description: &b.Description, CredentialsConfigured: &configured}
 }
 func credentialsDomain(c api.S3Credentials) domain.StorageCredentials {
 	return domain.StorageCredentials{AccessKeyID: value(c.AccessKeyId), SecretAccessKey: value(c.SecretAccessKey)}
@@ -24,15 +24,19 @@ func validStorage(b domain.BackupStorage) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && b.Name != "" && b.Type == "s3" && b.Region != "" && b.Bucket != "" && b.Credentials.AccessKeyID != "" && b.Credentials.SecretAccessKey != ""
 }
 func (s *Server) storage(ctx context.Context, name string, in input) response {
+	namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
 	switch name {
 	case "ListBackupStorages":
-		items, err := s.Store.ListBackupStorages(ctx)
+		items, err := s.Store.ListBackupStorages(ctx, namespaceFilter(ctx))
 		if err != nil {
 			return s.failure(err)
 		}
 		out := make([]api.BackupStorage, 0, len(items))
 		for _, b := range items {
-			full, err := s.Store.GetBackupStorage(ctx, b.Name)
+			if !s.allowed(ctx, "backup-storages", "read", clusterObject(b.Namespace, b.Name)) {
+				continue
+			}
+			full, err := s.Store.GetBackupStorage(ctx, b.Namespace, b.Name)
 			if err != nil {
 				return s.failure(err)
 			}
@@ -41,7 +45,10 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		return listResponse(s, ctx, out, nil)
 	case "CreateBackupStorage":
 		b := in.Body.(*api.CreateBackupStorageRequest)
-		v := domain.BackupStorage{Name: b.Name, Type: string(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: value(b.Prefix), ForcePathStyle: b.ForcePathStyle == nil || *b.ForcePathStyle, VerifyTLS: b.VerifyTLS == nil || *b.VerifyTLS, Description: value(b.Description), Credentials: credentialsDomain(b.Credentials)}
+		if failure := s.usableNamespace(namespace); failure != nil {
+			return *failure
+		}
+		v := domain.BackupStorage{Namespace: namespace, Name: b.Name, Type: string(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: value(b.Prefix), ForcePathStyle: b.ForcePathStyle == nil || *b.ForcePathStyle, VerifyTLS: b.VerifyTLS == nil || *b.VerifyTLS, Description: value(b.Description), Credentials: credentialsDomain(b.Credentials)}
 		if !validStorage(v) {
 			return invalid()
 		}
@@ -50,7 +57,7 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		}
 		return response{status: 201, body: storageAPI(v), noStore: true}
 	}
-	b, err := s.Store.GetBackupStorage(ctx, in.Storage)
+	b, err := s.Store.GetBackupStorage(ctx, namespace, in.Storage)
 	if err != nil {
 		return s.failure(err)
 	}
@@ -83,7 +90,7 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		}
 		return response{status: 200, body: storageAPI(*b), noStore: true}
 	case "DeleteBackupStorage":
-		clusters, err := s.Store.ListClusters(ctx)
+		clusters, err := s.Store.ListClusters(ctx, namespace)
 		if err != nil {
 			return s.failure(err)
 		}
@@ -97,7 +104,7 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 				}
 			}
 		}
-		backups, err := s.Store.ListBackups(ctx, "*")
+		backups, err := s.Store.ListBackups(ctx, domain.ClusterRef{Namespace: namespace})
 		if err != nil {
 			return s.failure(err)
 		}
@@ -106,7 +113,7 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 				return fail(409, "conflict", "Storage contains a backup record; delete retained backups using their original cluster name before removing the storage")
 			}
 		}
-		if err = s.Store.DeleteBackupStorage(ctx, b.Name); err != nil {
+		if err = s.Store.DeleteBackupStorage(ctx, namespace, b.Name); err != nil {
 			return s.failure(err)
 		}
 		return response{status: 204}

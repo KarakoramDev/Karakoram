@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -14,6 +15,22 @@ type orphanedVolumeRecord struct {
 	domain.OrphanedVolume
 	ProcessPending  bool `json:"processPending"`
 	JanitorFailures int  `json:"janitorFailures"`
+}
+
+func (v *orphanedVolumeRecord) UnmarshalJSON(data []byte) error {
+	type volumeJSON domain.OrphanedVolume
+	var wire struct {
+		volumeJSON
+		ProcessPending  bool `json:"processPending"`
+		JanitorFailures int  `json:"janitorFailures"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	v.OrphanedVolume = domain.OrphanedVolume(wire.volumeJSON)
+	v.Namespace = domain.NormalizedNamespace(v.Namespace)
+	v.ProcessPending, v.JanitorFailures = wire.ProcessPending, wire.JanitorFailures
+	return nil
 }
 
 func orphanRecord(v *domain.OrphanedVolume) orphanedVolumeRecord {
@@ -26,34 +43,43 @@ func (v orphanedVolumeRecord) volume() domain.OrphanedVolume {
 	return out
 }
 
-// PutOrphanedVolume inserts or updates a globally hostname-keyed orphan record.
-// Global scope deliberately keeps records independent of cluster deletion.
+// PutOrphanedVolume keeps orphan inventory independent of cluster deletion.
 func (s *Store) PutOrphanedVolume(ctx context.Context, v *domain.OrphanedVolume) error {
-	return put(ctx, s.writer, "orphaned-volume", "", v.Hostname, orphanRecord(v), "", "", "", false)
+	v.Namespace = domain.NormalizedNamespace(v.Namespace)
+	return put(ctx, s.writer, "orphaned-volume", namespaceScope(v.Namespace), v.Hostname, orphanRecord(v), "", "", "", false)
 }
 
 // GetOrphanedVolume loads the record for a platform volume hostname.
-func (s *Store) GetOrphanedVolume(ctx context.Context, hostname string) (*domain.OrphanedVolume, error) {
+func (s *Store) GetOrphanedVolume(ctx context.Context, namespace, hostname string) (*domain.OrphanedVolume, error) {
 	var v orphanedVolumeRecord
-	if _, _, err := s.get(ctx, "orphaned-volume", "", hostname, &v); err != nil {
+	if _, _, err := s.get(ctx, "orphaned-volume", namespaceScope(namespace), hostname, &v); err != nil {
 		return nil, err
 	}
 	out := v.volume()
 	return &out, nil
 }
 
-// ListOrphanedVolumes returns global records ordered by hostname.
-func (s *Store) ListOrphanedVolumes(ctx context.Context) ([]domain.OrphanedVolume, error) {
-	records, err := list[orphanedVolumeRecord](ctx, s, "orphaned-volume", "")
+// ListOrphanedVolumes returns records ordered by namespace and hostname.
+func (s *Store) ListOrphanedVolumes(ctx context.Context, namespace string) ([]domain.OrphanedVolume, error) {
+	scope := "*"
+	if namespace != "" {
+		scope = namespaceScope(namespace)
+	}
+	records, err := list[orphanedVolumeRecord](ctx, s, "orphaned-volume", scope)
 	items := make([]domain.OrphanedVolume, 0, len(records))
 	for _, record := range records {
 		items = append(items, record.volume())
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Hostname < items[j].Hostname })
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Namespace != items[j].Namespace {
+			return items[i].Namespace < items[j].Namespace
+		}
+		return items[i].Hostname < items[j].Hostname
+	})
 	return items, err
 }
 
 // DeleteOrphanedVolume removes only the orphan inventory record.
-func (s *Store) DeleteOrphanedVolume(ctx context.Context, hostname string) error {
-	return s.remove(ctx, "orphaned-volume", "", hostname)
+func (s *Store) DeleteOrphanedVolume(ctx context.Context, namespace, hostname string) error {
+	return s.remove(ctx, "orphaned-volume", namespaceScope(namespace), hostname)
 }

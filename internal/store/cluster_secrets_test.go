@@ -22,7 +22,7 @@ func TestCreateClusterSecretsDuplicateCannotOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key, want := range map[string]string{"tls/ca.crt": "first-certificate", "tls/ca.key": "first-key"} {
-		v, err := s.GetClusterSecret(ctx, c.Name, key)
+		v, err := s.GetClusterSecret(ctx, domain.ParseClusterKey(c.Name), key)
 		if err != nil || string(v) != want {
 			t.Fatal(key, string(v), err)
 		}
@@ -36,33 +36,33 @@ func TestClusterSecretChangesAdvanceGenerationIdempotently(t *testing.T) {
 	if err := s.CreateClusterWithSecrets(ctx, &c, values); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateClusterSpecWithSecrets(ctx, c.Name, c.Spec, values); err != nil {
+	if err := s.UpdateClusterSpecWithSecrets(ctx, domain.ParseClusterKey(c.Name), c.Spec, values); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.GetCluster(ctx, c.Name)
+	got, err := s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if err != nil || got.Generation != 1 {
 		t.Fatal(got, err)
 	}
 	values["tls/ca.crt"] = []byte("second-certificate")
 	values["tls/ca.key"] = []byte("second-key")
-	if err = s.UpdateClusterSpecWithSecrets(ctx, c.Name, c.Spec, values); err != nil {
+	if err = s.UpdateClusterSpecWithSecrets(ctx, domain.ParseClusterKey(c.Name), c.Spec, values); err != nil {
 		t.Fatal(err)
 	}
-	got, err = s.GetCluster(ctx, c.Name)
+	got, err = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if err != nil || got.Generation != 2 {
 		t.Fatal(got, err)
 	}
-	if err = s.UpdateClusterSpecWithSecrets(ctx, c.Name, c.Spec, values); err != nil {
+	if err = s.UpdateClusterSpecWithSecrets(ctx, domain.ParseClusterKey(c.Name), c.Spec, values); err != nil {
 		t.Fatal(err)
 	}
-	got, err = s.GetCluster(ctx, c.Name)
+	got, err = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if err != nil || got.Generation != 2 {
 		t.Fatal(got, err)
 	}
-	if err = s.UpdateClusterSpecWithSecrets(ctx, "missing", c.Spec, values); !errors.Is(err, ErrNotFound) {
+	if err = s.UpdateClusterSpecWithSecrets(ctx, domain.ParseClusterKey("missing"), c.Spec, values); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	if _, err = s.GetClusterSecret(ctx, "missing", "tls/ca.crt"); !errors.Is(err, ErrNotFound) {
+	if _, err = s.GetClusterSecret(ctx, domain.ParseClusterKey("missing"), "tls/ca.crt"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("orphaned secrets", err)
 	}
 }
@@ -77,10 +77,10 @@ func TestClusterAndSecretFailureRollsBackTogether(t *testing.T) {
 	if err := s.CreateClusterWithSecrets(ctx, &c, values); err == nil {
 		t.Fatal("failed secret insertion accepted")
 	}
-	if _, err := s.GetCluster(ctx, c.Name); !errors.Is(err, ErrNotFound) {
+	if _, err := s.GetCluster(ctx, domain.ParseClusterKey(c.Name)); !errors.Is(err, ErrNotFound) {
 		t.Fatal("cluster survived rollback", err)
 	}
-	if _, err := s.GetClusterSecret(ctx, c.Name, "tls/ca.crt"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.GetClusterSecret(ctx, domain.ParseClusterKey(c.Name), "tls/ca.crt"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("certificate survived rollback", err)
 	}
 	if err := s.CreateCluster(ctx, &c); err != nil {
@@ -88,10 +88,10 @@ func TestClusterAndSecretFailureRollsBackTogether(t *testing.T) {
 	}
 	changed := c.Spec
 	changed.Version = "8.0"
-	if err := s.UpdateClusterSpecWithSecrets(ctx, c.Name, changed, values); err == nil {
+	if err := s.UpdateClusterSpecWithSecrets(ctx, domain.ParseClusterKey(c.Name), changed, values); err == nil {
 		t.Fatal("failed secret update accepted")
 	}
-	got, err := s.GetCluster(ctx, c.Name)
+	got, err := s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
 	if err != nil || got.Generation != 1 || got.Spec.Version != "" {
 		t.Fatal("spec survived rollback", got, err)
 	}

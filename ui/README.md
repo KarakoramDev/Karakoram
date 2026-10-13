@@ -29,13 +29,19 @@ serves a "UI not built" page, so Go builds and tests never need Node:
 
 - `src/api` – generated OpenAPI types, typed fetch client (`openapi-fetch`), query keys, SSE client.
 - `src/auth` – session provider (`/auth/me`, `/permissions`), client-side policy evaluation that
-  mirrors the server (deny overrides allow, glob objects), route guard.
+  mirrors the server (deny overrides allow, doublestar objects `<namespace>/<cluster>`), route guard.
+- `src/namespaces` – the namespace scope of collection views: `useNamespace()` reads `?namespace=`
+  (authoritative) with a non-secret localStorage fallback so the choice survives navigation;
+  `undefined` means every readable namespace, which is also the API default.
 - `src/components/ui` – dependency-free component kit (buttons, fields, native `<dialog>`, toasts,
   SVG line chart).
-- `src/pages` – clusters list, creation wizard, cluster detail tabs, global events/operations,
-  settings.
+- `src/layout` – app shell with the sidebar namespace switcher.
+- `src/pages` – clusters list, creation wizard, cluster detail tabs (`/clusters/<namespace>/<name>`;
+  pre-namespace `/clusters/<name>` links redirect to `default`), global events/operations, settings
+  (including Settings → Namespaces).
 - `src/styles` – design tokens and component styles (no CSS framework).
 
 Credentials are only fetched on explicit "Reveal credentials" (`GET /clusters/{c}/connection`), which
 the server gates on the `cluster-credentials:read` permission; they are never cached in the query
-store.
+store. Namespace tokens are write-only: the add and rotate dialogs clear the field on submit and
+nothing token-like is kept in the query cache or localStorage.
