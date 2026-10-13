@@ -307,7 +307,7 @@ karactl elasticsearch api-keys invalidate search KEY_ID
 
 Creation returns `id`, `apiKey` and `encoded` **once**; store them immediately and securely. Lists do not reveal key secrets. Prefer explicit expiry and narrow role descriptors. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
 
-Managed rotation uses the existing system-user operation with identity `elastic`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
+Managed rotation uses the existing system-user operation with identity `elastic`, `karakoram-monitor`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; these are exactly the identities the system-user list shows. Affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
 
 ## Snapshots and restore
 
