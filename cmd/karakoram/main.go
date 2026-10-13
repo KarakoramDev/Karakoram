@@ -72,7 +72,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		if len(args) > 1 {
 			// Readiness needs engine selection, but not control-plane credentials.
-			return agent.Readiness(ctx, agent.Options{Engine: os.Getenv("KARAKORAM_ENGINE")}, args[2:])
+			// Zerops runs readiness exec checks without the service environment,
+			// so a leading --engine=<name> argument takes precedence over the env.
+			engineName, rest := os.Getenv("KARAKORAM_ENGINE"), args[2:]
+			if len(rest) > 0 && strings.HasPrefix(rest[0], "--engine=") {
+				engineName, rest = strings.TrimPrefix(rest[0], "--engine="), rest[1:]
+			}
+			return agent.Readiness(ctx, agent.Options{Engine: engineName}, rest)
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {

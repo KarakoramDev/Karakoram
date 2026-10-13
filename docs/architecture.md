@@ -97,6 +97,8 @@ Optional provider interfaces supply namespace relay targets, monitoring metric v
 
 Node runners implement `agent.Engine` and receive the protected `Node` toolkit; the common agent loop owns configuration pulls/cache, TLS/token authentication, generic routes, metrics, process supervision and durable maintenance/stop holds. `KARAKORAM_ENGINE`, configuration `engine` and engine-owned `engineSpec` select and configure a compiled-in runner. Empty engine names retain PSMDB behavior; unknown engines and mismatched configurations are rejected. Readiness forwards engine-specific arguments. See [ADR 0005](adr/0005-engine-provider-seam.md) and [ADR 0008](adr/0008-node-agent-protocol.md).
 
+Readiness accepts a leading `--engine=<name>` argument before engine-specific arguments. It overrides `KARAKORAM_ENGINE`, so platform exec checks can select the compiled-in engine without the service environment; for example, `karakoram agent readiness --engine=psmdb`. Without either selection, readiness retains the PSMDB default.
+
 ## Desired state and durable operations
 
 Clusters have desired `spec`, observed `status`, generation/observedGeneration and provider-owned internal state. Spec-driven work includes creation, membership/resource/disk/version changes, shard addition, TLS mode, exposure, backup configuration and PITR. Imperative work is a persisted Operation: backup, delete-backup, restore, raise-fcv, restart, replace-member, rotate-system-user or rotate-tls.
