@@ -40,6 +40,8 @@ type Metric struct {
 }
 
 // ProcessSpec describes a supervised executable, not a remote execution request.
+// Engine processes start from a minimal environment (PATH, LANG, LC_ALL, TZ)
+// plus Env; they never inherit the agent's environment or credentials.
 type ProcessSpec struct {
 	Binary    string
 	Args, Env []string
@@ -134,7 +136,7 @@ func (n *Node) Configure(name string, spec ProcessSpec) error {
 	if !n.a.allowedProcess(name) {
 		return errors.New("unknown process")
 	}
-	n.a.sup.configure(name, processSpec{binary: spec.Binary, args: spec.Args, env: spec.Env, dir: spec.Dir})
+	n.a.sup.configure(name, processSpec{binary: spec.Binary, args: spec.Args, env: spec.Env, dir: spec.Dir, cleanEnv: true})
 	return nil
 }
 

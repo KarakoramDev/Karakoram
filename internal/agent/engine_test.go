@@ -630,3 +630,36 @@ func TestNodeWithLockCancelsWaiting(t *testing.T) {
 		t.Fatal("cancelled action waited for control lock", err)
 	}
 }
+
+func TestEngineProcessesDoNotInheritAgentEnvironment(t *testing.T) {
+	t.Setenv("KARAKORAM_AGENT_TOKEN", "member-secret")
+	s := newSupervisor(io.Discard)
+	s.configure("env", processSpec{binary: "/usr/bin/env", env: []string{"ENGINE_VAR=1"}, cleanEnv: true})
+	if err := s.action(context.Background(), "env", "start"); err != nil {
+		t.Fatal(err)
+	}
+	var out string
+	eventuallyTrue(t, func() bool {
+		lines := s.logTail("env", 100)
+		out = ""
+		for _, l := range lines {
+			out += l.Message + "\n"
+		}
+		return strings.Contains(out, "ENGINE_VAR=1")
+	})
+	if strings.Contains(out, "member-secret") || strings.Contains(out, "KARAKORAM_AGENT_TOKEN") || !strings.Contains(out, "PATH=") {
+		t.Fatalf("engine child environment: %q", out)
+	}
+	_ = s.shutdown(context.Background())
+}
+
+func eventuallyTrue(t *testing.T, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !ok() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not reached")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
