@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM and RabbitMQ orchestration across existing Zerops projects through namespaces, without Kubernetes. The control plane remains in its own project; remote projects use outbound relays. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM, RabbitMQ and Elasticsearch/Elastic Stack orchestration across existing Zerops projects through namespaces, without Kubernetes. The control plane remains in its own project; remote projects use outbound relays. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -30,6 +30,11 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0020](0020-rabbitmq-node-persistence.md) | RabbitMQ runtime + Local Storage per node; stable identity and pre-platform shutdown |
 | [0021](0021-rabbitmq-cluster-lifecycle.md) | RabbitMQ Khepri-only 4.3 catalog, observed joins and quorum-gated rolling lifecycle |
 | [0022](0022-rabbitmq-access-tls-backups.md) | RabbitMQ Management API access, system users, TLS and definitions-only backups |
+| [0025](0025-elasticsearch-engine-runtime-model.md) | Elasticsearch runtime + Local Storage nodes, explicit heap and engine readiness |
+| [0026](0026-elasticsearch-cluster-formation-and-topology-changes.md) | One-time formation, quorum/health-gated rolling maintenance and add-then-drain topology changes |
+| [0027](0027-elastic-stack-components.md) | Version-locked Kibana, Logstash and APM components owned by the cluster |
+| [0028](0028-elasticsearch-security-and-snapshots.md) | TLS/file-realm recovery identity, isolated S3 repositories and destructive snapshot restore |
+| [0029](0029-elastic-licensing.md) | Default Elastic distributions, Basic-tier provisioning and ELv2 managed-service obligations |
 
 ## References and verification
 

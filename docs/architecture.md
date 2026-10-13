@@ -76,10 +76,12 @@ SQLite migration 004 follows actor/audit migration 003 and assigns existing clus
 | `internal/engine` | In-process Provider registry and narrow reconciliation/data-plane interfaces |
 | `internal/engine/psmdb` | Catalog/defaults/validation, replica sets/sharding, topology observation, rolling changes, access/PKI |
 | `internal/engine/psmdb/pbm` | Backup/PITR/inventory/restore/checkpoint orchestration |
+| `internal/engine/elastic` | Elasticsearch catalog/defaults/validation, formation/topology, rolling maintenance, Stack lifecycle, security/PKI and native S3 snapshot/restore/cleanup |
 | `internal/infra`, `internal/infra/zerops` | Backend intent and owned thin Zerops REST translation |
 | `internal/namespaces` | Namespace lifecycle, sealed project credentials, per-project Backends, relay deployment/health/renewal |
 | `internal/relay` | Outbound WebSocket carrier, dedicated mTLS PKI, smux streams, target policy and reverse agent listener |
 | `internal/agent`, `internal/agentapi` | Node supervision, protected file rendering, private command/config protocol |
+| `internal/agent/elastic` | Elastic product rendering below `DATA_DIR/karakoram`, keystore management, supervised processes, explicit engine readiness and product metrics |
 | `internal/auth`, `internal/rbac` | Argon2id/OIDC identity, sessions/API tokens, persisted Casbin policy |
 | `internal/scheduler`, `internal/events` | UTC backup schedules/count retention, durable events/SSE delivery |
 | `internal/monitoring` | Agent scrapes, SQLite sample history, UI series and Prometheus exposition |
@@ -88,7 +90,7 @@ SQLite migration 004 follows actor/audit migration 003 and assigns existing clus
 | `internal/agent/rabbitmq`, `internal/engine/rabbitmq/rmqspec` | Broker rendering/supervision, bounded lifecycle commands, metrics and shared node protocol |
 | `internal/server/rabbitmq.go`, `internal/cli/rabbitmq.go`, `ui/src/engines/rabbitmq` | Engine-owned access API/CLI, creation controls, Access tab and monitoring panels |
 
-The `psmdb` and `rabbitmq` providers and `zerops` backend are implemented. The seams isolate present responsibilities; they are not dynamically installable plugins or promises of compatibility with another project's providers.
+The `psmdb`, `rabbitmq` and `elasticsearch` providers and the `zerops` backend are implemented. The seams isolate present responsibilities; they are not dynamically installable plugins or promises of compatibility with another project's providers.
 
 ## Multi-engine extension
 
