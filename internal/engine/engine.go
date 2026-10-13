@@ -31,6 +31,21 @@ type Provider interface {
 	Cleanup(context.Context, *Context, domain.DeleteOptions) (bool, error)
 }
 
+// RelayTargeter lists host:port targets a namespace relay may dial for a cluster.
+type RelayTargeter interface {
+	RelayTargets(c *domain.Cluster) []string
+}
+
+// MetricsCatalog maps agent exposition metric names to monitoring series.
+type MetricsCatalog interface {
+	Metrics() []domain.MetricDescriptor
+}
+
+// RetainedBackupDeleter deletes backup artifacts after their cluster is deleted.
+type RetainedBackupDeleter interface {
+	DeleteRetainedBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error
+}
+
 // OperationSyncPolicy optionally permits ordinary Sync after a nonterminal,
 // successful RunOperation call. Without this policy, Running operations exclude
 // Sync and Status, which may be unsafe while restore stops database processes.

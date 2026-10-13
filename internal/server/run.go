@@ -10,7 +10,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/events"
 	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
@@ -80,14 +79,24 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	provider := psmdb.New(psmdb.Options{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger})
-	registry, err := engine.NewRegistry(provider)
+	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger})
+	registry, err := engine.NewRegistry(providers...)
 	if err != nil {
 		return err
 	}
 	hub := events.NewHub(128)
 	recorder := events.NewRecorder(st, hub)
-	namespaceRegistry, err := namespaces.New(ctx, namespaces.Options{Store: st, DefaultBackend: backend, Zerops: zerops.Options{Token: c.ZeropsToken, ProjectID: c.ZeropsProjectID, BaseURL: c.ZeropsAPIURL}, PublicURL: c.PublicURL, AdvertiseURL: c.AdvertiseURL, RelayHostname: relayHostname, Events: recorder, Logger: logger})
+	relayTargets := func(c *domain.Cluster) []string {
+		p, err := registry.Get(c.Spec.Provider)
+		if err != nil {
+			return nil
+		}
+		if p, ok := p.(engine.RelayTargeter); ok {
+			return p.RelayTargets(c)
+		}
+		return nil
+	}
+	namespaceRegistry, err := namespaces.New(ctx, namespaces.Options{Store: st, DefaultBackend: backend, Zerops: zerops.Options{Token: c.ZeropsToken, ProjectID: c.ZeropsProjectID, BaseURL: c.ZeropsAPIURL}, PublicURL: c.PublicURL, AdvertiseURL: c.AdvertiseURL, RelayHostname: relayHostname, Events: recorder, Logger: logger, RelayTargets: relayTargets})
 	if err != nil {
 		return err
 	}
@@ -104,7 +113,13 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return err
 	}
 	janitor := orphanvolumes.New(orphanvolumes.Options{Store: st, Namespaces: namespaceRegistry, Events: recorder, Logger: logger, Now: time.Now})
-	collector := monitoring.New(monitoring.Options{Store: st, Dialer: dialer, Logger: logger, Targets: func(ctx context.Context) ([]monitoring.Target, error) {
+	var vocabulary []domain.MetricDescriptor
+	for _, p := range providers {
+		if p, ok := p.(engine.MetricsCatalog); ok {
+			vocabulary = append(vocabulary, p.Metrics()...)
+		}
+	}
+	collector := monitoring.New(monitoring.Options{Store: st, Dialer: dialer, Logger: logger, Vocabulary: vocabulary, Targets: func(ctx context.Context) ([]monitoring.Target, error) {
 		clusters, err := st.ListClusters(ctx, "")
 		if err != nil {
 			return nil, err

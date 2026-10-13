@@ -82,6 +82,30 @@ test('config-server choices expose the full documented odd-member set', () => {
   assert.ok(topologyErrors({ ...sharded, components: { ...sharded.components, router: { replicas: 33, resources } } }, topology).router);
 });
 
+test('provider extra components use catalog limits and contribute to review footprint', () => {
+  const genericSpec: Schemas['ClusterSpec'] = {
+    ...spec,
+    provider: 'generic',
+    topology: { type: 'cluster' },
+    components: { engine: { replicas: 3, resources }, extra: { master: { replicas: 3, resources }, dashboard: { replicas: 0, resources } } },
+  };
+  const genericTopology: Schemas['ProviderTopology'] = {
+    ...topology,
+    type: 'cluster',
+    defaults: genericSpec,
+    limits: { engine: { minReplicas: 1, maxReplicas: 10 }, master: { allowedReplicas: [3, 5] }, dashboard: { minReplicas: 0, maxReplicas: 1 } },
+  };
+  const genericProvider: Schemas['Provider'] = { ...provider, name: 'generic', capabilities: [], operations: [], topologies: [genericTopology] };
+  assert.deepEqual(validateWizard('orders', 'default', genericSpec, [], genericProvider), empty);
+  assert.equal(totalFootprint(genericSpec).members, 6);
+  assert.equal(totalFootprint(genericSpec).minDisk, 30);
+  assert.match(topologyErrors({ ...genericSpec, components: { ...genericSpec.components, extra: { master: { replicas: 4, resources } } } }, genericTopology).master!, /3, 5/);
+  assert.ok(validateWizard('orders', 'default', {
+    ...genericSpec,
+    components: { ...genericSpec.components, extra: { master: { replicas: 3, resources: { ...resources, maxCpu: 0 } } } },
+  }, [], genericProvider).resources.length);
+});
+
 test('disabling a dependency clears checked flags without mutating the original', () => {
   const settings = { public: true, other: true, replicas: 0 };
   assert.deepEqual(clearDisabledFlags(settings, { public: false }), { public: false, other: true, replicas: 0 });

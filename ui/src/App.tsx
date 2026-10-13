@@ -11,7 +11,7 @@ import { LoginPage } from '@/pages/auth/Login';
 import { ChangePasswordPage } from '@/pages/auth/ChangePassword';
 import { ClustersListPage } from '@/pages/clusters/ClustersList';
 import { ClusterWizardPage } from '@/pages/clusters/ClusterWizard';
-import { ClusterDetailLayout, LegacyClusterRedirect } from '@/pages/clusters/detail/ClusterDetail';
+import { ClusterDetailLayout, EngineDetailTab, LegacyClusterRedirect } from '@/pages/clusters/detail/ClusterDetail';
 import { OverviewTab } from '@/pages/clusters/detail/OverviewTab';
 import { TopologyTab } from '@/pages/clusters/detail/TopologyTab';
 import { UpgradesTab } from '@/pages/clusters/detail/UpgradesTab';
@@ -64,6 +64,7 @@ const pageRoutes: RouteObject[] = [
               { path: 'events', element: <EventsTab /> },
               { path: 'operations', element: <OperationsTab /> },
               { path: 'delete', element: <DeleteTab /> },
+              { path: '*', element: <EngineDetailTab /> },
             ],
           },
           { path: '/events', element: <EventsPage /> },

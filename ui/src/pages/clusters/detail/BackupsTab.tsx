@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
-import { useBackupStorages, useProviders } from '@/api/hooks';
+import { useBackupStorages } from '@/api/hooks';
 import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
@@ -21,16 +21,16 @@ import { useClusterContext } from './ClusterDetail';
 import { latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
+import { hasCapability, supportsOperation } from '@/engines';
 
 type BackupType = Schemas['Provider']['backupTypes'][number];
 
 export function BackupsTab() {
-  const { cluster, namespace, name, base, can } = useClusterContext();
+  const { cluster, provider, namespace, name, base, can } = useClusterContext();
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const storages = useBackupStorages(namespace);
-  const providers = useProviders();
   const backups = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'backups'),
     queryFn: () => fetchBackupInventory((cursor) => unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster: name }, query: { namespace, limit: 200, cursor } } }))),
@@ -40,17 +40,17 @@ export function BackupsTab() {
     queryKey: keys.clusterSub(namespace, name, 'pitr'),
     queryFn: () => unwrap(api.GET('/clusters/{cluster}/pitr', { params: { path: { cluster: name }, query: { namespace } } })),
     refetchInterval: 60_000,
+    enabled: hasCapability(provider, 'pitr'),
   });
 
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteName, setDeleteName] = useState<string | null>(null);
 
-  const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
   const backupTypes: BackupType[] = provider?.backupTypes ?? ['logical', 'physical'];
   const storageNames = storages.data?.items.map((s) => s.name) ?? [];
-  const canCreate = can('create', 'backups');
-  const canDelete = can('delete', 'backups');
-  const canRestore = can('create', 'restores');
+  const canCreate = can('create', 'backups') && supportsOperation(provider, 'backup');
+  const canDelete = can('delete', 'backups') && supportsOperation(provider, 'delete-backup');
+  const canRestore = can('create', 'restores') && hasCapability(provider, 'restores') && supportsOperation(provider, 'restore');
 
   const del = useMutation({
     mutationFn: (backup: string) => unwrap(api.DELETE('/clusters/{cluster}/backups/{backup}', { params: { path: { cluster: name, backup }, query: { namespace } } })),
@@ -74,7 +74,7 @@ export function BackupsTab() {
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
               {cluster.spec.backup?.storage ?? '—'}
             </span>
-            <span className="stat-sub">{cluster.spec.backup?.storage ? '' : 'configure below to enable schedules and PITR'}</span>
+            <span className="stat-sub">{cluster.spec.backup?.storage ? '' : hasCapability(provider, 'pitr') ? 'configure below to enable schedules and PITR' : 'configure below to enable schedules'}</span>
           </div>
         </Card>
         <Card flush>
@@ -86,7 +86,7 @@ export function BackupsTab() {
             {lastSuccessful ? <span className="stat-sub"><Time iso={lastSuccessful.completedAt || lastSuccessful.startedAt} /></span> : null}
           </div>
         </Card>
-        <Card flush>
+        {hasCapability(provider, 'pitr') ? <Card flush>
           <div className="stat">
             <span className="stat-label">PITR window</span>
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
@@ -94,7 +94,7 @@ export function BackupsTab() {
             </span>
             <span className="stat-sub">{win?.message ?? (win?.available ? 'continuous, PBM-verified' : '')}</span>
           </div>
-        </Card>
+        </Card> : null}
       </div>
 
       <Card
@@ -195,7 +195,7 @@ export function BackupsTab() {
       {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
 
       <ConfirmDialog open={deleteName !== null} onClose={() => { setDeleteName(null); del.reset(); }} onConfirm={() => deleteName && del.mutateAsync(deleteName)} title={`Delete backup ${deleteName ?? ''}`} confirmLabel="Delete" danger busy={del.isPending} error={del.error}>
-        <p className="small">Backup data is removed from object storage. If PITR depends on this base backup, the restorable window shrinks accordingly.</p>
+        <p className="small">Backup data is removed from object storage.{hasCapability(provider, 'pitr') ? ' If PITR depends on this base backup, the restorable window shrinks accordingly.' : ''}</p>
       </ConfirmDialog>
     </div>
   );
@@ -244,8 +244,8 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
         onChange={setType}
         options={backupTypes.map((t) => ({
           value: t,
-          title: t === 'logical' ? 'Logical' : 'Physical',
-          description: t === 'logical' ? 'Dump via the wire protocol; portable, slower for large data.' : 'Copies data files; fast for large datasets, same engine major required on restore.',
+          title: t.charAt(0).toUpperCase() + t.slice(1),
+          description: t === 'logical' ? 'Dump via the wire protocol; portable, slower for large data.' : t === 'physical' ? 'Copies data files; fast for large datasets, same engine major required on restore.' : undefined,
         }))}
       />
       <SelectField label="Storage" value={storage} onChange={(e) => setStorage(e.target.value)} required>
@@ -260,10 +260,11 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
 }
 
 function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[]; backupTypes: BackupType[] }) {
-  const { cluster, namespace, name, can } = useClusterContext();
+  const { cluster, provider, namespace, name, can } = useClusterContext();
   const toast = useToast();
   const queryClient = useQueryClient();
   const persisted = useMemo(() => cluster.spec.backup ?? {}, [cluster.spec.backup]);
+  const pitr = hasCapability(provider, 'pitr');
   const [storage, setStorage] = useState(persisted.storage ?? '');
   const [schedules, setSchedules] = useState(persisted.schedules ?? []);
   const [pitrEnabled, setPitrEnabled] = useState(persisted.pitr?.enabled ?? false);
@@ -282,7 +283,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     }
   }, [persistedKey, seed, persisted]);
 
-  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } };
+  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } : {}) };
   const dirty = storage !== (persisted.storage ?? '') || JSON.stringify(schedules) !== JSON.stringify(persisted.schedules ?? []) || pitrEnabled !== (persisted.pitr?.enabled ?? false) || span !== (persisted.pitr?.oplogSpanMinutes ?? 10);
   const errors = validateSchedules(schedules);
   if ((schedules.length || pitrEnabled) && !storage) errors.unshift('Choose a primary storage.');
@@ -294,7 +295,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
         api.PATCH('/clusters/{cluster}', {
           headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' },
           params: { path: { cluster: name }, query: { namespace } },
-          body: { spec: { backup: { storage: storage || null, schedules, pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } } },
+          body: { spec: { backup: { ...draft, storage: storage || null } } },
         }),
       ),
     onSuccess: (c) => {
@@ -355,13 +356,13 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
               </option>
             ))}
           </SelectField>
-          <div className="field">
+          {pitr ? <div className="field">
             <span className="field-label">Point-in-time recovery</span>
             <div style={{ height: 34, display: 'flex', alignItems: 'center' }}>
               <Switch label={pitrEnabled ? 'Enabled' : 'Disabled'} checked={pitrEnabled} disabled={!storage} onChange={(e) => setPitrEnabled(e.target.checked)} />
             </div>
-          </div>
-          <TextField label="Oplog slice (minutes)" type="number" min={1} value={span} disabled={!pitrEnabled} onChange={(e) => setSpan(Math.max(1, Number(e.target.value) || 10))} />
+          </div> : null}
+          {pitr ? <TextField label="Oplog slice (minutes)" type="number" min={1} value={span} disabled={!pitrEnabled} onChange={(e) => setSpan(Math.max(1, Number(e.target.value) || 10))} /> : null}
         </div>
         <div className="section-title">Schedules</div>
         <SchedulesEditor value={schedules} onChange={setSchedules} storages={storageNames} defaultStorage={storage || undefined} backupTypes={backupTypes} />

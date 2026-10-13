@@ -61,15 +61,29 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 	if err != nil {
 		return s.failure(err)
 	}
-	if _, _, err := backupstorage.SnapshotKeys(*storage, *b); err != nil {
-		return s.failure(&domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: store.ErrConflict, Message: "backup " + b.Name + " lacks a safe recorded snapshot namespace; preserve its record and repair its storage/provenance before deletion"})
+	var deleteBackup func(context.Context, domain.BackupStorage, domain.Backup) error
+	if b.Provider == "" || b.Provider == "psmdb" {
+		if _, _, err := backupstorage.SnapshotKeys(*storage, *b); err != nil {
+			return s.failure(&domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: store.ErrConflict, Message: "backup " + b.Name + " lacks a safe recorded snapshot namespace; preserve its record and repair its storage/provenance before deletion"})
+		}
+		deleteBackup = backupstorage.DeleteSnapshot
+	} else {
+		p, err := s.Registry.Get(b.Provider)
+		if err != nil {
+			return s.failure(engine.ErrNotSupported)
+		}
+		deleter, ok := p.(engine.RetainedBackupDeleter)
+		if !ok {
+			return s.failure(engine.ErrNotSupported)
+		}
+		deleteBackup = deleter.DeleteRetainedBackup
 	}
 	if err := s.Store.MarkRetainedBackupDeleting(ctx, b); err != nil {
 		return s.failure(err)
 	}
-	if err := backupstorage.DeleteSnapshot(ctx, *storage, *b); err != nil {
+	if err := deleteBackup(ctx, *storage, *b); err != nil {
 		// Keep Deleting inventory and recovery credentials for a retry after
-		// cancellation, partial S3 failure, or a control-plane restart.
+		// cancellation, partial storage failure, or a control-plane restart.
 		return s.failure(err)
 	}
 	if b.RecoveryIdentity != "" {
@@ -103,6 +117,10 @@ func (s *Server) retainedRestoreSource(ctx context.Context, cluster domain.Clust
 	message := ""
 	if b.Phase != domain.PhaseSucceeded {
 		message = "Retained backup must be succeeded and not deleting"
+	} else if b.Provider != "" && b.Provider != "psmdb" {
+		if b.Location == "" {
+			message = "Retained backup lacks a snapshot-time artifact reference"
+		}
 	} else if b.PBMPrefix == "" || b.PBMName == "" || b.SourceTopology.Type == "" || b.SourceVersion == "" {
 		message = "Retained backup lacks snapshot/topology/version provenance and its source cluster no longer exists"
 	} else if b.Type == "physical" {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-// Package agent runs MongoDB member processes and the authenticated node API.
+// Package agent supervises member processes and the authenticated node API.
 package agent
 
 import (
@@ -31,20 +31,29 @@ import (
 type Options struct {
 	ControlPlaneURL, InternalCAPEM, Token, Cluster, Member, DataDir string
 	Listen                                                          string
+	Engine                                                          string
 	Logger                                                          *slog.Logger
 }
 
 // OptionsFromEnv loads the member configuration injected by the infrastructure backend.
 func OptionsFromEnv() (Options, error) {
 	o := Options{ControlPlaneURL: os.Getenv("KARAKORAM_URL"), InternalCAPEM: os.Getenv("KARAKORAM_INTERNAL_CA"), Token: os.Getenv("KARAKORAM_AGENT_TOKEN"), Cluster: os.Getenv("KARAKORAM_CLUSTER"), Member: os.Getenv("KARAKORAM_MEMBER"), DataDir: os.Getenv("KARAKORAM_DATA_DIR"), Listen: ":9443"}
+	o.Engine = os.Getenv("KARAKORAM_ENGINE")
 	if o.ControlPlaneURL == "" || o.InternalCAPEM == "" || o.Token == "" || o.Cluster == "" || o.Member == "" || o.DataDir == "" {
 		return o, errors.New("all KARAKORAM_URL, INTERNAL_CA, AGENT_TOKEN, CLUSTER, MEMBER and DATA_DIR environment variables are required")
 	}
 	return o, nil
 }
 
-// Readiness succeeds when the local mongod or mongos accepts TCP connections.
-func Readiness(ctx context.Context, o Options) error {
+// Readiness dispatches the local probe, defaulting to the built-in PSMDB TCP probe.
+func Readiness(ctx context.Context, o Options, args []string, engines ...Engine) error {
+	engine, err := selectEngine(o.Engine, engines)
+	if err != nil {
+		return err
+	}
+	if engine != nil {
+		return engine.Readiness(ctx, o, args)
+	}
 	conn, err := (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "tcp", "127.0.0.1:27017")
 	if err != nil {
 		return err
@@ -53,17 +62,20 @@ func Readiness(ctx context.Context, o Options) error {
 }
 
 type nodeAgent struct {
-	o              Options
-	client         *agentapi.Client
-	sup            *supervisor
-	mu             sync.RWMutex
-	applyMu, pbmMu sync.Mutex
-	c              agentapi.MemberConfig
-	controls       localControls
-	files          map[string][]byte
-	cert           *tls.Certificate
-	started        time.Time
-	version        string
+	o          Options
+	client     *agentapi.Client
+	sup        *supervisor
+	mu         sync.RWMutex
+	applyMu    controlMutex
+	pbmMu      sync.Mutex
+	c          agentapi.MemberConfig
+	controls   localControls
+	files      map[string][]byte
+	cert       *tls.Certificate
+	started    time.Time
+	version    string
+	engine     Engine
+	controlsMu sync.RWMutex
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -79,6 +91,12 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) ([]strin
 	defer a.applyMu.Unlock()
 	if c.Cluster != a.o.Cluster || c.Member != a.o.Member {
 		return nil, errors.New("configuration identity does not match this member")
+	}
+	if engineName(c.Engine) != engineName(a.o.Engine) {
+		return nil, errors.New("configuration engine does not match this member")
+	}
+	if a.engine != nil {
+		return a.applyEngine(ctx, c)
 	}
 	c.Maintenance = c.Maintenance || a.controls.Maintenance
 	cert, err := tls.X509KeyPair([]byte(c.AgentTLS.CertPEM), []byte(c.AgentTLS.KeyPEM))
@@ -183,7 +201,11 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) ([]strin
 }
 
 // Run pulls configuration, supervises member processes and serves the private HTTPS API.
-func Run(ctx context.Context, o Options) error {
+func Run(ctx context.Context, o Options, engines ...Engine) error {
+	engine, err := selectEngine(o.Engine, engines)
+	if err != nil {
+		return err
+	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
 	}
@@ -197,7 +219,7 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	defer client.Close()
-	a := &nodeAgent{o: o, client: client, sup: newSupervisor(os.Stdout), started: time.Now()}
+	a := &nodeAgent{o: o, client: client, sup: newSupervisor(os.Stdout), started: time.Now(), engine: engine}
 	a.controls, err = loadControls(o.DataDir)
 	if err != nil {
 		return err
@@ -239,13 +261,15 @@ func Run(ctx context.Context, o Options) error {
 		case <-time.After(5 * time.Second):
 		}
 	}
-	commandCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	output, _ := exec.CommandContext(commandCtx, "mongod", "--version").Output()
-	cancel()
-	for _, line := range strings.Split(string(output), "\n") {
-		if strings.HasPrefix(line, "db version v") {
-			a.version = strings.TrimPrefix(line, "db version v")
-			break
+	if a.engine == nil {
+		commandCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		output, _ := exec.CommandContext(commandCtx, "mongod", "--version").Output()
+		cancel()
+		for _, line := range strings.Split(string(output), "\n") {
+			if strings.HasPrefix(line, "db version v") {
+				a.version = strings.TrimPrefix(line, "db version v")
+				break
+			}
 		}
 	}
 	listener, err := net.Listen("tcp", o.Listen)
@@ -298,7 +322,10 @@ func (a *nodeAgent) handler() http.Handler {
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		states, maintenance := a.sup.snapshot()
 		disk, err := diskUsage(a.o.DataDir)
-		respond(w, agentapi.Status{Processes: states, Maintenance: maintenance, Disk: disk, EngineVersion: a.version, ConfigVersion: a.config().ConfigVersion, HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds())}, err)
+		a.mu.RLock()
+		version := a.version
+		a.mu.RUnlock()
+		respond(w, agentapi.Status{Processes: states, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds())}, err)
 	})
 	mux.HandleFunc("POST /v1/reload", func(w http.ResponseWriter, r *http.Request) {
 		changed, err := a.reload(r.Context())
@@ -306,10 +333,6 @@ func (a *nodeAgent) handler() http.Handler {
 	})
 	mux.HandleFunc("POST /v1/processes/{process}/{action}", func(w http.ResponseWriter, r *http.Request) {
 		name, action := r.PathValue("process"), r.PathValue("action")
-		if name != "mongod" && name != "mongos" && name != "pbm-agent" {
-			respond(w, nil, errors.New("unknown process"))
-			return
-		}
 		err := a.processAction(r.Context(), name, action)
 		respond(w, agentapi.ActionResponse{Success: err == nil}, err)
 	})
@@ -329,24 +352,26 @@ func (a *nodeAgent) handler() http.Handler {
 		}
 		respond(w, agentapi.ActionResponse{Success: err == nil}, err)
 	})
-	mux.HandleFunc("POST /v1/bootstrap", func(w http.ResponseWriter, r *http.Request) {
-		var v agentapi.BootstrapRequest
-		err := decode(w, r, &v)
-		var out agentapi.BootstrapResponse
-		if err == nil {
-			out, err = a.bootstrap(r.Context(), v)
-		}
-		respond(w, out, err)
-	})
-	mux.HandleFunc("POST /v1/pbm", func(w http.ResponseWriter, r *http.Request) {
-		var v agentapi.PBMRequest
-		err := decode(w, r, &v)
-		var out agentapi.PBMResponse
-		if err == nil {
-			out, err = a.pbm(r.Context(), v)
-		}
-		respond(w, out, err)
-	})
+	if a.engine == nil {
+		mux.HandleFunc("POST /v1/bootstrap", func(w http.ResponseWriter, r *http.Request) {
+			var v agentapi.BootstrapRequest
+			err := decode(w, r, &v)
+			var out agentapi.BootstrapResponse
+			if err == nil {
+				out, err = a.bootstrap(r.Context(), v)
+			}
+			respond(w, out, err)
+		})
+		mux.HandleFunc("POST /v1/pbm", func(w http.ResponseWriter, r *http.Request) {
+			var v agentapi.PBMRequest
+			err := decode(w, r, &v)
+			var out agentapi.PBMResponse
+			if err == nil {
+				out, err = a.pbm(r.Context(), v)
+			}
+			respond(w, out, err)
+		})
+	}
 	mux.HandleFunc("GET /v1/logs", func(w http.ResponseWriter, r *http.Request) {
 		n, _ := strconv.Atoi(r.URL.Query().Get("lines"))
 		if n <= 0 {
@@ -355,6 +380,11 @@ func (a *nodeAgent) handler() http.Handler {
 		respond(w, agentapi.LogsResponse{Lines: a.sup.logTail(r.URL.Query().Get("process"), min(n, 1000))}, nil)
 	})
 	mux.HandleFunc("GET /v1/metrics", func(w http.ResponseWriter, r *http.Request) { a.writeMetrics(w, r) })
+	if a.engine != nil {
+		engineMux := http.NewServeMux()
+		a.engine.Routes(engineMux, &Node{a: a})
+		mux.Handle("/v1/"+a.engine.Name()+"/", engineMux)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !agentapi.AuthenticateBearer(r, a.o.Token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)

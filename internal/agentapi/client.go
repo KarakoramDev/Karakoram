@@ -18,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -128,13 +129,20 @@ func (c *Client) Reload(ctx context.Context) error {
 
 // Process executes a whitelisted supervisor process action.
 func (c *Client) Process(ctx context.Context, a ProcessAction) error {
-	if a.Process != "mongod" && a.Process != "mongos" && a.Process != "pbm-agent" {
+	if !processName.MatchString(a.Process) {
 		return errors.New("invalid process")
 	}
 	if a.Action != "start" && a.Action != "stop" && a.Action != "restart" {
 		return errors.New("invalid process action")
 	}
 	return c.request(ctx, "POST", "/v1/processes/"+a.Process+"/"+a.Action, nil, nil)
+}
+
+var processName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+
+// Engine invokes an engine-owned authenticated JSON action.
+func (c *Client) Engine(ctx context.Context, engine, action string, req, resp any) error {
+	return c.request(ctx, "POST", "/v1/"+engine+"/"+action, req, resp)
 }
 
 // Maintenance sets database auto-restart suppression.

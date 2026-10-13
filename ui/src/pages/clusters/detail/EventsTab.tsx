@@ -16,6 +16,7 @@ import { Badge, Card, ErrorBlock, Loading, Time } from '@/components/ui/Primitiv
 import { useClusterContext } from './ClusterDetail';
 import { clusterPath } from '../cluster-path';
 import { EventFilters, useEventFilters } from '@/components/EventFilters';
+import { defaultLogProcess, providerProcesses } from '@/engines';
 
 type KEvent = Schemas['Event'];
 type Process = NonNullable<NonNullable<operations['getMemberLogs']['parameters']['query']>['process']>;
@@ -117,22 +118,22 @@ export function useLiveEvents(scope: { namespace?: string; cluster?: string; act
 }
 
 export function EventsTab() {
-  const { cluster, namespace, name, can } = useClusterContext();
+  const { cluster, provider, namespace, name, can } = useClusterContext();
   const filters = useEventFilters();
   const events = useLiveEvents({ ...filters, namespace, cluster: name }, can('read', 'events') || can('read', 'audit'));
   const members = cluster.status.members;
+  const processes = providerProcesses(provider);
   const [member, setMember] = useState(members[0]?.name ?? '');
-  const [process, setProcess] = useState<Process>('mongod');
+  const [process, setProcess] = useState<Process>(() => defaultLogProcess(cluster.spec.provider, members[0]?.role, provider));
   const [lines, setLines] = useState(200);
   const [follow, setFollow] = useState(false);
   const [filter, setFilter] = useState('');
   const logRef = useRef<HTMLPreElement>(null);
 
-  const selectedMember = members.find((m) => m.name === member);
-  const defaultProcess: Process = selectedMember?.role === 'router' ? 'mongos' : 'mongod';
+  const defaultProcess = defaultLogProcess(cluster.spec.provider, members.find((m) => m.name === member)?.role, provider);
   useEffect(() => {
     setProcess(defaultProcess);
-  }, [defaultProcess]);
+  }, [defaultProcess, member]);
 
   const logs = useQuery({
     queryKey: [...keys.clusterSub(namespace, name, 'logs'), member, process, lines],
@@ -181,10 +182,7 @@ export function EventsTab() {
               ))}
             </SelectField>
             <SelectField label="Process" value={process} onChange={(e) => setProcess(e.target.value as Process)}>
-              <option value="mongod">mongod</option>
-              <option value="mongos">mongos</option>
-              <option value="pbm-agent">pbm-agent</option>
-              <option value="agent">karakoram agent</option>
+              {processes.map((p) => <option key={p} value={p}>{p === 'agent' ? 'karakoram agent' : p}</option>)}
             </SelectField>
             <SelectField label="Lines" value={lines} onChange={(e) => setLines(Number(e.target.value))}>
               {[100, 200, 500, 1000, 5000].map((n) => (

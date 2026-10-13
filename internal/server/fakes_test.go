@@ -24,11 +24,14 @@ import (
 	"time"
 )
 
-type fakeProvider struct{}
+type fakeProvider struct{ info *domain.ProviderInfo }
 
 func (*fakeProvider) Name() string { return "fake" }
-func (*fakeProvider) Describe() domain.ProviderInfo {
-	return domain.ProviderInfo{Name: "fake", DisplayName: "Fake engine", BackupTypes: []string{"logical", "physical"}, Versions: []domain.VersionInfo{{Version: "8.0", Major: "8.0", Default: true, Status: "supported"}}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}, MinReplicas: 1, MaxReplicas: 7}}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}}, "configServer": {Defaults: domain.ComponentSpec{Replicas: 1}}, "router": {Defaults: domain.ComponentSpec{Replicas: 1}}}}}}
+func (p *fakeProvider) Describe() domain.ProviderInfo {
+	if p.info != nil {
+		return *p.info
+	}
+	return domain.ProviderInfo{Name: "fake", DisplayName: "Fake engine", Operations: []string{domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, domain.OperationRaiseFCV, domain.OperationRestart, domain.OperationReplaceMember, domain.OperationRotateSystemUser, domain.OperationRotateTLS}, BackupTypes: []string{"logical", "physical"}, Processes: []string{"mongod", "mongos", "pbm-agent"}, Versions: []domain.VersionInfo{{Version: "8.0", Major: "8.0", Default: true, Status: "supported"}}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}, MinReplicas: 1, MaxReplicas: 7}}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}}, "configServer": {Defaults: domain.ComponentSpec{Replicas: 1}}, "router": {Defaults: domain.ComponentSpec{Replicas: 1}}}}}}
 }
 func (*fakeProvider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Provider == "" {
@@ -45,6 +48,12 @@ func (*fakeProvider) ApplyDefaults(s *domain.ClusterSpec) {
 	}
 	if s.Components.Engine.Resources.CPUMode == "" {
 		s.Components.Engine.Resources = domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
+	}
+	for name, component := range s.Components.Extra {
+		if component.Resources.CPUMode == "" {
+			component.Resources = s.Components.Engine.Resources
+			s.Components.Extra[name] = component
+		}
 	}
 	if s.Exposure.IPType == "" {
 		s.Exposure.IPType = "IPV6"

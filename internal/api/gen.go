@@ -43,20 +43,26 @@ const (
 
 // Defines values for BackupType.
 const (
-	BackupTypeLogical  BackupType = "logical"
-	BackupTypePhysical BackupType = "physical"
+	BackupTypeDefinitions BackupType = "definitions"
+	BackupTypeLogical     BackupType = "logical"
+	BackupTypePhysical    BackupType = "physical"
+	BackupTypeSnapshot    BackupType = "snapshot"
 )
 
 // Defines values for BackupScheduleType.
 const (
-	BackupScheduleTypeLogical  BackupScheduleType = "logical"
-	BackupScheduleTypePhysical BackupScheduleType = "physical"
+	BackupScheduleTypeDefinitions BackupScheduleType = "definitions"
+	BackupScheduleTypeLogical     BackupScheduleType = "logical"
+	BackupScheduleTypePhysical    BackupScheduleType = "physical"
+	BackupScheduleTypeSnapshot    BackupScheduleType = "snapshot"
 )
 
 // Defines values for BackupScheduleInputType.
 const (
-	BackupScheduleInputTypeLogical  BackupScheduleInputType = "logical"
-	BackupScheduleInputTypePhysical BackupScheduleInputType = "physical"
+	BackupScheduleInputTypeDefinitions BackupScheduleInputType = "definitions"
+	BackupScheduleInputTypeLogical     BackupScheduleInputType = "logical"
+	BackupScheduleInputTypePhysical    BackupScheduleInputType = "physical"
+	BackupScheduleInputTypeSnapshot    BackupScheduleInputType = "snapshot"
 )
 
 // Defines values for BackupStorageType.
@@ -183,14 +189,18 @@ const (
 
 // Defines values for ProviderBackupTypes.
 const (
-	ProviderBackupTypesLogical  ProviderBackupTypes = "logical"
-	ProviderBackupTypesPhysical ProviderBackupTypes = "physical"
+	ProviderBackupTypesDefinitions ProviderBackupTypes = "definitions"
+	ProviderBackupTypesLogical     ProviderBackupTypes = "logical"
+	ProviderBackupTypesPhysical    ProviderBackupTypes = "physical"
+	ProviderBackupTypesSnapshot    ProviderBackupTypes = "snapshot"
 )
 
 // Defines values for ProviderTopologyType.
 const (
-	ProviderTopologyTypeReplicaSet ProviderTopologyType = "replicaSet"
-	ProviderTopologyTypeSharded    ProviderTopologyType = "sharded"
+	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
+	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
+	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
+	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
 )
 
 // Defines values for ProviderVersionStatus.
@@ -302,33 +312,31 @@ const (
 
 // Defines values for TopologyType.
 const (
-	TopologyTypeReplicaSet TopologyType = "replicaSet"
-	TopologyTypeSharded    TopologyType = "sharded"
+	TopologyTypeCluster          TopologyType = "cluster"
+	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
+	TopologyTypeReplicaSet       TopologyType = "replicaSet"
+	TopologyTypeSharded          TopologyType = "sharded"
 )
 
 // Defines values for TopologyInputType.
 const (
-	TopologyInputTypeReplicaSet TopologyInputType = "replicaSet"
-	TopologyInputTypeSharded    TopologyInputType = "sharded"
+	TopologyInputTypeCluster          TopologyInputType = "cluster"
+	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
+	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
+	TopologyInputTypeSharded          TopologyInputType = "sharded"
 )
 
 // Defines values for TopologyPatchType.
 const (
-	TopologyPatchTypeReplicaSet TopologyPatchType = "replicaSet"
-	TopologyPatchTypeSharded    TopologyPatchType = "sharded"
+	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
+	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
+	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
+	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
 const (
 	S3 UpdateBackupStorageRequestType = "s3"
-)
-
-// Defines values for GetMemberLogsParamsProcess.
-const (
-	Agent    GetMemberLogsParamsProcess = "agent"
-	Mongod   GetMemberLogsParamsProcess = "mongod"
-	Mongos   GetMemberLogsParamsProcess = "mongos"
-	PbmAgent GetMemberLogsParamsProcess = "pbm-agent"
 )
 
 // Defines values for ListEventsParamsOrder.
@@ -444,17 +452,21 @@ type AgentStatus struct {
 
 // Backup defines model for Backup.
 type Backup struct {
-	Cluster       string         `json:"cluster"`
-	CompletedAt   *time.Time     `json:"completedAt,omitempty"`
-	Error         *string        `json:"error,omitempty"`
-	LastWriteTime *time.Time     `json:"lastWriteTime,omitempty"`
-	Name          string         `json:"name"`
-	Namespace     *NamespaceName `json:"namespace,omitempty"`
+	Cluster       string     `json:"cluster"`
+	CompletedAt   *time.Time `json:"completedAt,omitempty"`
+	Error         *string    `json:"error,omitempty"`
+	LastWriteTime *time.Time `json:"lastWriteTime,omitempty"`
+
+	// Location Complete snapshot-time object key, prefix, or snapshot reference.
+	Location  *string        `json:"location,omitempty"`
+	Name      string         `json:"name"`
+	Namespace *NamespaceName `json:"namespace,omitempty"`
 
 	// OperationId Durable operation that created this backup.
 	OperationId *string     `json:"operationId,omitempty"`
 	PbmName     *string     `json:"pbmName,omitempty"`
 	Phase       BackupPhase `json:"phase"`
+	Provider    *string     `json:"provider,omitempty"`
 	Schedule    *string     `json:"schedule,omitempty"`
 	Size        *int64      `json:"size,omitempty"`
 	StartedAt   *time.Time  `json:"startedAt,omitempty"`
@@ -619,7 +631,7 @@ type ClusterBackupStatus struct {
 	PitrWindow *PITRWindow `json:"pitrWindow,omitempty"`
 }
 
-// ClusterInputSpec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+// ClusterInputSpec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
 type ClusterInputSpec struct {
 	Backup     *BackupSpecInput `json:"backup,omitempty"`
 	Components *ComponentsInput `json:"components,omitempty"`
@@ -627,10 +639,11 @@ type ClusterInputSpec struct {
 	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 	DataSource *DataSource `json:"dataSource,omitempty"`
 
-	// EngineConfig Validated YAML mongod/mongos overrides.
-	EngineConfig *string         `json:"engineConfig,omitempty"`
-	Exposure     *ExposureInput  `json:"exposure,omitempty"`
-	Monitoring   *MonitoringSpec `json:"monitoring,omitempty"`
+	// EngineConfig Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...).
+	EngineConfig  *string                 `json:"engineConfig,omitempty"`
+	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
+	Exposure      *ExposureInput          `json:"exposure,omitempty"`
+	Monitoring    *MonitoringSpec         `json:"monitoring,omitempty"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider string `json:"provider"`
@@ -668,10 +681,11 @@ type ClusterPatchSpec struct {
 	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 	DataSource *DataSourcePatch `json:"dataSource"`
 
-	// EngineConfig Validated YAML mongod/mongos overrides.
-	EngineConfig *string              `json:"engineConfig"`
-	Exposure     *ExposurePatch       `json:"exposure"`
-	Monitoring   *MonitoringSpecPatch `json:"monitoring"`
+	// EngineConfig Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...).
+	EngineConfig  *string                 `json:"engineConfig"`
+	EngineOptions *map[string]interface{} `json:"engineOptions"`
+	Exposure      *ExposurePatch          `json:"exposure"`
+	Monitoring    *MonitoringSpecPatch    `json:"monitoring"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider *string `json:"provider"`
@@ -690,10 +704,11 @@ type ClusterSpec struct {
 	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 	DataSource *DataSource `json:"dataSource,omitempty"`
 
-	// EngineConfig Validated YAML mongod/mongos overrides.
-	EngineConfig *string         `json:"engineConfig,omitempty"`
-	Exposure     *Exposure       `json:"exposure,omitempty"`
-	Monitoring   *MonitoringSpec `json:"monitoring,omitempty"`
+	// EngineConfig Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...).
+	EngineConfig  *string                 `json:"engineConfig,omitempty"`
+	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
+	Exposure      *Exposure               `json:"exposure,omitempty"`
+	Monitoring    *MonitoringSpec         `json:"monitoring,omitempty"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider string `json:"provider"`
@@ -729,6 +744,7 @@ type ClusterStatusPhase string
 
 // Component defines model for Component.
 type Component struct {
+	// Replicas Replica count; zero disables an optional component when supported by the provider.
 	Replicas int `json:"replicas"`
 
 	// Resources Resource configuration returned by the control plane. Observed member autoscaling describes runtime root disks, not persistent data volumes; request-only resource bounds do not apply.
@@ -749,25 +765,28 @@ type ComponentPatch struct {
 
 // Components defines model for Components.
 type Components struct {
-	ConfigServer *Component `json:"configServer,omitempty"`
-	Engine       Component  `json:"engine"`
-	Router       *Component `json:"router,omitempty"`
+	ConfigServer *Component            `json:"configServer,omitempty"`
+	Engine       Component             `json:"engine"`
+	Extra        *map[string]Component `json:"extra,omitempty"`
+	Router       *Component            `json:"router,omitempty"`
 }
 
 // ComponentsInput defines model for ComponentsInput.
 type ComponentsInput struct {
 	// ConfigServer PSMDB config-server replica set: 1, 3, 5 or 7 members.
-	ConfigServer *ConfigServerInput `json:"configServer,omitempty"`
-	Engine       *ComponentInput    `json:"engine,omitempty"`
-	Router       *ComponentInput    `json:"router,omitempty"`
+	ConfigServer *ConfigServerInput              `json:"configServer,omitempty"`
+	Engine       *ComponentInput                 `json:"engine,omitempty"`
+	Extra        *map[string]ExtraComponentInput `json:"extra,omitempty"`
+	Router       *ComponentInput                 `json:"router,omitempty"`
 }
 
 // ComponentsPatch defines model for ComponentsPatch.
 type ComponentsPatch struct {
 	// ConfigServer PSMDB config-server replica set: 1, 3, 5 or 7 members.
-	ConfigServer *ConfigServerPatch `json:"configServer"`
-	Engine       *ComponentPatch    `json:"engine"`
-	Router       *ComponentPatch    `json:"router"`
+	ConfigServer *ConfigServerPatch               `json:"configServer"`
+	Engine       *ComponentPatch                  `json:"engine"`
+	Extra        *map[string]*ExtraComponentPatch `json:"extra"`
+	Router       *ComponentPatch                  `json:"router"`
 }
 
 // Condition defines model for Condition.
@@ -812,9 +831,10 @@ type ConnectionCredential struct {
 
 // ConnectionSummary defines model for ConnectionSummary.
 type ConnectionSummary struct {
-	Hosts       []string  `json:"hosts"`
-	PublicHosts *[]string `json:"publicHosts,omitempty"`
-	ReplicaSet  *string   `json:"replicaSet,omitempty"`
+	Endpoints   *[]Endpoint `json:"endpoints,omitempty"`
+	Hosts       []string    `json:"hosts"`
+	PublicHosts *[]string   `json:"publicHosts,omitempty"`
+	ReplicaSet  *string     `json:"replicaSet,omitempty"`
 
 	// Uri Connection URI without a password.
 	Uri string `json:"uri"`
@@ -875,7 +895,7 @@ type CreateBackupStorageRequestType string
 type CreateClusterRequest struct {
 	Name string `json:"name"`
 
-	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
 	Spec ClusterInputSpec `json:"spec"`
 }
 
@@ -980,6 +1000,15 @@ type DatabaseUserList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// Endpoint defines model for Endpoint.
+type Endpoint struct {
+	Name   string `json:"name"`
+	Public bool   `json:"public"`
+
+	// Url Connection URL without a password.
+	Url string `json:"url"`
+}
+
 // Error Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
@@ -1065,6 +1094,19 @@ type ExposurePatch struct {
 
 // ExposurePatchIpType defines model for ExposurePatch.IpType.
 type ExposurePatchIpType string
+
+// ExtraComponentInput defines model for ExtraComponentInput.
+type ExtraComponentInput struct {
+	// Replicas Zero disables an optional component when supported by the provider.
+	Replicas  *int            `json:"replicas,omitempty"`
+	Resources *ResourcesInput `json:"resources,omitempty"`
+}
+
+// ExtraComponentPatch defines model for ExtraComponentPatch.
+type ExtraComponentPatch struct {
+	Replicas  *int            `json:"replicas"`
+	Resources *ResourcesPatch `json:"resources"`
+}
 
 // Health defines model for Health.
 type Health struct {
@@ -1399,9 +1441,12 @@ type PrivilegeResource struct {
 // Provider defines model for Provider.
 type Provider struct {
 	BackupTypes  []ProviderBackupTypes `json:"backupTypes"`
+	Capabilities *[]string             `json:"capabilities,omitempty"`
 	DisplayName  string                `json:"displayName"`
 	Name         string                `json:"name"`
+	Operations   *[]string             `json:"operations,omitempty"`
 	Presets      []Preset              `json:"presets"`
+	Processes    *[]string             `json:"processes,omitempty"`
 	Topologies   []ProviderTopology    `json:"topologies"`
 	UpgradePaths []UpgradePath         `json:"upgradePaths"`
 	Versions     []ProviderVersion     `json:"versions"`
@@ -1482,7 +1527,7 @@ type ReplaceClusterRequest struct {
 	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 
-	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
 	Spec      ClusterInputSpec        `json:"spec"`
 	Status    *map[string]interface{} `json:"status,omitempty"`
 	UpdatedAt *string                 `json:"updatedAt,omitempty"`
@@ -2469,17 +2514,14 @@ type GetClusterMemberParams struct {
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
 type GetMemberLogsParams struct {
-	Process *GetMemberLogsParamsProcess `form:"process,omitempty" json:"process,omitempty"`
-	Lines   *int                        `form:"lines,omitempty" json:"lines,omitempty"`
-	Cursor  *string                     `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Since   *time.Time                  `form:"since,omitempty" json:"since,omitempty"`
+	Process *string    `form:"process,omitempty" json:"process,omitempty"`
+	Lines   *int       `form:"lines,omitempty" json:"lines,omitempty"`
+	Cursor  *string    `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Since   *time.Time `form:"since,omitempty" json:"since,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
-
-// GetMemberLogsParamsProcess defines parameters for GetMemberLogs.
-type GetMemberLogsParamsProcess string
 
 // ReplaceClusterMemberParams defines parameters for ReplaceClusterMember.
 type ReplaceClusterMemberParams struct {

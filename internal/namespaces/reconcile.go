@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
@@ -172,9 +171,9 @@ func (r *Registry) step(ctx context.Context, name string) {
 	}
 	clusters, err := r.o.Store.ListClusters(ctx, name)
 	targets := []string{}
-	if err == nil {
+	if err == nil && r.o.RelayTargets != nil {
 		for i := range clusters {
-			targets = append(targets, psmdb.RelayTargets(&clusters[i])...)
+			targets = append(targets, r.o.RelayTargets(&clusters[i])...)
 		}
 	}
 	if n.Phase == "Deleting" {

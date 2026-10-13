@@ -33,6 +33,7 @@ type Backend struct {
 }
 
 var _ infra.Backend = (*Backend)(nil)
+var _ infra.SubdomainAccess = (*Backend)(nil)
 var hostnamePattern = regexp.MustCompile(`^[a-z][a-z0-9]{0,24}$`)
 
 // New constructs a Zerops backend, using bounded context-cancelable waits for
@@ -503,6 +504,59 @@ func (b *Backend) Stop(ctx context.Context, name string) (infra.Op, error) {
 // Restart schedules runtime restart without replaying the process-creating PUT.
 func (b *Backend) Restart(ctx context.Context, name string) (infra.Op, error) {
 	return b.lifecycle(ctx, name, "restart")
+}
+
+// SetSubdomainAccess schedules public HTTPS routing for a service's HTTP ports.
+// Matching state is a completed no-op; returned process IDs survive backend restarts.
+func (b *Backend) SetSubdomainAccess(ctx context.Context, name string, enabled bool) (infra.Op, error) {
+	s, err := b.require(ctx, name)
+	if err != nil {
+		return infra.Op{}, err
+	}
+	kind := "disable-subdomain-access"
+	if enabled {
+		kind = "enable-subdomain-access"
+	}
+	if s.SubdomainAccess == enabled {
+		return processOp(nil, kind, s.ID), nil
+	}
+	p, err := b.client.SetSubdomainAccess(ctx, s.ID, enabled)
+	return processOp(&p, kind, s.ID), err
+}
+
+// SubdomainURLs derives enabled HTTPS URLs from effective ports and project identity.
+// Zerops terminates TLS at its public L7 balancer; URLs have no explicit port.
+func (b *Backend) SubdomainURLs(ctx context.Context, name string) ([]string, error) {
+	s, err := b.require(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if !s.SubdomainAccess {
+		return nil, nil
+	}
+	count := 0
+	for _, p := range s.Ports {
+		if p.HTTPSupport || p.Scheme == "http" || p.Scheme == "https" {
+			count++
+		}
+	}
+	if count == 0 {
+		return nil, nil
+	}
+	project, err := b.client.ProjectInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if project.ZeropsSubdomainHost == "" || s.NestID == "" {
+		return nil, errors.New("zerops: missing subdomain routing identity")
+	}
+	urls := make([]string, 0, count)
+	for _, p := range s.Ports {
+		if p.HTTPSupport || p.Scheme == "http" || p.Scheme == "https" {
+			urls = append(urls, fmt.Sprintf("https://%s-%s-%d.%s.zerops.app", s.Name, project.ZeropsSubdomainHost, p.Port, s.NestID))
+		}
+	}
+	return urls, nil
 }
 func putJSON(m map[string]json.RawMessage, k string, v any) { m[k], _ = json.Marshal(v) }
 func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources, minCount, maxCount *int) (infra.Op, error) {

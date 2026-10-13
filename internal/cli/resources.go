@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,6 +23,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		a.namespaceFlags(c, s.operation)
 	case strings.HasPrefix(s.path, "clusters create"), strings.HasPrefix(s.path, "clusters scale"):
 		c.Flags().Int("members", 3, "Engine replicas per replica set")
+		c.Flags().Int("replicas", 3, "Engine replicas")
 		c.Flags().Int("shards", 1, "Shard count")
 		c.Flags().Int("config-servers", 3, "Config-server replicas")
 		c.Flags().Int("routers", 2, "Router replicas")
@@ -41,9 +43,9 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			c.Long = "Create a cluster. Convenience flags use PSMDB defaults; --provider defaults to psmdb.\nFor other providers, presets or optional components, submit the complete JSON/YAML body with -f.\nRun karactl providers get <provider> -o json to inspect versions, presets and components,\nthen copy a preset spec into a body containing name and spec. There is no --preset flag."
 			c.Flags().String("provider", "psmdb", "Engine provider")
 			c.Flags().String("version", "", "Exact engine version (defaults to provider catalog default; see providers get <provider>)")
-			c.Flags().String("topology", "replicaSet", "replicaSet or sharded")
+			c.Flags().String("topology", "replicaSet", "Provider topology (replicaSet, sharded, cluster or dedicatedMasters)")
 			c.Flags().String("backup-storage", "", "Default backup storage")
-			c.Flags().StringArray("schedule", nil, "Schedule: NAME=CRON,type=logical|physical,retain=COUNT[,storage=NAME]")
+			c.Flags().StringArray("schedule", nil, "Schedule: NAME=CRON,type=TYPE,retain=COUNT[,storage=NAME]")
 			c.Flags().Bool("pitr", false, "Enable continuous point-in-time recovery")
 			c.Flags().Int("oplog-span-minutes", 10, "PITR oplog slice interval")
 			c.Flags().String("tls-mode", "requireTLS", "disabled, preferTLS or requireTLS")
@@ -54,7 +56,8 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			c.Flags().String("from-pitr", "", "Seed from RFC3339 point in time")
 			c.Flags().String("source-cluster", "", "Source cluster for initial data")
 			c.Flags().String("source-namespace", "", "Namespace of the initial data source (defaults to target)")
-			c.Flags().String("engine-config", "", "YAML engine overrides file")
+			c.Flags().String("engine-config", "", "Provider configuration overrides file")
+			c.Flags().String("engine-options", "", "Provider options as a JSON object or @file.json")
 			c.Flags().Bool("monitoring", true, "Enable monitoring")
 		}
 	case strings.HasPrefix(s.path, "clusters upgrade"), s.operation == "raiseClusterFCV":
@@ -64,7 +67,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	case s.operation == "replaceClusterBalancer":
 		c.Flags().Bool("enabled", true, "Enable balancing")
 	case s.operation == "createBackup":
-		c.Flags().String("type", "logical", "logical or physical")
+		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions or snapshot)")
 		c.Flags().String("storage", "", "Backup storage (defaults to cluster configuration)")
 		c.Annotations[operationAnnotation] += ",getCluster"
 	case s.operation == "createRestore":
@@ -121,8 +124,11 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			return nil, usageError("invalid --component")
 		}
 		c := map[string]any{}
-		if cmd.Flags().Changed("members") {
+		if cmd.Flags().Changed("members") || cmd.Flags().Changed("replicas") {
 			n, _ := cmd.Flags().GetInt("members")
+			if cmd.Flags().Changed("replicas") {
+				n, _ = cmd.Flags().GetInt("replicas")
+			}
 			c["replicas"] = n
 		}
 		r := resourceFlags(cmd, false)
@@ -180,8 +186,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			name = args[1]
 		}
 		typ, _ := cmd.Flags().GetString("type")
-		if typ != "logical" && typ != "physical" {
-			return nil, usageError("backup type must be logical or physical")
+		if typ != "logical" && typ != "physical" && typ != "definitions" && typ != "snapshot" {
+			return nil, usageError("backup type must be logical, physical, definitions or snapshot")
 		}
 		storage, _ := cmd.Flags().GetString("storage")
 		if storage == "" {
@@ -251,19 +257,32 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	version, _ := cmd.Flags().GetString("version")
 	provider, _ := cmd.Flags().GetString("provider")
 	topology, _ := cmd.Flags().GetString("topology")
-	if topology != "replicaSet" && topology != "sharded" {
-		return nil, usageError("topology must be replicaSet or sharded")
+	if topology != "replicaSet" && topology != "sharded" && topology != "cluster" && topology != "dedicatedMasters" {
+		return nil, usageError("invalid provider topology %q", topology)
 	}
 	mode, _ := cmd.Flags().GetString("cpu-mode")
 	if mode != "SHARED" && mode != "DEDICATED" {
 		return nil, usageError("CPU mode must be SHARED or DEDICATED")
 	}
 	members, _ := cmd.Flags().GetInt("members")
+	if cmd.Flags().Changed("replicas") {
+		members, _ = cmd.Flags().GetInt("replicas")
+	}
 	if members < 1 {
 		return nil, usageError("members must be positive")
 	}
-	components := map[string]any{"engine": map[string]any{"replicas": members, "resources": resourceFlags(cmd, true)}}
-	t := map[string]any{"type": topology}
+	engine := map[string]any{}
+	t := map[string]any{}
+	if provider == "psmdb" || cmd.Flags().Changed("members") || cmd.Flags().Changed("replicas") {
+		engine["replicas"] = members
+	}
+	if resources := resourceFlags(cmd, provider == "psmdb"); len(resources) > 0 {
+		engine["resources"] = resources
+	}
+	components := map[string]any{"engine": engine}
+	if provider == "psmdb" || cmd.Flags().Changed("topology") {
+		t["type"] = topology
+	}
 	if topology != "sharded" {
 		for _, flag := range []string{"shards", "config-servers", "routers"} {
 			if cmd.Flags().Changed(flag) {
@@ -271,7 +290,7 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 			}
 		}
 	}
-	if topology == "sharded" {
+	if topology == "sharded" && (provider == "psmdb" || cmd.Flags().Changed("topology")) {
 		shards, _ := cmd.Flags().GetInt("shards")
 		if shards < 1 || shards > 128 {
 			return nil, usageError("--shards must be from 1 to 128")
@@ -340,6 +359,22 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 		}
 		spec["engineConfig"] = string(b)
 	}
+	options, _ := cmd.Flags().GetString("engine-options")
+	if options != "" {
+		data := []byte(options)
+		if strings.HasPrefix(options, "@") {
+			var err error
+			data, err = os.ReadFile(strings.TrimPrefix(options, "@"))
+			if err != nil {
+				return nil, err
+			}
+		}
+		var value map[string]any
+		if err := json.Unmarshal(data, &value); err != nil || value == nil {
+			return nil, fmt.Errorf("--engine-options must be a JSON object")
+		}
+		spec["engineOptions"] = value
+	}
 	return map[string]any{"name": name, "spec": spec}, nil
 }
 func parseSchedule(input, storage string) (map[string]any, error) {
@@ -359,7 +394,7 @@ func parseSchedule(input, storage string) (map[string]any, error) {
 		}
 		switch key {
 		case "type":
-			if value != "logical" && value != "physical" {
+			if value != "logical" && value != "physical" && value != "definitions" && value != "snapshot" {
 				return nil, usageError("invalid schedule type %q", value)
 			}
 			result[key] = value

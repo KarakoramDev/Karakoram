@@ -13,7 +13,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
 type namespaceAgentTransport struct {

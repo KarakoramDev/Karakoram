@@ -12,10 +12,11 @@ import { useClusterContext } from './ClusterDetail';
 import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from '../cluster-utils';
 import { memberHealthCounts } from '../member-status';
 import { certificateDownload, colocatedGroups, credentialDatabaseLabel, generationState, knownHost, psmdbConnect } from './detail-state';
+import { hasCapability } from '@/engines';
 
 
 export function OverviewTab() {
-  const { cluster, namespace, name, base, can } = useClusterContext();
+  const { cluster, provider, namespace, name, base, can } = useClusterContext();
   const members = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'members'),
     queryFn: () => unwrap(api.GET('/clusters/{cluster}/members', { params: { path: { cluster: name }, query: { namespace } } })),
@@ -29,7 +30,7 @@ export function OverviewTab() {
   const balancer = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'balancer'),
     queryFn: () => unwrap(api.GET('/clusters/{cluster}/balancer', { params: { path: { cluster: name }, query: { namespace } } })),
-    enabled: cluster.spec.topology.type === 'sharded',
+    enabled: hasCapability(provider, 'balancer') && cluster.spec.topology.type === 'sharded',
     refetchInterval: 30_000,
   });
 
@@ -72,7 +73,7 @@ export function OverviewTab() {
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
               {cluster.status.backup?.lastBackup ?? '—'}
             </span>
-            <span className="stat-sub">{cluster.status.backup?.pitrWindow?.available ? `PITR until ${new Date(cluster.status.backup.pitrWindow.end ?? '').toLocaleTimeString()}` : 'PITR window unavailable'}</span>
+            {hasCapability(provider, 'pitr') ? <span className="stat-sub">{cluster.status.backup?.pitrWindow?.available ? `PITR until ${new Date(cluster.status.backup.pitrWindow.end ?? '').toLocaleTimeString()}` : 'PITR window unavailable'}</span> : null}
           </div>
         </Card>
         <Card flush>
@@ -184,6 +185,10 @@ export function OverviewTab() {
 
       <div className="grid-2">
         <Card title="Connection">
+          {conn?.endpoints?.map((endpoint) => <div key={`${endpoint.name}:${endpoint.url}`} className="stack" style={{ marginBottom: 12 }}>
+            <strong className="small">{endpoint.name} <Badge plain>{endpoint.public ? 'Public' : 'Private'}</Badge></strong>
+            <CodeLine value={endpoint.url} />
+          </div>)}
           {conn?.hosts?.length ? (
             <div className="stack">
               <KV
@@ -199,7 +204,7 @@ export function OverviewTab() {
               <CredentialsReveal namespace={namespace} name={name} base={base} provider={spec.provider} allowed={can('read', 'cluster-credentials')} />
             </div>
           ) : (
-            <p className="small muted">Connection details appear once the cluster is initialized.</p>
+            conn?.endpoints?.length ? null : <p className="small muted">Connection details appear once the cluster is initialized.</p>
           )}
         </Card>
         <Card title="Specification">
@@ -210,10 +215,10 @@ export function OverviewTab() {
               spec.components.configServer && ['Config servers', `${spec.components.configServer.replicas} × ${resourcesSummary(spec.components.configServer.resources)}`],
               spec.components.router && ['Routers', `${spec.components.router.replicas} × ${resourcesSummary(spec.components.router.resources, true)}`],
               ['Backup storage', spec.backup?.storage ?? 'none'],
-              ['PITR', spec.backup?.pitr?.enabled ? `on, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'off'],
+              hasCapability(provider, 'pitr') && ['PITR', spec.backup?.pitr?.enabled ? `on, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'off'],
               ['Exposure', spec.exposure?.public ? `public ${spec.exposure.ipType} · allowlist ${(spec.exposure.allowlist ?? []).join(', ') || 'none'}` : 'private'],
               ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
-              balancer.data && ['Balancer', <span>{balancer.data.enabled ? 'enabled' : 'disabled'}{balancer.data.running ? ' · running' : ''}{balancer.data.mode ? ` · ${balancer.data.mode}` : ''}</span>],
+              hasCapability(provider, 'balancer') && balancer.data && ['Balancer', <span>{balancer.data.enabled ? 'enabled' : 'disabled'}{balancer.data.running ? ' · running' : ''}{balancer.data.mode ? ` · ${balancer.data.mode}` : ''}</span>],
               ['Created', <Time iso={cluster.createdAt} />],
             ]}
           />

@@ -137,3 +137,10 @@ type Backend interface {
 	Logs(context.Context, string, LogQuery) ([]LogLine, error)
 	OpStatus(context.Context, Op) (OpState, error)
 }
+
+// SubdomainAccess manages public HTTPS subdomain routing to a service's httpSupport ports.
+// It is optional: infrastructure backends need not support public HTTPS routing.
+type SubdomainAccess interface {
+	SetSubdomainAccess(ctx context.Context, service string, enabled bool) (Op, error)
+	SubdomainURLs(ctx context.Context, service string) ([]string, error)
+}

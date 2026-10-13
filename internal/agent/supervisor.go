@@ -21,6 +21,7 @@ import (
 type processSpec struct {
 	binary    string
 	args, env []string
+	dir       string
 }
 type child struct {
 	spec       processSpec
@@ -62,6 +63,7 @@ func (s *supervisor) startLocked(name string, p *child) error {
 	}
 	cmd := exec.Command(p.spec.binary, p.spec.args...)
 	cmd.Env = append(os.Environ(), p.spec.env...)
+	cmd.Dir = p.spec.dir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

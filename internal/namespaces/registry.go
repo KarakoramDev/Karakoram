@@ -62,6 +62,7 @@ type Options struct {
 	Logger                                 *slog.Logger
 	Artifact                               engine.ArtifactSource
 	ExecutableHash                         string
+	RelayTargets                           func(*domain.Cluster) []string
 	// Validate returns an isolated client; it must verify identity and service permissions.
 	Validate   func(context.Context, zerops.Options) (Backend, infra.Project, error)
 	NewBackend func(zerops.Options) (Backend, error)
