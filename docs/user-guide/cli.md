@@ -32,7 +32,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
-Examples and safety prerequisites: [replica sets](replica-sets.md), [sharding](sharding.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
+Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
 
 ## Orphaned platform volumes
 

@@ -15,6 +15,9 @@ import (
 func TestCrossNamespaceRestoreUsesSourceStorageAndRecoveryIdentity(t *testing.T) {
 	env, st, fake, _ := setup(t)
 	ctx := context.Background()
+	if err := st.PutNamespace(ctx, &domain.Namespace{Name: "production", Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
 	source := &domain.Cluster{Namespace: "production", Name: env.RC.Cluster.Name, Spec: domain.ClusterSpec{Backup: domain.BackupConfig{Storage: "storage"}}, Internal: json.RawMessage(`{"uid":"source-id","pbmPrefix":"source-prefix"}`)}
 	if err := st.CreateCluster(ctx, source); err != nil {
 		t.Fatal(err)

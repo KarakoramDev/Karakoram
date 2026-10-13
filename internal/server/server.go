@@ -104,12 +104,16 @@ func fail(status int, code, message string) response {
 	return response{status: status, body: api.Error{Code: code, Message: message}}
 }
 func (s *Server) failure(err error) response {
+	var namespaceConflict *store.NamespaceConflictError
+	if errors.As(err, &namespaceConflict) {
+		return fail(409, "conflict", namespaceConflict.Error())
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
 	case errors.Is(err, store.ErrConflict), errors.Is(err, engine.ErrConflict), errors.Is(err, engine.ErrNotSupported):
 		return fail(409, "conflict", "Request conflicts with the resource state")
-	case errors.Is(err, engine.ErrInvalid), errors.Is(err, auth.ErrInvalid):
+	case errors.Is(err, engine.ErrInvalid), errors.Is(err, auth.ErrInvalid), errors.Is(err, store.ErrInvalid):
 		var v *engine.ValidationError
 		if errors.As(err, &v) {
 			return fail(400, "invalid_request", v.Message)
@@ -164,6 +168,21 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 			return fail(403, "forbidden", "Unknown API operation"), nil
 		}
 		ctx = context.WithValue(ctx, requestKey{}, r)
+		if cluster := r.PathValue("cluster"); cluster != "" {
+			if err := domain.ValidateClusterName(cluster); err != nil {
+				return fail(404, "not_found", "Resource not found"), nil
+			}
+		}
+		if namespace := r.PathValue("namespace"); namespace != "" {
+			if err := domain.ValidateNamespaceName(namespace); err != nil {
+				return fail(404, "not_found", "Resource not found"), nil
+			}
+		}
+		if namespaces, present := r.URL.Query()["namespace"]; present {
+			if len(namespaces) != 1 || domain.ValidateNamespaceName(namespaces[0]) != nil {
+				return invalid(), nil
+			}
+		}
 		if id == "login" || id == "refreshSession" || id == "logout" || id == "oidcLogin" {
 			if !s.sameOrigin(r) {
 				return fail(403, "forbidden", "Cross-origin authentication request rejected"), nil
@@ -373,13 +392,19 @@ func (s *Server) context(ctx context.Context, ref domain.ClusterRef) (*engine.Co
 	rc := s.Context
 	rc.Cluster = c
 	rc.Namespace = domain.NormalizedNamespace(c.Namespace)
-	rc.Backend, err = s.namespaces.Backend(rc.Namespace)
+	return &rc, p, nil
+}
+
+func (s *Server) providerContext(rc *engine.Context) *response {
+	backend, err := s.namespaces.Backend(rc.Namespace)
 	if err != nil {
-		return nil, nil, err
+		r := fail(503, "invalid_namespace", "Namespace "+rc.Namespace+" is unavailable; repair its token or relay")
+		return &r
 	}
+	rc.Backend = backend
 	rc.Dialer = s.namespaces.Dialer(rc.Namespace)
 	rc.AgentURL = s.namespaces.AgentURL(rc.Namespace)
-	return &rc, p, nil
+	return nil
 }
 func (s *Server) trigger(ref domain.ClusterRef) {
 	if s.Trigger != nil {

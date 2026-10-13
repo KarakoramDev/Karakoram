@@ -46,9 +46,6 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		if err != nil {
 			return s.failure(err)
 		}
-		if domain.NormalizedNamespace(o.Namespace) != domain.NormalizedNamespace(namespaceFilter(ctx)) {
-			return fail(404, "not_found", "Operation not found")
-		}
 		if !s.allowed(ctx, "operations", "read", clusterObject(o.Namespace, o.Cluster)) {
 			return fail(403, "forbidden", "Permission denied")
 		}

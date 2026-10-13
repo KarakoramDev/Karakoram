@@ -10,6 +10,16 @@ Use local username/password or the configured SSO button. First bootstrap and re
 
 A missing/disabled control can be an RBAC restriction, not missing functionality. The server enforces permissions regardless of what the UI displays. Unauthorized resources do not become visible just by typing a URL.
 
+## Namespace selection
+
+The app-shell switcher offers **All namespaces** and readable namespace names
+with token/relay health indicators. Selection is persisted in `?namespace=` and
+a non-secret localStorage preference. Clusters, backups, events, operations and
+storages follow it; cluster detail routes carry the namespace so same-named
+clusters remain distinct. Choose an explicit namespace for creation. The
+switcher may be absent in a single-namespace view; direct links still require
+server authorization. See [namespaces](namespaces.md).
+
 ## Clusters and creation
 
 **Clusters** lists authorized clusters and their current phases. **Create cluster** opens the topology/provider-driven wizard at `/clusters/new`. Select a name, exact catalog version, replica-set or sharded topology, component replicas/resources and the relevant backup, PITR, TLS, exposure and monitoring settings. Review costs and placement warnings before submitting.
@@ -35,6 +45,11 @@ Percona member resources require at least **0.5 GiB RAM** and **5 GiB data disk*
 
 Use operation and resource status together. Accepted mutations are not completed provisioning/upgrades/restores, and local TCP readiness does not prove replica-set health. Physical restore intentionally stops database processes; do not use UI restart buttons to undo a restore's maintenance holds.
 
+Restore/clone dialogs support selecting a source namespace; cross-namespace
+recovery checks source `backups/export` as well as backup read and target
+mutation. Source storage is used during recovery; target backup settings must
+refer to target-local storage. See [cross-namespace recovery](backups-and-restore.md#cross-namespace-recovery).
+
 **Reveal credentials** is an explicit action requiring `cluster-credentials:read`. Its response is not stored in the query cache; treat displayed/copied URI/password/CA material according to [users/TLS/access](users-tls-access.md). Normal Overview data does not reveal application/system passwords. Use your own application account rather than the revealed administrative identity for workloads.
 
 When adding a database user under **Users**, leave the password empty to have the server generate one. The success dialog displays that generated password exactly once; copy it into a secret manager before closing. Alternatively, supply your own password of at least eight characters.
@@ -44,6 +59,7 @@ When adding a database user under **Users**, leave the password empty to have th
 **Settings** contains:
 
 - **Backup storages:** S3 destination/credential registration and verification.
+- **Namespaces:** project/token/relay health, Validate and add, detail/description, token rotation, re-validation and guarded removal. Tokens are write-only; default-token rotation requires a service-secret update/restart.
 - **Accounts:** local account lifecycle, enable/disable and password reset.
 - **RBAC:** full-policy editing and effective authorization checks.
 - **API tokens:** one-time-secret creation, metadata and revocation.

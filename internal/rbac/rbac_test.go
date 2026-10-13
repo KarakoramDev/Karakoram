@@ -154,7 +154,7 @@ func TestNamespaceDefaults(t *testing.T) {
 		{"user:admin", "namespaces", "read", "prod", true},
 		{"user:admin", "namespaces", "update", "prod", true},
 		{"user:admin", "namespaces", "delete", "prod", true},
-		{"role:operator", "namespaces", "read", "prod", false},
+		{"role:operator", "namespaces", "read", "prod", true},
 		{"role:viewer", "namespaces", "read", "prod", true},
 		{"role:viewer", "namespaces", "create", "*", false},
 		{"role:viewer", "namespaces", "update", "prod", false},

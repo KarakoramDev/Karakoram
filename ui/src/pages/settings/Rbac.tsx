@@ -12,7 +12,7 @@ import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primi
 import { useToast } from '@/components/ui/Toast';
 
 const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'monitoring', 'namespaces', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
-const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', '*'];
+const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', 'export', '*'];
 const OBJECT_EXAMPLES: Array<[string, string]> = [
   ['**', 'everything in every namespace (a bare * is normalized to this)'],
   ['dev/**', 'the dev namespace and every cluster or storage in it'],

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Architecture
 
-Karakoram is a self-hosted, single-project control plane for PSMDB/PBM on Zerops. It does not run Kubernetes or reuse OpenEverest's Kubernetes provider runtime. The [ADRs](adr/README.md) record the design rationale; current implementation details and explicit limitations are summarized here.
+Karakoram is a self-hosted control plane for PSMDB/PBM on Zerops, managing its own project and additional projects as namespaces. It does not run Kubernetes or reuse OpenEverest's Kubernetes provider runtime. The [ADRs](adr/README.md) record the design rationale; current implementation details and explicit limitations are summarized here.
 
 ## Deployment and trust boundaries
 
@@ -20,12 +20,51 @@ flowchart LR
   P --> S[S3-compatible backup storage]
 ```
 
-- **Control plane:** one runtime service, normally `karakoram`, with one container and a `karakoramdata` Local Storage volume mounted at `/mnt/karakoramdata`. Public UI/API is HTTP 8080 behind Zerops HTTPS; the private agent listener is TLS 9443. The service holds the project's infrastructure token and the operator-held master key.
+- **Control plane:** one runtime service, normally `karakoram`, with one container and a `karakoramdata` Local Storage volume mounted at `/mnt/karakoramdata`. Public UI/API is HTTP 8080 behind Zerops HTTPS; the private agent listener is TLS 9443. The service holds its own project's token, sealed credentials for additional namespaces and the operator-held master key.
 - **Data-bearing members:** one Ubuntu 24.04 runtime plus one Local Storage volume per mongod, including config servers. Singleton services provide stable replica-set identities; horizontal runtime scaling is not MongoDB replication. Persistent dbpath is under `KARAKORAM_DATA_DIR/db`.
 - **Routers:** one stateless mongos service per sharded cluster, potentially multiple containers. It has no durable data volume. Multiple router containers share a service identity; they are not independent data-bearing voters.
 - **Node agent:** the same executable as the control plane, started as `karakoram agent`, supervises mongod/mongos and PBM agents and exposes a bounded private API. It is not a remote shell.
 
 Private networking is not a security boundary on its own: agent traffic has pinned trust roots and per-member bearer tokens. Database keyfile authentication, database TLS, internal agent TLS and public HTTPS protect different paths. See [security](security.md).
+
+## Namespaces and relay routing
+
+Each namespace represents one existing Zerops project and its project-scoped Backend/token. `default` is the control plane's own project and uses direct private networking. Other namespaces have one private relay running `karakoram relay`, uploaded from the same executable as members. Names are immutable; cluster and storage names are unique per namespace. See [ADR 0018](adr/0018-multi-project-namespaces-relay.md) and the [namespace guide](user-guide/namespaces.md).
+
+```mermaid
+flowchart LR
+  subgraph Default[Control-plane project: default]
+    CP[Karakoram control plane]
+    Hub[Relay hub]
+    Internal[Internal TLS server]
+    CP --> Hub
+    Hub --> Internal
+  end
+  L7[Public HTTPS origin / L7] -->|HTTP 8080 carrying encrypted tunnel| Hub
+  subgraph Remote[Additional namespace project]
+    Relay[karakoram relay]
+    Agent[Node agent]
+    Mongo[PSMDB / mongos]
+    Relay -->|Policy-allowed 27017 / 9443| Mongo
+    Relay -->|Policy-allowed 9443| Agent
+    Agent -->|End-to-end TLS config pull through relay| Relay
+    Mongo -->|PBM backup data directly| S3[S3]
+  end
+  Relay -->|Outbound WSS / inner mTLS 1.3 / smux v2| L7
+```
+
+| Traffic | `default` | Additional namespace |
+| --- | --- | --- |
+| Zerops infrastructure API | Environment-token Backend | Namespace-token Backend |
+| MongoDB administration | Direct private TCP | Namespace smux dial stream to private 27017 |
+| Control plane → node agent | Direct pinned TLS 9443 | Namespace dial stream; agent TLS/token unchanged |
+| Agent configuration pull | Direct internal TLS listener | Private relay 9443 → reverse stream → internal TLS listener; end-to-end TLS |
+| PBM data → S3 | Direct member-to-S3 | Direct member-to-S3; not tunneled |
+
+The hub admits only enrolled relay certificate identities/serials and keeps one active session per namespace. Target policy is pushed on change/reconnect and refreshed every thirty seconds; the relay validates host/port and DNS answers before dialing. The namespace reconciler runs independent project workers, tracks token/relay health, renews client certificates and redeploys mismatched executable digests. Reconciliation, scheduling, orphan cleanup and monitoring use namespace-qualified identities and backends. A token/routing failure affects that namespace's clusters, not every project.
+
+SQLite migration 003 assigns existing clusters/events/metrics to `default`. Default cluster/storage secret identities retain their legacy encoding, so no secret re-sealing occurs. Public RBAC objects use `<namespace>/<cluster>` or `<namespace>/<storage>`; namespace registry objects use the namespace name. Cross-namespace recovery additionally checks source `backups/export` and uses the recorded source storage.
+
 
 ## Code boundaries
 
@@ -38,6 +77,8 @@ Private networking is not a security boundary on its own: agent traffic has pinn
 | `internal/engine/psmdb` | Catalog/defaults/validation, replica sets/sharding, topology observation, rolling changes, access/PKI |
 | `internal/engine/psmdb/pbm` | Backup/PITR/inventory/restore/checkpoint orchestration |
 | `internal/infra`, `internal/infra/zerops` | Backend intent and owned thin Zerops REST translation |
+| `internal/namespaces` | Namespace lifecycle, sealed project credentials, per-project Backends, relay deployment/health/renewal |
+| `internal/relay` | Outbound WebSocket carrier, dedicated mTLS PKI, smux streams, target policy and reverse agent listener |
 | `internal/agent`, `internal/agentapi` | Node supervision, protected file rendering, private command/config protocol |
 | `internal/auth`, `internal/rbac` | Argon2id/OIDC identity, sessions/API tokens, persisted Casbin policy |
 | `internal/scheduler`, `internal/events` | UTC backup schedules/count retention, durable events/SSE delivery |

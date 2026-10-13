@@ -8,6 +8,12 @@ Karakoram uses PBM for consistent MongoDB recovery, for both replica sets and sh
 
 Create the bucket separately: Karakoram's BackupStorage resource describes an existing S3-compatible destination. Zerops Object Storage and other S3-compatible services are supported. In **Settings → Backup storages**, supply name, endpoint URL, signing region, bucket, optional prefix and access credentials. Path-style addressing and TLS verification default to true. Do not disable TLS verification to hide an incorrect endpoint or certificate chain.
 
+Storages belong to a [namespace](namespaces.md): select it in the UI or use
+`karactl -n dev storages create -f FILE`. Names are unique per namespace; cluster
+backup settings and schedules resolve storage names in their own namespace.
+Verification runs from the control plane's network, while backup payloads go
+directly between members and S3, not through the relay.
+
 For the CLI, prepare a protected API-shaped YAML/JSON request and pass it with `-f`:
 
 ```yaml
@@ -142,6 +148,32 @@ This fragment belongs under `spec` in a normal cluster create request, not a sta
 
 PBM restores source users except the backup account that performs a logical restore. Karakoram uses that account to reset destination system users to its own generated credentials. Physical snapshots additionally retain a separately encrypted snapshot-time `userAdmin` recovery identity, independent of the source cluster's secrets. Recovery uses the recorded storage/prefix, topology and engine version, then switches back to the destination's isolated prefix. Modern successful logical and physical snapshots can therefore be cloned after their source cluster has been fully deleted. Application users/data restored from the source remain application administration concerns. Never manually take clone backups while PBM still points at the source prefix.
 
+### Cross-namespace recovery
+
+Select the source namespace in the restore/clone dialog, or pass
+`--source-namespace`. The global `-n` selects the **target**:
+
+```sh
+karactl -n dev restores create orderscopy recover \
+  --source-namespace prod --source-cluster orders --backup baseline
+# Live-source convenience clone into a new cluster in dev:
+karactl -n dev restores create orders cloneproof \
+  --source-namespace prod --backup baseline --into-new orderscopy
+```
+
+For explicit cluster creation, set `spec.dataSource.namespace: prod` along with
+`cluster` and `backup`/`pitrTime`; in-place REST restore uses `sourceNamespace`.
+Omitting source namespace means the target namespace. Cross-namespace recovery
+requires source `backups/read` and **`backups/export`** on `prod/orders`, plus
+target restore/cluster create. Export alone is not sufficient.
+
+PBM uses the backup's recorded **source namespace storage** during recovery,
+then returns to the target's isolated configuration. Target members must reach
+that S3 destination directly. Normal topology/version and protected snapshot
+identity checks still apply. The CLI convenience clone omits copied source
+backup settings across namespaces; configure a target-local storage afterward.
+See [namespaces](namespaces.md#backup-storages-and-cross-namespace-recovery).
+
 ## Delete and preserve recovery objects
 
 ```sh
@@ -153,7 +185,7 @@ For a live cluster, deletion is asynchronous and observes PBM inventory absence 
 
 ### Retained backups after full cluster deletion
 
-Deleting volumes with `--keep-backups` removes the cluster resource, but preserves backup records, immutable snapshot provenance and protected recovery identities. Continue using the original cluster name with the existing backup API/CLI; permissions remain `backups` read/delete on **that cluster name**, not the destination or storage:
+Deleting volumes with `--keep-backups` removes the cluster resource, but preserves backup records, immutable snapshot provenance and protected recovery identities. Continue using the original cluster name **and namespace** with the backup API/CLI; permissions remain `backups` read/delete on **`<source namespace>/<source cluster>`**, not the destination or storage:
 
 ```sh
 karactl clusters delete demo --keep-backups --wait

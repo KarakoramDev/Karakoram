@@ -4,6 +4,11 @@
 
 These operations change managed databases. Updating the Karakoram control-plane executable is a separate procedure in [upgrade.md](../upgrade.md).
 
+For a remote project, select its [namespace](namespaces.md) or add `-n NAME` to
+the commands below. Keep its project token valid and relay connected throughout
+observation and rolling work; a management outage is not evidence that member
+replication stopped. Cluster identity and operation history include namespace.
+
 ## Resource and membership scaling
 
 Cluster component resources express desired Zerops autoscaling bounds: `cpuMode` (`SHARED`/`DEDICATED`), min/max CPU cores, min/max RAM, min/max disk and optional start CPU. RAM/disk are GiB in the API. The provider requires RAM at least 0.5 GB, persistent disk at least 5 GB, positive CPU and valid min/max bounds. The normal provider default is 1 GB RAM, not a production sizing recommendation for every workload.

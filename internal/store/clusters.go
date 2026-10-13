@@ -44,8 +44,18 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	if !json.Valid(internal) {
 		return errors.New("invalid provider internal JSON")
 	}
-	_, err = s.writer.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano())
-	return typed(err)
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = namespaceForInsert(ctx, tx, c.Namespace); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano()); err != nil {
+		return typed(err)
+	}
+	return tx.Commit()
 }
 
 type scanner interface{ Scan(...any) error }
@@ -76,6 +86,9 @@ const clusterColumns = "namespace,name,spec,status,internal,generation,deleting,
 
 // GetCluster loads cluster.
 func (s *Store) GetCluster(ctx context.Context, ref domain.ClusterRef) (*domain.Cluster, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
 	return scanCluster(s.reader.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name))
 }
 
@@ -105,6 +118,9 @@ func (s *Store) ListClusters(ctx context.Context, namespace string) ([]domain.Cl
 
 // UpdateClusterSpec persists changes to cluster spec.
 func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, spec domain.ClusterSpec) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	data, err := json.Marshal(spec)
 	if err != nil {
 		return err
@@ -129,6 +145,9 @@ func (s *Store) UpdateClusterState(ctx context.Context, c *domain.Cluster) error
 }
 
 func updateClusterState(ctx context.Context, db executor, c *domain.Cluster) error {
+	if err := c.Ref().Validate(); err != nil {
+		return err
+	}
 	status, err := json.Marshal(c.Status)
 	if err != nil {
 		return err
@@ -146,6 +165,9 @@ func updateClusterState(ctx context.Context, db executor, c *domain.Cluster) err
 
 // MarkClusterDeleting sets deletion intent and retires work before cleanup starts.
 func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, opts domain.DeleteOptions) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -164,6 +186,9 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, 
 
 // SuspendCluster retains state and suspends cluster.
 func (s *Store) SuspendCluster(ctx context.Context, c *domain.Cluster) error {
+	if err := c.Ref().Validate(); err != nil {
+		return err
+	}
 	c.Status.Phase = domain.PhaseSuspended
 	status, err := json.Marshal(c.Status)
 	if err != nil {
@@ -175,6 +200,9 @@ func (s *Store) SuspendCluster(ctx context.Context, c *domain.Cluster) error {
 
 // ResumeCluster increments generation and resumes cluster.
 func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -199,6 +227,9 @@ func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error 
 // DeleteCluster removes cluster and atomically fails unfinished operations so
 // recreating its name cannot resume work belonging to the removed cluster.
 func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err

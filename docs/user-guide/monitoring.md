@@ -77,6 +77,7 @@ Use `rate(karakoram_opcounters_total[5m])` for operation throughput in Prometheu
 - **403 scrape:** check per-cluster `monitoring, read, <namespace>/<cluster>` policy and account/token status.
 - **Empty charts:** check enabled collection, connected agents, time range, monitor credentials/CA and enough samples for a counter rate.
 - **Namespace unavailable:** check that namespace's project token and relay connectivity. A namespace routing failure degrades only its clusters, emits a namespaced `NamespaceUnavailable` event, and retries with backoff; collection and reconciliation in other namespaces continue.
+- **Remote scrape/config pull failed:** inspect [relay health](namespaces.md#relay-health), public-origin reachability and namespace-qualified agent routing. Relay platform readiness proves only its private listener, not the tunnel; do not disable CA/hostname verification.
 - **PBM up but no backups:** the metric indicates a supervised process only; inspect PBM registration and backup/error records.
 - **Memory near bound:** RSS excludes other processes; inspect Zerops allocation/runtime logs before concluding the complete container fits.
 

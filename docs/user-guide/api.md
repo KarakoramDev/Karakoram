@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # REST API
 
-The public contract is [api/openapi.yaml](../../api/openapi.yaml), **OpenAPI 3.0.3**. Most routes are rooted at `/api/v1`. `GET /healthz` and authenticated `GET /metrics` are installation-root exceptions; they are not `/api/v1/healthz` or `/api/v1/metrics`. The private `/internal/agent/v1` and node `/v1` protocols are not public management APIs.
+The public contract is [api/openapi.yaml](../../api/openapi.yaml), **OpenAPI 3.0.3**. Most routes are rooted at `/api/v1`. `GET /healthz` and authenticated `GET /metrics` are installation-root exceptions. The root WebSocket `/relay/v1/connect` is **not in OpenAPI** and authenticates inside the tunnel with relay mTLS, not API tokens/cookies. The private `/internal/agent/v1` and node `/v1` protocols are not public management APIs.
 
 The UI and `karactl` use this contract. Karakoram does not currently ship an interactive Swagger UI or promise the YAML is served at a guessed HTTP URL; use the checked-in specification and generated client.
 
@@ -24,7 +24,7 @@ For cookie-authenticated unsafe methods (anything except GET/HEAD/OPTIONS), send
 
 ## Authorization and credential reveal
 
-Every authenticated operation is classified by `x-karakoram-rbac` in OpenAPI. Resources/actions/objects, deny-overrides semantics and default roles are described in [RBAC](rbac-and-auth.md). List/stream/metrics filtering uses each object's cluster, not just a collection-wide allow. Reading clusters does not grant `cluster-credentials:read`.
+Every authenticated operation is classified by `x-karakoram-rbac` in OpenAPI. Resources/actions/objects, deny-overrides semantics and default roles are described in [RBAC](rbac-and-auth.md). List/stream/metrics filtering checks each namespace-qualified object, not just a collection-wide allow. Reading clusters does not grant `cluster-credentials:read`.
 
 `GET /api/v1/clusters/{cluster}/connection` is an explicit sensitive response with `Cache-Control: no-store`; it currently reveals databaseAdmin connection credentials and the public CA. Ordinary cluster/status reads contain password-free URIs. Storage keys and PEM private inputs are write-only. Application passwords generated at creation and API token secrets are one-time responses, not retrievable later.
 
@@ -35,6 +35,7 @@ Every authenticated operation is classified by `x-karakoram-rbac` in OpenAPI. Re
 | Auth/identity | `/auth/*`, `/accounts`, `/api-tokens`, `/permissions` |
 | Policy/settings | `/rbac/policy`, `/rbac/can`, `/settings` |
 | Provider catalog | `/providers`, `/providers/{provider}` |
+| Namespaces | `/namespaces`, `/namespaces/{namespace}`, `/namespaces/{namespace}/token`, `/namespaces/{namespace}/validate` |
 | Cluster desired/observed state | `/clusters`, `/clusters/{cluster}`, `/status`, `/members`, `/placement`, `/balancer`, `/connection` (suffixes on a cluster) |
 | Cluster operations | `/restart`, `/resume`, `/raise-fcv`, `/rotate-tls`, `/members/{member}/replace`, `/system-users/{user}/rotate` (cluster suffixes) |
 | Database identities | Cluster `/database-users` and `/database-roles` |
@@ -43,6 +44,42 @@ Every authenticated operation is classified by `x-karakoram-rbac` in OpenAPI. Re
 | Member observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` |
 
 Use the exact path parameters, request schema and operation-specific permission in OpenAPI rather than treating the abbreviations above as standalone paths.
+
+## Namespace parameters and lifecycle
+
+Cluster-scoped and backup-storage routes accept optional query
+`namespace=NAME`. Single-object routes and creation default to **`default`**.
+Collection `/clusters`, `/operations`, `/events`, `/events/stream`,
+`/orphaned-volumes`, `/backup-storages` and root `/metrics` include all
+authorized namespaces when omitted; a value filters to that namespace.
+Responses identify their namespace. A bare cluster name is not an
+installation-wide identity; keep namespace in caches and links.
+
+`spec.dataSource.namespace` selects a cluster-create recovery source;
+in-place restore uses `sourceNamespace`. Both default to the target namespace.
+Cross-namespace recovery additionally checks source `backups/export`.
+
+| Method/path under `/api/v1` | Behavior |
+| --- | --- |
+| `GET /namespaces` | Read-filtered namespace collection |
+| `POST /namespaces` | `{name, projectId, token, description?}`; validates synchronously, returns 201 then deploys relay asynchronously |
+| `GET /namespaces/{namespace}` | Secret-safe project/token/relay health |
+| `PATCH /namespaces/{namespace}` | `{description}` only; name/project immutable |
+| `PUT /namespaces/{namespace}/token` | `{token}`; validates same project before swapping; default returns 409 |
+| `POST /namespaces/{namespace}/validate` | Returns updated health, including invalid-token state |
+| `DELETE /namespaces/{namespace}` | 202 asynchronous owned-relay teardown; 409 for default or retained resources |
+
+Tokens are write-only. Invalid token/project, duplicate project and occupied
+relay hostname return **422** `invalid_namespace`; duplicate name returns
+**409**. Deletion is guarded by clusters, storages, retained backup records and
+orphaned-volume records, and does not remove policy rules.
+See [namespace lifecycle](namespaces.md).
+
+Namespace registration/validation checks project identity and service-list
+access, not every Full access mutation capability. A readable but insufficiently
+privileged token can fail later during relay import/deployment; inspect health.
+Currently the namespace collection returns all readable items without applying
+its advertised `limit`/`cursor` parameters.
 
 ## Declarative updates and asynchronous work
 
@@ -76,6 +113,7 @@ Structured errors are `{code, message, details?}`; do not rely on English messag
 | 404 | Missing/not-visible resource or API route |
 | 409 | Conflicting resource state/operation or unsupported action reported as conflict |
 | 413 | Request exceeds the current 2 MiB body limit |
+| 422 | Namespace token/project/name or relay-hostname validation failed |
 | 500 | Unexpected server error, deliberately generic public response |
 | 503 | Unavailable store/monitoring subsystem for the relevant endpoint |
 

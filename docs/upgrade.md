@@ -108,6 +108,31 @@ Sign in and check existing clusters, operations, backup inventory, and member
 agent health. A healthy control plane alone does not prove a cluster backup or
 restore works. Check the deployed version and logs without exposing secrets.
 
+## Existing single-project installations
+
+Migration **003** runs automatically with the normal store migrations. Existing
+clusters, events and metrics become namespace `default`; legacy records and
+cluster/storage secret identities retain their old encoding/AAD. **No re-sealing
+or master-key change is required.** The default project/token still comes from
+the existing service environment.
+
+At startup, stored RBAC object `*` normalizes to `**`, and bare legacy objects
+such as `orders*` become `default/orders*`, preserving their old project scope
+rather than granting remote-project access. New `namespaces` rules keep bare
+namespace names. Submitted policy is normalized the same way. Review the
+canonical policy and new namespace-qualified objects in [RBAC](user-guide/rbac-and-auth.md).
+
+Take the consistent pre-upgrade state backup above **before** this migration.
+A pre-namespace binary cannot read the migrated schema: rollback requires
+stopping the writer and restoring the complete **pre-upgrade state backup**,
+with its original master key, before starting the old binary. Redeploying an old
+application version against the migrated database is not rollback.
+
+For enrolled remote projects, the namespace reconciler updates relay executables
+to the control plane's digest. Expect brief management interruptions and check
+each relay's desired/reported version and connected state afterward. This is
+separate from member-agent rollout below.
+
 ## Member-agent updates
 
 The control plane uploads its own static Karakoram executable to member services

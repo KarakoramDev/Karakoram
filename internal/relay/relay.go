@@ -154,6 +154,7 @@ type relaySession struct {
 	mu         sync.RWMutex
 	targets    map[string]struct{}
 	generation uint64
+	streams    streamLimit
 }
 type runtime struct {
 	o       Options
@@ -252,7 +253,8 @@ func (r *runtime) connect(ctx context.Context, endpoint string, tlsConfig *tls.C
 		return errors.New("relay WebSocket connection failed")
 	}
 	defer ws.CloseNow()
-	conn := tls.Client(websocket.NetConn(sessionCtx, ws, websocket.MessageBinary), tlsConfig)
+	raw := websocketConn(sessionCtx, ws)
+	conn := tls.Client(raw, tlsConfig)
 	if err = conn.HandshakeContext(handshakeCtx); err != nil {
 		return errors.New("relay inner TLS handshake failed")
 	}
@@ -304,7 +306,14 @@ func (r *runtime) connect(ctx context.Context, endpoint string, tlsConfig *tls.C
 		if err != nil {
 			return err
 		}
-		go r.handleDial(s, stream)
+		if !s.streams.acquire() {
+			stream.Close()
+			continue
+		}
+		go func() {
+			defer s.streams.release()
+			r.handleDial(s, stream)
+		}()
 	}
 }
 func (s *relaySession) readPolicy(control *smux.Stream) error {
@@ -344,7 +353,12 @@ func (r *runtime) acceptLocal(ctx context.Context, l net.Listener) error {
 			local.Close()
 			continue
 		}
+		if !s.streams.acquire() {
+			local.Close()
+			continue
+		}
 		go func() {
+			defer s.streams.release()
 			defer local.Close()
 			stream, err := s.mux.OpenStream()
 			if err != nil {

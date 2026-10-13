@@ -15,6 +15,9 @@ import (
 
 func prepareOperation(op *domain.Operation) error {
 	op.Namespace = domain.NormalizedNamespace(op.Namespace)
+	if err := (domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}).Validate(); err != nil {
+		return err
+	}
 	if op.ID == "" {
 		id, err := secrets.RandomString(24)
 		if err != nil {
@@ -35,6 +38,9 @@ func prepareOperation(op *domain.Operation) error {
 
 // EnqueueOperation durably queues operation.
 func (s *Store) EnqueueOperation(ctx context.Context, op *domain.Operation) error {
+	if err := (domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}).Validate(); err != nil {
+		return err
+	}
 	if err := prepareOperation(op); err != nil {
 		return err
 	}
@@ -57,6 +63,9 @@ func (s *Store) GetOperation(ctx context.Context, id string) (*domain.Operation,
 
 // ListOperations returns ordered operations.
 func (s *Store) ListOperations(ctx context.Context, ref domain.ClusterRef, phases ...domain.Phase) ([]domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
 	ops, err := listClusterRecords[domain.Operation](ctx, s, "operation", ref)
 	if err != nil {
 		return nil, err
@@ -78,6 +87,9 @@ func (s *Store) ListOperations(ctx context.Context, ref domain.ClusterRef, phase
 
 // UpdateOperation persists changes to operation.
 func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error {
+	if err := (domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}).Validate(); err != nil {
+		return err
+	}
 	op.UpdatedAt = time.Now().UTC()
 	return s.update(ctx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase))
 }
@@ -86,6 +98,9 @@ func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error
 // provider state it references, without overwriting concurrent desired-state
 // edits or deletion intent. Neither record is created if it has been removed.
 func (s *Store) UpdateOperationAndClusterState(ctx context.Context, op *domain.Operation, c *domain.Cluster) error {
+	if err := c.Ref().Validate(); err != nil {
+		return err
+	}
 	if op.Cluster != c.Name || domain.NormalizedNamespace(op.Namespace) != domain.NormalizedNamespace(c.Namespace) {
 		return ErrConflict
 	}
@@ -154,12 +169,18 @@ func retireOperations(ctx context.Context, tx *sql.Tx, cluster, message string) 
 // ClaimOperation resumes Running work before claiming the oldest Pending action.
 // Per-cluster ownership is enforced by the reconciler.
 func (s *Store) ClaimOperation(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
 	return s.claimOperation(ctx, ref.Key(), true)
 }
 
 // ClaimRunningOperation resumes active work without starting a Pending action.
 // Reconciliation uses it before ordinary Sync, which active work may exclude.
 func (s *Store) ClaimRunningOperation(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
 	return s.claimOperation(ctx, ref.Key(), false)
 }
 
@@ -196,6 +217,9 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 
 // EnqueueBackup creates its inventory record and operation in one transaction.
 func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *domain.Operation) error {
+	if err := (domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}).Validate(); err != nil {
+		return err
+	}
 	if err := prepareOperation(op); err != nil {
 		return err
 	}
@@ -221,6 +245,9 @@ func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 
 // EnqueueRestore creates a restore record and its operation in one transaction.
 func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op *domain.Operation) error {
+	if err := (domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}).Validate(); err != nil {
+		return err
+	}
 	if err := prepareOperation(op); err != nil {
 		return err
 	}
@@ -246,6 +273,9 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 
 // EnqueueBackupDeletion marks inventory and enqueues deletion atomically.
 func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup, op *domain.Operation) error {
+	if err := (domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}).Validate(); err != nil {
+		return err
+	}
 	if err := prepareOperation(op); err != nil {
 		return err
 	}

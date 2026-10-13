@@ -80,6 +80,9 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 		return err
 	}
 	defer tx.Rollback()
+	if err = namespaceForInsert(ctx, tx, c.Namespace); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano()); err != nil {
 		return typed(err)
 	}
@@ -93,6 +96,9 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 // certificate/key inputs. Changed secret material advances the generation even
 // when the public spec is unchanged; repeating identical inputs remains idempotent.
 func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.ClusterRef, spec domain.ClusterSpec, values map[string][]byte) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	name := ref.Key()
 	if len(values) == 0 {
 		return s.UpdateClusterSpec(ctx, ref, spec)

@@ -404,6 +404,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(clusterRef(ctx, c.Name))
 		return response{status: 202, body: restoreAPI(r)}
 	}
+	if failure := s.providerContext(rc); failure != nil {
+		return *failure
+	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {
 		return s.failure(engine.ErrNotSupported)
@@ -491,6 +494,10 @@ func namespaceOrDefaultSource(source, target string) string {
 }
 
 func (s *Server) restorePermission(ctx context.Context, targetNamespace string, source domain.ClusterRef) *response {
+	if err := source.Validate(); err != nil || domain.ValidateClusterName(source.Name) != nil {
+		r := invalid()
+		return &r
+	}
 	object := clusterObject(source.Namespace, source.Name)
 	if source.Namespace != domain.NormalizedNamespace(targetNamespace) && !s.allowed(ctx, "backups", "export", object) {
 		r := fail(403, "forbidden", "Cross-namespace restore requires backups/export permission on "+object)
@@ -510,7 +517,11 @@ func (s *Server) validateStorages(ctx context.Context, c *domain.Cluster) error 
 		}
 	}
 	for _, schedule := range c.Spec.Backup.Schedules {
-		if _, err := s.Store.GetBackupStorage(ctx, c.Namespace, schedule.Storage); err != nil {
+		storage := schedule.Storage
+		if storage == "" {
+			storage = c.Spec.Backup.Storage
+		}
+		if _, err := s.Store.GetBackupStorage(ctx, c.Namespace, storage); err != nil {
 			return err
 		}
 	}

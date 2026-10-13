@@ -72,14 +72,23 @@ type Registry struct {
 	refused  map[string]time.Time
 }
 
+var relayHostnamePattern = regexp.MustCompile(`^[a-z][a-z0-9]{0,24}$`)
+
+// RelayHostname preserves the usual name while bounding long control-plane names.
+func RelayHostname(hostname string) string {
+	name := hostname + "relay"
+	if len(name) <= 25 {
+		return name
+	}
+	hash := sha256.Sum256([]byte(hostname))
+	return hostname[:16] + hex.EncodeToString(hash[:2]) + "relay"
+}
+
 var _ engine.Namespaces = (*Registry)(nil)
 
 func New(ctx context.Context, o Options) (*Registry, error) {
 	if o.Store == nil || o.DefaultBackend == nil {
 		return nil, errors.New("namespace store and default backend are required")
-	}
-	if !regexp.MustCompile(`^[a-z][a-z0-9]{0,24}$`).MatchString(o.RelayHostname) || o.RelayHostname == "core" {
-		return nil, errors.New("invalid relay hostname")
 	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
@@ -149,7 +158,7 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 	if !pool.AppendCertsFromPEM(p.CACert) {
 		return nil, errors.New("invalid relay CA")
 	}
-	r.Hub = relay.NewHub(relay.HubOptions{Certificate: cert, ClientCAs: pool, Authorize: r.Authorize, Logger: o.Logger, OnSession: func(ns string, e relay.SessionEvent) {
+	r.Hub = relay.NewHub(relay.HubOptions{Certificate: cert, ClientCAs: pool, Authorize: r.authorizeStored, Logger: o.Logger, OnSession: func(ns string, e relay.SessionEvent) {
 		select {
 		case r.notices <- sessionNotice{ns, e}:
 		default:
@@ -190,6 +199,9 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 	for _, n := range all {
 		if n.Default {
 			continue
+		}
+		if n.Phase != "Deleting" {
+			r.enroll(&n)
 		}
 		n.Relay.DesiredVersion = version.Version
 		if e := o.Store.PutNamespace(ctx, &n); e != nil {
@@ -242,7 +254,15 @@ func (r *Registry) event(ctx context.Context, n *domain.Namespace, kind, message
 }
 func (r *Registry) save(ctx context.Context, n *domain.Namespace) error {
 	n.UpdatedAt = time.Now().UTC()
-	return r.o.Store.PutNamespace(ctx, n)
+	err := r.o.Store.PutNamespace(ctx, n)
+	if err == nil && !n.Default {
+		if n.Phase == "Deleting" {
+			r.Hub.Revoke(n.Name)
+		} else {
+			r.enroll(n)
+		}
+	}
+	return err
 }
 func (r *Registry) trigger() {
 	select {
@@ -274,8 +294,14 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	if name == domain.DefaultNamespace || domain.ValidateNamespaceName(name) != nil || projectID == "" || token == "" {
 		return nil, fmt.Errorf("%w: name, project and token are required; default is reserved", ErrInvalid)
 	}
+	if !relayHostnamePattern.MatchString(r.o.RelayHostname) || r.o.RelayHostname == "core" {
+		return nil, fmt.Errorf("%w: invalid relay hostname", ErrInvalid)
+	}
 	r.createMu.Lock()
 	defer r.createMu.Unlock()
+	m := r.lock(name)
+	m.Lock()
+	defer m.Unlock()
 	all, err := r.List(ctx)
 	if err != nil {
 		return nil, err
@@ -315,6 +341,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	if err = r.o.Store.PutNamespaceCredentials(ctx, n, token, key); err != nil {
 		return nil, err
 	}
+	r.enroll(n)
 	r.mu.Lock()
 	r.backends[name] = b
 	r.mu.Unlock()
@@ -348,9 +375,6 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	if n.Default {
 		return nil, fmt.Errorf("%w: default token is environment-managed; update the service secret and restart", ErrConflict)
 	}
-	if n.Phase == "Deleting" {
-		return nil, ErrConflict
-	}
 	z := r.o.Zerops
 	z.Token = token
 	z.ProjectID = n.ProjectID
@@ -377,6 +401,7 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 		r.mu.Unlock()
 	}
 	r.event(ctx, n, "NamespaceTokenRotated", "Project token rotated")
+	r.trigger()
 	return n, nil
 }
 func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace, error) {
@@ -433,30 +458,12 @@ func (r *Registry) Delete(ctx context.Context, name string) error {
 	if n.Default {
 		return fmt.Errorf("%w: default namespace cannot be deleted", ErrConflict)
 	}
-	clusters, err := r.o.Store.ListClusters(ctx, name)
-	if err != nil {
+	if err = r.o.Store.BeginNamespaceDeletion(ctx, name); err != nil {
 		return err
 	}
-	storages, err := r.o.Store.ListBackupStorages(ctx, name)
-	if err != nil {
-		return err
-	}
-	backups, err := r.o.Store.ListBackups(ctx, domain.ClusterRef{Namespace: name})
-	if err != nil {
-		return err
-	}
-	orphans, err := r.o.Store.ListOrphanedVolumes(ctx, name)
-	if err != nil {
-		return err
-	}
-	if len(clusters)+len(storages)+len(backups)+len(orphans) > 0 {
-		return fmt.Errorf("%w: remove all clusters, backup storages, retained backups and orphaned volumes first", ErrConflict)
-	}
+	r.Hub.Revoke(name)
 	if n.Phase != "Deleting" {
 		n.Phase = "Deleting"
-		if err = r.save(ctx, n); err != nil {
-			return err
-		}
 		r.event(ctx, n, "NamespaceDeleting", "Namespace deletion requested")
 	}
 	r.trigger()
@@ -498,22 +505,59 @@ func (r *Registry) AgentURL(ns string) string {
 	if ns == "" || ns == domain.DefaultNamespace {
 		return r.o.AdvertiseURL
 	}
-	return "https://" + r.o.RelayHostname + ":9443"
+	n, err := r.Get(context.Background(), ns)
+	if err != nil {
+		return ""
+	}
+	return "https://" + n.Relay.Hostname + ":9443"
 }
 func (r *Registry) Authorize(ctx context.Context, ns string, cert *x509.Certificate) error {
+	if err := r.authorizeStored(ctx, ns, cert); err != nil {
+		return err
+	}
+	if !r.Hub.AcceptsSerial(ns, cert.SerialNumber.String()) {
+		return errors.New("relay certificate is not enrolled")
+	}
+	return nil
+}
+func (r *Registry) authorizeStored(ctx context.Context, ns string, cert *x509.Certificate) error {
 	n, err := r.Get(ctx, ns)
 	if err != nil || n.Default || n.Phase == "Deleting" || cert == nil {
 		return errors.New("relay namespace is not enrolled")
 	}
-	serial := cert.SerialNumber.String()
-	previousAllowed := serial == n.PreviousClientSerial && time.Now().Before(n.PreviousCertNotAfter)
-	// A current-certificate connection revokes overlap immediately, even before persistence.
-	if previousAllowed && r.Hub.Status(ns).CertificateSerial == n.ClientSerial {
-		previousAllowed = false
-	}
-	if serial != n.ClientSerial && !previousAllowed {
+	if !acceptsSerial(n, cert.SerialNumber.String()) {
 		return errors.New("relay certificate is not enrolled")
 	}
+	return nil
+}
+
+func acceptsSerial(n *domain.Namespace, serial string) bool {
+	return serial == n.ClientSerial || (serial == n.PreviousClientSerial && time.Now().Before(n.PreviousCertNotAfter))
+}
+
+func (r *Registry) enroll(n *domain.Namespace) {
+	r.Hub.Enroll(n.Name, n.ClientSerial, n.PreviousClientSerial, n.PreviousCertNotAfter)
+}
+
+func (r *Registry) renewHubCertificate(ctx context.Context, now time.Time) error {
+	leaf, err := relay.ParseCertificatePEM(r.pki.HubCert)
+	if err != nil || !relay.NeedsRenewal(leaf, now) {
+		return err
+	}
+	next := *r.pki
+	next.HubCert, next.HubKey, err = relay.IssueHubCertificate(next.CACert, next.CAKey, now)
+	if err != nil {
+		return err
+	}
+	pair, err := tls.X509KeyPair(next.HubCert, next.HubKey)
+	if err != nil {
+		return err
+	}
+	if err = r.o.Store.PutRelayPKI(ctx, &next); err != nil {
+		return err
+	}
+	r.pki.HubCert, r.pki.HubKey = next.HubCert, next.HubKey
+	r.Hub.SetCertificate(pair)
 	return nil
 }
 func owned(n *domain.Namespace, s *infra.Service) bool {

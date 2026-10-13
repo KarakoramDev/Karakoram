@@ -32,6 +32,61 @@ Two log paths serve different purposes:
 
 Redact passwords, credential-bearing URIs, environment contents, API tokens and PEM private keys before exporting logs. Capture cluster/member/operation/event identifiers and timestamps instead of full secret responses.
 
+## Namespace and relay operations
+
+Use [namespace lifecycle](user-guide/namespaces.md) for registration, validation,
+rotation, guarded deletion and health fields. Inspect project/token health
+separately from tunnel and database health:
+
+```sh
+karactl namespaces list
+karactl namespaces get prod -o yaml
+karactl namespaces validate prod
+karactl -n prod clusters status orders
+karactl -n prod events list
+karactl -n prod orphaned-volumes list
+```
+
+Invalid project credentials or unavailable namespace routing degrade that
+namespace's clusters; other projects continue reconciling. Check namespace
+`phase`, `token.valid`/validation time/error and relay
+`phase`/`connected`/`lastSeenAt`/`reconnects` before restarting database members.
+`/healthz` and a relay marked ACTIVE do not establish authenticated tunnel
+health. `karakoram relay readiness` probes the private listener only.
+
+During a remote namespace outage, MongoDB replication and already-running
+member-to-S3 PBM work can continue. Management, new agent configuration pulls,
+observations and backup scheduling/control can fail or pause. Cached member
+configuration can preserve startup; an uncached bootstrap cannot. Do not clear
+restore maintenance holds or submit another restore merely because management
+lost connectivity.
+
+The relay reconnects automatically using exponential backoff/jitter capped at
+thirty seconds. Verify outbound HTTPS to the configured public origin and
+WebSocket forwarding at `/relay/v1/connect`, then inspect the relay's Zerops
+runtime/deployment logs without exporting secret environment. `RelayConnected`,
+`RelayDisconnected` and `RelayTargetRefused` events identify session/policy
+transitions; token validation events report health transitions. Never publish
+relay/agent 9443 or broaden target policy to repair routing.
+
+Rotate stored namespace tokens with `namespaces rotate-token NAME --token-file
+FILE` (or stdin `-`); validation precedes replacement and the live relay is not
+restarted. For `default`, update the service secret and restart. Client
+certificate renewal uses env-secret replacement and a relay restart; executable
+upgrades redeploy the same control-plane binary when digests differ. Verify
+connection and desired/reported versions after [upgrading](upgrade.md).
+
+The dedicated hub leaf also renews during runtime before expiry. Pending relay
+admissions are fenced against enrollment transitions, and namespace deletion
+revokes both its active session and pending admissions; deleting credentials
+alone is not the session-revocation mechanism.
+
+Before removing a namespace, finish deletion of clusters, storages, retained
+backup records and orphaned volumes. Keep a valid token until the owned relay is
+deleted. A foreign service occupying the relay hostname is never adopted or
+deleted. Removal does not delete the project or its RBAC rules: remove obsolete
+grants deliberately before reusing the namespace name.
+
 ## Node-agent semantics
 
 The agent receives nonsecret identity/connection environment (`KARAKORAM_URL`, `KARAKORAM_CLUSTER`, `KARAKORAM_MEMBER`, `KARAKORAM_INTERNAL_CA`, `KARAKORAM_DATA_DIR`) and the per-member secret `KARAKORAM_AGENT_TOKEN`. It pins the control-plane internal CA and pulls only its assigned MemberConfig.
@@ -156,7 +211,7 @@ The offline command needs the existing DB and master key, not a fresh bootstrap.
 | Public seed connects but normal RS driver fails | Discovered private `hello` hosts, per-member public ports, client DNS/routing and TLS SANs | Routing is not a split-horizon solution. Use private access or a designed external discovery setup; directConnection is diagnostic, not automatic failover. |
 | Backup/PITR missing | Backup errors, base success, primary destination/prefix, S3 quota/access and continuous PBM ranges | Verify storage and fresh base, then observe new coverage. Count retention is not a promised time window. Do not fabricate a PITR interval from wall-clock elapsed time. |
 | API 403 or UI controls absent | Current account state, effective RBAC, forced password change, CSRF for cookie writes | Use permission checks and reauthenticate after password change; reveal needs cluster-credentials read separately. |
-| Root `/metrics` denied/stale | Monitoring global/per-cluster permissions, enabled targets and latest scrape success | Grant the intended monitoring scope and repair scraper connectivity. Cached sample presence is not live heartbeat; use status/timestamps/external checks. |
+| Root `/metrics` denied/stale | Monitoring permissions on `<namespace>/<cluster>`, enabled targets, namespace relay and latest scrape success | Grant the intended scope and repair scraper connectivity. Cached sample presence is not live heartbeat; use status/timestamps/external checks. |
 | Events watch/UI live updates arrive in batches, but ordinary requests work | Compare durable `/events` and operation/status reads; inspect SSE proxy buffering and padded heartbeat delivery | Approximately 16-KiB random-base64 initial/heartbeat comments reduce buffering; small events may still wait for the fifteen-second heartbeat. Account for ~1.1 KiB/s padding per stream plus startup. Keep no-cache/no-transform/X-Accel-Buffering:no and configure a nonbuffering proxy path where possible. Preserve cursors and refresh/read durable state rather than resubmitting work. |
 
 For destructive repairs or ambiguous restore recovery, preserve redacted evidence and involve a maintainer/operator who can inspect the original state and PBM metadata. Never silently mark an uncertain operation successful or remove safety files to suppress its error.

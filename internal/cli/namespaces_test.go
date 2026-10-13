@@ -203,3 +203,19 @@ func TestNamespaceStatusTable(t *testing.T) {
 		}
 	}
 }
+
+func TestNamespaceOperationGetAndWaitUseGlobalID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/operations/one" || r.URL.Query().Get("namespace") != "" {
+			t.Errorf("operation ID lookup must be global: %s", r.URL)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":"one","namespace":"dev","cluster":"orders","kind":"restart","phase":"Succeeded"}`)
+	}))
+	defer server.Close()
+	for _, command := range []string{"get", "wait"} {
+		if _, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "-n", "dev", "operations", command, "one"); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

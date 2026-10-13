@@ -121,6 +121,13 @@ karactl clusters connection demo --reveal
 
 The endpoint requires `read` on **`cluster-credentials`**, separate from reading `clusters`, and sends `Cache-Control: no-store`. Treat its databaseAdmin password/credential-bearing URI as a secret. This is an administrative credential, not the application's normal identity. Application clients should use their own user's auth database and password, URL-encode credentials, and set TLS with the downloaded CA. Sharded clients connect to mongos; replica-set clients use discovered members and `replicaSet=rs0`.
 
+Select the cluster's namespace (`karactl -n prod clusters connection orders
+--reveal` or `?namespace=prod`). Private hosts belong to **that namespace's
+project**, not necessarily the control-plane project. The relay carries
+management only and is not an application connection endpoint; workloads need
+network access to the database project or deliberate public TCP exposure.
+Credential authorization is on `cluster-credentials, read, prod/orders`.
+
 ## Public exposure and discovery
 
 Private-only is the default. The agent explicitly renders both `net.bindIpAll: true` and `net.ipv6: true` for dual-stack MongoDB listeners; private IPv4/IPv6 and supported public IPv6 routing therefore use the same managed listener. `bindIpAll` alone does not enable MongoDB IPv6. Both settings are provider/agent-owned and cannot be overridden through engineConfig. Public MongoDB TCP requires project IPv6 or a **dedicated** public IPv4, not shared IPv4 or the HTTP subdomain. You must supply a nonempty CIDR allowlist:

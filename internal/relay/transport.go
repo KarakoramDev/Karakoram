@@ -5,14 +5,43 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/xtaci/smux"
 )
+
+const MaxWebSocketMessageSize = 1 << 20
+const MaxActiveStreams = 256
+
+var ErrStreamCapacity = errors.New("relay active stream capacity reached")
+
+type streamLimit struct{ active atomic.Int32 }
+
+func (l *streamLimit) acquire() bool {
+	for {
+		n := l.active.Load()
+		if n >= MaxActiveStreams {
+			return false
+		}
+		if l.active.CompareAndSwap(n, n+1) {
+			return true
+		}
+	}
+}
+func (l *streamLimit) release() { l.active.Add(-1) }
+
+func websocketConn(ctx context.Context, ws *websocket.Conn) net.Conn {
+	conn := websocket.NetConn(ctx, ws, websocket.MessageBinary)
+	// NetConn disables the library default limit; restore a TLS-record-sized bound.
+	ws.SetReadLimit(MaxWebSocketMessageSize)
+	return conn
+}
 
 func muxConfig(c *smux.Config) *smux.Config {
 	if c == nil {
@@ -46,10 +75,22 @@ func pingLoop(ctx context.Context, c *websocket.Conn, interval time.Duration) {
 // streamConn reports the logical target and deliberately exposes only net.Conn semantics.
 type streamConn struct {
 	net.Conn
-	remote net.Addr
+	remote  net.Addr
+	release func()
+	once    sync.Once
 }
 
 func (c *streamConn) RemoteAddr() net.Addr { return c.remote }
+
+func (c *streamConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(func() {
+		if c.release != nil {
+			c.release()
+		}
+	})
+	return err
+}
 
 type relayAddr string
 

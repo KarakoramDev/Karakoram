@@ -12,7 +12,7 @@ Define `infra.Backend` around required operations: project information; batch im
 
 Own a thin HTTP REST client in `internal/infra/zerops`, implementing only those endpoints and their wire types. Use `zerops-go` and platform documentation as references, not as the public domain contract or a runtime dependency. Preserve returned Process IDs in reconciliation state and poll `GET /process/{id}`; HTTP acceptance is not completion. `GetService` distinguishes an absent service from an API failure.
 
-Load the project-scoped token at runtime, send it only in authorization headers, and never include it in logs, artifacts or browser responses. Scope lookups/mutations to the configured project and owned resource identities; never manage the system `core` service. The engine requests intent through Backend types instead of constructing Zerops HTTP calls.
+Create a Backend instance per namespace with its project-scoped token. The default token comes from runtime environment; additional tokens are sealed in the state store (ADR 0018). Send tokens only in authorization headers, never logs, artifacts or browser responses. Rotation validates the replacement against the same project before persisting it and updating the existing client's token, without restarting its relay. Rotate the default token by changing the service secret and restarting. Scope lookups/mutations to that namespace's project and owned resource identities; never manage the system `core` service. The engine requests intent through Backend types instead of constructing Zerops HTTP calls.
 
 ## Consequences
 

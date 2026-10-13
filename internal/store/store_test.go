@@ -343,6 +343,9 @@ func TestNamespacePersistenceIsolation(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
+	if err := s.PutNamespace(ctx, &domain.Namespace{Name: "dev", Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
 	for _, namespace := range []string{domain.DefaultNamespace, "dev"} {
 		c := domain.Cluster{Namespace: namespace, Name: "orders", Spec: domain.ClusterSpec{Provider: "psmdb"}}
 		if err := s.CreateClusterWithSecrets(ctx, &c, map[string][]byte{"password": []byte(namespace + "-secret")}); err != nil {

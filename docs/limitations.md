@@ -22,7 +22,21 @@ These constraints are part of the product's operating model, not errors to suppr
 - **Orphaned volumes require tracking.** If the platform refuses to delete a volume after runtime removal and ownership verification, Karakoram can complete the removal and track the volume as an orphan. A background janitor retries deletion with backoff. Until deletion succeeds, the volume still consumes disk and may incur charges. See [orphaned platform volumes](operations.md#orphaned-platform-volumes).
 - **Import and environment semantics.** Member provisioning imports services first, then deploys an artifact with the generated pipeline. Secret writes do not mutate running process environments. Runtime YAML envVariables override service secrets. Resource updates send complete vertical/horizontal settings.
 - **Public Git import requires a public repository.** Use a publicly reachable source repository for Git import, or deploy from a local checkout. Members receive prebuilt artifacts and do not need public source builds.
-- **Single-project deployment.** One installation manages its configured existing Zerops project. Project creation, cross-project tenancy, other infrastructure backends and engines are not implemented. The system `core` service is outside Karakoram ownership.
+- **Existing projects only.** Namespaces support cross-project management, not project creation, other infrastructure backends or engines. The system `core` service remains outside Karakoram ownership.
+
+## Namespaces and relays
+
+- **Default token is environment-managed.** API token rotation returns 409 for `default`; update `KARAKORAM_ZEROPS_TOKEN` on the control-plane service and restart.
+- **One namespace per project.** Cluster and backup-storage names are unique per namespace, not installation-wide. Namespace rename/project reassignment is not supported; only descriptions can change.
+- **No relay HA.** Each additional project has one relay container. Losing it interrupts MongoDB administration, agent commands/config pulls and monitoring for that namespace, not database replication. It is not a workload connectivity gateway.
+- **Public HTTPS origin is required.** Remote namespaces depend on outbound access to the control-plane origin and WebSocket forwarding through L7. Default namespace networking remains direct.
+- **Half-close is not propagated.** EOF closes both sides of a tunneled stream; the relay is not a general TCP/VPN transport.
+- **One ordered tunnel per namespace.** Streams share congestion/failure fate. Backup data goes directly member-to-S3; measured transport throughput is evidence for admin/PBM control, not a bulk-backup SLA.
+- **L7 longevity is bounded evidence.** A session measured in a test deployment survived at least 31 minutes 23.882 seconds with keepalives and three approximately ten-minute application-idle intervals. Multi-hour/day behavior, actual idle timeout and message-size limits were not characterized; see [ADR 0018](adr/0018-multi-project-namespaces-relay.md#evidence).
+- **Removal guards retained resources.** Clusters (including deleting), storages, retained backup records and orphaned-volume records must be gone first. Deletion removes the owned relay, not the project, and does not remove RBAC policy rules. Review obsolete policies before reusing names.
+- **Relay bounds are not a DoS guarantee.** Handshakes, control frames, WebSocket messages and active streams are bounded, but shared public listener/network resources remain exposed to denial of service. Project DNS/network are trusted; inner relay TLS is not a substitute for MongoDB TLS.
+
+See [namespace lifecycle](user-guide/namespaces.md) and [relay threat model](security.md#relay-threat-model).
 
 ## Access and networking
 

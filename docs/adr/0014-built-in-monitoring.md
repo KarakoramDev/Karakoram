@@ -13,7 +13,7 @@ Collect MongoDB metrics in the node agent through its local driver using the pur
 - `/api/v1/clusters/{c}/metrics?range=` for the UI dashboard;
 - `/metrics` as a Prometheus-compatible endpoint for external monitoring, protected by Bearer/API-token authentication and monitoring RBAC.
 
-Show member role/health, replication lag, uptime and resource/disk observations alongside charted metrics. Include stable cluster/member labels and honor each cluster's monitoring setting. Apply per-object authorization to aggregation so a permitted scrape cannot expose unrelated clusters. Unavailable or stale data is marked as such, not reported as a healthy zero. Monitoring failures do not redefine database readiness or substitute for direct engine health checks.
+Show member role/health, replication lag, uptime and resource/disk observations alongside charted metrics. Include authoritative namespace/cluster/member labels and honor each cluster's monitoring setting. Namespace-qualified history/cache keys isolate identically named clusters; remote scrapes use their namespace relay (ADR 0018). Cluster JSON routes default to `default`; root `/metrics` includes all authorized namespaces unless filtered by `namespace`. Apply per-object `<namespace>/<cluster>` authorization to aggregation. Unavailable or stale data is marked as such, not reported as a healthy zero. Monitoring failures do not redefine database readiness or substitute for direct engine health checks.
 
 Defer PMM integration; it is not required or shipped in the initial supported monitoring path. The agent exporter, public scrape endpoint and UI charts are required, not deferred along with PMM.
 

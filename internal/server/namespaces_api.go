@@ -74,7 +74,7 @@ func (s *Server) ListNamespaces(ctx context.Context, request api.ListNamespacesR
 		}
 		items = append(items, namespaceAPI(n, count))
 	}
-	return ok(api.NamespaceList{Items: items}), nil
+	return listResponse(s, ctx, items, nil), nil
 }
 func (r response) VisitListNamespacesResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) CreateNamespace(ctx context.Context, request api.CreateNamespaceRequestObject) (api.CreateNamespaceResponseObject, error) {

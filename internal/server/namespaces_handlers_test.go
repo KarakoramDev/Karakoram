@@ -37,6 +37,9 @@ func namespaceServer(t *testing.T) (*Server, string) {
 	s, _, admin := testServer(t)
 	s.namespaces = handlerNamespaces{}
 	s.Namespaces = s.namespaces
+	if err := s.Store.PutNamespace(t.Context(), &domain.Namespace{Name: "dev", Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
 	c := domain.Cluster{Namespace: "dev", Name: "prod", Spec: domain.ClusterSpec{Provider: "fake", Version: "8.0", Topology: domain.Topology{Type: "replicaSet"}}, Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
 	if err := s.Store.CreateCluster(t.Context(), &c); err != nil {
 		t.Fatal(err)

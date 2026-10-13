@@ -44,6 +44,9 @@ func TestCloneUsesSourceNamespaceStorageAndValidation(t *testing.T) {
 	ctx := context.Background()
 	st := rc.Store.(*store.Store)
 	p.options.Store = st
+	if err := st.PutNamespace(ctx, &domain.Namespace{Name: "production", Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
 	backup := &domain.Backup{Namespace: "production", Name: "base", Cluster: rc.Cluster.Name, Storage: "snapshots", Phase: domain.PhaseSucceeded, SourceTopology: rc.Cluster.Spec.Topology, SourceVersion: rc.Cluster.Spec.Version}
 	if err := st.CreateBackup(ctx, backup); err != nil {
 		t.Fatal(err)

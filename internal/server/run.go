@@ -71,7 +71,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	relayHostname := envDefault("KARAKORAM_RELAY_HOSTNAME", c.Hostname+"relay")
+	relayHostname := envDefault("KARAKORAM_RELAY_HOSTNAME", namespaces.RelayHostname(c.Hostname))
 	tlsConfig, ca, err := internalTLS(ctx, st, sealer, c.Hostname, relayHostname)
 	if err != nil {
 		return err

@@ -19,6 +19,7 @@ import { SchedulesEditor, validateSchedules } from './editors/SchedulesEditor';
 import { ExposureEditor, TLSEditor, validateExposure, validateTLS } from './editors/AccessEditor';
 import { resourcesSummary } from './cluster-utils';
 import { clusterPath } from './detail/ClusterDetail';
+import { dataSourceFor, dataSourceLabel, wireDataSource } from './data-source';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -151,7 +152,7 @@ export function ClusterWizardPage() {
     if (from) {
       const backup = params.get('backup') ?? undefined;
       const pitrTime = params.get('pitrTime') ?? undefined;
-      seeded.dataSource = { cluster: from, namespace: fromNamespace, ...(backup ? { backup } : {}), ...(pitrTime ? { pitrTime } : {}) };
+      seeded.dataSource = dataSourceFor(fromNamespace, from, { backup, pitrTime });
       const src = source.data;
       if (src) {
         seeded.version = src.spec.version;
@@ -226,7 +227,7 @@ export function ClusterWizardPage() {
       setTouched({ basics: true, topology: true, resources: true, backups: true, access: true, review: true });
       return;
     }
-    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec) };
+    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace) };
     create.mutate(body);
   };
 
@@ -287,6 +288,8 @@ export function ClusterWizardPage() {
                     onChange={(e) => {
                       setTargetNamespace(e.target.value);
                       // Storages and name uniqueness are per namespace; drop a stale storage choice.
+                      // The data source keeps its own explicit namespace, so a chosen source
+                      // cluster never changes meaning here; the Basics callout flags the result.
                       update((s) => ({ ...s, backup: s.backup ? { ...s.backup, storage: undefined, schedules: s.backup.schedules?.map((sc) => ({ ...sc, storage: '' })) } : s.backup }));
                     }}
                     hint="The Zerops project that will host the cluster. Backup storages and name uniqueness are per namespace."
@@ -363,8 +366,15 @@ export function ClusterWizardPage() {
                 ) : null}
                 {spec.dataSource ? (
                   <Callout tone="info" title="Seeding from existing data">
-                    This cluster will be restored from <strong className="mono">{spec.dataSource.namespace && spec.dataSource.namespace !== targetNamespace ? `${spec.dataSource.namespace}/` : ''}{spec.dataSource.cluster}</strong>{' '}
-                    {spec.dataSource.backup ? <>backup <span className="mono">{spec.dataSource.backup}</span></> : spec.dataSource.pitrTime ? <>at {spec.dataSource.pitrTime}</> : <>(restore point not chosen yet)</>}. Change this under Backups.
+                    This cluster will be restored from <strong className="mono">{dataSourceLabel(spec.dataSource, targetNamespace)}</strong>{' '}
+                    {spec.dataSource.backup ? <>backup <span className="mono">{spec.dataSource.backup}</span></> : spec.dataSource.pitrTime ? <>at {spec.dataSource.pitrTime}</> : <>(restore point not chosen yet)</>}.
+                    {spec.dataSource.namespace && spec.dataSource.namespace !== targetNamespace ? (
+                      <>
+                        {' '}
+                        The source stays in namespace <span className="mono">{spec.dataSource.namespace}</span>, so this is a cross-namespace restore and needs <code>backups:export</code> on the source cluster.
+                      </>
+                    ) : null}{' '}
+                    Change this under Backups.
                   </Callout>
                 ) : null}
               </div>
@@ -561,7 +571,7 @@ export function ClusterWizardPage() {
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],
-                    spec.dataSource && ['Seed from', `${spec.dataSource.namespace && spec.dataSource.namespace !== targetNamespace ? `${spec.dataSource.namespace}/` : ''}${spec.dataSource.cluster} ${spec.dataSource.backup ? `backup ${spec.dataSource.backup}` : `at ${spec.dataSource.pitrTime}`}`],
+                    spec.dataSource && ['Seed from', `${dataSourceLabel(spec.dataSource, targetNamespace)} ${spec.dataSource.backup ? `backup ${spec.dataSource.backup}` : `at ${spec.dataSource.pitrTime}`}`],
                     ['TLS', `${spec.tls?.mode ?? 'requireTLS'} · ${spec.tls?.ca === 'userProvided' ? 'user-provided certificates' : 'managed CA'}`],
                     ['Exposure', spec.exposure?.public ? `public ${spec.exposure.ipType}, allowlist ${(spec.exposure.allowlist ?? []).join(', ') || 'missing (required)'}` : 'private'],
                     ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
@@ -599,7 +609,7 @@ export function ClusterWizardPage() {
 }
 
 /** Drop empty optional envelopes so the server applies its own defaults. */
-function cleanSpec(spec: ClusterSpec): ClusterSpec {
+function cleanSpec(spec: ClusterSpec, targetNamespace: string): ClusterSpec {
   const out: ClusterSpec = structuredClone(spec);
   if (out.backup) {
     if (!out.backup.storage) delete out.backup.storage;
@@ -615,7 +625,8 @@ function cleanSpec(spec: ClusterSpec): ClusterSpec {
   }
   if (out.exposure && !out.exposure.public) out.exposure = { public: false, ipType: out.exposure.ipType };
   if (!out.engineConfig) delete out.engineConfig;
-  if (!out.dataSource) delete out.dataSource;
+  if (out.dataSource) out.dataSource = wireDataSource(out.dataSource, targetNamespace);
+  else delete out.dataSource;
   return out;
 }
 
@@ -681,22 +692,22 @@ export function SourceClusterPicker({
 export function DataSourceEditor({ value, onChange, targetNamespace, namespaces }: { value: Schemas['DataSource'] | undefined; onChange: (d: Schemas['DataSource'] | undefined) => void; targetNamespace: string; namespaces: string[] }) {
   const [mode, setMode] = useState<'backup' | 'pitr'>(value?.pitrTime ? 'pitr' : 'backup');
   const cluster = value?.cluster ?? '';
+  // Wizard state always carries the source namespace (see data-source.ts); the
+  // fallback only covers values typed as optional, never one this editor built.
   const namespace = value?.namespace || targetNamespace;
-  // The API defaults the source namespace to the target; only send it when it differs.
-  const source = (ns: string, c: string): Schemas['DataSource'] => ({ cluster: c, ...(ns !== targetNamespace ? { namespace: ns } : {}) });
   return (
     <div className="stack" style={{ gap: 14 }}>
-      <Switch label="Restore data from another cluster into this new cluster" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked ? source(targetNamespace, '') : undefined)} />
+      <Switch label="Restore data from another cluster into this new cluster" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked ? dataSourceFor(targetNamespace, '') : undefined)} />
       {value ? (
         <>
-          <SourceClusterPicker targetNamespace={targetNamespace} namespaces={namespaces} namespace={namespace} cluster={cluster} onChange={(ns, c) => onChange(source(ns, c))} />
+          <SourceClusterPicker targetNamespace={targetNamespace} namespaces={namespaces} namespace={namespace} cluster={cluster} onChange={(ns, c) => onChange(dataSourceFor(ns, c))} />
           <ChoiceGroup<'backup' | 'pitr'>
             name="ds-mode"
             legend="Restore point"
             value={mode}
             onChange={(m) => {
               setMode(m);
-              onChange(source(namespace, cluster));
+              onChange(dataSourceFor(namespace, cluster));
             }}
             options={[
               { value: 'backup', title: 'Backup', description: 'A completed backup of the source.' },
@@ -704,9 +715,9 @@ export function DataSourceEditor({ value, onChange, targetNamespace, namespaces 
             ]}
           />
           {mode === 'backup' ? (
-            <BackupPicker namespace={namespace} cluster={cluster} value={value.backup} onChange={(backup) => onChange({ ...source(namespace, cluster), backup })} />
+            <BackupPicker namespace={namespace} cluster={cluster} value={value.backup} onChange={(backup) => onChange(dataSourceFor(namespace, cluster, { backup }))} />
           ) : (
-            <PitrPicker namespace={namespace} cluster={cluster} value={value.pitrTime} onChange={(pitrTime) => onChange({ ...source(namespace, cluster), pitrTime })} />
+            <PitrPicker namespace={namespace} cluster={cluster} value={value.pitrTime} onChange={(pitrTime) => onChange(dataSourceFor(namespace, cluster, { pitrTime }))} />
           )}
         </>
       ) : null}

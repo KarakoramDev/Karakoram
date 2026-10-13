@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "gen:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts --alphabetize --export-type",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.0",

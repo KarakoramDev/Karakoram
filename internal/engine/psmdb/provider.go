@@ -335,8 +335,18 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		if old.Spec.TLS.CA != s.TLS.CA {
 			return invalid("CA source is immutable; rotate leaf certificates instead")
 		}
-		a, _ := json.Marshal(old.Spec.DataSource)
-		b, _ := json.Marshal(s.DataSource)
+		normalizeSource := func(source *domain.DataSource, namespace string) *domain.DataSource {
+			if source == nil {
+				return nil
+			}
+			copy := *source
+			if copy.Namespace == "" {
+				copy.Namespace = domain.NormalizedNamespace(namespace)
+			}
+			return &copy
+		}
+		a, _ := json.Marshal(normalizeSource(old.Spec.DataSource, old.Namespace))
+		b, _ := json.Marshal(normalizeSource(s.DataSource, n.Namespace))
 		if string(a) != string(b) {
 			return invalid("dataSource is immutable")
 		}

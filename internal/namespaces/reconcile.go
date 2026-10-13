@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"gopkg.in/yaml.v3"
 )
@@ -31,6 +32,9 @@ func (r *Registry) Run(ctx context.Context) error {
 	var workers sync.WaitGroup
 	defer workers.Wait()
 	tick := func() {
+		if err := r.renewHubCertificate(ctx, time.Now()); err != nil {
+			r.o.Logger.Error("Relay hub certificate renewal failed", "error", err)
+		}
 		all, err := r.List(ctx)
 		if err != nil {
 			r.o.Logger.Error("Namespace listing failed", "error", err)
@@ -82,15 +86,15 @@ func (r *Registry) sessionEvent(ctx context.Context, notice sessionNotice) {
 	if err != nil || n.Phase == "Deleting" {
 		return
 	}
-	if notice.event.Type == "connected" && notice.event.CertificateSerial == n.ClientSerial {
-		n.PreviousClientSerial = ""
-		n.PreviousCertNotAfter = time.Time{}
-	}
 	r.syncSession(ctx, n)
 	_ = r.save(ctx, n)
 }
 func (r *Registry) syncSession(ctx context.Context, n *domain.Namespace) {
 	s := r.Hub.Status(n.Name)
+	if n.Phase == "Deleting" || (s.CertificateSerial != "" && (!acceptsSerial(n, s.CertificateSerial) || !r.Hub.AcceptsSerial(n.Name, s.CertificateSerial))) {
+		r.Hub.Revoke(n.Name)
+		s = relay.SessionStatus{}
+	}
 	was := n.Relay.Connected
 	if s.CertificateSerial != "" && s.CertificateSerial == n.ClientSerial {
 		n.PreviousClientSerial = ""
@@ -117,6 +121,7 @@ func (r *Registry) syncSession(ctx context.Context, n *domain.Namespace) {
 		}
 	}
 }
+
 func (r *Registry) step(ctx context.Context, name string) {
 	n, err := r.Get(ctx, name)
 	if err != nil {
@@ -168,7 +173,11 @@ func (r *Registry) step(ctx context.Context, name string) {
 			targets = append(targets, psmdb.RelayTargets(&clusters[i])...)
 		}
 	}
-	r.Hub.SetPolicy(name, targets)
+	if n.Phase == "Deleting" {
+		r.Hub.Revoke(name)
+	} else {
+		r.Hub.SetPolicy(name, targets)
+	}
 	r.syncSession(ctx, n)
 	if !n.RetryAt.After(time.Now()) && (n.Token.Valid || n.Phase == "Deleting") {
 		err = r.reconcile(ctx, n, b)
@@ -259,6 +268,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 			op.Kind = "delete"
 			return r.pending(ctx, n, b, op)
 		}
+		r.Hub.Revoke(n.Name)
 		if err = r.o.Store.DeleteNamespace(ctx, n.Name); err != nil {
 			return err
 		}
@@ -280,6 +290,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		if err = r.o.Store.PutNamespaceCredentials(ctx, n, token, key); err != nil {
 			return err
 		}
+		r.enroll(n)
 		return nil
 	}
 	key, err := r.o.Store.GetNamespaceRelayKey(ctx, n.Name)

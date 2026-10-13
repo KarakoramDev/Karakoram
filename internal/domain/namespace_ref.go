@@ -27,6 +27,18 @@ func (c Cluster) Ref() ClusterRef {
 	return ClusterRef{Namespace: NormalizedNamespace(c.Namespace), Name: c.Name}
 }
 
+// Validate rejects ambiguous identities before constructing storage keys.
+// An empty name is allowed for namespace-wide collection filters.
+func (r ClusterRef) Validate() error {
+	if err := ValidateNamespaceName(NormalizedNamespace(r.Namespace)); err != nil {
+		return err
+	}
+	if strings.ContainsAny(r.Name, ":/") {
+		return fmt.Errorf("cluster identity contains a reserved separator")
+	}
+	return nil
+}
+
 // Key preserves the legacy identity and secret AAD for the default namespace.
 func (r ClusterRef) Key() string {
 	if r.Namespace == "" || r.Namespace == DefaultNamespace {

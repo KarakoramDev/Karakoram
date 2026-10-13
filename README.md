@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-**Self-hosted MongoDB orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM) inside your own Zerops project. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
+**Self-hosted MongoDB orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM) across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
 
 You own the infrastructure, credentials, data and recovery procedures. Zerops is the infrastructure backend, not the operator of your databases. Project site: [karakoram.dev](https://karakoram.dev) · Source: [github.com/KarakoramDev/Karakoram](https://github.com/KarakoramDev/Karakoram).
 
@@ -14,6 +14,7 @@ You own the infrastructure, credentials, data and recovery procedures. Zerops is
 - CPU/RAM configuration, persistent disk growth, rolling binary upgrades/restarts and explicit FCV promotion.
 - Database users/roles, independently rotatable system accounts, keyfile authentication, generated or supplied TLS certificates and opt-in public TCP access.
 - Per-member monitoring, authenticated Prometheus output, events/logs, local accounts, OIDC, RBAC and owner-scoped API tokens.
+- Multi-project [namespaces](docs/user-guide/namespaces.md), project-scoped tokens, outbound authenticated relays and permission-gated cross-namespace restore/clone.
 
 **Read the [limitations](docs/limitations.md) before production use.** Zerops does not guarantee physical-host anti-affinity, Local Storage is single-host and the control plane has one replica. Healthy voters do not prove independent failure domains. Public replica-set routing does not automatically solve external member discovery. Configure backups and exercise recovery before loading important data.
 
@@ -54,6 +55,7 @@ A Go-only `make build` without built UI assets serves a “UI not built” page.
 ## Documentation index
 
 - [Installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
+- [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)
 - [Replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
 - [Backups, PITR, restore and clone](docs/user-guide/backups-and-restore.md)
 - [Scaling and upgrades](docs/user-guide/scaling-and-upgrades.md), [database users, TLS and access](docs/user-guide/users-tls-access.md), [monitoring](docs/user-guide/monitoring.md)

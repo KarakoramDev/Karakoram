@@ -110,6 +110,10 @@ func (s *Server) InternalHandler() http.Handler {
 			_ = s.failure(err).write(w)
 			return
 		}
+		if failure := s.providerContext(rc); failure != nil {
+			_ = failure.write(w)
+			return
+		}
 		source, yes := p.(engine.AgentConfigSource)
 		if !yes {
 			_ = s.failure(engine.ErrNotSupported).write(w)
@@ -128,7 +132,31 @@ func (s *Server) InternalHandler() http.Handler {
 type internalIdentity struct{ CACert, CAKey, Cert, Key []byte }
 
 func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, hostname string, additionalNames ...string) (*tls.Config, string, error) {
-	dnsNames := append([]string{hostname, "karakoram", "localhost"}, additionalNames...)
+	dnsNames := []string{hostname, "karakoram", "localhost"}
+	persistedNamespaces, err := st.ListNamespaces(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, n := range persistedNamespaces {
+		if !n.Default && n.Relay.Hostname != "" {
+			additionalNames = append(additionalNames, n.Relay.Hostname)
+		}
+	}
+	for _, name := range additionalNames {
+		if name == "" {
+			continue
+		}
+		duplicate := false
+		for _, existing := range dnsNames {
+			if existing == name {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			dnsNames = append(dnsNames, name)
+		}
+	}
 	const setting = "server/internal-pki"
 	raw, err := st.GetSetting(ctx, setting)
 	var identity internalIdentity

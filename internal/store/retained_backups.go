@@ -14,6 +14,9 @@ import (
 // MarkRetainedBackupDeleting records direct S3 cleanup intent only while the
 // source cluster is absent. A retry resumes the same immutable backup record.
 func (s *Store) MarkRetainedBackupDeleting(ctx context.Context, b *domain.Backup) error {
+	if err := (domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster}).Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err

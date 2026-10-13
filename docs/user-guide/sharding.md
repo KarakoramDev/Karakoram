@@ -10,6 +10,12 @@ A sharded Karakoram cluster contains:
 
 Engine and config-server sets accept 1/3/5/7 members. The provider accepts 1–128 shards and 1–32 router containers. These are validation bounds, not a claim that a maximum-sized deployment fits your project or has been load-tested. Each mongod gets its own runtime/volume; the mongos service is horizontally scalable and has no durable database volume.
 
+Select the project's [namespace](namespaces.md) in the UI or add `-n NAME` to
+the commands below. Every config/shard/router service stays in that project;
+cross-project management uses its relay, not cross-project database replication.
+Private mongos hostnames in connection details require application access to
+that namespace's project.
+
 ## Create
 
 In the creation wizard choose **Sharded**, configure each component's size, and review the complete service/storage cost. For a small multi-member topology:

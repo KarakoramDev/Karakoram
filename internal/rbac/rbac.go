@@ -61,7 +61,7 @@ func DefaultPolicy() string {
 	for _, r := range names {
 		if operator[r] {
 			fmt.Fprintf(&b, "p, role:operator, %s, *, **, allow\n", r)
-		} else if r == "backup-storages" || r == "providers" {
+		} else if r == "backup-storages" || r == "providers" || r == "namespaces" {
 			fmt.Fprintf(&b, "p, role:operator, %s, read, **, allow\n", r)
 		}
 		if r != "cluster-credentials" && r != "accounts" && r != "api-tokens" && r != "rbac" && r != "settings" {

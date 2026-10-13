@@ -8,9 +8,22 @@ Multi-user administration needs permissions per resource, action and cluster, in
 
 ## Decision
 
-Use Casbin with request/policy tuple `sub, res, act, obj`, role inheritance `g = _, _` and glob matching on resource, action and object. Name subjects `user:<name>`, `group:<oidcGroup>` and `role:<name>`. Authorize cluster-scoped objects by cluster-name glob and global objects by `*`; filter lists, events, metrics and streams per authorized object. Evaluate allow rules with explicit-deny support: a matching deny is not canceled by a broad allow.
+Use Casbin with request/policy tuple `sub, res, act, obj`, role inheritance `g = _, _` and glob matching on resource, action and object. Name subjects `user:<name>`, `group:<oidcGroup>` and `role:<name>`. Cluster-scoped objects are `<namespace>/<cluster>`; backup-storage objects are `<namespace>/<storage>`. The `namespaces` resource uses a bare namespace name, with global create on `*`; settings/accounts/RBAC/API tokens/providers retain global object `*`. Filter lists, events, metrics and streams per actual object. Evaluate allow rules with explicit-deny support: a matching deny is not canceled by a broad allow.
 
 Provide built-in admin, operator and viewer roles. Admin has all permissions. Operator manages clusters, backups, restores, database users and operations, reads events/monitoring and storages/providers, but cannot reveal credentials or administer accounts/RBAC/settings. Viewer is read-only without credentials. Credential reveal requires `read` on the separate `cluster-credentials` resource; operational read access does not imply it.
+
+Normalize persisted policies at startup and submitted policies before saving: object `*` becomes `**`; bare legacy objects become `default/<object>`, except `namespaces` rules, whose bare namespace names remain unchanged. `*` does not cross `/`; `dev/**` matches `dev` and its objects. Built-in roles use `**`. Cross-namespace restore/clone requires `backups, export, <source namespace>/<source cluster>` alongside source backup read and target restore/cluster create. Admin/operator have export; viewer does not.
+
+Examples (add to a complete policy, retaining administrator access):
+
+```csv
+p, user:alice, *, *, dev/**
+p, user:alice, *, read, prod/**
+p, user:alice, cluster-credentials, read, prod/**, deny
+p, user:bob, cluster-credentials, read, prod/orders
+p, user:bob, namespaces, read, prod
+p, user:bob, backups, export, prod/**
+```
 
 Support local accounts with Argon2id password hashes, and server-side OIDC authorization-code flow with PKCE and group-claim mapping. First-run bootstrap creates an admin account marked for password change from the installer-supplied secret. UI access JWTs use EdDSA and an HttpOnly, Secure-in-HTTPS, SameSite=Strict cookie; enforce CSRF header checks on unsafe cookie-authenticated requests and rotate refresh sessions. Do not store access credentials in browser local storage.
 

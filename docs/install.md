@@ -2,10 +2,11 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Install Karakoram on Zerops
 
-Karakoram is self-hosted inside **your existing Zerops project**. It creates and
-operates Percona Server for MongoDB services in that same project's private
-network. Zerops provides infrastructure; you operate the databases and the
-Karakoram installation.
+Karakoram is self-hosted inside **your existing Zerops project**, its `default`
+namespace. It operates Percona Server for MongoDB there using direct private
+networking, and can manage additional existing projects through namespaces and
+outbound relays. Zerops provides infrastructure; you operate the databases and
+the Karakoram installation.
 
 ## Prerequisites
 
@@ -204,11 +205,63 @@ space after each comma; Zerops's parser requires it.
    Karakoram API tokens are **not Zerops integration tokens**. They inherit the
    owning account's Karakoram RBAC permissions and can be revoked independently.
 
+## Adding a namespace
+
+After installation, register an additional existing project through **Settings →
+Namespaces → Add namespace → Validate and add**, or the CLI:
+
+```sh
+# Store the project token in a private, untracked file; '-' reads stdin.
+karactl namespaces create --name dev --project-id YOUR_PROJECT_ID \
+  --token-file namespace-token.txt
+karactl namespaces get dev -o yaml
+# Once the relay is connected, select the namespace for cluster commands.
+karactl -n dev clusters list
+```
+
+The token needs **Custom access per project → Full access for that project**.
+Read-only and organization-wide tokens are not the intended scope. The project
+must differ from `default` and every registered project. Namespace names are
+2–32 lowercase letters/digits/hyphens, start with a letter, end with a
+letter/digit, and cannot be `default`.
+
+The control-plane `KARAKORAM_PUBLIC_URL` must be an HTTPS origin reachable from
+the additional project. Any extra proxy must forward WebSocket Upgrade at root
+`/relay/v1/connect`; do not put browser login in front of that transport path.
+The tunnel authenticates with inner mTLS, not browser cookies.
+
+Registration synchronously validates token/project and the availability of the
+relay hostname, returning **422** for invalid credentials/project scope,
+duplicate project or an occupied hostname; duplicate namespace names return
+**409**. Relay deployment is asynchronous after **201** acceptance.
+
+Token validation checks project identity and service-list access, not every
+mutation grant; a read-capable but insufficient token can fail later during
+relay deployment. The requested Full access scope is still required.
+
+Karakoram deploys one Ubuntu runtime with the same executable, started as
+`./karakoram relay`. The hostname normally defaults to `<control-plane hostname>relay`
+(usually `karakoramrelay`). If that exceeds 25 characters, it uses the first
+16 hostname characters, four hexadecimal SHA-256 characters and `relay`.
+`KARAKORAM_RELAY_HOSTNAME` overrides the derived name for new enrollments;
+existing namespaces retain their recorded hostname. The service has
+**private TCP 9443, no public access** and one
+container. Allow project capacity for it; enrollment material is delivered as
+service env secrets, not pipeline variables. Remote agents use
+`https://<relay hostname>:9443` for end-to-end TLS configuration pulls.
+
+Wait for `token.valid: true`, namespace `Ready`, relay `Ready` and
+`connected: true`; inspect `lastError`, `lastSeenAt`, version and certificate
+expiry in the UI detail or `namespaces get`. Platform relay readiness probes only
+the local listener, not the tunnel. See [namespace lifecycle](user-guide/namespaces.md)
+and [operations](operations.md#namespace-and-relay-operations).
+
 ## Network, security, and durability
 
 - Public HTTPS terminates at Zerops's L7 balancer and forwards to HTTP port 8080.
-  The installer enables the subdomain for the UI/API only. Use HTTPS; secure
-  browser cookies and OIDC depend on the correct public origin. For production,
+  The installer enables the subdomain for UI/API and outbound relay connections.
+  Use HTTPS; browser cookies, OIDC and remote namespaces depend on the correct
+  public origin. For production,
   configure a custom domain and review access policies rather than relying on a
   shared development subdomain indefinitely.
 - Proxies can buffer small SSE frames. Karakoram sends ~16-KiB random-base64

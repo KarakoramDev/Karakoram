@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -71,25 +72,39 @@ type hubSession struct {
 	hello         Hello
 	policyChanged chan struct{}
 	cancel        context.CancelFunc
+	serial        string
+	streams       streamLimit
 }
 type namespaceState struct {
-	session       *hubSession
-	status        SessionStatus
-	policy        Policy
-	everConnected bool
+	session          *hubSession
+	status           SessionStatus
+	policy           Policy
+	everConnected    bool
+	currentSerial    string
+	previousSerial   string
+	previousNotAfter time.Time
+	enrolled         bool
+	overlapRevoked   bool
+	admissions       map[*admission]struct{}
+}
+
+type admission struct {
+	cert   *x509.Certificate
+	cancel context.CancelFunc
 }
 
 // Hub routes namespace TCP streams and exposes inbound connections as a listener.
 // The first relay-opened stream is reserved for hello and hub-pushed policy acknowledgments.
 type Hub struct {
-	o        HubOptions
-	mu       sync.Mutex
-	states   map[string]*namespaceState
-	pending  chan struct{}
-	ctx      context.Context
-	cancel   context.CancelFunc
-	listener *inboundListener
-	closed   bool
+	o           HubOptions
+	mu          sync.Mutex
+	states      map[string]*namespaceState
+	pending     chan struct{}
+	ctx         context.Context
+	cancel      context.CancelFunc
+	listener    *inboundListener
+	closed      bool
+	certificate atomic.Pointer[tls.Certificate]
 }
 
 // NewHub creates a hub. Mount Handler on the public root /relay/v1/connect endpoint.
@@ -111,12 +126,14 @@ func NewHub(o HubOptions) *Hub {
 	}
 	o.SmuxConfig = muxConfig(o.SmuxConfig)
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Hub{o: o, states: make(map[string]*namespaceState), pending: make(chan struct{}, o.MaxPendingHandshakes), ctx: ctx, cancel: cancel, listener: newInboundListener()}
+	h := &Hub{o: o, states: make(map[string]*namespaceState), pending: make(chan struct{}, o.MaxPendingHandshakes), ctx: ctx, cancel: cancel, listener: newInboundListener()}
+	h.SetCertificate(o.Certificate)
+	return h
 }
 func (h *Hub) state(ns string) *namespaceState {
 	s := h.states[ns]
 	if s == nil {
-		s = &namespaceState{policy: Policy{Type: "policy", Targets: []string{}}}
+		s = &namespaceState{policy: Policy{Type: "policy", Targets: []string{}}, admissions: make(map[*admission]struct{})}
 		h.states[ns] = s
 	}
 	return s
@@ -166,8 +183,8 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer ws.CloseNow()
-	raw := websocket.NetConn(ctx, ws, websocket.MessageBinary)
-	conn := tls.Server(raw, &tls.Config{Certificates: []tls.Certificate{h.o.Certificate}, ClientCAs: h.o.ClientCAs, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS13})
+	raw := websocketConn(ctx, ws)
+	conn := tls.Server(raw, &tls.Config{GetCertificate: h.getCertificate, ClientCAs: h.o.ClientCAs, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS13})
 	deadline := time.Now().Add(h.o.HandshakeTimeout)
 	conn.SetDeadline(deadline)
 	handshakeCtx, handshakeCancel := context.WithDeadline(ctx, deadline)
@@ -183,9 +200,20 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request) {
 	if h.o.Authorize == nil {
 		return
 	}
-	if err = h.o.Authorize(handshakeCtx, ns, cert); err != nil {
+	a := &admission{cert: cert, cancel: cancel}
+	h.mu.Lock()
+	state := h.state(ns)
+	if h.closed || !state.accepts(cert.SerialNumber.String()) || h.o.Authorize(handshakeCtx, ns, cert) != nil {
+		h.mu.Unlock()
 		return
 	}
+	state.admissions[a] = struct{}{}
+	h.mu.Unlock()
+	defer func() {
+		h.mu.Lock()
+		delete(state.admissions, a)
+		h.mu.Unlock()
+	}()
 	conn.SetDeadline(time.Time{})
 	mux, err := smux.Server(conn, h.o.SmuxConfig)
 	if err != nil {
@@ -207,19 +235,31 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request) {
 	if !ok || hello.Namespace != ns {
 		return
 	}
-	hs := &hubSession{mux: mux, control: control, hello: *hello, policyChanged: make(chan struct{}, 1), cancel: cancel}
+	hs := &hubSession{mux: mux, control: control, hello: *hello, serial: cert.SerialNumber.String(), policyChanged: make(chan struct{}, 1), cancel: cancel}
 	h.mu.Lock()
-	policy := h.state(ns).policy
+	if h.states[ns] != state {
+		h.mu.Unlock()
+		return
+	}
+	policy := state.policy
 	h.mu.Unlock()
 	if err = pushPolicy(ctx, control, policy, h.o.HandshakeTimeout); err != nil {
 		return
 	}
 	h.mu.Lock()
-	if h.closed {
+	_, pending := state.admissions[a]
+	if h.closed || !pending || h.states[ns] != state || !state.accepts(hs.serial) || h.o.Authorize(ctx, ns, cert) != nil {
 		h.mu.Unlock()
 		return
 	}
 	s := h.state(ns)
+	delete(s.admissions, a)
+	if s.enrolled && hs.serial == s.currentSerial {
+		s.previousSerial = ""
+		s.previousNotAfter = time.Time{}
+		s.overlapRevoked = true
+		h.invalidateAdmissions(s)
+	}
 	old := s.session
 	if s.everConnected {
 		s.status.Reconnects++
@@ -258,8 +298,8 @@ func (h *Hub) serve(w http.ResponseWriter, r *http.Request) {
 	mux.Close()
 	<-acceptDone
 	h.mu.Lock()
-	s = h.state(ns)
-	current := s.session == hs
+	s = h.states[ns]
+	current := s != nil && s.session == hs
 	if current {
 		s.session = nil
 		s.status.Connected = false
@@ -298,15 +338,20 @@ func (h *Hub) policyLoop(ctx context.Context, ns string, s *hubSession) string {
 		case <-s.policyChanged:
 		}
 		h.mu.Lock()
-		p := h.state(ns).policy
+		state := h.states[ns]
+		if state == nil || state.session != s {
+			h.mu.Unlock()
+			return "session revoked"
+		}
+		p := state.policy
 		h.mu.Unlock()
 		if err := pushPolicy(ctx, s.control, p, h.o.HandshakeTimeout); err != nil {
 			s.mux.Close()
 			return "policy exchange failed"
 		}
 		h.mu.Lock()
-		if h.state(ns).session == s {
-			h.state(ns).status.LastSeen = time.Now()
+		if state := h.states[ns]; state != nil && state.session == s {
+			state.status.LastSeen = time.Now()
 		}
 		h.mu.Unlock()
 	}
@@ -317,7 +362,17 @@ func (h *Hub) acceptAgents(ctx context.Context, ns string, s *hubSession) {
 		if err != nil {
 			return
 		}
+		if !s.streams.acquire() {
+			stream.Close()
+			continue
+		}
 		go func() {
+			released := false
+			defer func() {
+				if !released {
+					s.streams.release()
+				}
+			}()
 			err := boundedStreamOperation(ctx, stream, h.o.HandshakeTimeout, func() error {
 				v, err := ReadHeader(stream)
 				if err != nil {
@@ -333,13 +388,15 @@ func (h *Hub) acceptAgents(ctx context.Context, ns string, s *hubSession) {
 				return
 			}
 			h.mu.Lock()
-			current := h.state(ns).session == s
+			state := h.states[ns]
+			current := state != nil && state.session == s
 			h.mu.Unlock()
 			if !current {
 				stream.Close()
 				return
 			}
-			h.listener.deliver(ctx, &streamConn{Conn: stream, remote: relayAddr("relay:" + ns)})
+			released = true
+			h.listener.deliver(ctx, &streamConn{Conn: stream, remote: relayAddr("relay:" + ns), release: s.streams.release})
 		}()
 	}
 }
@@ -359,6 +416,15 @@ func (h *Hub) DialContext(ctx context.Context, namespace, network, addr string) 
 	if s == nil || s.mux.IsClosed() {
 		return nil, ErrNoSession
 	}
+	if !s.streams.acquire() {
+		return nil, ErrStreamCapacity
+	}
+	retained := false
+	defer func() {
+		if !retained {
+			s.streams.release()
+		}
+	}()
 	// OpenStream may block on the smux send queue; cancellation closes any late-opened stream.
 	type opened struct {
 		s   *smux.Stream
@@ -412,7 +478,8 @@ func (h *Hub) DialContext(ctx context.Context, namespace, network, addr string) 
 		}
 		return nil, err
 	}
-	return &streamConn{Conn: stream, remote: relayAddr(addr)}, nil
+	retained = true
+	return &streamConn{Conn: stream, remote: relayAddr(addr), release: s.streams.release}, nil
 }
 
 // SetPolicy stores a complete allowlist and pushes it now, on reconnect, and every thirty seconds by default.
@@ -438,6 +505,77 @@ func (h *Hub) Status(namespace string) SessionStatus {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.state(namespace).status
+}
+
+// SetCertificate atomically replaces the leaf used by subsequent TLS handshakes.
+func (h *Hub) SetCertificate(cert tls.Certificate) { h.certificate.Store(&cert) }
+func (h *Hub) getCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return h.certificate.Load(), nil
+}
+
+func (s *namespaceState) accepts(serial string) bool {
+	return !s.enrolled || serial == s.currentSerial || (serial == s.previousSerial && time.Now().Before(s.previousNotAfter))
+}
+
+// Enroll fences pending and active connections against a changed enrollment.
+// Once the current serial connects, repeated snapshots cannot restore its revoked overlap.
+func (h *Hub) Enroll(namespace, current, previous string, previousNotAfter time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.state(namespace)
+	if s.currentSerial != current {
+		s.overlapRevoked = false
+	}
+	if !s.overlapRevoked {
+		s.previousSerial = previous
+		s.previousNotAfter = previousNotAfter
+	}
+	s.currentSerial, s.enrolled = current, true
+	h.invalidateAdmissions(s)
+	if s.session != nil && !s.accepts(s.session.serial) {
+		s.session.cancel()
+		s.session.mux.Close()
+		s.session = nil
+	}
+	if s.status.CertificateSerial != "" && !s.accepts(s.status.CertificateSerial) {
+		s.status = SessionStatus{}
+	}
+}
+
+func (h *Hub) invalidateAdmissions(s *namespaceState) {
+	for a := range s.admissions {
+		if !s.accepts(a.cert.SerialNumber.String()) {
+			delete(s.admissions, a)
+			a.cancel()
+		}
+	}
+}
+
+// AcceptsSerial reports the live enrollment fence without exposing it publicly.
+func (h *Hub) AcceptsSerial(namespace, serial string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.states[namespace]
+	return s != nil && s.accepts(serial)
+}
+
+// Revoke closes active and pending sessions and forgets policy and observed status.
+func (h *Hub) Revoke(namespace string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.states[namespace]
+	if s == nil {
+		return
+	}
+	delete(h.states, namespace)
+	for a := range s.admissions {
+		delete(s.admissions, a)
+		a.cancel()
+	}
+	if s.session != nil {
+		s.session.cancel()
+		s.session.mux.Close()
+	}
 }
 
 // Close stops handshakes, closes all sessions and unblocks listener Accept. It is idempotent.

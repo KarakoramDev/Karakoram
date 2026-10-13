@@ -27,7 +27,9 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		}
 		out := make([]api.Backup, 0, len(items))
 		for _, b := range items {
-			out = append(out, backupAPI(b))
+			if s.allowed(ctx, "backups", "read", clusterObject(b.Namespace, b.Cluster)) {
+				out = append(out, backupAPI(b))
+			}
 		}
 		return listResponse(s, ctx, out, nil)
 	}
@@ -37,6 +39,13 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 	}
 	if err != nil {
 		return s.failure(err)
+	}
+	action := "read"
+	if name == "DeleteBackup" {
+		action = "delete"
+	}
+	if !s.allowed(ctx, "backups", action, clusterObject(b.Namespace, b.Cluster)) {
+		return fail(403, "forbidden", "Permission denied")
 	}
 	if name == "GetBackup" {
 		return ok(backupAPI(*b))

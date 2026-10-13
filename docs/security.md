@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Security model
 
-Karakoram is self-hosted administration software with authority over its configured Zerops project and managed databases. It is not a hostile multi-tenant isolation layer or a managed service. Read [limitations](limitations.md) and [operations/recovery](operations.md) alongside this model.
+Karakoram is self-hosted administration software with authority over its enrolled Zerops projects and managed databases. Namespaces scope credentials, routing and RBAC; they are not a hostile multi-tenant isolation layer or a managed service. Read [limitations](limitations.md) and [operations/recovery](operations.md) alongside this model.
 
 ## Threat model and trust boundaries
 
@@ -14,10 +14,73 @@ The design protects against unauthorized public API use, accidental credential d
 - **Agent → control plane:** private TLS listener 9443, pinned installation internal CA, member-specific token identifying exactly the assigned member's configuration.
 - **Control plane → agent:** pinned per-cluster CA/server hostname and that member's bearer token; bounded authenticated commands, not remote shell.
 - **Database clients/members:** MongoDB authentication, cluster keyfile and configured database TLS, distinct from agent transport.
-- **Control plane → Zerops:** server-held project-scoped Full access integration token. The public UI/CLI never receives it.
+- **Control plane → Zerops:** a server-held project-scoped Full access token per namespace. The public UI/CLI never receives tokens.
 - **PBM → object storage:** S3 credentials and endpoint TLS verification, plus cluster-isolated prefixes.
 
 The public service listener is HTTP 8080 behind Zerops's HTTPS L7 termination. Traffic within the project to that HTTP listener is not end-to-end browser TLS; treat the project private network and platform as trusted infrastructure. Do not bind it directly to an untrusted public plaintext route. Agent traffic uses end-to-end TLS independently of the L7 path.
+
+## Relay threat model
+
+Additional assets are sealed namespace tokens, relay CA/hub private keys,
+namespace enrollment keys and the management/configuration bytes carried by the
+tunnel. Trust boundaries include the public L7 carrier, control-plane hub,
+namespace project relay host, namespace private DNS/targets and the independently
+authenticated agent protocol. Default namespace traffic remains direct.
+
+| Boundary or threat | Mitigation |
+| --- | --- |
+| L7 termination/HTTP forwarding exposes tunnel plaintext | Outer verified HTTPS plus **inner mTLS 1.3**; dedicated relay CA, pinned hub server name and enrolled namespace certificate serial binding |
+| An unrelated relay claims a namespace | CA verification, namespace URI identity and enrolled serial check; previous renewal serial accepted only until its expiry/current-certificate transition; absent/default/deleting namespaces rejected at authorization |
+| Relay becomes a general cross-project dial proxy | Relay-enforced complete target policy, only member/router 27017/9443, bare hostnames, no `core` or self; all resolved addresses checked and checked numeric IP dialed to prevent DNS rebinding |
+| Carrier/relay reads agent configuration | Agent config pulls preserve **end-to-end TLS** to the internal listener, pinned internal CA/relay hostname SAN and member-specific bearer authentication |
+| Public unauthenticated connections exhaust admission | At most thirty-two pending handshakes; ten-second TLS/introduction deadline and a separately bounded policy-acknowledgment interval, not a ten-second total slot lifetime; bounded protocol/control frames and policies |
+| State copy discloses enrolled project authority | Per-namespace token/client-key sealing and sealed installation relay PKI; no tokens, fingerprints, client keys or serials in public health responses |
+| Pipeline/artifact enrollment leakage or foreign service deletion | Certificate/key/CA delivery through service env secrets; ownership marker checked before adopting/deleting a relay |
+
+The control plane pushes current target policy on change/reconnect and every
+thirty seconds. A new authenticated namespace session replaces its old session;
+relay enrollment is independent of cookie/API-token authorization. The public
+root `/relay/v1/connect` bypasses browser session auth only because admission is
+inside the mTLS tunnel; WebSocket Upgrade alone does not grant a usable session.
+
+Residual risks: **control-plane compromise grants authority over all namespaces**.
+A compromised relay host exposes its own enrolled credential and can disrupt its
+namespace's management or access locally reachable project services; target policy
+does not sandbox a compromised host/process. End-to-end agent TLS protects
+forwarded configuration from passive relay inspection, not from control-plane or
+member compromise. Project administrators and Zerops remain trusted. A public
+endpoint DoS can consume shared listener/network resources despite handshake
+bounds. A relay is one management failure point, and all streams share its
+ordered carrier; it does not carry replication or member-to-S3 backup data.
+
+Project DNS/network remain trusted: checked addresses do not cryptographically
+prove project membership. Inner relay TLS protects the L7 carrier, but database
+TLS is separate; `tls.mode: disabled` lets a relay read MongoDB traffic on its
+project-side connection. Keep database `requireTLS`.
+
+Resource controls bound pending admission, protocol/control frames,
+WebSocket-message reads (**1 MiB per message**) and active data streams
+(**256 per relay session**, control stream excluded). The byte-stream adapter's
+message limit is restored after construction; it does not bound total tunneled
+payload. Production smux uses its default 4-MiB shared receive budget and 64-KiB
+stream window, not the larger test buffers. Bounds do not eliminate public DoS.
+
+Hub and namespace client leaves renew during runtime within thirty days of expiry. Enrollment
+is checked again/fenced at session publication, preventing a pending connection
+from undoing revocation or replacing a newer enrolled session. Namespace
+deletion revokes its hub session and pending admissions as well as removing
+stored enrollment, so stale sessions cannot route a reused name into the old
+project.
+
+Public request identifiers are validated before namespace-qualified record
+lookup. Non-default storage credentials use a distinct authenticated-data domain
+from legacy default storage credentials. Existing default secrets keep their
+legacy AAD; namespace-aware encoding must not be confused with user-supplied
+names. These controls preserve object isolation without claiming adversarial
+tenant isolation against project/root administrators.
+
+See [ADR 0018](adr/0018-multi-project-namespaces-relay.md) and
+[namespace operations](operations.md#namespace-and-relay-operations).
 
 ## Secrets at rest
 
@@ -27,11 +90,12 @@ The public service listener is HTTP 8080 behind Zerops's HTTPS L7 termination. T
 | --- | --- |
 | Control-plane secret environment | `KARAKORAM_MASTER_KEY`, `KARAKORAM_ZEROPS_TOKEN`, first-run `KARAKORAM_ADMIN_PASSWORD`; preserve/restrict these on the control-plane service |
 | Control-plane nonsecret configuration | `KARAKORAM_DATA_DIR`, public/private listener/origins, project ID/API URL; names and defaults in `internal/server/config.go` |
-| SQLite sealed values | Cluster passwords/keyfile, CA/private-key/member material, recoverable agent tokens, S3 credentials, auth signing key, OIDC client secret and installation internal PKI |
+| SQLite sealed values | Cluster passwords/keyfile, CA/private-key/member material, recoverable agent tokens, namespace project tokens/relay client keys, dedicated relay CA/hub keys, S3 credentials, auth signing key, OIDC client secret and installation internal PKI |
 | SQLite verifiers | Argon2id local password hashes; SHA-256 API/refresh-token hashes and agent-token lookup hashes |
 | SQLite plaintext metadata | Specs/status, member ownership/process IDs, checkpoints/events, policy/account/token metadata, settings and metric samples; encryption does not hide all metadata |
 | Member secret environment | Its own `KARAKORAM_AGENT_TOKEN`; not the infrastructure token or master key |
 | Member config/files | Owner-only cached MemberConfig and rendered key/certificate files, containing plaintext secrets needed by local processes |
+| Relay secret environment | Its enrolled client certificate/key, relay CA and ownership marker; not the namespace infrastructure token or master key |
 | CLI context | Plain bearer token in owner-only `~/.config/karakoram/config.yaml`; filesystem permissions are its protection |
 
 Write-only TLS/storage inputs are removed from ordinary cluster/storage response models and retained sealed separately. Agents receive locally needed backup/monitor credentials, not general system-account disclosure. PBM's connection URI is placed in its process environment; local process/root access can expose it. Member config cache is **0600**, keyfile **0400**, controls/receipts **0600**, protected directories normally **0700**. Volume/runtime administrators can read these files: state encryption does not extend to node-cache plaintext.
@@ -64,6 +128,17 @@ Application users/custom roles are managed separately and should be least-privil
 
 Persisted Casbin request tuples are `subject, resource, action, object` with role inheritance and glob matching. Subjects include local accounts, roles and OIDC groups. Deny **overrides** allow; lack of a matching allow denies. Route metadata is generated from OpenAPI, while lists/events/streams/metrics also check each actual object. Do not grant all-cluster access just to expose a UI page.
 
+Cluster-scoped objects are `<namespace>/<cluster>`; storage objects are
+`<namespace>/<storage>`. The `namespaces` resource uses the bare namespace name
+(create requires global `*`; list checks each namespace). Global settings,
+accounts, RBAC, API tokens and providers remain global `*`. Policy object `*`
+normalizes to `**`, legacy bare cluster patterns to `default/<pattern>`;
+namespace-name rules remain bare. Explicit denies apply across all subjects.
+Cross-namespace restore/clone additionally requires source `backups/export`,
+source backup read and target mutation permission, preventing read-only users
+from exporting production data into a namespace they can operate.
+
+
 Credential reveal requires **read on cluster-credentials**, separate from clusters read. Ordinary URIs omit passwords. The connection endpoint returns databaseAdmin credentials/CA with `Cache-Control: no-store`; UI requests it explicitly and does not cache it in query state. Authorized users can still copy displayed credentials; RBAC cannot recall an already disclosed database password. Rotate when exposure requires it. API/storage/TLS secret inputs and token one-time creation responses must never be logged.
 
 Admin role manages policy/accounts/settings and broad orchestration. Operator can disrupt workloads, restore data and manage application identities, despite not receiving cluster-credentials read by default; this is operational trust, not a read-only boundary. Full-policy replacement can lock out administrators. [RBAC/auth](user-guide/rbac-and-auth.md) lists exact defaults/resources and safe policy examples.
@@ -95,9 +170,15 @@ The temporary `karakoram_oidc_state` cookie is HttpOnly, SameSite=Lax, path `/ap
 
 MongoDB is private by default. Opt-in public TCP requires explicit CIDR allowlists plus project IPv6/dedicated IPv4. Use TLS and strong credentials; an IP allowlist is defense in depth, not a substitute for authentication. Keep `requireTLS` and the smallest intended ranges, and verify allowed and denied access in your deployment. The HTTP subdomain/shared IPv4 are not database TCP endpoints. Never publish agent port 9443. A public seed does not fix normal RS discovery of private hosts/ports: no automatic external split-horizon DNS/SNI solution is shipped. Direct-connection diagnostic reachability is not public failover verification.
 
-The control-plane integration token needs **Custom access per project → Full access** for the selected existing project: import/deploy, secret updates, resource/volume/lifecycle/routing and log inspection. Organization-wide Owner/Admin access and project-creation rights are unnecessary. Full project scope can read other services' sensitive environment entries. Treat the token and Karakoram runtime as trusted project infrastructure authority, and keep service environment isolation enabled. Zerops custom user variables cannot use its reserved `ZEROPS_` prefix; use **KARAKORAM_ZEROPS_TOKEN/PROJECT_ID/API_URL**.
+Each namespace's integration token needs **Custom access per project → Full access** for its selected existing project: import/deploy, secret updates, resource/volume/lifecycle/routing and log inspection. Organization-wide Owner/Admin access and project-creation rights are unnecessary. Full project scope can read other services' sensitive environment entries. Treat each token and the Karakoram runtime as trusted project infrastructure authority, and keep service environment isolation enabled. Zerops custom user variables cannot use its reserved `ZEROPS_` prefix; use **KARAKORAM_ZEROPS_TOKEN/PROJECT_ID/API_URL** for the default namespace.
 
 Changing an environment secret does not update an already running process; coordinate restart/redeploy without violating database quorum. Never write tokens into pipeline runtime envVariables (which override service secrets), source, artifacts, issue reports or shell traces. Signed upload/log URLs are credential-bearing too. Karakoram API tokens and database passwords are not substitutes for the infrastructure token.
+
+Stored namespace token rotation validates project access before replacing the
+sealed value and live Backend token, without restarting its relay. Default-token
+rotation is environment-managed and requires service restart. Removing a
+namespace does not remove policy grants; review stale authority before reusing
+a name. See [namespace lifecycle](user-guide/namespaces.md).
 
 ## Reporting vulnerabilities
 

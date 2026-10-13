@@ -26,6 +26,16 @@ var ErrNotFound = errors.New("resource not found")
 // ErrConflict indicates a duplicate identity or conflicting state transition.
 var ErrConflict = errors.New("resource conflict")
 
+// ErrInvalid indicates an invalid persistence identity.
+var ErrInvalid = errors.New("invalid resource identity")
+
+func storageAAD(namespace, name string) string {
+	if namespace == "" || namespace == domain.DefaultNamespace {
+		return "storage/" + name
+	}
+	return "storage-ns/" + namespace + "/" + name
+}
+
 //go:embed migrations/*.sql
 var migrations embed.FS
 
@@ -205,6 +215,9 @@ func clusterRecordFilter(ref domain.ClusterRef) (string, []any) {
 }
 
 func listClusterRecords[T any](ctx context.Context, s *Store, kind string, ref domain.ClusterRef) ([]T, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
 	filter, args := clusterRecordFilter(ref)
 	return listQuery[T](ctx, s, "SELECT data FROM records WHERE kind=?"+filter+" ORDER BY created,key", append([]any{kind}, args...)...)
 }
