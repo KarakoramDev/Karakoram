@@ -21,7 +21,7 @@ func componentProcess(m *member) string {
 }
 
 func restoreVersionCompatible(source, target string) bool {
-	a, ok := parseVersion(source)
+	a, ok := parseVersion(snapshotReleaseVersion(source))
 	if !ok {
 		return false
 	}

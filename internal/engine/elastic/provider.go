@@ -347,7 +347,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		if version == "" {
 			version = source.Spec.Version
 		}
-		a, ok := parseVersion(version)
+		a, ok := parseVersion(snapshotReleaseVersion(version))
 		target, _ := parseVersion(s.Version)
 		if !ok || a[0] > target[0] || target[0] > a[0]+1 || a[0] == target[0] && (a[1] > target[1] || a[1] == target[1] && a[2] > target[2]) {
 			return invalid("source version is incompatible with target")

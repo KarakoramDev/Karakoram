@@ -112,3 +112,16 @@ func TestDeleteSnapshotNotFoundIsIdempotent(t *testing.T) {
 		t.Fatalf("second delete: %+v %v", result, err)
 	}
 }
+
+// Elasticsearch 9 reports a snapshot's index version as a release range;
+// recording it verbatim made every restore fail as incompatible.
+func TestSnapshotReleaseVersionRange(t *testing.T) {
+	for in, want := range map[string]string{"9.5.2-9.5.4": "9.5.2", "9.5.5": "9.5.5", "9111000": "", "": ""} {
+		if got := snapshotReleaseVersion(in); got != want {
+			t.Errorf("snapshotReleaseVersion(%q)=%q want %q", in, got, want)
+		}
+	}
+	if !restoreVersionCompatible("9.5.2-9.5.4", "9.5.4") || restoreVersionCompatible("9.5.2-9.5.4", "9.4.8") {
+		t.Fatal("range compatibility")
+	}
+}

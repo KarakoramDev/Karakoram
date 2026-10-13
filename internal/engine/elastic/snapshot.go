@@ -143,8 +143,8 @@ func (p *Provider) runBackup(ctx context.Context, rc *engine.Context, s *state, 
 		if !info.StartTime.IsZero() {
 			b.StartedAt = &info.StartTime
 		}
-		if info.Version != "" {
-			b.SourceVersion = info.Version
+		if v := snapshotReleaseVersion(info.Version); v != "" {
+			b.SourceVersion = v
 		}
 		switch info.State {
 		case "SUCCESS":
@@ -252,4 +252,18 @@ func (p *Provider) runDeleteBackup(ctx context.Context, rc *engine.Context, s *s
 	}
 	cp.Stage = "done"
 	return operationResult(cp, true), nil
+}
+
+// snapshotReleaseVersion maps a snapshot's reported version to the oldest
+// release that wrote it. Elasticsearch 9 reports the index version as a
+// release range such as "9.5.2-9.5.4"; unparsable values yield "" so the
+// recorded cluster version is kept.
+func snapshotReleaseVersion(v string) string {
+	if low, _, ok := strings.Cut(v, "-"); ok {
+		v = low
+	}
+	if _, ok := parseVersion(v); !ok {
+		return ""
+	}
+	return v
 }
