@@ -54,6 +54,7 @@ function specFromTopology(provider: Provider, topology: Topology, version: strin
 }
 
 
+
 export function ClusterWizardPage() {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -174,6 +175,9 @@ export function ClusterWizardPage() {
   const pitr = mongo && hasCapability(provider, 'pitr');
   const engineUI = engines[provider.name];
   const WizardSection = engineUI?.wizardSection;
+  const TopologySection = engineUI?.topologySection;
+  const ResourcesSection = engineUI?.resourcesSection;
+  const engineSummary = engineUI?.specSummary?.(spec) ?? `${spec.components.engine.replicas} nodes`;
 
   const goto = (id: StepId, clickCount: number) => {
     if (clickCount > 1) return;
@@ -254,7 +258,7 @@ export function ClusterWizardPage() {
               {provider.displayName} {spec.version}
             </dd>
             <dt>Topology</dt>
-            <dd>{mongo ? (sharded ? `${spec.topology.shards ?? 0} shards × ${spec.components.engine.replicas}` : `RS × ${spec.components.engine.replicas}`) : `${spec.components.engine.replicas} nodes`}</dd>
+            <dd>{mongo ? (sharded ? `${spec.topology.shards ?? 0} shards × ${spec.components.engine.replicas}` : `RS × ${spec.components.engine.replicas}`) : engineSummary}</dd>
             <dt>Backups</dt>
             <dd>{spec.backup?.storage ? `${spec.backup.storage}${spec.backup.pitr?.enabled ? ' + PITR' : ''}` : 'none'}</dd>
             <dt>Exposure</dt>
@@ -379,7 +383,7 @@ export function ClusterWizardPage() {
                   Zerops does not guarantee that members land on separate physical hosts. More members improve resilience against process and container failures, but host-failure tolerance cannot be
                   promised. Karakoram reports detected co-location on the cluster overview.
                 </Callout>
-                {!mongo ? <GenericComponents spec={spec} topology={topology} showErrors={touched.topology} onChange={(next) => update(() => next)} /> : sharded ? (
+                {!mongo ? (TopologySection ? <TopologySection provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : <GenericComponents spec={spec} topology={topology} showErrors={touched.topology} onChange={(next) => update(() => next)} />) : sharded ? (
                   <>
                     <div className="grid-2">
                       <TextField
@@ -453,7 +457,7 @@ export function ClusterWizardPage() {
 
           {step === 'resources' ? (
             <div className="stack" style={{ gap: 16 }}>
-              {!mongo ? <GenericComponents spec={spec} topology={topology} resources showErrors={touched.resources} onChange={(next) => update(() => next)} /> : <>
+              {!mongo ? (ResourcesSection ? <ResourcesSection provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : <GenericComponents spec={spec} topology={topology} resources showErrors={touched.resources} onChange={(next) => update(() => next)} />) : <>
               <Card title={sharded ? 'Shard members' : 'Members'}>
                 <ResourcesEditor idPrefix="engine" minimums={resourceMinimums(provider.name, topology, 'engine')} showErrors={touched.resources} value={spec.components.engine.resources} onChange={(r) => update((s) => ({ ...s, components: { ...s.components, engine: { ...s.components.engine, resources: r } } }))} />
               </Card>
@@ -567,7 +571,7 @@ export function ClusterWizardPage() {
                     ['Namespace', <span className="mono">{targetNamespace}</span>],
                     ['Name', <span className="mono">{name}</span>],
                     ['Engine', `${provider.displayName} ${spec.version}`],
-                    ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${topology.displayName}, ${spec.components.engine.replicas} nodes`],
+                    ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${topology.displayName}, ${engineSummary}`],
                     ['Member resources', resourcesSummary(spec.components.engine.resources)],
                     spec.components.configServer && ['Config server resources', resourcesSummary(spec.components.configServer.resources)],
                     spec.components.router && ['Router resources', resourcesSummary(spec.components.router.resources, true)],

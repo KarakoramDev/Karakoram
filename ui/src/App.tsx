@@ -33,6 +33,7 @@ import { ApiTokensPage } from '@/pages/settings/ApiTokens';
 import { SsoPage } from '@/pages/settings/Sso';
 import { MonitoringSettingsPage } from '@/pages/settings/Monitoring';
 import { OperationDetailPage } from '@/pages/OperationDetail';
+import '@/engines/register';
 
 const pageRoutes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },

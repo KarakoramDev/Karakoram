@@ -3,8 +3,12 @@
 
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
-export type { EngineUI, MonitoringPanel, WizardSectionProps } from './types';
+export type { EngineUI, MonitoringPanel, TopologyEditorProps, WizardSectionProps } from './types';
 
+/**
+ * Provider name → engine UI descriptor. Descriptors with React components are attached by
+ * `./register.ts` (`./<provider>/index.tsx`) so this module stays loadable by `node --test`.
+ */
 export const engines: Record<string, EngineUI> = {
   psmdb: {
     label: 'Percona Server for MongoDB',

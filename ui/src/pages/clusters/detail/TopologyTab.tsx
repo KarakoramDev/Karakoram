@@ -63,6 +63,7 @@ export function TopologyTab() {
   const sharded = cluster.spec.topology.type === 'sharded';
   const mongo = cluster.spec.provider === 'psmdb';
   const engineUI = engines[cluster.spec.provider];
+  const TopologyEditor = engineUI?.topologyEditor;
   const limits = replicaLimits(topology, 'engine');
   const editable = can('update') && cluster.status.phase !== 'Deleting' && cluster.status.phase !== 'Suspended';
   const patch = useMemo(() => buildPatch(cluster.spec, draft), [cluster.spec, draft]);
@@ -84,7 +85,7 @@ export function TopologyTab() {
   if (patch.exposure) errors.push(...validateExposure(draft.exposure, allAddressesConfirmed));
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
+    mutationFn: ({ spec, key }: { spec: Record<string, unknown>; key: string }) => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec } })),
     onSuccess: (c) => {
       submission.reset();
       setAllAddressesConfirmed(false);
@@ -118,6 +119,7 @@ export function TopologyTab() {
       {!editable ? <Callout tone="info">{can('update') ? `Editing is unavailable while the cluster is ${cluster.status.phase}.` : 'You have read-only access to this cluster.'}</Callout> : null}
       {cluster.status.observedGeneration < cluster.generation ? <Callout tone="info">A previous change is still being reconciled (generation {cluster.status.observedGeneration} of {cluster.generation}).</Callout> : null}
 
+      {TopologyEditor ? <TopologyEditor cluster={cluster} provider={provider} editable={editable} can={can} busy={save.isPending} submit={(spec, key) => save.mutateAsync({ spec, key })} /> : <>
       <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
         <Card title={sharded ? 'Shards and members' : 'Members'}>
           <div className="stack" style={{ gap: 16 }}>
@@ -204,6 +206,7 @@ export function TopologyTab() {
           </Button>
         </div>
       ) : null}
+      </>}
 
       {supportsOperation(provider, 'replace-member') ? <Card title="Replace a member" flush>
         <div className="table-wrap">
@@ -247,7 +250,7 @@ export function TopologyTab() {
         </div>
       </Card> : null}
 
-      <ConfirmDialog open={confirmOpen} onClose={() => { setConfirmOpen(false); save.reset(); submission.reset(); }} onConfirm={() => save.mutateAsync()} title="Apply topology changes" confirmLabel="Apply" busy={save.isPending} error={save.error}>
+      {TopologyEditor ? null : <ConfirmDialog open={confirmOpen} onClose={() => { setConfirmOpen(false); save.reset(); submission.reset(); }} onConfirm={() => save.mutateAsync({ spec: patch, key: submission.key })} title="Apply topology changes" confirmLabel="Apply" busy={save.isPending} error={save.error}>
         <div className="stack">
           {disruptive.length ? (
             <Callout tone="warn" title="What will change">
@@ -264,7 +267,7 @@ export function TopologyTab() {
           </details>
           {clusters.data && clusters.data.items.length > 1 && patch.exposure ? <p className="xs faint">Other clusters are unaffected.</p> : null}
         </div>
-      </ConfirmDialog>
+      </ConfirmDialog>}
 
       <ConfirmDialog
         open={replaceMember !== null}

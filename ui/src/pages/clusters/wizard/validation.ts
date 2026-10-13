@@ -57,9 +57,15 @@ export function validateWizard(name: string, namespace: string, spec: Schemas['C
   else if (version.status === 'unavailable') v.basics.push('This version is not available for new clusters.');
   v.basics.push(...(engines[spec.provider]?.validateSpec?.(spec) ?? []));
   const topology = provider?.topologies.find((item) => item.type === spec.topology.type);
-  v.topology.push(...Object.values(topologyErrors(spec, topology)));
-  for (const [name, component] of componentEntries(spec.components)) {
-    if (component) v.resources.push(...validateResources(component.resources, undefined, name === 'router', resourceMinimums(spec.provider, topology, name)).map((error) => `${name}: ${error}`));
+  const custom = engines[spec.provider]?.validateComponents?.(spec, topology);
+  if (custom) {
+    v.topology.push(...custom.topology);
+    v.resources.push(...custom.resources);
+  } else {
+    v.topology.push(...Object.values(topologyErrors(spec, topology)));
+    for (const [name, component] of componentEntries(spec.components)) {
+      if (component) v.resources.push(...validateResources(component.resources, undefined, name === 'router', resourceMinimums(spec.provider, topology, name)).map((error) => `${name}: ${error}`));
+    }
   }
   const backup = spec.backup;
   if (backup) {

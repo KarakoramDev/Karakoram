@@ -183,7 +183,7 @@ export function ClusterDetailLayout() {
           { to: `${base}/events`, label: 'Events & logs' },
           { to: `${base}/operations`, label: 'Operations' },
           ...(can('delete') ? [{ to: `${base}/delete`, label: 'Delete' }] : []),
-          ...(engine?.detailTabs ?? []).map((t) => ({ to: `${base}/${t.id}`, label: t.label })),
+          ...(engine?.detailTabs ?? []).filter((t) => !t.capability || hasCapability(provider, t.capability)).map((t) => ({ to: `${base}/${t.id}`, label: t.label })),
         ].filter((t) => tabAvailable(provider, t.to.slice(base.length + 1)))}
       />
       <Outlet context={{ cluster, provider, namespace, name, base, can } satisfies ClusterContext} />
