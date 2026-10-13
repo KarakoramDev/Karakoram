@@ -4,16 +4,21 @@ openapi: 3.0.3
 info:
   title: Karakoram API
   version: 1.0.0
-  description: Self-hosted Zerops-native PSMDB and PBM orchestration. REST contracts
-    for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie
+  description: Self-hosted Zerops-native PSMDB and PBM orchestration across project
+    namespaces. REST contracts for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie
     sessions are alternatives. Cookie-authenticated unsafe requests require X-Karakoram-CSRF.
     Secret inputs are write-only; explicit one-time token creation, generated application
     passwords returned once on user creation, and cluster-credentials reads are the only
     secret-bearing JSON responses. RBAC uses resource/action/object
     with explicit deny overriding allow; database roles share database-users authorization.
     Self-service auth/permissions endpoints require an authenticated identity but
-    do not require administrative account/RBAC permissions. Global collections are
-    filtered by each item’s cluster object rather than requiring a wildcard grant.
+    do not require administrative account/RBAC permissions. RBAC object kinds are
+    '*' for global routes, cluster for namespace/cluster from the namespace query and
+    cluster path, namespace for the namespace path, and storage for namespace/storage
+    from the namespace query and storage path. Collection routes filter each item by
+    its persisted object; create routes authorize the submitted namespaced object.
+    Namespace creation requires namespaces/create on '*'; namespace lists filter by
+    namespaces/read on each namespace. Namespace actions are read/create/update/delete.
     Root /healthz and /metrics use explicit operation-level server overrides.
   license:
     name: Apache-2.0
@@ -39,6 +44,8 @@ tags:
   description: Owner-scoped API tokens; token values are returned only once.
 - name: Providers
   description: Engine catalogs, topology schemas, presets and upgrade paths.
+- name: Namespaces
+  description: Project namespaces, write-only tokens and relay health.
 - name: Clusters
   description: Desired state, observed health, credentials and sharded balancing.
 - name: ClusterActions
@@ -871,7 +878,222 @@ paths:
                 $ref: '#/components/schemas/Provider'
         '500':
           $ref: '#/components/responses/InternalError'
+  /namespaces:
+    get:
+      operationId: listNamespaces
+      tags: [Namespaces]
+      summary: List readable project namespaces
+      description: Filters each namespace by namespaces/read on its name before pagination;
+        a global wildcard grant is not required.
+      x-karakoram-rbac: {resource: namespaces, action: read, object: '*'}
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NamespaceList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createNamespace
+      tags: [Namespaces]
+      summary: Register a project namespace and deploy its relay
+      description: Requires namespaces/create on '*'. Validates the token and project
+        synchronously, then starts relay deployment asynchronously. The name default
+        is reserved and each project may belong to only one namespace.
+      x-karakoram-rbac: {resource: namespaces, action: create, object: '*'}
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NamespaceCreate'
+      responses:
+        '201':
+          description: Registered; relay deployment continues asynchronously.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /namespaces/{namespace}:
+    parameters:
+    - $ref: '#/components/parameters/NamespacePath'
+    get:
+      operationId: getNamespace
+      tags: [Namespaces]
+      summary: Read namespace project, token status and relay health
+      x-karakoram-rbac: {resource: namespaces, action: read, object: namespace}
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: updateNamespace
+      tags: [Namespaces]
+      summary: Update a namespace description
+      description: Changes only description. Name, project identity, token and relay
+        status cannot be changed by this patch.
+      x-karakoram-rbac: {resource: namespaces, action: update, object: namespace}
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NamespaceUpdate'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteNamespace
+      tags: [Namespaces]
+      summary: Remove an empty namespace and its relay
+      description: Returns 409 for default or while any cluster (including deleting),
+        backup storage, retained backup record or pending orphaned-volume record exists.
+        Once accepted, deletes the relay service before removing the namespace and
+        its sealed token and relay secrets.
+      x-karakoram-rbac: {resource: namespaces, action: delete, object: namespace}
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      responses:
+        '202':
+          description: Namespace removal accepted; relay cleanup continues asynchronously.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /namespaces/{namespace}/token:
+    parameters:
+    - $ref: '#/components/parameters/NamespacePath'
+    put:
+      operationId: rotateNamespaceToken
+      tags: [Namespaces]
+      summary: Validate and atomically rotate a namespace token
+      description: The new token must see the same projectId. Rotation does not restart
+        the relay. The default namespace token is environment-managed; returns 409
+        and must instead be rotated by updating the service secret and restarting.
+      x-karakoram-rbac: {resource: namespaces, action: update, object: namespace}
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NamespaceTokenRotate'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /namespaces/{namespace}/validate:
+    parameters:
+    - $ref: '#/components/parameters/NamespacePath'
+    post:
+      operationId: validateNamespace
+      tags: [Namespaces]
+      summary: Revalidate a namespace token and project
+      x-karakoram-rbac: {resource: namespaces, action: update, object: namespace}
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /clusters:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listClusters
       tags:
@@ -895,8 +1117,8 @@ paths:
                 $ref: '#/components/schemas/ClusterList'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Filters each cluster by clusters read on its name; a global * check
-        must not prevent scoped users from listing permitted clusters.
+      description: Filters each cluster by clusters read on namespace/name; a global
+        '*' check must not prevent scoped users from listing permitted clusters.
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
@@ -923,8 +1145,11 @@ paths:
                 $ref: '#/components/schemas/Cluster'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Also authorize clusters create against the submitted name. Returns
-        desired state immediately; status tracks asynchronous reconciliation.
+      description: Also authorize clusters create against the submitted namespace/name.
+        Returns desired state immediately; status tracks asynchronous reconciliation.
+        Cloning requires backups/read on the source namespace/cluster; cross-namespace
+        cloning additionally requires backups/export on that source object, checked
+        by the handler rather than route metadata.
       parameters:
       - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -936,6 +1161,7 @@ paths:
   /clusters/{cluster}:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getCluster
       tags:
@@ -1058,6 +1284,7 @@ paths:
   /clusters/{cluster}/resume:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     post:
       operationId: resumeCluster
       tags:
@@ -1086,6 +1313,7 @@ paths:
   /clusters/{cluster}/restart:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     post:
       operationId: restartCluster
       tags:
@@ -1114,6 +1342,7 @@ paths:
   /clusters/{cluster}/raise-fcv:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     post:
       operationId: raiseClusterFCV
       tags:
@@ -1148,6 +1377,7 @@ paths:
   /clusters/{cluster}/members/{member}/replace:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
       in: path
       schema: *id006
@@ -1180,6 +1410,7 @@ paths:
   /clusters/{cluster}/rotate-tls:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     post:
       operationId: rotateClusterTLS
       tags:
@@ -1210,6 +1441,7 @@ paths:
   /clusters/{cluster}/system-users:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listSystemUsers
       tags:
@@ -1236,6 +1468,7 @@ paths:
   /clusters/{cluster}/system-users/{user}/rotate:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: user
       in: path
       schema: *id006
@@ -1268,6 +1501,7 @@ paths:
   /clusters/{cluster}/members:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listClusterMembers
       tags:
@@ -1294,6 +1528,7 @@ paths:
   /clusters/{cluster}/members/{member}:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
       in: path
       schema: *id006
@@ -1324,6 +1559,7 @@ paths:
   /clusters/{cluster}/status:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getClusterStatus
       tags:
@@ -1350,6 +1586,7 @@ paths:
   /clusters/{cluster}/connection:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getClusterConnection
       tags:
@@ -1383,6 +1620,7 @@ paths:
   /clusters/{cluster}/placement:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getClusterPlacement
       tags:
@@ -1409,6 +1647,7 @@ paths:
   /clusters/{cluster}/balancer:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getClusterBalancer
       tags:
@@ -1466,6 +1705,7 @@ paths:
   /clusters/{cluster}/database-users:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listDatabaseUsers
       tags:
@@ -1533,6 +1773,7 @@ paths:
   /clusters/{cluster}/database-users/{database}/{username}:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: database
       in: path
       schema: *id006
@@ -1619,6 +1860,7 @@ paths:
   /clusters/{cluster}/database-roles:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listDatabaseRoles
       tags:
@@ -1680,6 +1922,7 @@ paths:
   /clusters/{cluster}/database-roles/{database}/{role}:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: database
       in: path
       schema: *id006
@@ -1764,6 +2007,8 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /orphaned-volumes:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listOrphanedVolumes
       tags:
@@ -1787,6 +2032,7 @@ paths:
   /clusters/{cluster}/backups:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listBackups
       tags:
@@ -1848,6 +2094,7 @@ paths:
   /clusters/{cluster}/backups/{backup}:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: backup
       in: path
       schema: *id006
@@ -1907,6 +2154,7 @@ paths:
   /clusters/{cluster}/pitr:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getPITRWindow
       tags:
@@ -1933,6 +2181,7 @@ paths:
   /clusters/{cluster}/restores:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listRestores
       tags:
@@ -1985,6 +2234,9 @@ paths:
       description: Requires a compatible succeeded source backup or an available PITR
         window. Creating a new cluster from a source uses cluster spec.dataSource
         instead.
+        Requires backups/read on the source namespace/cluster. Cross-namespace restores
+        additionally require backups/export on that source object, checked by the
+        handler rather than route metadata.
       parameters:
       - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -1996,6 +2248,7 @@ paths:
   /clusters/{cluster}/restores/{restore}:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: restore
       in: path
       schema: *id006
@@ -2024,6 +2277,8 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
   /backup-storages:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listBackupStorages
       tags:
@@ -2083,6 +2338,7 @@ paths:
               $ref: '#/components/schemas/CreateBackupStorageRequest'
   /backup-storages/{storage}:
     parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: storage
       in: path
       schema: *id006
@@ -2095,7 +2351,7 @@ paths:
       x-karakoram-rbac:
         resource: backup-storages
         action: read
-        object: '*'
+        object: storage
       responses:
         '400': *id001
         '401': *id002
@@ -2118,7 +2374,7 @@ paths:
       x-karakoram-rbac:
         resource: backup-storages
         action: update
-        object: '*'
+        object: storage
       responses:
         '400': *id001
         '401': *id002
@@ -2149,7 +2405,7 @@ paths:
       x-karakoram-rbac:
         resource: backup-storages
         action: delete
-        object: '*'
+        object: storage
       responses:
         '400': *id001
         '401': *id002
@@ -2165,6 +2421,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /backup-storages/{storage}/verify:
     parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: storage
       in: path
       schema: *id006
@@ -2177,7 +2434,7 @@ paths:
       x-karakoram-rbac:
         resource: backup-storages
         action: update
-        object: '*'
+        object: storage
       responses:
         '400': *id001
         '401': *id002
@@ -2195,6 +2452,8 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /operations:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listOperations
       tags:
@@ -2237,6 +2496,7 @@ paths:
   /clusters/{cluster}/operations:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listClusterOperations
       tags:
@@ -2296,9 +2556,11 @@ paths:
                 $ref: '#/components/schemas/Operation'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Resolve the operation first, then authorize operations read against
-        its persisted cluster name. The global route has no cluster path parameter.
+      description: Resolve the globally unique operation ID first, then authorize
+        operations read against its persisted namespace/cluster object.
   /events:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listEvents
       tags:
@@ -2306,6 +2568,11 @@ paths:
       summary: List the durable authorization-filtered event log
       x-karakoram-rbac:
         resource: events
+        action: read
+        object: '*'
+      description: Cluster events require events:read or audit:read on '<namespace>/<cluster>'. Namespace lifecycle and mutation events require audit:read on '<namespace>'; global audit entries require audit:read on '*'. Namespace, actor and resource filters compose; actor and resource use exact matches.
+      x-karakoram-rbac-extra:
+        resource: audit
         action: read
         object: '*'
       responses:
@@ -2339,7 +2606,21 @@ paths:
         in: query
         schema:
           type: string
+      - &eventActor
+        name: actor
+        in: query
+        description: Exact actor identity, including token name and ID when applicable.
+        schema:
+          type: string
+      - &eventResource
+        name: resource
+        in: query
+        description: Exact resource category, such as clusters, accounts, auth or rbac.
+        schema:
+          type: string
   /events/stream:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: streamEvents
       tags:
@@ -2347,6 +2628,10 @@ paths:
       summary: Stream authorization-filtered events with durable replay
       x-karakoram-rbac:
         resource: events
+        action: read
+        object: '*'
+      x-karakoram-rbac-extra:
+        resource: audit
         action: read
         object: '*'
       responses:
@@ -2366,12 +2651,16 @@ paths:
       description: 'SSE frames: id is the durable event ID, event is the event type,
         data is a JSON Event. Replays after the requested cursor then streams live
         events. Heartbeat comment frames keep the connection alive. Authorization
-        filtering applies to every event cluster. An unavailable cursor returns 409;
-        never skip lost history silently.'
+        uses events:read or audit:read on namespace/cluster for cluster entries,
+        audit:read on the namespace for namespace-level entries, and audit:read on
+        "*" for global entries. Namespace, actor and resource filters compose;
+        actor and resource filters are exact matches.'
       parameters:
       - *id008
       - *id009
       - *id010
+      - *eventActor
+      - *eventResource
       - name: cursor
         in: query
         schema:
@@ -2385,6 +2674,7 @@ paths:
   /clusters/{cluster}/metrics:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getClusterMetrics
       tags:
@@ -2426,6 +2716,7 @@ paths:
   /clusters/{cluster}/members/{member}/logs:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
       in: path
       schema: *id006
@@ -2480,6 +2771,8 @@ paths:
           type: string
           format: date-time
   /metrics:
+    parameters:
+    - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getPrometheusMetrics
       tags:
@@ -2526,6 +2819,23 @@ components:
         rotating HttpOnly karakoram_refresh cookie at /auth/refresh. X-Karakoram-CSRF
         is required on unsafe methods.
   parameters:
+    NamespaceQuery:
+      name: namespace
+      in: query
+      required: false
+      description: Namespace of the requested object; defaults to default for single-object
+        routes and creation. On collection routes (/clusters, /operations, /events,
+        /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence
+        includes all authorized namespaces and a value filters to that namespace.
+      schema:
+        $ref: '#/components/schemas/NamespaceName'
+    NamespacePath:
+      name: namespace
+      in: path
+      required: true
+      description: Project namespace name; the RBAC object is this name.
+      schema:
+        $ref: '#/components/schemas/NamespaceName'
     Limit:
       name: limit
       in: query
@@ -2554,7 +2864,7 @@ components:
       name: cluster
       in: path
       required: true
-      description: Managed cluster name. RBAC object is this name.
+      description: Managed cluster name; the RBAC object is namespace/cluster.
       schema: *id007
   responses:
     BadRequest:
@@ -2589,6 +2899,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    UnprocessableEntity:
+      description: Invalid namespace token, project mismatch or duplicate project.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     InternalError:
       description: Unexpected server error; response does not contain secret material.
       content:
@@ -2596,6 +2912,148 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    NamespaceName:
+      type: string
+      pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'
+      description: Project namespace name, 2–32 lowercase letters, digits or hyphens.
+    TokenStatus:
+      type: object
+      description: Secret-safe token health; never contains a token or fingerprint.
+      properties:
+        source:
+          type: string
+          enum: [env, stored]
+        valid:
+          type: boolean
+        lastValidatedAt:
+          type: string
+          format: date-time
+        lastError:
+          type: string
+        rotatedAt:
+          type: string
+          format: date-time
+      required: [source, valid]
+    RelayStatus:
+      type: object
+      description: Relay health; the default namespace uses direct networking.
+      properties:
+        hostname:
+          type: string
+        serviceId:
+          type: string
+        phase:
+          type: string
+          enum: [NotRequired, Pending, Deploying, Ready, Error]
+        connected:
+          type: boolean
+        connectedSince:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        version:
+          type: string
+        desiredVersion:
+          type: string
+        certNotAfter:
+          type: string
+          format: date-time
+        reconnects:
+          type: integer
+          format: int64
+          minimum: 0
+        lastError:
+          type: string
+      required: [phase, connected, reconnects]
+    Namespace:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/NamespaceName'
+        description:
+          type: string
+        projectId:
+          type: string
+        projectName:
+          type: string
+        default:
+          type: boolean
+        phase:
+          type: string
+          enum: [Pending, Ready, Error, Deleting]
+        token:
+          $ref: '#/components/schemas/TokenStatus'
+        relay:
+          $ref: '#/components/schemas/RelayStatus'
+        clusterCount:
+          type: integer
+          minimum: 0
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - name
+      - projectId
+      - projectName
+      - default
+      - phase
+      - token
+      - relay
+      - clusterCount
+      - createdAt
+      - updatedAt
+    NamespaceCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          $ref: '#/components/schemas/NamespaceName'
+        projectId:
+          type: string
+          minLength: 1
+        token:
+          type: string
+          format: password
+          minLength: 1
+          writeOnly: true
+        description:
+          type: string
+      required: [name, projectId, token]
+    NamespaceUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+          description: New description; an empty string clears the description.
+      required: [description]
+    NamespaceTokenRotate:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          format: password
+          minLength: 1
+          writeOnly: true
+      required: [token]
+    NamespaceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Namespace'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required: [items]
     Error:
       type: object
       properties:
@@ -2800,6 +3258,7 @@ components:
           - read
           - update
           - delete
+          - export
           - '*'
         object:
           type: string
@@ -3206,6 +3665,10 @@ components:
     DataSource:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          description: Source namespace; defaults to the target cluster namespace.
         cluster: *id007
         backup: *id006
         pitrTime: *id011
@@ -3511,6 +3974,10 @@ components:
     Cluster:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
         name: *id007
         generation:
           type: integer
@@ -3522,6 +3989,7 @@ components:
         createdAt: *id011
         updatedAt: *id011
       required:
+      - namespace
       - name
       - generation
       - spec
@@ -3722,6 +4190,10 @@ components:
     Backup:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
         name: *id006
         cluster: *id007
         storage: *id006
@@ -3756,6 +4228,7 @@ components:
         error:
           type: string
       required:
+      - namespace
       - name
       - cluster
       - storage
@@ -3788,6 +4261,10 @@ components:
     Restore:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
         name: *id006
         cluster: *id007
         source:
@@ -3804,6 +4281,7 @@ components:
         error:
           type: string
       required:
+      - namespace
       - name
       - cluster
       - source
@@ -3811,6 +4289,10 @@ components:
     CreateRestoreRequest:
       type: object
       properties:
+        sourceNamespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          description: Source namespace; defaults to the target cluster namespace.
         name: *id006
         source:
           $ref: '#/components/schemas/RestoreSource'
@@ -3832,6 +4314,10 @@ components:
     BackupStorage:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
         name: *id006
         type: &id013
           type: string
@@ -3861,6 +4347,7 @@ components:
         createdAt: *id011
         updatedAt: *id011
       required:
+      - namespace
       - name
       - type
       - endpointURL
@@ -3872,7 +4359,13 @@ components:
     CreateBackupStorageRequest:
       type: object
       properties:
-        name: *id006
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[^:/]+$'
+          description: New storage names must not contain ':' or '/'. Existing default
+            storages with these characters remain readable and updatable.
         type: *id013
         endpointURL: *id014
         region: *id015
@@ -3928,6 +4421,10 @@ components:
     Operation:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
         id: *id006
         cluster: *id007
         type:
@@ -3950,6 +4447,9 @@ components:
           - Failed
         message:
           type: string
+        actor:
+          type: string
+          description: Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
         progress:
           type: number
           minimum: 0
@@ -3960,6 +4460,7 @@ components:
         error:
           $ref: '#/components/schemas/Error'
       required:
+      - namespace
       - id
       - cluster
       - type
@@ -3968,6 +4469,11 @@ components:
     Event:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
+          description: Namespace of cluster and namespace-level entries; absent for global audit entries.
         id:
           type: integer
           format: int64
@@ -3981,6 +4487,13 @@ components:
           type: string
         actor:
           type: string
+          description: Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor.
+        resource:
+          type: string
+          description: Resource category for filtering, such as clusters, accounts, auth, rbac or backup-storages.
+        target:
+          type: string
+          description: Non-secret resource identifier, such as a cluster name, account name or token ID.
         operationId:
           type: string
         createdAt: *id011
@@ -4163,6 +4676,10 @@ components:
     OrphanedVolume:
       type: object
       properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          readOnly: true
         hostname:
           type: string
         serviceId:
@@ -4192,6 +4709,7 @@ components:
         lastProcessId:
           type: string
       required:
+      - namespace
       - hostname
       - serviceId
       - cluster

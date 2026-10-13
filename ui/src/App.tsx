@@ -8,7 +8,7 @@ import { LoginPage } from '@/pages/auth/Login';
 import { ChangePasswordPage } from '@/pages/auth/ChangePassword';
 import { ClustersListPage } from '@/pages/clusters/ClustersList';
 import { ClusterWizardPage } from '@/pages/clusters/ClusterWizard';
-import { ClusterDetailLayout } from '@/pages/clusters/detail/ClusterDetail';
+import { ClusterDetailLayout, LegacyClusterRedirect } from '@/pages/clusters/detail/ClusterDetail';
 import { OverviewTab } from '@/pages/clusters/detail/OverviewTab';
 import { TopologyTab } from '@/pages/clusters/detail/TopologyTab';
 import { UpgradesTab } from '@/pages/clusters/detail/UpgradesTab';
@@ -23,6 +23,7 @@ import { EventsPage, NotFoundPage, OperationsPage } from '@/pages/GlobalPages';
 import { SettingsLayout } from '@/pages/settings/SettingsLayout';
 import { BackupStoragesPage } from '@/pages/settings/BackupStorages';
 import { OrphanedVolumesPage } from '@/pages/settings/OrphanedVolumes';
+import { NamespacesPage } from '@/pages/settings/Namespaces';
 import { AccountsPage } from '@/pages/settings/Accounts';
 import { RbacPage } from '@/pages/settings/Rbac';
 import { ApiTokensPage } from '@/pages/settings/ApiTokens';
@@ -44,8 +45,9 @@ const router = createBrowserRouter([
           { index: true, element: <Navigate to="/clusters" replace /> },
           { path: '/clusters', element: <ClustersListPage /> },
           { path: '/clusters/new', element: <ClusterWizardPage /> },
+          { path: '/clusters/:name', element: <LegacyClusterRedirect /> },
           {
-            path: '/clusters/:name',
+            path: '/clusters/:namespace/:name',
             element: <ClusterDetailLayout />,
             children: [
               { index: true, element: <OverviewTab /> },
@@ -69,6 +71,7 @@ const router = createBrowserRouter([
               { index: true, element: <Navigate to="/settings/backup-storages" replace /> },
               { path: 'backup-storages', element: <BackupStoragesPage /> },
               { path: 'orphaned-volumes', element: <OrphanedVolumesPage /> },
+              { path: 'namespaces', element: <NamespacesPage /> },
               { path: 'accounts', element: <AccountsPage /> },
               { path: 'rbac', element: <RbacPage /> },
               { path: 'api-tokens', element: <ApiTokensPage /> },

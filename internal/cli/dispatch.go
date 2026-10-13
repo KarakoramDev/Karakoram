@@ -20,6 +20,24 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	}
 	_ = q
 	switch op {
+	case "listNamespaces":
+		var p apiclient.ListNamespacesParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListNamespaces(ctx, &p)
+	case "getNamespace":
+		return c.GetNamespace(ctx, args[0])
+	case "createNamespace":
+		return c.CreateNamespaceWithBody(ctx, nil, "application/json", bytes.NewReader(body))
+	case "updateNamespace":
+		return c.UpdateNamespaceWithBody(ctx, args[0], nil, "application/json", bytes.NewReader(body))
+	case "rotateNamespaceToken":
+		return c.RotateNamespaceTokenWithBody(ctx, args[0], nil, "application/json", bytes.NewReader(body))
+	case "validateNamespace":
+		return c.ValidateNamespace(ctx, args[0], nil)
+	case "deleteNamespace":
+		return c.DeleteNamespace(ctx, args[0], nil)
 	case "changePassword":
 		var p apiclient.ChangePasswordParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -127,17 +145,41 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getAccount":
 		return c.GetAccount(ctx, args[0])
 	case "getBackup":
-		return c.GetBackup(ctx, args[0], args[1])
+		var p apiclient.GetBackupParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetBackup(ctx, args[0], args[1], &p)
 	case "getBackupStorage":
-		return c.GetBackupStorage(ctx, args[0])
+		var p apiclient.GetBackupStorageParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetBackupStorage(ctx, args[0], &p)
 	case "getCluster":
-		return c.GetCluster(ctx, args[0])
+		var p apiclient.GetClusterParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetCluster(ctx, args[0], &p)
 	case "getClusterBalancer":
-		return c.GetClusterBalancer(ctx, args[0])
+		var p apiclient.GetClusterBalancerParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetClusterBalancer(ctx, args[0], &p)
 	case "getClusterConnection":
-		return c.GetClusterConnection(ctx, args[0])
+		var p apiclient.GetClusterConnectionParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetClusterConnection(ctx, args[0], &p)
 	case "getClusterMember":
-		return c.GetClusterMember(ctx, args[0], args[1])
+		var p apiclient.GetClusterMemberParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetClusterMember(ctx, args[0], args[1], &p)
 	case "getClusterMetrics":
 		var p apiclient.GetClusterMetricsParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -145,15 +187,31 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 		}
 		return c.GetClusterMetrics(ctx, args[0], &p)
 	case "getClusterPlacement":
-		return c.GetClusterPlacement(ctx, args[0])
+		var p apiclient.GetClusterPlacementParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetClusterPlacement(ctx, args[0], &p)
 	case "getClusterStatus":
-		return c.GetClusterStatus(ctx, args[0])
+		var p apiclient.GetClusterStatusParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetClusterStatus(ctx, args[0], &p)
 	case "getCurrentUser":
 		return c.GetCurrentUser(ctx)
 	case "getDatabaseRole":
-		return c.GetDatabaseRole(ctx, args[0], args[1], args[2])
+		var p apiclient.GetDatabaseRoleParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetDatabaseRole(ctx, args[0], args[1], args[2], &p)
 	case "getDatabaseUser":
-		return c.GetDatabaseUser(ctx, args[0], args[1], args[2])
+		var p apiclient.GetDatabaseUserParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetDatabaseUser(ctx, args[0], args[1], args[2], &p)
 	case "getHealth":
 		return root.GetHealth(ctx)
 	case "getMemberLogs":
@@ -165,17 +223,29 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getOperation":
 		return c.GetOperation(ctx, args[0])
 	case "getPITRWindow":
-		return c.GetPITRWindow(ctx, args[0])
+		var p apiclient.GetPITRWindowParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetPITRWindow(ctx, args[0], &p)
 	case "getPermissions":
 		return c.GetPermissions(ctx)
 	case "getPrometheusMetrics":
-		return root.GetPrometheusMetrics(ctx)
+		var p apiclient.GetPrometheusMetricsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return root.GetPrometheusMetrics(ctx, &p)
 	case "getProvider":
 		return c.GetProvider(ctx, args[0])
 	case "getRBACPolicy":
 		return c.GetRBACPolicy(ctx)
 	case "getRestore":
-		return c.GetRestore(ctx, args[0], args[1])
+		var p apiclient.GetRestoreParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetRestore(ctx, args[0], args[1], &p)
 	case "getSettings":
 		return c.GetSettings(ctx)
 	case "getVersion":
@@ -205,7 +275,11 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 		}
 		return c.ListBackups(ctx, args[0], &p)
 	case "listClusterMembers":
-		return c.ListClusterMembers(ctx, args[0])
+		var p apiclient.ListClusterMembersParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListClusterMembers(ctx, args[0], &p)
 	case "listClusterOperations":
 		var p apiclient.ListClusterOperationsParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -237,7 +311,11 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 		}
 		return c.ListEvents(ctx, &p)
 	case "listOrphanedVolumes":
-		return c.ListOrphanedVolumes(ctx)
+		var p apiclient.ListOrphanedVolumesParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListOrphanedVolumes(ctx, &p)
 	case "listOperations":
 		var p apiclient.ListOperationsParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -253,7 +331,11 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 		}
 		return c.ListRestores(ctx, args[0], &p)
 	case "listSystemUsers":
-		return c.ListSystemUsers(ctx, args[0])
+		var p apiclient.ListSystemUsersParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListSystemUsers(ctx, args[0], &p)
 	case "login":
 		var p apiclient.LoginParams
 		if err = json.Unmarshal(q, &p); err != nil {

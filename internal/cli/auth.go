@@ -65,7 +65,7 @@ func (a *app) addAuth(root *cobra.Command) {
 			return fmt.Errorf("token creation response did not include a secret")
 		}
 		id, _ := nested(created, "token", "id").(string)
-		a.config.Contexts[a.selected] = Context{Server: a.server, Token: secret, TokenID: id}
+		a.config.Contexts[a.selected] = Context{Server: a.server, Token: secret, TokenID: id, Namespace: a.namespace}
 		a.config.CurrentContext = a.selected
 		if err = SaveConfig(a.opts.ConfigPath, a.config); err != nil {
 			return fmt.Errorf("saving credentials: %w", err)

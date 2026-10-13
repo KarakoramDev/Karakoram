@@ -24,7 +24,7 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 	if err != nil {
 		return result(cp, false), err
 	}
-	b, err := env.RC.Store.GetBackup(ctx, env.RC.Cluster.Name, name)
+	b, err := env.RC.Store.GetBackup(ctx, env.RC.Cluster.Ref(), name)
 	if err != nil {
 		return result(cp, false), err
 	}
@@ -45,11 +45,11 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 		if b.PBMPrefix == "" {
 			b.PBMPrefix, b.SourceTopology, b.SourceVersion = env.Prefix, env.RC.Cluster.Spec.Topology, env.RC.Cluster.Spec.Version
 			b.RecoveryIdentity = "backup-" + secrets.Hash(env.RC.Cluster.Name + "/" + env.Prefix + "/" + b.Name)[:32]
-			pw, e := env.RC.Secrets.GetClusterSecret(ctx, env.RC.Cluster.Name, "users/userAdmin")
+			pw, e := env.RC.Secrets.GetClusterSecret(ctx, env.RC.Cluster.Ref(), "users/userAdmin")
 			if e != nil {
 				return result(cp, false), e
 			}
-			if e := env.RC.Secrets.SetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin", pw); e != nil {
+			if e := env.RC.Secrets.SetClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin", pw); e != nil {
 				return result(cp, false), e
 			}
 			if e := env.RC.Store.UpdateBackup(ctx, b); e != nil {
@@ -156,7 +156,7 @@ func RunDeleteBackup(ctx context.Context, env Env, op *domain.Operation) (engine
 	if cp.Step == "done" {
 		return result(cp, true), nil
 	}
-	b, err := env.RC.Store.GetBackup(ctx, env.RC.Cluster.Name, name)
+	b, err := env.RC.Store.GetBackup(ctx, env.RC.Cluster.Ref(), name)
 	if errors.Is(err, engine.ErrNotFound) || errors.Is(err, store.ErrNotFound) {
 		cp.Step = "done"
 		return result(cp, true), nil
@@ -165,7 +165,7 @@ func RunDeleteBackup(ctx context.Context, env Env, op *domain.Operation) (engine
 		return result(cp, false), err
 	}
 	if b.PBMPrefix != "" {
-		env, err = recordedEnv(ctx, env, b.Storage, b.PBMPrefix)
+		env, err = recordedEnv(ctx, env, b.Namespace, b.Storage, b.PBMPrefix)
 		if err != nil {
 			return result(cp, false), err
 		}
@@ -225,11 +225,11 @@ func RunDeleteBackup(ctx context.Context, env Env, op *domain.Operation) (engine
 			return result(cp, false), e
 		}
 		if b.RecoveryIdentity != "" {
-			if e := env.RC.Secrets.DeleteClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin"); e != nil && !errors.Is(e, engine.ErrNotFound) && !errors.Is(e, store.ErrNotFound) {
+			if e := env.RC.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); e != nil && !errors.Is(e, engine.ErrNotFound) && !errors.Is(e, store.ErrNotFound) {
 				return result(cp, false), e
 			}
 		}
-		if err = env.RC.Store.DeleteBackup(ctx, env.RC.Cluster.Name, name); err != nil && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, store.ErrNotFound) {
+		if err = env.RC.Store.DeleteBackup(ctx, env.RC.Cluster.Ref(), name); err != nil && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, store.ErrNotFound) {
 			return result(cp, false), err
 		}
 		if err = event(ctx, env, op, "BackupDeleted", "PBM backup "+cp.PBMName+" deleted"); err != nil {

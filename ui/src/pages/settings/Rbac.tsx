@@ -11,8 +11,17 @@ import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 
-const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'monitoring', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
-const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', '*'];
+const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'audit', 'monitoring', 'namespaces', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
+const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', 'export', '*'];
+const OBJECT_EXAMPLES: Array<[string, string]> = [
+  ['**', 'everything in every namespace (a bare * is normalized to this)'],
+  ['dev', 'one namespace for the namespaces resource'],
+  ['dev/**', 'the dev namespace and every cluster, storage or audit object in it'],
+  ['prod/**', 'the prod namespace and everything in it'],
+  ['prod/orders', 'one cluster (or storage) in prod'],
+  ['prod/*', 'every cluster in prod, but not the namespace object itself'],
+  ['orders', 'legacy form; normalized to default/orders for cluster-scoped resources and audit'],
+];
 
 /** Lightweight structural check so obvious typos never reach the server. */
 function lintPolicy(csv: string): string[] {
@@ -90,8 +99,24 @@ export function RbacPage() {
           <div className="stack">
             <p className="small muted">
               Rules: <code>p, subject, resource, action, object, allow|deny</code> and role bindings <code>g, subject, role</code>. Subjects are <code>user:&lt;name&gt;</code>, <code>group:&lt;oidc-group&gt;</code> or <code>role:&lt;name&gt;</code>. Objects
-              are cluster-name globs (<code>prod*</code>) for cluster-scoped resources and <code>*</code> for global ones. Built-in roles <code>role:admin</code>, <code>role:operator</code>, <code>role:viewer</code> remain installed. Deny overrides allow.
+              are <code>&lt;namespace&gt;/&lt;cluster&gt;</code> globs for cluster-scoped resources and backup storages, <code>&lt;namespace&gt;</code> for the <code>namespaces</code> resource and <code>*</code> for global ones. Audit reads use the affected namespace/cluster, namespace or global object; <code>audit, read, dev/**</code> grants dev audit visibility only. Built-in roles{' '}
+              <code>role:admin</code>, <code>role:operator</code>, <code>role:viewer</code> remain installed. Deny overrides allow.
             </p>
+            <details className="small muted">
+              <summary>Object pattern examples</summary>
+              <dl className="kv" style={{ marginTop: 8 }}>
+                {OBJECT_EXAMPLES.map(([pattern, meaning]) => (
+                  <div key={pattern} style={{ display: 'contents' }}>
+                    <dt className="mono">{pattern}</dt>
+                    <dd>{meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p style={{ marginTop: 8 }}>
+                <code>*</code> matches within one path segment, <code>**</code> spans segments and <code>x/**</code> also matches <code>x</code> itself. Restoring or cloning across namespaces additionally needs the <code>export</code> action on{' '}
+                <code>backups</code> for the source cluster, e.g. <code>p, user:alice, backups, export, prod/orders</code>.
+              </p>
+            </details>
             <TextAreaField label="Policy" className="policy-editor" mono value={text} onChange={(e) => setText(e.target.value)} rows={18} readOnly={!editable} spellCheck={false} aria-describedby="policy-lint" />
             <div id="policy-lint">
               {problems.length ? (
@@ -188,7 +213,7 @@ function CanTester() {
               </option>
             ))}
           </SelectField>
-          <TextField label="Object" mono value={object} onChange={(e) => setObject(e.target.value)} placeholder="* or cluster name" />
+          <TextField label="Object" mono value={object} onChange={(e) => setObject(e.target.value)} placeholder="*, <namespace> or <namespace>/<cluster>" />
         </div>
         <div className="row">
           <Button type="submit" loading={check.isPending}>

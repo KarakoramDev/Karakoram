@@ -48,7 +48,7 @@ func TestRBAC(t *testing.T) {
 		if !visible {
 			t.Fatal("viewer cannot read test cluster")
 		}
-		s.expect(nil, 403)(view.GetClusterConnection(s.ctx, name))
+		s.expect(nil, 403)(view.GetClusterConnection(s.ctx, name, nil))
 		s.expect(nil, 403)(view.DeleteCluster(s.ctx, name, &api.DeleteClusterParams{}))
 		s.expect(nil, 403)(operate.ListAccounts(s.ctx, &api.ListAccountsParams{}))
 		s.expect(nil, 403)(operate.CreateAccount(s.ctx, &api.CreateAccountParams{}, api.CreateAccountRequest{Name: s.name(), Password: ptr(s.name() + s.name())}))
@@ -69,7 +69,7 @@ func TestRBAC(t *testing.T) {
 			t.Fatal("policy replacement did not grant credential read")
 		}
 		var connection api.Connection
-		s.expect(&connection)(view.GetClusterConnection(s.ctx, name))
+		s.expect(&connection)(view.GetClusterConnection(s.ctx, name, nil))
 		if len(connection.Credentials) == 0 {
 			t.Fatal("credential reveal omitted credentials after grant")
 		}
@@ -83,16 +83,16 @@ func TestRBAC(t *testing.T) {
 			t.Fatal("resource-scoped cluster collection leaked/omitted resources")
 		}
 		var permitted api.Cluster
-		s.expect(&permitted)(restricted.GetCluster(s.ctx, name))
-		s.expect(nil, 403)(restricted.GetCluster(s.ctx, s.name()))
-		s.expect(nil, 403)(restricted.GetClusterConnection(s.ctx, name))
+		s.expect(&permitted)(restricted.GetCluster(s.ctx, name, nil))
+		s.expect(nil, 403)(restricted.GetCluster(s.ctx, s.name(), nil))
+		s.expect(nil, 403)(restricted.GetClusterConnection(s.ctx, name, nil))
 		policy += "p, " + scopedSubject + ", cluster-credentials, read, " + name + ", allow\n"
 		s.expect(nil)(s.client.ReplaceRBACPolicy(s.ctx, &api.ReplaceRBACPolicyParams{}, api.RBACPolicy{Policy: policy}))
-		s.expect(&connection)(restricted.GetClusterConnection(s.ctx, name))
-		s.expect(nil, 403)(restricted.GetClusterConnection(s.ctx, s.name()))
+		s.expect(&connection)(restricted.GetClusterConnection(s.ctx, name, nil))
+		s.expect(nil, 403)(restricted.GetClusterConnection(s.ctx, s.name(), nil))
 		policy += "p, " + scopedSubject + ", clusters, read, " + name + ", deny\n"
 		s.expect(nil)(s.client.ReplaceRBACPolicy(s.ctx, &api.ReplaceRBACPolicyParams{}, api.RBACPolicy{Policy: policy}))
-		s.expect(nil, 403)(restricted.GetCluster(s.ctx, name))
+		s.expect(nil, 403)(restricted.GetCluster(s.ctx, name, nil))
 		s.expect(&clusters)(restricted.ListClusters(s.ctx, &api.ListClustersParams{}))
 		if len(clusters.Items) != 0 {
 			t.Fatal("explicit deny did not filter collection")

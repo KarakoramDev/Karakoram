@@ -25,13 +25,13 @@ func TestAlternateStorageRestoreEnqueuesFreshPITRBase(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := rc.Store.CreateBackup(ctx, &domain.Backup{Name: "old-base", Cluster: rc.Cluster.Name, Storage: "alternate", Type: "logical", PBMName: "old-snapshot", Phase: domain.PhaseSucceeded}); err != nil {
+			if err := rc.Store.CreateBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: "old-base", Cluster: rc.Cluster.Name, Storage: "alternate", Type: "logical", PBMName: "old-snapshot", Phase: domain.PhaseSucceeded}); err != nil {
 				t.Fatal(err)
 			}
-			if err := rc.Store.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: rc.Cluster.Name, Source: domain.RestoreSource{Backup: "old-base"}}); err != nil {
+			if err := rc.Store.CreateRestore(ctx, &domain.Restore{Namespace: rc.Cluster.Ref().Namespace, Name: "restore", Cluster: rc.Cluster.Name, Source: domain.RestoreSource{Backup: "old-base"}}); err != nil {
 				t.Fatal(err)
 			}
-			op := &domain.Operation{ID: "alternate-restore", Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"restore"}`)}
+			op := &domain.Operation{Namespace: rc.Cluster.Ref().Namespace, ID: "alternate-restore", Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"restore"}`)}
 			op.Checkpoint, _ = json.Marshal(map[string]string{"step": step})
 			result, err := p.RunOperation(ctx, rc, op)
 			if err != nil || !result.Done {
@@ -56,7 +56,7 @@ func TestAlternateStorageRestoreEnqueuesFreshPITRBase(t *testing.T) {
 			if !state.Pending || state.Name != name {
 				t.Fatalf("PITR restarted without fresh base gate: %+v", state)
 			}
-			base, err := rc.Store.GetBackup(ctx, rc.Cluster.Name, name)
+			base, err := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), name)
 			if err != nil {
 				t.Fatal(err)
 			}

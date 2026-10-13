@@ -18,9 +18,10 @@ import (
 
 // Context is a named server and its API credential.
 type Context struct {
-	Server  string `yaml:"server"`
-	Token   string `yaml:"token"`
-	TokenID string `yaml:"tokenID,omitempty"`
+	Server    string `yaml:"server"`
+	Token     string `yaml:"token"`
+	TokenID   string `yaml:"tokenID,omitempty"`
+	Namespace string `yaml:"namespace,omitempty"`
 }
 
 // Config records the selected context and named connections.

@@ -101,7 +101,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		if s.PBMStorage != "" && !slices.Contains(storages, s.PBMStorage) {
 			storages = append(storages, s.PBMStorage)
 		}
-		backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Name)
+		backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
 		if e != nil {
 			return false, e
 		}
@@ -114,7 +114,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			if slices.Contains(s.CleanedStorages, storage) {
 				continue
 			}
-			env, e := p.pbmEnvForStorage(ctx, rc, s, storage)
+			env, e := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, storage)
 			if e != nil {
 				return false, e
 			}
@@ -131,7 +131,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		s.CleanupBackups = true
 		return false, nil
 	}
-	retained, e := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Name)
+	retained, e := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 	if e != nil {
 		return false, e
 	}
@@ -167,7 +167,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 				exists = exists || r.Member == m.Name
 			}
 			if !exists && v != nil {
-				r := &domain.RetainedVolume{Cluster: rc.Cluster.Name, Member: m.Name, Hostname: m.Volume, ServiceID: v.ID, Set: m.Set, Role: m.Role, Index: m.Index, RetainedAt: now(rc)}
+				r := &domain.RetainedVolume{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Member: m.Name, Hostname: m.Volume, ServiceID: v.ID, Set: m.Set, Role: m.Role, Index: m.Index, RetainedAt: now(rc)}
 				if e = rc.Store.CreateRetainedVolume(ctx, r); e != nil {
 					return false, e
 				}
@@ -199,12 +199,12 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			keys = append(keys, "users/"+u.Name)
 		}
 		for _, key := range keys {
-			if e = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Name, key); e != nil && !missing(e) {
+			if e = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key); e != nil && !missing(e) {
 				return false, e
 			}
 		}
 		for _, r := range retained {
-			if e = rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Name, r.Member); e != nil && !missing(e) {
+			if e = rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), r.Member); e != nil && !missing(e) {
 				return false, e
 			}
 		}
@@ -212,19 +212,19 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	}
 	return true, nil
 }
-func (p *Provider) pbmEnvForStorage(ctx context.Context, rc *engine.Context, s *internalState, name string) (pbm.Env, error) {
+func (p *Provider) pbmEnvForStorage(ctx context.Context, rc *engine.Context, s *internalState, namespace, name string) (pbm.Env, error) {
 	copyRC := *rc
 	cluster := *rc.Cluster
 	cluster.Spec.Backup.Storage = name
 	copyRC.Cluster = &cluster
-	env, e := p.pbmEnv(ctx, &copyRC, s)
+	env, e := p.pbmEnvInNamespace(ctx, &copyRC, s, namespace)
 	env.RC = rc
 	env.Hooks = hooks{p, rc}
 	return env, e
 }
 
 func deleteMemberSecrets(ctx context.Context, rc *engine.Context, name string) error {
-	if err := rc.Secrets.DeleteAgentToken(ctx, rc.Cluster.Name, name); err != nil && !missing(err) {
+	if err := rc.Secrets.DeleteAgentToken(ctx, rc.Cluster.Ref(), name); err != nil && !missing(err) {
 		return err
 	}
 	keys := []string{"members/" + name + "/users/backup", "members/" + name + "/users/clusterMonitor"}
@@ -232,7 +232,7 @@ func deleteMemberSecrets(ctx context.Context, rc *engine.Context, name string) e
 		keys = append(keys, "tls/"+kind+"/"+name+".pem", "tls/"+kind+"/"+name+".pending.pem")
 	}
 	for _, key := range keys {
-		if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Name, key); err != nil && !missing(err) {
+		if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key); err != nil && !missing(err) {
 			return err
 		}
 	}

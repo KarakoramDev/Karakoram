@@ -17,12 +17,15 @@ Install Karakoram using the [installation guide](../../docs/install.md), complet
 | `KARAKORAM_E2E_TOKEN` | Existing admin API token, supplied securely through the environment. |
 | `KARAKORAM_E2E_ALLOW_CIDR` | Authorized IPv6 source CIDR (`/128` or network `/64`) of the test host. Required for public MongoDB checks; the suite requests `IPV6` exposure with this allowlist. |
 | `KARAKORAM_E2E_ALLOWLIST_OBSERVATION_ONLY` | Optional observation-only mode: `1` logs the deny-only TLS probe in `TestSecurity/TLSExposure` rather than asserting source rejection. Unset by default. Route/spec checks and exposure deletion remain strict. A run using this option does not verify allowlist enforcement. |
-| `KARAKORAM_E2E_STORAGE_NAME` | Existing HTTPS S3 backup-storage object with `forcePathStyle=true`, `verifyTLS=true`. Takes precedence over creation variables except in `TestDeletionChoices`. Existing objects are verified, not edited/deleted. |
+| `KARAKORAM_E2E_STORAGE_NAME` | Existing HTTPS S3 backup-storage object with `forcePathStyle=true`, `verifyTLS=true`. Takes precedence over creation variables except in `TestDeletionChoices` and `TestMultiNamespace`. Existing objects are verified, not edited/deleted. |
 | `KARAKORAM_E2E_STORAGE_ENDPOINT` | HTTPS S3 endpoint when creating test storage; TLS certificate verification is required. |
 | `KARAKORAM_E2E_STORAGE_BUCKET` | Existing bucket; the suite never creates/deletes buckets. |
 | `KARAKORAM_E2E_STORAGE_ACCESS_KEY` | S3 access key, supplied as write-only API input. |
 | `KARAKORAM_E2E_STORAGE_SECRET` | S3 secret access key, supplied as write-only API input. |
 | `KARAKORAM_E2E_STORAGE_REGION` | Signing region. All five storage-creation variables are required together. |
+| `KARAKORAM_E2E_NAMESPACE_PROJECT_ID` | A second disposable Zerops project for `TestMultiNamespace`. Required together with its namespace token; must differ from the control plane's project. |
+| `KARAKORAM_E2E_NAMESPACE_TOKEN` | Project-scoped Zerops token for that second project, supplied securely. The scenario submits it as write-only input and never logs it. |
+| `KARAKORAM_E2E_NAMESPACE` | Optional namespace name for `TestMultiNamespace`; default `<KARAKORAM_E2E_PREFIX>ns`. An existing namespace is reused only if its project ID matches. |
 | `KARAKORAM_E2E_PREFIX` | Optional 1–4-character lowercase alphanumeric prefix beginning with a letter; default `e2e`. Eight random hex characters keep cluster names within 12 characters. |
 | `KARAKORAM_E2E_KEEP` | `1` disables final cleanup of test-owned resources. Explicit scenario actions (including deletion, suspend/resume and user/role deletion) still execute. Global RBAC/settings are always restored. |
 | `KARAKORAM_E2E_KARACTL` | Already-built `karactl` executable; required by the CLI workflow. Subprocess credentials use the environment and an isolated temporary HOME. |
@@ -31,6 +34,8 @@ Install Karakoram using the [installation guide](../../docs/install.md), complet
 | `KARAKORAM_E2E_EVIDENCE_DIR` | Optional private output directory for JSON status/member/operation/backup/restore/metrics snapshots and test-prefix S3 object metadata. Credential/token responses are not captured. |
 
 Missing URL/token skips deployed scenarios. Capability-specific prerequisites are checked before creating clusters. Invalid configured API values or missing advertised behavior fail; they are not silently treated as passing coverage. To exercise storage creation, omit `KARAKORAM_E2E_STORAGE_NAME` and supply all five creation variables. `TestDeletionChoices` always requires those five: it creates an isolated storage object/prefix per case and inspects its S3 snapshot objects without touching a pre-existing prefix.
+
+`TestMultiNamespace` additionally requires the public IPv6 CIDR and all five S3 storage-creation inputs. It creates an isolated namespace-local storage regardless of `KARAKORAM_E2E_STORAGE_NAME`, then removes it before namespace deletion. The scenario reuses a matching namespace but treats it as disposable, so do not select one containing unrelated resources. Relay enrollment may take up to fifteen minutes. It creates a three-member source and a three-member clone in `default`, validates a restored marker document, checks namespace RBAC and backup export denial, and verifies that token rotation preserves the relay session. Namespace teardown waits for retained-resource guards and relay deletion; `KEEP=1` retains it and its test resources.
 
 For OIDC setup, see the [test issuer instructions](../../docs/user-guide/rbac-and-auth.md#test-only-live-issuer). The issuer accepts public-client or basic-client authentication without validating a client secret, allowing the suite to preserve the deployment's existing write-only secret while restoring other settings. A configured issuer enables full login; no secret replacement is necessary.
 
@@ -91,8 +96,9 @@ Use the exact `Test/Scenario` names below with the command above, for example `-
 | `TestRBAC/Accounts` | Accounts/session login, viewer/operator permissions, object filtering, separate credential read, explicit deny and API-token CRUD/revocation. |
 | `TestRBAC/OIDC` | Issuer code/PKCE/signed ID-token callback, HttpOnly session, identity/groups, viewer mapping, administrative denial and logout. |
 | `TestAPICLI/Workflow` | Cluster, backup/restore, database-user/role, storage, account/token, policy/permissions, operations and events commands against the deployed server. |
+| `TestMultiNamespace` | Second-project registration and relay readiness, three-member health, credential isolation, database user creation, namespace-local backup, cross-namespace clone with restored marker data, namespace RBAC/export denial, non-disruptive token rotation and deletion guard/teardown. |
 
-Independent scenario processes may share a disposable deployment because resource names and S3 prefixes are randomized; the suite does not use `t.Parallel`. **Serialize `TestRBAC/Accounts` and `TestRBAC/OIDC` with each other and with any administrative policy/settings mutation.** Both save/replace/restore global policy; OIDC also temporarily replaces settings and uses the fixed `oidctest` identity. Do not make unrelated administrative changes while these scenarios run.
+Independent scenario processes may share a disposable deployment because resource names and S3 prefixes are randomized; the suite does not use `t.Parallel`. **Serialize `TestRBAC/Accounts`, `TestRBAC/OIDC` and `TestMultiNamespace` with each other and with any administrative policy/settings mutation.** These scenarios save/replace/restore global policy; OIDC also temporarily replaces settings and uses the fixed `oidctest` identity. Do not make unrelated administrative changes while these scenarios run.
 
 ## Capability audit and assertion boundaries
 

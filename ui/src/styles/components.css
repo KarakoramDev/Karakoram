@@ -515,6 +515,22 @@
   color: var(--accent-text);
 }
 
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
 .table-empty {
   padding: 36px 16px;
   text-align: center;

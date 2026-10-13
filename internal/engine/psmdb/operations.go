@@ -77,8 +77,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	}
 	if op.Kind == domain.OperationBackup || op.Kind == domain.OperationDeleteBackup || op.Kind == domain.OperationRestore {
 		storage := rc.Cluster.Spec.Backup.Storage
+		storageNamespace := rc.Cluster.Ref().Namespace
 		if name := payload["backup"]; name != "" {
-			b, err := rc.Store.GetBackup(ctx, rc.Cluster.Name, name)
+			b, err := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), name)
 			if op.Kind == domain.OperationDeleteBackup && missing(err) {
 				return engine.OpResult{Done: true, Step: "done", Checkpoint: json.RawMessage(`{"step":"done"}`)}, nil
 			}
@@ -88,23 +89,34 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			storage = b.Storage
 		}
 		if name := payload["restore"]; name != "" {
-			r, err := rc.Store.GetRestore(ctx, rc.Cluster.Name, name)
+			r, err := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), name)
 			if err != nil {
 				return result, err
 			}
+			sourceRef := domain.ClusterRef{Namespace: r.SourceNamespace, Name: r.Source.SourceCluster}
+			if sourceRef.Namespace == "" {
+				sourceRef.Namespace = rc.Cluster.Ref().Namespace
+			}
+			if sourceRef.Name == "" {
+				sourceRef.Name = rc.Cluster.Name
+			}
+			storageNamespace = sourceRef.Namespace
 			if r.Source.Backup != "" {
-				source := r.Source.SourceCluster
-				if source == "" {
-					source = rc.Cluster.Name
-				}
-				b, err := rc.Store.GetBackup(ctx, source, r.Source.Backup)
+				b, err := rc.Store.GetBackup(ctx, sourceRef, r.Source.Backup)
 				if err != nil {
 					return result, err
 				}
 				storage = b.Storage
 			}
+			if r.Source.Backup == "" {
+				source, err := rc.Store.GetCluster(ctx, sourceRef)
+				if err != nil {
+					return result, err
+				}
+				storage = source.Spec.Backup.Storage
+			}
 		}
-		env, e := p.pbmEnvForStorage(ctx, rc, s, storage)
+		env, e := p.pbmEnvForStorage(ctx, rc, s, storageNamespace, storage)
 		if e != nil {
 			return result, e
 		}
@@ -130,9 +142,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 				}
 				name := "restore-base-" + secrets.Hash(op.ID)[:12]
 				payload, _ := json.Marshal(map[string]string{"backup": name})
-				base := &domain.Operation{ID: op.ID + "-base", Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Payload: payload, Phase: domain.PhasePending}
+				base := &domain.Operation{Namespace: rc.Cluster.Ref().Namespace, ID: op.ID + "-base", Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Payload: payload, Phase: domain.PhasePending}
 				if _, e = rc.Store.GetOperation(ctx, base.ID); missing(e) {
-					e = rc.Store.EnqueueBackup(ctx, &domain.Backup{Name: name, Cluster: rc.Cluster.Name, Storage: rc.Cluster.Spec.Backup.Storage, Type: "logical", Trigger: "restore", Phase: domain.PhasePending}, base)
+					e = rc.Store.EnqueueBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: name, Cluster: rc.Cluster.Name, Storage: rc.Cluster.Spec.Backup.Storage, Type: "logical", Trigger: "restore", Phase: domain.PhasePending}, base)
 				}
 				if e != nil {
 					return result, e
@@ -216,7 +228,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 				c, e := p.dial(ctx, rc, s, set, "userAdmin")
 				if e != nil && user == "userAdmin" {
 					ca, _ := secret(ctx, rc, "tls/ca.crt")
-					c, e = mongoadmin.Dial(ctx, mongoadmin.DialOptions{Hosts: hosts(s.setMembers(set)), ReplicaSet: set, Username: "userAdmin", Password: string(pw), TLS: s.TLSMode != "disabled", CAPEM: ca})
+					c, e = mongoadmin.Dial(ctx, mongoadmin.DialOptions{Hosts: hosts(s.setMembers(set)), Dialer: rc.Dialer, ReplicaSet: set, Username: "userAdmin", Password: string(pw), TLS: s.TLSMode != "disabled", CAPEM: ca})
 				}
 				if e != nil {
 					return result, e
@@ -244,7 +256,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			result, e = opResult(cp, true, "password-rotated")
 		}
 		if e == nil && result.Done {
-			e = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Name, key)
+			e = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key)
 		}
 		return result, e
 	case domain.OperationReplaceMember:
@@ -425,7 +437,7 @@ func refreshFreshBase(ctx context.Context, rc *engine.Context) error {
 	if !raw.Pending {
 		return nil
 	}
-	backup, e := rc.Store.GetBackup(ctx, rc.Cluster.Name, raw.Name)
+	backup, e := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), raw.Name)
 	if e != nil {
 		return e
 	}

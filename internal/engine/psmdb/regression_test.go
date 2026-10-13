@@ -24,7 +24,7 @@ import (
 
 type memberDialer map[string]testDialer
 
-func (d memberDialer) Dial(ctx context.Context, cluster, member string) (*agentapi.Client, error) {
+func (d memberDialer) Dial(ctx context.Context, cluster domain.ClusterRef, member string) (*agentapi.Client, error) {
 	return d[member].Dial(ctx, cluster, member)
 }
 func responder(t *testing.T, handler http.HandlerFunc) testDialer {
@@ -151,13 +151,13 @@ func TestMatchingOwnershipAndRetainedIDsAllowAdoption(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := s.Members[0]
-	token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name)
+	token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.services[m.Name] = &infra.Service{ID: "runtime-id", Hostname: m.Name, Ownership: ownershipEnv(rc.Cluster.Name, m.Name, token.Token)}
 	f.services[m.Volume] = &infra.Service{ID: "volume-id", Hostname: m.Volume}
-	if err := rc.Store.CreateRetainedVolume(ctx, &domain.RetainedVolume{Cluster: rc.Cluster.Name, Member: m.Name, Hostname: m.Volume, ServiceID: "volume-id"}); err != nil {
+	if err := rc.Store.CreateRetainedVolume(ctx, &domain.RetainedVolume{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Member: m.Name, Hostname: m.Volume, ServiceID: "volume-id"}); err != nil {
 		t.Fatal(err)
 	}
 	_ = save(rc.Cluster, s)
@@ -183,7 +183,7 @@ func TestLegacyThreeMemberPlanAdoptsVerifiedDeployedResources(t *testing.T) {
 	}
 	for i, m := range s.Members {
 		m.Stage = []string{"imported", "deployed", "active"}[i]
-		token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name)
+		token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -222,7 +222,7 @@ func TestLegacyVolumeAdoptionRequiresAuthenticatedRuntimeMount(t *testing.T) {
 			}
 			m := s.Members[0]
 			m.Stage = "active"
-			token, _ := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name)
+			token, _ := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 			env := ownershipEnv(rc.Cluster.Name, m.Name, token.Token)
 			env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
 			switch variant {
@@ -389,7 +389,7 @@ func TestBackupOperationInvalidatesPBMHashAndMissingDeleteCompletes(t *testing.T
 	if err := st.CreateBackupStorage(ctx, &domain.BackupStorage{Name: "alternate", Type: "s3"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateBackup(ctx, &domain.Backup{Name: "snapshot", Cluster: rc.Cluster.Name, Storage: "alternate", Type: "logical"}); err != nil {
+	if err := st.CreateBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: "snapshot", Cluster: rc.Cluster.Name, Storage: "alternate", Type: "logical"}); err != nil {
 		t.Fatal(err)
 	}
 	op := &domain.Operation{Kind: domain.OperationBackup, Payload: json.RawMessage(`{"backup":"snapshot"}`), Checkpoint: json.RawMessage(`{"step":"done"}`)}
@@ -468,10 +468,10 @@ func TestExplicitInPlaceRestoreUsesBackupRecordedStorage(t *testing.T) {
 	plan(rc.Cluster, s)
 	s.PBMPrefix = "target-prefix"
 	_ = save(rc.Cluster, s)
-	if err := st.CreateBackup(ctx, &domain.Backup{Name: "alternate-base", Cluster: rc.Cluster.Name, Storage: "alternate", PBMPrefix: "recorded-prefix", Type: "logical", PBMName: "snapshot", Phase: domain.PhaseSucceeded}); err != nil {
+	if err := st.CreateBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: "alternate-base", Cluster: rc.Cluster.Name, Storage: "alternate", PBMPrefix: "recorded-prefix", Type: "logical", PBMName: "snapshot", Phase: domain.PhaseSucceeded}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: rc.Cluster.Name, Source: domain.RestoreSource{SourceCluster: rc.Cluster.Name, Backup: "alternate-base"}}); err != nil {
+	if err := st.CreateRestore(ctx, &domain.Restore{Namespace: rc.Cluster.Ref().Namespace, Name: "restore", Cluster: rc.Cluster.Name, Source: domain.RestoreSource{SourceCluster: rc.Cluster.Name, Backup: "alternate-base"}}); err != nil {
 		t.Fatal(err)
 	}
 	rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {

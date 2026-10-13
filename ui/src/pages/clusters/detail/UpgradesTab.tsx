@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from './ClusterDetail';
 
 export function UpgradesTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,9 +43,9 @@ export function UpgradesTab() {
   const fcvBehind = cluster.status.fcv && cluster.status.fcv !== currentMajor;
 
   const upgrade = useMutation({
-    mutationFn: (version: string) => unwrap(api.PATCH('/clusters/{cluster}', { params: { path: { cluster: name } }, body: { spec: { version } } })),
+    mutationFn: (version: string) => unwrap(api.PATCH('/clusters/{cluster}', { params: { path: { cluster: name }, query: { namespace } }, body: { spec: { version } } })),
     onSuccess: (c) => {
-      queryClient.setQueryData(keys.cluster(name), c);
+      queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(`Upgrade to ${c.spec.version} requested.`);
       setTarget(null);
@@ -54,22 +54,22 @@ export function UpgradesTab() {
   });
 
   const raiseFcv = useMutation({
-    mutationFn: (version: string) => unwrap(api.POST('/clusters/{cluster}/raise-fcv', { params: { path: { cluster: name } }, body: { version } })),
+    mutationFn: (version: string) => unwrap(api.POST('/clusters/{cluster}/raise-fcv', { params: { path: { cluster: name }, query: { namespace } }, body: { version } })),
     onSuccess: (op) => {
       toast.success(`FCV raise started (operation ${op.id}).`);
       setFcvTarget(null);
-      void queryClient.invalidateQueries({ queryKey: keys.cluster(name) });
-      navigate(`/clusters/${encodeURIComponent(name)}/operations`);
+      void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
+      navigate(`${base}/operations`);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
 
   const restart = useMutation({
-    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/restart', { params: { path: { cluster: name } } })),
+    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/restart', { params: { path: { cluster: name }, query: { namespace } } })),
     onSuccess: (op) => {
       toast.success(`Rolling restart started (operation ${op.id}).`);
       setRestartOpen(false);
-      navigate(`/clusters/${encodeURIComponent(name)}/operations`);
+      navigate(`${base}/operations`);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });

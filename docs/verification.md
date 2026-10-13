@@ -56,6 +56,30 @@ The matrix uses exact top-level test/subtest names from `test/e2e/*_test.go`. A 
 | Authentication, RBAC and OIDC | `internal/auth` (bootstrap, login, refresh, recovery, OIDC validation), `internal/rbac`, `internal/server` (CSRF, object filtering and credential-read separation), `internal/store` | HTTP/identity tests run locally; a configured test issuer is exercised by the deployed OIDC scenario | `TestRBAC/Accounts`, `TestRBAC/OIDC` |
 | REST API and CLI | `internal/server: TestEveryOperationHasImplementedHandler`, plus handler tests; `internal/cli: TestEveryOperationHasCommand`, plus CLI tests; `internal/events` and `internal/tools/rbacgen` | Real agent protocol coverage in `test/integration: TestAgent`; no separate full CLI integration scenario | `TestAPICLI/Workflow`; all capability scenarios use the generated REST client |
 | Installation and control-plane recovery | `internal/server: TestConfigFromZeropsEnvironment`; `internal/auth: TestBootstrapAndKeyPersistence` and admin recovery tests; `cmd/karakoram: TestServerRecoveryRunsBeforeListenersAndOnlyOnce`, `TestRecoveryEnvironmentValidation`, `TestOfflinePasswordReset`; `internal/store`, `internal/secrets` | `test/integration: TestAgent` checks static agent startup, readiness and clean shutdown, not installation of the control plane | No dedicated installer scenario. After installing, run `TestReplicaSet/Singleton` and `TestAPICLI/Workflow`; complete the installation checklist below |
+| Namespaces and relays | `internal/namespaces` (validation, enrollment/rotation, ownership/deletion guards, durable deployment); `internal/relay` (mTLS rejection, policy/DNS restrictions, concurrent streams, reconnect/replacement, reverse agent TLS, bounded handshakes and EOF); `internal/store` (migration/sealed identities); `internal/rbac`, `internal/server`, `internal/cli`, `internal/monitoring` (namespace isolation, export and filtering) | Relay loopback/network tests run locally; they do not establish Zerops L7 behavior | `TestMultiNamespace` |
+
+### Namespace-specific coverage
+
+Migration regression `TestNamespaceMigrationPreservesLegacyData` opens legacy
+state and checks default-namespace readability/decryption. Registry tests include
+`TestRotationPreservesLiveRelaySession`, `TestDeleteGuardsAndOwnedRelay` and
+`TestForeignRelayNeverDeleted`. Transport tests include
+`TestAuthenticationFailures`, `TestTargetRefusals`, `TestInboundAgentTLS`,
+`TestSessionReplacement`, `TestPendingHandshakesBounded` and
+`TestResponseBeforeCloseAndEOFClosesPair`. API/RBAC/monitoring tests exercise
+same-name object isolation, per-item collection/SSE filtering, policy normalization,
+cross-namespace export checks and authoritative metric labels. These are
+coverage descriptions, not claims that a particular checkout's checks passed.
+
+The environment-gated **`TestMultiNamespace`** requires a disposable second
+project/token, public IPv6 test CIDR and all five S3 storage-creation inputs;
+see [the suite guide](../test/e2e/README.md). It registers/reuses a disposable
+namespace, waits for relay enrollment, creates a three-member source, checks
+credentials/database users/namespace-local backup, clones into a three-member
+`default` target and verifies restored marker data. It also checks namespace
+RBAC/export denial, non-disruptive token rotation and guarded teardown.
+Serialize it with RBAC/OIDC scenarios and policy/settings changes. Missing
+prerequisites skip the scenario, not establish success.
 
 ## Browser workflow checklist
 
@@ -67,6 +91,7 @@ Use the built UI against a disposable deployment, with admin and restricted acco
 - Create/update/delete application users and roles; verify credential reveal is explicit and permission-gated. Exercise TLS and public-access controls only on disposable databases.
 - Check monitoring charts, events/logs, operations and installation settings. Confirm restricted users cannot see or mutate unauthorized resources, including through direct navigation.
 - Refresh and navigate directly to nested routes; reconnect live events without losing the replay cursor. Check errors and pending operations remain understandable when requests fail.
+- Add a second-project namespace with invalid and valid token inputs; inspect relay health, rotate/re-validate and exercise guarded removal. Switch All/dev/prod views, refresh shared namespace links, check same-named objects remain distinct and test source-namespace restore/clone permissions with a restricted account.
 
 Static UI checks and API tests do not replace this browser exercise.
 

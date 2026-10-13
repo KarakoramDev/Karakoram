@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -17,23 +18,27 @@ type memoryStore struct {
 	items map[string]domain.OrphanedVolume
 }
 
-func (s *memoryStore) ListOrphanedVolumes(context.Context) ([]domain.OrphanedVolume, error) {
+func (s *memoryStore) ListOrphanedVolumes(_ context.Context, namespace string) ([]domain.OrphanedVolume, error) {
 	out := make([]domain.OrphanedVolume, 0, len(s.items))
 	for _, v := range s.items {
+		if namespace != "" && domain.NormalizedNamespace(v.Namespace) != namespace {
+			continue
+		}
 		out = append(out, v)
 	}
 	return out, nil
 }
 func (s *memoryStore) PutOrphanedVolume(_ context.Context, v *domain.OrphanedVolume) error {
-	s.items[v.Hostname] = *v
+	s.items[domain.ClusterRef{Namespace: v.Namespace, Name: v.Hostname}.Key()] = *v
 	return nil
 }
-func (s *memoryStore) DeleteOrphanedVolume(_ context.Context, name string) error {
-	delete(s.items, name)
+func (s *memoryStore) DeleteOrphanedVolume(_ context.Context, namespace, name string) error {
+	delete(s.items, domain.ClusterRef{Namespace: namespace, Name: name}.Key())
 	return nil
 }
 
 type fakeBackend struct {
+	infra.Backend
 	service      *infra.Service
 	deletes      int
 	polls        int
@@ -78,7 +83,7 @@ func fixture() (*Janitor, *memoryStore, *fakeBackend, *eventRecorder, *time.Time
 	s := &memoryStore{items: map[string]domain.OrphanedVolume{v.Hostname: v}}
 	b := &fakeBackend{service: &infra.Service{ID: v.ServiceID, Hostname: v.Hostname}, op: infra.Op{ID: "new-process"}}
 	e := &eventRecorder{}
-	j := New(Options{Store: s, Backend: b, Events: e, Now: func() time.Time { return at }})
+	j := New(Options{Store: s, Namespaces: engine.StaticNamespaces{DefaultBackend: b}, Events: e, Now: func() time.Time { return at }})
 	return j, s, b, e, &at
 }
 
@@ -91,6 +96,9 @@ func TestJanitorAbsentVolumeRemovesRecordAndEmitsEvent(t *testing.T) {
 	if len(s.items) != 0 || b.deletes != 0 || len(e.items) != 1 || e.items[0].Reason != "OrphanedVolumeDeleted" || e.items[0].Type != "Normal" || e.items[0].Cluster != "demo" {
 		t.Fatal(s.items, b, e.items)
 	}
+	if e.items[0].Actor != "system" || e.items[0].Resource != "orphaned-volumes" || e.items[0].Target == "" {
+		t.Fatal("janitor event lacks attributed target", e.items[0])
+	}
 }
 
 func TestJanitorReplacementIsDroppedWithoutDeletion(t *testing.T) {
@@ -99,7 +107,7 @@ func TestJanitorReplacementIsDroppedWithoutDeletion(t *testing.T) {
 	if err := j.Tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.items) != 0 || b.deletes != 0 || b.polls != 0 || len(e.items) != 0 {
+	if len(s.items) != 0 || b.deletes != 0 || b.polls != 0 || len(e.items) != 1 || e.items[0].Reason != "OrphanedVolumeRecordRemoved" || e.items[0].Actor != "system" {
 		t.Fatal(s.items, b, e.items)
 	}
 }
@@ -214,5 +222,56 @@ func TestJanitorRunReturnsOnCancellation(t *testing.T) {
 	cancel()
 	if err := j.Run(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+type namespaceBackends struct {
+	engine.StaticNamespaces
+	backends map[string]*fakeBackend
+}
+
+func (n namespaceBackends) Backend(namespace string) (infra.Backend, error) {
+	if namespace == "broken" {
+		return nil, errors.New("relay disconnected")
+	}
+	b, ok := n.backends[namespace]
+	if !ok {
+		return nil, errors.New("namespace not found")
+	}
+	return b, nil
+}
+
+func TestJanitorSelectsNamespaceBackendAndPreservesUnavailableFence(t *testing.T) {
+	at := time.Now().UTC()
+	s := &memoryStore{items: map[string]domain.OrphanedVolume{}}
+	backends := map[string]*fakeBackend{}
+	for _, namespace := range []string{"default", "other", "broken"} {
+		v := domain.OrphanedVolume{Namespace: namespace, Cluster: "same", Hostname: "samem0v", ServiceID: namespace + "-volume", NextAttemptAt: at}
+		if namespace == "broken" {
+			v.ProcessPending = true
+			v.LastProcessID = "pending"
+		}
+		if err := s.PutOrphanedVolume(context.Background(), &v); err != nil {
+			t.Fatal(err)
+		}
+		backends[namespace] = &fakeBackend{service: &infra.Service{ID: v.ServiceID, Hostname: v.Hostname}, op: infra.Op{ID: namespace + "-delete"}}
+	}
+	e := &eventRecorder{}
+	j := New(Options{Store: s, Namespaces: namespaceBackends{backends: backends}, Events: e, Now: func() time.Time { return at }})
+	if err := j.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, namespace := range []string{"default", "other"} {
+		key := domain.ClusterRef{Namespace: namespace, Name: "samem0v"}.Key()
+		if backends[namespace].deletes != 1 || s.items[key].LastProcessID != namespace+"-delete" {
+			t.Fatal("wrong project backend selected", namespace, s.items, backends)
+		}
+	}
+	v := s.items["broken:samem0v"]
+	if !v.ProcessPending || v.LastProcessID != "pending" || v.Attempts != 0 || !v.NextAttemptAt.After(at) || backends["broken"].deletes != 0 {
+		t.Fatal("namespace failure cleared deletion fence", v)
+	}
+	if len(e.items) != 1 || e.items[0].Namespace != "broken" || e.items[0].Reason != "NamespaceUnavailable" {
+		t.Fatal(e.items)
 	}
 }

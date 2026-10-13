@@ -22,23 +22,17 @@ const (
 )
 
 type Store interface {
-	ListOrphanedVolumes(context.Context) ([]domain.OrphanedVolume, error)
+	ListOrphanedVolumes(context.Context, string) ([]domain.OrphanedVolume, error)
 	PutOrphanedVolume(context.Context, *domain.OrphanedVolume) error
-	DeleteOrphanedVolume(context.Context, string) error
-}
-
-type Backend interface {
-	GetService(context.Context, string) (*infra.Service, error)
-	DeleteServiceByID(context.Context, string, string) (infra.Op, error)
-	OpStatus(context.Context, infra.Op) (infra.OpState, error)
+	DeleteOrphanedVolume(context.Context, string, string) error
 }
 
 type Options struct {
-	Store   Store
-	Backend Backend
-	Events  engine.Recorder
-	Logger  *slog.Logger
-	Now     func() time.Time
+	Store      Store
+	Namespaces engine.Namespaces
+	Events     engine.Recorder
+	Logger     *slog.Logger
+	Now        func() time.Time
 }
 
 type Janitor struct{ Options }
@@ -85,7 +79,7 @@ func (j *Janitor) Run(ctx context.Context) error {
 
 // Tick executes due records once; the clock and backend are injectable for tests.
 func (j *Janitor) Tick(ctx context.Context) error {
-	items, err := j.Store.ListOrphanedVolumes(ctx)
+	items, err := j.Store.ListOrphanedVolumes(ctx, "")
 	if err != nil {
 		return err
 	}
@@ -109,7 +103,7 @@ func (j *Janitor) event(ctx context.Context, v *domain.OrphanedVolume, kind, rea
 	if j.Events == nil {
 		return nil
 	}
-	return j.Events.Record(ctx, domain.Event{Cluster: v.Cluster, Type: kind, Reason: reason, Message: message, CreatedAt: j.Now()})
+	return j.Events.Record(ctx, domain.Event{Namespace: domain.NormalizedNamespace(v.Namespace), Cluster: v.Cluster, Resource: "orphaned-volumes", Target: v.Hostname, Actor: "system", Type: kind, Reason: reason, Message: message, CreatedAt: j.Now()})
 }
 
 func (j *Janitor) removed(ctx context.Context, v *domain.OrphanedVolume, replaced bool) error {
@@ -118,12 +112,15 @@ func (j *Janitor) removed(ctx context.Context, v *domain.OrphanedVolume, replace
 	if replaced {
 		message = fmt.Sprintf("orphaned volume %s was replaced by a different service; dropping record without deleting the replacement", v.Hostname)
 		j.Logger.Warn(message, "serviceId", v.ServiceID)
-		return j.Store.DeleteOrphanedVolume(ctx, v.Hostname)
+		if err := j.event(ctx, v, kind, "OrphanedVolumeRecordRemoved", message); err != nil {
+			return err
+		}
+		return j.Store.DeleteOrphanedVolume(ctx, v.Namespace, v.Hostname)
 	}
 	if err := j.event(ctx, v, kind, "OrphanedVolumeDeleted", message); err != nil {
 		return err
 	}
-	return j.Store.DeleteOrphanedVolume(ctx, v.Hostname)
+	return j.Store.DeleteOrphanedVolume(ctx, v.Namespace, v.Hostname)
 }
 
 func (j *Janitor) failed(ctx context.Context, v *domain.OrphanedVolume, message string) error {
@@ -138,7 +135,18 @@ func (j *Janitor) failed(ctx context.Context, v *domain.OrphanedVolume, message 
 }
 
 func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
-	service, err := j.Backend.GetService(ctx, v.Hostname)
+	backend, err := j.Namespaces.Backend(domain.NormalizedNamespace(v.Namespace))
+	if err != nil {
+		// A routing failure says nothing about an in-flight deletion. Keep its fence.
+		v.LastError = fmt.Sprintf("namespace %q unavailable: %v", domain.NormalizedNamespace(v.Namespace), err)
+		v.JanitorFailures++
+		v.NextAttemptAt = j.Now().Add(Backoff(v.JanitorFailures))
+		if saveErr := j.Store.PutOrphanedVolume(ctx, v); saveErr != nil {
+			return saveErr
+		}
+		return j.event(ctx, v, "Warning", "NamespaceUnavailable", v.LastError)
+	}
+	service, err := backend.GetService(ctx, v.Hostname)
 	if err != nil {
 		if v.ProcessPending {
 			v.NextAttemptAt = j.Now().Add(InitialBackoff)
@@ -156,7 +164,7 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 		return j.removed(ctx, v, true)
 	}
 	if v.ProcessPending && v.LastProcessID != "" {
-		st, err := j.Backend.OpStatus(ctx, infra.Op{ID: v.LastProcessID, Kind: "delete", ServiceID: v.ServiceID})
+		st, err := backend.OpStatus(ctx, infra.Op{ID: v.LastProcessID, Kind: "delete", ServiceID: v.ServiceID})
 		if err != nil {
 			// A polling error is not a failed delete: preserve the in-flight fence.
 			v.NextAttemptAt = j.Now().Add(InitialBackoff)
@@ -169,7 +177,7 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 			return j.failed(ctx, v, st.Message)
 		}
 		if st.Done {
-			service, err = j.Backend.GetService(ctx, v.Hostname)
+			service, err = backend.GetService(ctx, v.Hostname)
 			if err != nil {
 				return err
 			}
@@ -184,9 +192,15 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 		v.NextAttemptAt = j.Now().Add(PollInterval)
 		return j.Store.PutOrphanedVolume(ctx, v)
 	}
+	deleter, ok := backend.(interface {
+		DeleteServiceByID(context.Context, string, string) (infra.Op, error)
+	})
+	if !ok {
+		return j.failed(ctx, v, "namespace backend does not support ID-fenced volume deletion")
+	}
 	v.Attempts++
 	v.LastAttemptAt = j.Now()
-	op, err := j.Backend.DeleteServiceByID(ctx, v.Hostname, v.ServiceID)
+	op, err := deleter.DeleteServiceByID(ctx, v.Hostname, v.ServiceID)
 	if op.ID != "" {
 		v.LastProcessID = op.ID
 	}

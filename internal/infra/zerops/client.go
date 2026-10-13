@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,7 @@ type Options struct {
 // Client is a context-aware, credential-silent thin Zerops REST client.
 type Client struct {
 	base, token, project string
+	tokenMu              sync.RWMutex
 	http                 *http.Client
 	retries              int
 	retryBase            time.Duration
@@ -66,6 +68,13 @@ func NewClient(o Options) (*Client, error) {
 		o.RetryBase = 250 * time.Millisecond
 	}
 	return &Client{base: strings.TrimRight(o.BaseURL, "/"), token: o.Token, project: o.ProjectID, http: &h, retries: o.MaxRetries, retryBase: o.RetryBase}, nil
+}
+
+// SetToken replaces credentials without interrupting in-flight requests.
+func (c *Client) SetToken(token string) {
+	c.tokenMu.Lock()
+	c.token = token
+	c.tokenMu.Unlock()
 }
 func escape(s string) string                       { return url.PathEscape(s) }
 func (c *Client) projectPath(suffix string) string { return "/project/" + escape(c.project) + suffix }
@@ -118,7 +127,9 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 			req.Header.Set("Content-Type", contentType)
 		}
 		if auth {
+			c.tokenMu.RLock()
 			req.Header.Set("Authorization", "Bearer "+c.token)
+			c.tokenMu.RUnlock()
 		}
 		req.Header.Set("Accept", "application/json")
 		resp, err := c.http.Do(req)

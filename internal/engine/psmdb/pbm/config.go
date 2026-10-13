@@ -147,8 +147,8 @@ func EnsureConfig(ctx context.Context, env Env, appliedHash string) (string, err
 }
 
 // recordedEnv resolves immutable backup provenance without a source cluster.
-func recordedEnv(ctx context.Context, env Env, storage, prefix string) (Env, error) {
-	s, err := env.RC.Store.GetBackupStorage(ctx, storage)
+func recordedEnv(ctx context.Context, env Env, namespace, storage, prefix string) (Env, error) {
+	s, err := env.RC.Store.GetBackupStorage(ctx, namespace, storage)
 	if err != nil {
 		return Env{}, fmt.Errorf("read recorded storage: %w", err)
 	}
@@ -157,7 +157,7 @@ func recordedEnv(ctx context.Context, env Env, storage, prefix string) (Env, err
 	return env, nil
 }
 
-func sourceEnv(ctx context.Context, env Env, source, storage string) (Env, error) {
+func sourceEnv(ctx context.Context, env Env, source domain.ClusterRef, storage string) (Env, error) {
 	c, err := env.RC.Store.GetCluster(ctx, source)
 	if err != nil {
 		return Env{}, fmt.Errorf("read source cluster: %w", err)
@@ -165,7 +165,7 @@ func sourceEnv(ctx context.Context, env Env, source, storage string) (Env, error
 	if storage == "" {
 		storage = c.Spec.Backup.Storage
 	}
-	s, err := env.RC.Store.GetBackupStorage(ctx, storage)
+	s, err := env.RC.Store.GetBackupStorage(ctx, source.Namespace, storage)
 	if err != nil {
 		return Env{}, fmt.Errorf("read source storage: %w", err)
 	}
@@ -180,7 +180,7 @@ func sourceEnv(ctx context.Context, env Env, source, storage string) (Env, error
 		if state.UID == "" {
 			return Env{}, errors.New("source cluster has no durable PBM prefix or UID")
 		}
-		state.Prefix = "karakoram/" + source + "-" + state.UID
+		state.Prefix = "karakoram/" + source.Name + "-" + state.UID
 	}
 	env.Storage, env.Credentials, env.Prefix = *s, s.Credentials, state.Prefix
 	if s.Prefix != "" {

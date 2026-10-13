@@ -65,6 +65,7 @@ type suite struct {
 	client              *api.Client
 	root                *api.Client
 	base, token, prefix string
+	namespace           *string
 	keep                bool
 	evidenceSeq         int
 }
@@ -96,6 +97,13 @@ func newSuite(t *testing.T, data bool) *suite {
 	s.client = s.newClient(token, base+"/api/v1", nil)
 	s.root = s.newClient(token, base, nil)
 	return s
+}
+
+// inNamespace shares suite credentials and deadlines while scoping resource helpers.
+func (s *suite) inNamespace(namespace string) *suite {
+	scoped := *s
+	scoped.namespace = ptr(namespace)
+	return &scoped
 }
 
 func requireCIDR(t *testing.T) string {
@@ -278,21 +286,21 @@ func (s *suite) create(spec api.ClusterSpec) string {
 	name := s.name()
 	s.cleanupCluster(name)
 	var c api.Cluster
-	s.expect(&c, 201)(s.client.CreateCluster(s.ctx, &api.CreateClusterParams{}, api.CreateClusterRequest{Name: name, Spec: spec}))
+	s.expect(&c, 201)(s.client.CreateCluster(s.ctx, &api.CreateClusterParams{Namespace: s.namespace}, api.CreateClusterRequest{Name: name, Spec: spec}))
 	s.t.Logf("created cluster=%s generation=%d phase=%s", name, c.Generation, c.Status.Phase)
 	s.ready(name)
 	return name
 }
 func (s *suite) cluster(name string) api.Cluster {
 	var c api.Cluster
-	s.expect(&c)(s.client.GetCluster(s.ctx, name))
+	s.expect(&c)(s.client.GetCluster(s.ctx, name, &api.GetClusterParams{Namespace: s.namespace}))
 	return c
 }
 func (s *suite) members(name string) []observedMember {
 	var m struct {
 		Items []observedMember `json:"items"`
 	}
-	s.expect(&m)(s.client.ListClusterMembers(s.ctx, name))
+	s.expect(&m)(s.client.ListClusterMembers(s.ctx, name, &api.ListClusterMembersParams{Namespace: s.namespace}))
 	return m.Items
 }
 func (s *suite) ready(name string) api.Cluster {
@@ -304,7 +312,7 @@ func (s *suite) phase(name string, phase api.ClusterStatusPhase) api.Cluster {
 		result = s.cluster(name)
 		s.t.Logf("cluster=%s phase=%s generation=%d observed=%d members=%d", name, result.Status.Phase, result.Generation, result.Status.ObservedGeneration, len(result.Status.Members))
 		var ops api.OperationList
-		s.expect(&ops)(s.client.ListClusterOperations(s.ctx, name, &api.ListClusterOperationsParams{Limit: ptr(20)}))
+		s.expect(&ops)(s.client.ListClusterOperations(s.ctx, name, &api.ListClusterOperationsParams{Namespace: s.namespace, Limit: ptr(20)}))
 		for _, op := range ops.Items {
 			s.t.Logf("operation=%s type=%s phase=%s", op.Id, op.Type, op.Phase)
 		}
@@ -324,7 +332,7 @@ func (s *suite) update(name string, edit func(*api.ClusterSpec)) api.Cluster {
 	c := s.cluster(name)
 	edit(&c.Spec)
 	var changed api.Cluster
-	s.expect(&changed)(s.client.ReplaceCluster(s.ctx, name, &api.ReplaceClusterParams{}, api.ReplaceClusterRequest{Spec: c.Spec}))
+	s.expect(&changed)(s.client.ReplaceCluster(s.ctx, name, &api.ReplaceClusterParams{Namespace: s.namespace}, api.ReplaceClusterRequest{Spec: c.Spec}))
 	return s.ready(name)
 }
 func (s *suite) operation(r *http.Response, err error) {
@@ -364,7 +372,7 @@ func (s *suite) deleteClusterOptions(name string, keepVolumes, keepBackups bool)
 	// Cleanup gets its own deadline even if the test's context expired; each
 	// member volume may need an orphan handoff.
 	budget := operationTimeout + orphanHandoff
-	if r, err := s.client.GetCluster(context.Background(), name); err == nil {
+	if r, err := s.client.GetCluster(context.Background(), name, &api.GetClusterParams{Namespace: s.namespace}); err == nil {
 		var c api.Cluster
 		if r.StatusCode == 200 && json.NewDecoder(r.Body).Decode(&c) == nil && len(c.Status.Members) > 1 {
 			budget = operationTimeout + time.Duration(len(c.Status.Members))*orphanHandoff
@@ -373,7 +381,7 @@ func (s *suite) deleteClusterOptions(name string, keepVolumes, keepBackups bool)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
-	r, err := s.client.DeleteCluster(ctx, name, &api.DeleteClusterParams{KeepVolumes: ptr(keepVolumes), KeepBackups: ptr(keepBackups)})
+	r, err := s.client.DeleteCluster(ctx, name, &api.DeleteClusterParams{Namespace: s.namespace, KeepVolumes: ptr(keepVolumes), KeepBackups: ptr(keepBackups)})
 	if err != nil {
 		s.t.Errorf("delete cluster=%s transport failure", name)
 		return
@@ -388,7 +396,7 @@ func (s *suite) deleteClusterOptions(name string, keepVolumes, keepBackups bool)
 		return
 	}
 	for {
-		r, err = s.client.GetCluster(ctx, name)
+		r, err = s.client.GetCluster(ctx, name, &api.GetClusterParams{Namespace: s.namespace})
 		if err != nil {
 			s.t.Errorf("wait deletion cluster=%s transport failure", name)
 			return
@@ -430,7 +438,7 @@ func (s *suite) deleteClusterOptions(name string, keepVolumes, keepBackups bool)
 // deletion; orphaned volumes are tracked separately from cluster lifecycle status.
 func (s *suite) recordOrphans(ctx context.Context, cluster string) {
 	var list api.OrphanedVolumeList
-	r, err := s.client.ListOrphanedVolumes(ctx)
+	r, err := s.client.ListOrphanedVolumes(ctx, &api.ListOrphanedVolumesParams{Namespace: s.namespace})
 	if err != nil {
 		return
 	}
@@ -452,7 +460,7 @@ func (s *suite) recordOrphans(ctx context.Context, cluster string) {
 
 func (s *suite) connection(name string) api.Connection {
 	var c api.Connection
-	s.expect(&c)(s.client.GetClusterConnection(s.ctx, name))
+	s.expect(&c)(s.client.GetClusterConnection(s.ctx, name, &api.GetClusterConnectionParams{Namespace: s.namespace}))
 	if c.Connection.Uri == "" {
 		s.t.Fatal("connection URI missing")
 	}
@@ -469,7 +477,7 @@ func credential(c api.Connection, user string) (string, string) {
 
 func (s *suite) dial(ctx context.Context, name, user, password, db string, useTLS bool) (*mongo.Client, error) {
 	var c api.Connection
-	r, err := s.client.GetClusterConnection(ctx, name)
+	r, err := s.client.GetClusterConnection(ctx, name, &api.GetClusterConnectionParams{Namespace: s.namespace})
 	if err = readJSON(&c, r, err); err != nil {
 		return nil, err
 	}
@@ -480,7 +488,7 @@ func (s *suite) dial(ctx context.Context, name, user, password, db string, useTL
 		}
 	}
 	var cluster api.Cluster
-	r, err = s.client.GetCluster(ctx, name)
+	r, err = s.client.GetCluster(ctx, name, &api.GetClusterParams{Namespace: s.namespace})
 	if err = readJSON(&cluster, r, err); err != nil {
 		return nil, err
 	}
@@ -493,7 +501,7 @@ func (s *suite) dial(ctx context.Context, name, user, password, db string, useTL
 		var members struct {
 			Items []observedMember `json:"items"`
 		}
-		r, err = s.client.ListClusterMembers(ctx, name)
+		r, err = s.client.ListClusterMembers(ctx, name, &api.ListClusterMembersParams{Namespace: s.namespace})
 		if err = readJSON(&members, r, err); err != nil {
 			return nil, err
 		}

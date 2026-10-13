@@ -22,9 +22,9 @@ func (c fixedClock) Now() time.Time { return c.now }
 
 type fakeTrigger struct{ names []string }
 
-func (t *fakeTrigger) Trigger(name string) { t.names = append(t.names, name) }
+func (t *fakeTrigger) Trigger(ref domain.ClusterRef) { t.names = append(t.names, ref.Key()) }
 func TestScheduleReloadFireAndRetention(t *testing.T) {
-	ctx := context.Background()
+	ctx := store.WithActor(context.Background(), "interactive-user")
 	key, _ := secrets.New(strings.Repeat("k", 32))
 	db, err := store.Open(filepath.Join(t.TempDir(), "schedule.db"), key)
 	if err != nil {
@@ -47,13 +47,16 @@ func TestScheduleReloadFireAndRetention(t *testing.T) {
 	if len(s.entries) != 1 {
 		t.Fatal(s.entries)
 	}
-	if err = s.Fire(ctx, "demo", "daily"); err != nil {
+	if err = s.Fire(ctx, domain.ClusterRef{Name: "demo"}, "daily"); err != nil {
 		t.Fatal(err)
 	}
-	backups, _ := db.ListBackups(ctx, "demo")
-	ops, _ := db.ListOperations(ctx, "demo")
+	backups, _ := db.ListBackups(ctx, domain.ClusterRef{Name: "demo"})
+	ops, _ := db.ListOperations(ctx, domain.ClusterRef{Name: "demo"})
 	if len(backups) != 1 || len(ops) != 1 || backups[0].Trigger != "schedule" || backups[0].Storage != "archive" || backups[0].Type != "physical" || !backups[0].CreatedAt.Equal(now) || len(trigger.names) != 1 {
 		t.Fatal(backups, ops, trigger)
+	}
+	if ops[0].Actor != "scheduler" {
+		t.Fatalf("scheduled backup actor=%q", ops[0].Actor)
 	}
 	var payload struct {
 		Backup string `json:"backup"`
@@ -68,12 +71,15 @@ func TestScheduleReloadFireAndRetention(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err = s.EnforceRetention(ctx, "demo"); err != nil {
+	if err = s.EnforceRetention(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
-	ops, _ = db.ListOperations(ctx, "demo")
+	ops, _ = db.ListOperations(ctx, domain.ClusterRef{Name: "demo"})
 	deleted := map[string]bool{}
 	for _, op := range ops {
+		if op.Actor != "scheduler" {
+			t.Fatalf("scheduled operation actor=%q", op.Actor)
+		}
 		if op.Kind == domain.OperationDeleteBackup {
 			json.Unmarshal(op.Payload, &payload)
 			deleted[payload.Backup] = true
@@ -82,15 +88,15 @@ func TestScheduleReloadFireAndRetention(t *testing.T) {
 	if len(deleted) != 2 || !deleted["oldest"] || !deleted["middle"] {
 		t.Fatal(deleted)
 	}
-	if err = s.EnforceRetention(ctx, "demo"); err != nil {
+	if err = s.EnforceRetention(ctx, domain.ClusterRef{Name: "demo"}); err != nil {
 		t.Fatal(err)
 	}
-	again, _ := db.ListOperations(ctx, "demo")
+	again, _ := db.ListOperations(ctx, domain.ClusterRef{Name: "demo"})
 	if len(again) != len(ops) {
 		t.Fatal("duplicate retention ops")
 	}
 	c.Spec.Backup.Schedules[0].Cron = "0 */6 * * *"
-	if err = db.UpdateClusterSpec(ctx, "demo", c.Spec); err != nil {
+	if err = db.UpdateClusterSpec(ctx, domain.ClusterRef{Name: "demo"}, c.Spec); err != nil {
 		t.Fatal(err)
 	}
 	old := s.entries["demo/daily"].id
@@ -101,17 +107,17 @@ func TestScheduleReloadFireAndRetention(t *testing.T) {
 		t.Fatal("cron not replaced")
 	}
 	c.Spec.Backup.Schedules[0].Enabled = false
-	db.UpdateClusterSpec(ctx, "demo", c.Spec)
+	db.UpdateClusterSpec(ctx, domain.ClusterRef{Name: "demo"}, c.Spec)
 	if err = s.Reload(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.entries) != 0 {
 		t.Fatal("disabled entry retained")
 	}
-	if err = s.Fire(ctx, "demo", "daily"); err != nil {
+	if err = s.Fire(ctx, domain.ClusterRef{Name: "demo"}, "daily"); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := db.ListBackups(ctx, "demo")
+	after, _ := db.ListBackups(ctx, domain.ClusterRef{Name: "demo"})
 	if len(after) != 5 {
 		t.Fatal("disabled schedule fired")
 	}
@@ -126,5 +132,51 @@ func TestCronGrammar(t *testing.T) {
 		if err := ValidateCron(spec); err == nil {
 			t.Fatal("invalid cron accepted", spec)
 		}
+	}
+}
+
+func TestSameNameSchedulesAreNamespaceScoped(t *testing.T) {
+	ctx := context.Background()
+	key, _ := secrets.New(strings.Repeat("k", 32))
+	db, err := store.Open(filepath.Join(t.TempDir(), "schedule.db"), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	trigger := &fakeTrigger{}
+	s, err := New(Options{Store: db, Trigger: trigger})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, namespace := range []string{"default", "other"} {
+		if err := db.CreateNamespace(ctx, &domain.Namespace{Name: namespace, Phase: "Ready"}); err != nil {
+			t.Fatal(err)
+		}
+		c := domain.Cluster{Namespace: namespace, Name: "demo", Spec: domain.ClusterSpec{Backup: domain.BackupConfig{Schedules: []domain.BackupSchedule{{Name: "daily", Cron: "@daily", Enabled: true}}}}}
+		if err := db.CreateCluster(ctx, &c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.entries) != 2 || s.entries["demo/daily"].id == s.entries["other:demo/daily"].id {
+		t.Fatal("namespace schedules collided", s.entries)
+	}
+	ref := domain.ClusterRef{Namespace: "other", Name: "demo"}
+	if err := s.Fire(ctx, ref, "daily"); err != nil {
+		t.Fatal(err)
+	}
+	backups, err := db.ListBackups(ctx, ref)
+	if err != nil || len(backups) != 1 || backups[0].Namespace != "other" {
+		t.Fatal(backups, err)
+	}
+	ops, err := db.ListOperations(ctx, ref)
+	if err != nil || len(ops) != 1 || ops[0].Namespace != "other" {
+		t.Fatal(ops, err)
+	}
+	defaultBackups, err := db.ListBackups(ctx, domain.ClusterRef{Namespace: "default", Name: "demo"})
+	if err != nil || len(defaultBackups) != 0 || len(trigger.names) != 1 || trigger.names[0] != ref.Key() {
+		t.Fatal(defaultBackups, trigger, err)
 	}
 }

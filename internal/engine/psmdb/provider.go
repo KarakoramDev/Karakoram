@@ -33,7 +33,7 @@ type Options struct {
 type Provider struct {
 	options          Options
 	portMu           sync.Mutex
-	portReservations map[int]string
+	portReservations map[string]map[int]string
 }
 
 // New constructs a PSMDB provider.
@@ -44,7 +44,7 @@ func New(o Options) *Provider {
 	if o.ControlPlaneURL == "" {
 		o.ControlPlaneURL = "https://karakoram:9443"
 	}
-	return &Provider{options: o, portReservations: make(map[int]string)}
+	return &Provider{options: o, portReservations: make(map[string]map[int]string)}
 }
 
 // Name returns the stable engine identifier.
@@ -303,7 +303,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		return invalid("backup storage validation requires configured store")
 	}
 	for storage := range storages {
-		if _, e := p.options.Store.GetBackupStorage(ctx, storage); e != nil {
+		if _, e := p.options.Store.GetBackupStorage(ctx, n.Ref().Namespace, storage); e != nil {
 			return invalid("backup storage %q: %v", storage, e)
 		}
 	}
@@ -335,14 +335,28 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		if old.Spec.TLS.CA != s.TLS.CA {
 			return invalid("CA source is immutable; rotate leaf certificates instead")
 		}
-		a, _ := json.Marshal(old.Spec.DataSource)
-		b, _ := json.Marshal(s.DataSource)
+		normalizeSource := func(source *domain.DataSource, namespace string) *domain.DataSource {
+			if source == nil {
+				return nil
+			}
+			copy := *source
+			if copy.Namespace == "" {
+				copy.Namespace = domain.NormalizedNamespace(namespace)
+			}
+			return &copy
+		}
+		a, _ := json.Marshal(normalizeSource(old.Spec.DataSource, old.Namespace))
+		b, _ := json.Marshal(normalizeSource(s.DataSource, n.Namespace))
 		if string(a) != string(b) {
 			return invalid("dataSource is immutable")
 		}
 	}
 	if d := s.DataSource; d != nil {
-		if d.Cluster == "" || d.Cluster == n.Name || (d.Backup == "") == (d.PITRTime == nil) {
+		sourceRef := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
+		if sourceRef.Namespace == "" {
+			sourceRef.Namespace = n.Ref().Namespace
+		}
+		if d.Cluster == "" || sourceRef.Key() == n.Ref().Key() || (d.Backup == "") == (d.PITRTime == nil) {
 			return invalid("dataSource requires another cluster and exactly one of backup or pitrTime")
 		}
 		if p.options.Store == nil {
@@ -350,13 +364,13 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		}
 		var source *domain.Cluster
 		if d.Backup != "" {
-			b, e := p.options.Store.GetBackup(ctx, d.Cluster, d.Backup)
+			b, e := p.options.Store.GetBackup(ctx, sourceRef, d.Backup)
 			if e != nil || b.Phase != domain.PhaseSucceeded {
 				return invalid("source backup must exist and be succeeded")
 			}
 			topology, version := b.SourceTopology, b.SourceVersion
 			if topology.Type == "" || version == "" {
-				source, e = p.options.Store.GetCluster(ctx, d.Cluster)
+				source, e = p.options.Store.GetCluster(ctx, sourceRef)
 				if e != nil {
 					return invalid("backup lacks retained topology/version provenance: %v", e)
 				}
@@ -367,7 +381,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			}
 		} else {
 			var e error
-			source, e = p.options.Store.GetCluster(ctx, d.Cluster)
+			source, e = p.options.Store.GetCluster(ctx, sourceRef)
 			if e != nil {
 				return invalid("source cluster: %v", e)
 			}

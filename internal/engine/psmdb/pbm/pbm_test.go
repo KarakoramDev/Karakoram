@@ -33,7 +33,7 @@ type testDialer struct {
 	ca  []byte
 }
 
-func (d testDialer) Dial(context.Context, string, string) (*agentapi.Client, error) {
+func (d testDialer) Dial(context.Context, domain.ClusterRef, string) (*agentapi.Client, error) {
 	return agentapi.NewClient(agentapi.ClientOptions{BaseURL: d.url, Token: "test", CAPEM: d.ca})
 }
 
@@ -177,7 +177,7 @@ func setup(t *testing.T) (Env, *store.Store, *fakeAgent, *fakeHooks) {
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
 	hooks := &fakeHooks{}
 	cluster := &domain.Cluster{Name: "target", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"uid":"target-id","pbmPrefix":"karakoram/target-target-id"}`)}
-	if err := st.SetClusterSecret(context.Background(), "target", "users/userAdmin", []byte("snapshot-password")); err != nil {
+	if err := st.SetClusterSecret(context.Background(), domain.ClusterRef{Name: "target"}, "users/userAdmin", []byte("snapshot-password")); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.CreateBackupStorage(context.Background(), &domain.BackupStorage{Name: "storage", Type: "s3", EndpointURL: "https://s3.example.test", Bucket: "bucket", ForcePathStyle: true, VerifyTLS: true, Credentials: domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"}}); err != nil {
@@ -224,7 +224,7 @@ func TestBackupCrashResume(t *testing.T) {
 	}
 	op := &domain.Operation{ID: "backup-op", Payload: json.RawMessage(`{"backup":"manual"}`)}
 	drive(t, env, op, RunBackup, false)
-	got, err := st.GetBackup(context.Background(), "target", "manual")
+	got, err := st.GetBackup(context.Background(), domain.ClusterRef{Name: "target"}, "manual")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestDeleteCrashResume(t *testing.T) {
 	}
 	op := &domain.Operation{ID: "delete-op", Payload: json.RawMessage(`{"backup":"manual"}`)}
 	drive(t, env, op, RunDeleteBackup, false)
-	if _, err := st.GetBackup(context.Background(), "target", "manual"); err == nil {
+	if _, err := st.GetBackup(context.Background(), domain.ClusterRef{Name: "target"}, "manual"); err == nil {
 		t.Fatal("backup record retained")
 	}
 }
@@ -319,7 +319,7 @@ func TestRestoreCrashResume(t *testing.T) {
 			fake.failRestore = mode == "failed"
 			op := &domain.Operation{ID: "restore-op", Payload: json.RawMessage(`{"restore":"restore"}`)}
 			res := drive(t, env, op, RunRestore, mode == "failed")
-			got, err := st.GetRestore(context.Background(), "target", "restore")
+			got, err := st.GetRestore(context.Background(), domain.ClusterRef{Name: "target"}, "restore")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -378,7 +378,7 @@ func TestInventoryAdoptsAndMarksMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all, err := st.ListBackups(context.Background(), "target")
+	all, err := st.ListBackups(context.Background(), domain.ClusterRef{Name: "target"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +389,7 @@ func TestInventoryAdoptsAndMarksMissing(t *testing.T) {
 	if _, _, err := SyncInventory(context.Background(), env); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := st.GetBackup(context.Background(), "target", all[0].Name)
+	got, _ := st.GetBackup(context.Background(), domain.ClusterRef{Name: "target"}, all[0].Name)
 	if got.Phase != domain.PhaseFailed || !strings.Contains(got.Error, "missing") {
 		t.Fatal(got)
 	}

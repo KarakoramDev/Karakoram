@@ -15,7 +15,7 @@ func primaryEnv(ctx context.Context, env Env) (Env, error) {
 	if name == "" {
 		return env, nil
 	}
-	storage, err := env.RC.Store.GetBackupStorage(ctx, name)
+	storage, err := env.RC.Store.GetBackupStorage(ctx, env.RC.Cluster.Ref().Namespace, name)
 	if err != nil {
 		return Env{}, err
 	}

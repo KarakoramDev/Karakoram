@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM orchestration in one Zerops project, without Kubernetes. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM orchestration across existing Zerops projects through namespaces, without Kubernetes. The control plane remains in its own project; remote projects use outbound relays. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -25,6 +25,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0015](0015-openapi-code-generation.md) | OpenAPI-first generated contracts and x-karakoram-rbac mapping |
 | [0016](0016-placement-anti-affinity.md) | No anti-affinity guarantee; heuristic detection and honest warnings |
 | [0017](0017-public-tcp-exposure.md) | Optional public TCP, IP/allowlist policy and discovery-safe endpoints |
+| [0018](0018-multi-project-namespaces-relay.md) | Multi-project namespaces; outbound WebSocket/inner mTLS/smux relays |
 
 ## References and verification
 

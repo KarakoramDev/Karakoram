@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const can = useCallback(
-    (resource: Resource, action: Action, object = '*') => {
+    (resource: Resource, action: Action, object?: string) => {
       if (!state.permissions) return false;
       return evaluate(state.permissions.permissions, resource, action, object);
     },

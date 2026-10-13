@@ -31,6 +31,8 @@ type Options struct {
 type app struct {
 	opts                               Options
 	server, token, contextName, format string
+	namespace                          string
+	namespaceExplicit                  bool
 	insecure                           bool
 	config                             Config
 	selected                           string
@@ -60,6 +62,7 @@ func NewCommand(o Options) *cobra.Command {
 	f.StringVar(&a.server, "server", "", "Server URL (overrides KARAKORAM_SERVER and context)")
 	f.StringVar(&a.token, "token", "", "API token (prefer KARAKORAM_TOKEN to avoid shell history)")
 	f.StringVar(&a.contextName, "context", "", "Named connection context")
+	f.StringVarP(&a.namespace, "namespace", "n", "", "Namespace (overrides context; collections default to all)")
 	f.StringVarP(&a.format, "output", "o", "table", "Output: table, json, yaml")
 	f.StringArrayVar(&a.cookies, "cookie", nil, "Session/OIDC cookie NAME=VALUE (advanced auth flows; not saved)")
 	f.StringVar(&a.csrf, "csrf-token", "", "Session CSRF token (advanced auth flows; not saved)")
@@ -97,6 +100,13 @@ func (a *app) connect(cmd *cobra.Command) error {
 	c, exists := a.config.Contexts[a.selected]
 	if a.contextName != "" && !exists && cmd.Name() != "login" {
 		return fmt.Errorf("context %q does not exist", a.selected)
+	}
+	a.namespaceExplicit = cmd.Flags().Changed("namespace")
+	if !a.namespaceExplicit {
+		a.namespace = c.Namespace
+	}
+	if a.namespace == "" {
+		a.namespace = "default"
 	}
 	server := c.Server
 	token := c.Token
@@ -155,6 +165,10 @@ func (a *app) connect(cmd *cobra.Command) error {
 }
 
 func (a *app) request(ctx context.Context, op string, args []string, q map[string]any, body any) (any, error) {
+	if op == "listNamespaces" {
+		return a.listNamespaces(ctx)
+	}
+	q = a.namespaceQuery(op, q)
 	var b []byte
 	var err error
 	if body != nil {
@@ -168,6 +182,20 @@ func (a *app) request(ctx context.Context, op string, args []string, q map[strin
 		return nil, err
 	}
 	return decodeResponse(resp)
+}
+
+func (a *app) namespaceQuery(op string, q map[string]any) map[string]any {
+	collection := op == "listClusters" || op == "listBackupStorages" || op == "listOperations" || op == "listEvents" || op == "streamEvents" || op == "listOrphanedVolumes" || op == "getPrometheusMetrics"
+	if collection && !a.namespaceExplicit {
+		return q
+	}
+	if q == nil {
+		q = map[string]any{}
+	}
+	if _, exists := q["namespace"]; !exists {
+		q["namespace"] = a.namespace
+	}
+	return q
 }
 
 func decodeResponse(resp *http.Response) (any, error) {

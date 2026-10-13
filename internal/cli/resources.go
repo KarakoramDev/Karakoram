@@ -18,6 +18,8 @@ import (
 
 func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	switch {
+	case strings.HasPrefix(s.path, "namespaces "):
+		a.namespaceFlags(c, s.operation)
 	case strings.HasPrefix(s.path, "clusters create"), strings.HasPrefix(s.path, "clusters scale"):
 		c.Flags().Int("members", 3, "Engine replicas per replica set")
 		c.Flags().Int("shards", 1, "Shard count")
@@ -46,6 +48,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			c.Flags().String("from-backup", "", "Seed from a backup")
 			c.Flags().String("from-pitr", "", "Seed from RFC3339 point in time")
 			c.Flags().String("source-cluster", "", "Source cluster for initial data")
+			c.Flags().String("source-namespace", "", "Namespace of the initial data source (defaults to target)")
 			c.Flags().String("engine-config", "", "YAML engine overrides file")
 			c.Flags().Bool("monitoring", true, "Enable monitoring")
 		}
@@ -63,6 +66,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("backup", "", "Backup name")
 		c.Flags().String("time", "", "RFC3339 restore time")
 		c.Flags().String("source-cluster", "", "Source cluster (defaults to target)")
+		c.Flags().String("source-namespace", "", "Source namespace (defaults to target namespace)")
 		c.Flags().String("into-new", "", "Clone source spec and restore into a new cluster")
 	case strings.HasPrefix(s.path, "operations wait"):
 		c.Flags().Duration("timeout", 30*time.Minute, "Maximum wait duration")
@@ -75,6 +79,9 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 }
 
 func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error) {
+	if strings.HasPrefix(s.path, "namespaces ") {
+		return a.namespaceBody(cmd, s.operation)
+	}
 	if !s.body {
 		return nil, nil
 	}
@@ -195,7 +202,11 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		if len(args) > 1 {
 			name = args[1]
 		}
-		return map[string]any{"name": name, "source": source}, nil
+		body := map[string]any{"name": name, "source": source}
+		if ns, _ := cmd.Flags().GetString("source-namespace"); ns != "" {
+			body["sourceNamespace"] = ns
+		}
+		return body, nil
 	case s.operation == "checkPermission":
 		resource, _ := cmd.Flags().GetString("resource")
 		if resource == "" {
@@ -295,6 +306,9 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 		}
 		source["cluster"] = source["sourceCluster"]
 		delete(source, "sourceCluster")
+		if ns, _ := cmd.Flags().GetString("source-namespace"); ns != "" {
+			source["namespace"] = ns
+		}
 		spec["dataSource"] = source
 	}
 	engineConfig, _ := cmd.Flags().GetString("engine-config")
@@ -429,7 +443,11 @@ func (a *app) clone(cmd *cobra.Command, cluster, name string, body any) error {
 	if sourceCluster, ok := source["sourceCluster"].(string); ok && sourceCluster != "" {
 		cluster = sourceCluster
 	}
-	current, err := a.request(cmd.Context(), "getCluster", []string{cluster}, nil, nil)
+	sourceNamespace, _ := nested(body, "sourceNamespace").(string)
+	if sourceNamespace == "" {
+		sourceNamespace = a.namespace
+	}
+	current, err := a.request(cmd.Context(), "getCluster", []string{cluster}, map[string]any{"namespace": sourceNamespace}, nil)
 	if err != nil {
 		return err
 	}
@@ -437,7 +455,10 @@ func (a *app) clone(cmd *cobra.Command, cluster, name string, body any) error {
 	if !ok {
 		return fmt.Errorf("cluster response lacks spec")
 	}
-	dataSource := map[string]any{"cluster": source["sourceCluster"]}
+	if sourceNamespace != a.namespace {
+		delete(spec, "backup")
+	}
+	dataSource := map[string]any{"cluster": source["sourceCluster"], "namespace": sourceNamespace}
 	if dataSource["cluster"] == nil || dataSource["cluster"] == "" {
 		dataSource["cluster"] = cluster
 	}

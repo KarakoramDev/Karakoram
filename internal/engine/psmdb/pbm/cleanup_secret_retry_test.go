@@ -20,7 +20,7 @@ type interruptedCleanupStore struct {
 	interrupted bool
 }
 
-func (s *interruptedCleanupStore) DeleteBackup(ctx context.Context, cluster, name string) error {
+func (s *interruptedCleanupStore) DeleteBackup(ctx context.Context, cluster domain.ClusterRef, name string) error {
 	if !s.interrupted {
 		s.interrupted = true
 		return errors.New("control plane stopped before inventory deletion")
@@ -33,7 +33,7 @@ type cleanupNotFoundSecrets struct {
 	err error
 }
 
-func (s cleanupNotFoundSecrets) DeleteClusterSecret(context.Context, string, string) error {
+func (s cleanupNotFoundSecrets) DeleteClusterSecret(context.Context, domain.ClusterRef, string) error {
 	return s.err
 }
 
@@ -44,7 +44,7 @@ func TestDeleteAllSecretDeletedCrashResume(t *testing.T) {
 	if err := st.CreateBackup(ctx, b); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin", []byte("backup-password")); err != nil {
+	if err := st.SetClusterSecret(ctx, domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin", []byte("backup-password")); err != nil {
 		t.Fatal(err)
 	}
 	env.RC.Store = &interruptedCleanupStore{ClusterStore: st}
@@ -54,10 +54,10 @@ func TestDeleteAllSecretDeletedCrashResume(t *testing.T) {
 		if err == nil {
 			continue
 		}
-		if _, err := st.GetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin"); !errors.Is(err, store.ErrNotFound) {
+		if _, err := st.GetClusterSecret(ctx, domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin"); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("secret was not removed before crash: %v", err)
 		}
-		if _, err := st.GetBackup(ctx, b.Cluster, b.Name); err != nil {
+		if _, err := st.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name); err != nil {
 			t.Fatalf("inventory record must survive crash: %v", err)
 		}
 		var state map[string]json.RawMessage
@@ -94,7 +94,7 @@ func TestDeleteAllSecretDeletedCrashResume(t *testing.T) {
 			t.Fatal(err)
 		}
 		if res.Done {
-			if _, err := st.GetBackup(ctx, b.Cluster, b.Name); !errors.Is(err, store.ErrNotFound) {
+			if _, err := st.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name); !errors.Is(err, store.ErrNotFound) {
 				t.Fatalf("cleanup retained backup record: %v", err)
 			}
 			var state map[string]json.RawMessage
@@ -131,7 +131,7 @@ func TestDeleteAllMissingRecoverySecretErrors(t *testing.T) {
 					if !errors.Is(err, test.err) {
 						t.Fatalf("unexpected error: %v", err)
 					}
-					if _, err := st.GetBackup(ctx, b.Cluster, b.Name); err != nil {
+					if _, err := st.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name); err != nil {
 						t.Fatal("secret-store failure removed inventory record")
 					}
 					return
@@ -143,7 +143,7 @@ func TestDeleteAllMissingRecoverySecretErrors(t *testing.T) {
 					if !test.done {
 						t.Fatal("unexpected cleanup success")
 					}
-					if _, err := st.GetBackup(ctx, b.Cluster, b.Name); !errors.Is(err, store.ErrNotFound) {
+					if _, err := st.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name); !errors.Is(err, store.ErrNotFound) {
 						t.Fatalf("missing secret prevented inventory deletion: %v", err)
 					}
 					return

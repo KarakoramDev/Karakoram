@@ -6,8 +6,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
-import { useBackupStorages, useClusters, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
+import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
+import { DEFAULT_NAMESPACE, clusterObject } from '@/auth/permissions';
+import { useNamespace } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { ChoiceGroup, SelectField, Switch, TextAreaField, TextField } from '@/components/ui/Field';
 import { Callout, Card, ErrorBlock, KV, Loading, PageHeader } from '@/components/ui/Primitives';
@@ -16,6 +18,8 @@ import { ResourcesEditor, validateResources } from './editors/ResourcesEditor';
 import { SchedulesEditor, validateSchedules } from './editors/SchedulesEditor';
 import { ExposureEditor, TLSEditor, validateExposure, validateTLS } from './editors/AccessEditor';
 import { resourcesSummary } from './cluster-utils';
+import { clusterPath } from './detail/ClusterDetail';
+import { dataSourceFor, dataSourceLabel, wireDataSource } from './data-source';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -65,10 +69,11 @@ interface Validation {
   access: string[];
 }
 
-function validate(name: string, spec: ClusterSpec, existing: string[], provider: Provider | undefined): Validation {
+function validate(name: string, namespace: string, spec: ClusterSpec, existing: string[], provider: Provider | undefined): Validation {
   const v: Validation = { basics: [], topology: [], resources: [], backups: [], access: [] };
+  if (!namespace) v.basics.push('Choose the namespace (Zerops project) that will host the cluster.');
   if (!NAME_RE.test(name)) v.basics.push('Name: 2–12 lowercase letters/digits, starting with a letter.');
-  if (existing.includes(name)) v.basics.push('A cluster with this name already exists.');
+  if (existing.includes(name)) v.basics.push('A cluster with this name already exists in this namespace.');
   if (!spec.version) v.basics.push('Choose an engine version.');
   const ver = provider?.versions.find((x) => x.version === spec.version);
   if (ver && ver.status === 'unavailable') v.basics.push('This version is not available for new clusters.');
@@ -110,33 +115,45 @@ export function ClusterWizardPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
+  const { namespace: selectedNamespace } = useNamespace();
   const providers = useProviders();
-  const storages = useBackupStorages();
-  const clusters = useClusters();
+  const namespaceOptions = useNamespaceOptions();
 
   const [step, setStep] = useState<StepId>('basics');
   const [name, setName] = useState('');
+  const [targetNamespace, setTargetNamespace] = useState(selectedNamespace ?? '');
   const [spec, setSpec] = useState<ClusterSpec | null>(null);
   const [presetName, setPresetName] = useState('');
   const [touched, setTouched] = useState<Record<StepId, boolean>>({ basics: false, topology: false, resources: false, backups: false, access: false, review: false });
 
+  // Place the cluster in the only namespace available without asking.
+  useEffect(() => {
+    if (!targetNamespace && namespaceOptions.length === 1) setTargetNamespace(namespaceOptions[0]!);
+  }, [targetNamespace, namespaceOptions]);
+
+  const storages = useBackupStorages(targetNamespace || DEFAULT_NAMESPACE);
+  const clusters = useClusters(targetNamespace || DEFAULT_NAMESPACE);
+
   const provider = useMemo(() => providers.data?.items.find((p) => p.name === spec?.provider) ?? providers.data?.items[0], [providers.data, spec?.provider]);
   const topology = useMemo(() => provider?.topologies.find((t) => t.type === spec?.topology.type), [provider, spec?.topology.type]);
 
-  // Seed from the catalog defaults once providers are loaded; honour a clone
-  // request passed via ?from=<cluster>&backup=<name> or &pitrTime=<iso>.
+  // A clone request arrives as ?from=<cluster>[&sourceNamespace=<ns>]&backup=<name> or &pitrTime=<iso>.
+  const from = params.get('from');
+  const fromNamespace = params.get('sourceNamespace') || params.get('namespace') || selectedNamespace || DEFAULT_NAMESPACE;
+  const source = useCluster(fromNamespace, from ?? '', Boolean(from));
+
+  // Seed from the catalog defaults once providers are loaded; honour the clone request.
   useEffect(() => {
-    if (spec || !provider) return;
+    if (spec || !provider || (from && source.isPending)) return;
     const defaultVersion = provider.versions.find((v) => v.default)?.version ?? provider.versions[0]?.version ?? '';
     const topo = provider.topologies.find((t) => t.type === 'replicaSet') ?? provider.topologies[0];
     if (!topo) return;
     const seeded = specFromTopology(provider, topo, defaultVersion);
-    const from = params.get('from');
     if (from) {
       const backup = params.get('backup') ?? undefined;
       const pitrTime = params.get('pitrTime') ?? undefined;
-      seeded.dataSource = { cluster: from, ...(backup ? { backup } : {}), ...(pitrTime ? { pitrTime } : {}) };
-      const src = clusters.data?.items.find((c) => c.name === from);
+      seeded.dataSource = dataSourceFor(fromNamespace, from, { backup, pitrTime });
+      const src = source.data;
       if (src) {
         seeded.version = src.spec.version;
         seeded.topology = { ...src.spec.topology };
@@ -145,17 +162,17 @@ export function ClusterWizardPage() {
       }
     }
     setSpec(seeded);
-  }, [provider, spec, params, clusters.data]);
+  }, [provider, spec, params, from, fromNamespace, source.isPending, source.data]);
 
   const existingNames = useMemo(() => clusters.data?.items.map((c) => c.name) ?? [], [clusters.data]);
-  const validation = useMemo(() => (spec ? validate(name, spec, existingNames, provider) : null), [name, spec, existingNames, provider]);
+  const validation = useMemo(() => (spec ? validate(name, targetNamespace, spec, existingNames, provider) : null), [name, targetNamespace, spec, existingNames, provider]);
 
   const create = useMutation({
-    mutationFn: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { body })),
+    mutationFn: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, body })),
     onSuccess: (c) => {
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(`Cluster ${c.name} is being created.`);
-      navigate(`/clusters/${encodeURIComponent(c.name)}`);
+      navigate(clusterPath(c.namespace || targetNamespace, c.name));
     },
   });
 
@@ -210,7 +227,7 @@ export function ClusterWizardPage() {
       setTouched({ basics: true, topology: true, resources: true, backups: true, access: true, review: true });
       return;
     }
-    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec) };
+    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace) };
     create.mutate(body);
   };
 
@@ -223,7 +240,7 @@ export function ClusterWizardPage() {
           </>
         }
         title="Create cluster"
-        description="Provision a new database cluster in this Zerops project."
+        description={targetNamespace ? `Provision a new database cluster in namespace ${targetNamespace}.` : 'Provision a new database cluster in one of your namespaces.'}
       />
       <div className="wizard">
         <aside className="wizard-side">
@@ -242,6 +259,8 @@ export function ClusterWizardPage() {
             })}
           </nav>
           <dl className="wizard-summary kv">
+            <dt>Namespace</dt>
+            <dd className="mono">{targetNamespace || '—'}</dd>
             <dt>Name</dt>
             <dd className="mono">{name || '—'}</dd>
             <dt>Engine</dt>
@@ -261,6 +280,29 @@ export function ClusterWizardPage() {
           {step === 'basics' ? (
             <Card title="Basics">
               <div className="stack" style={{ gap: 16 }}>
+                {namespaceOptions.length > 1 || !targetNamespace ? (
+                  <SelectField
+                    label="Namespace"
+                    required
+                    value={targetNamespace}
+                    onChange={(e) => {
+                      setTargetNamespace(e.target.value);
+                      // Storages and name uniqueness are per namespace; drop a stale storage choice.
+                      // The data source keeps its own explicit namespace, so a chosen source
+                      // cluster never changes meaning here; the Basics callout flags the result.
+                      update((s) => ({ ...s, backup: s.backup ? { ...s.backup, storage: undefined, schedules: s.backup.schedules?.map((sc) => ({ ...sc, storage: '' })) } : s.backup }));
+                    }}
+                    hint="The Zerops project that will host the cluster. Backup storages and name uniqueness are per namespace."
+                    error={touched.basics && !targetNamespace ? 'Choose a namespace.' : undefined}
+                  >
+                    <option value="">Choose…</option>
+                    {namespaceOptions.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </SelectField>
+                ) : null}
                 <TextField
                   label="Cluster name"
                   required
@@ -324,8 +366,15 @@ export function ClusterWizardPage() {
                 ) : null}
                 {spec.dataSource ? (
                   <Callout tone="info" title="Seeding from existing data">
-                    This cluster will be restored from <strong className="mono">{spec.dataSource.cluster}</strong> {spec.dataSource.backup ? <>backup <span className="mono">{spec.dataSource.backup}</span></> : <>at {spec.dataSource.pitrTime}</>}. Change
-                    this under Backups.
+                    This cluster will be restored from <strong className="mono">{dataSourceLabel(spec.dataSource, targetNamespace)}</strong>{' '}
+                    {spec.dataSource.backup ? <>backup <span className="mono">{spec.dataSource.backup}</span></> : spec.dataSource.pitrTime ? <>at {spec.dataSource.pitrTime}</> : <>(restore point not chosen yet)</>}.
+                    {spec.dataSource.namespace && spec.dataSource.namespace !== targetNamespace ? (
+                      <>
+                        {' '}
+                        The source stays in namespace <span className="mono">{spec.dataSource.namespace}</span>, so this is a cross-namespace restore and needs <code>backups:export</code> on the source cluster.
+                      </>
+                    ) : null}{' '}
+                    Change this under Backups.
                   </Callout>
                 ) : null}
               </div>
@@ -432,7 +481,7 @@ export function ClusterWizardPage() {
               <Card title="Backup storage">
                 {storageNames.length === 0 ? (
                   <Callout tone="warn">
-                    No backup storages configured. <Link to="/settings/backup-storages">Add an S3 storage</Link> to enable schedules and PITR. You can still create the cluster now.
+                    No backup storages in namespace <span className="mono">{targetNamespace}</span>. <Link to={`/settings/backup-storages?namespace=${encodeURIComponent(targetNamespace)}`}>Add an S3 storage</Link> to enable schedules and PITR. You can still create the cluster now.
                   </Callout>
                 ) : null}
                 <div className="stack" style={{ gap: 14, marginTop: storageNames.length === 0 ? 12 : 0 }}>
@@ -478,7 +527,7 @@ export function ClusterWizardPage() {
                 />
               </Card>
               <Card title="Seed data (optional)">
-                <DataSourceEditor value={spec.dataSource} onChange={(dataSource) => update((s) => ({ ...s, dataSource }))} clusters={clusters.data?.items.map((c) => c.name) ?? []} />
+                <DataSourceEditor value={spec.dataSource} onChange={(dataSource) => update((s) => ({ ...s, dataSource }))} targetNamespace={targetNamespace || DEFAULT_NAMESPACE} namespaces={namespaceOptions} />
               </Card>
             </div>
           ) : null}
@@ -512,6 +561,7 @@ export function ClusterWizardPage() {
                 {create.error ? <ErrorBlock error={create.error} /> : null}
                 <KV
                   items={[
+                    ['Namespace', <span className="mono">{targetNamespace}</span>],
                     ['Name', <span className="mono">{name}</span>],
                     ['Engine', `${provider.displayName} ${spec.version}`],
                     ['Topology', sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`],
@@ -521,7 +571,7 @@ export function ClusterWizardPage() {
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],
-                    spec.dataSource && ['Seed from', `${spec.dataSource.cluster} ${spec.dataSource.backup ? `backup ${spec.dataSource.backup}` : `at ${spec.dataSource.pitrTime}`}`],
+                    spec.dataSource && ['Seed from', `${dataSourceLabel(spec.dataSource, targetNamespace)} ${spec.dataSource.backup ? `backup ${spec.dataSource.backup}` : `at ${spec.dataSource.pitrTime}`}`],
                     ['TLS', `${spec.tls?.mode ?? 'requireTLS'} · ${spec.tls?.ca === 'userProvided' ? 'user-provided certificates' : 'managed CA'}`],
                     ['Exposure', spec.exposure?.public ? `public ${spec.exposure.ipType}, allowlist ${(spec.exposure.allowlist ?? []).join(', ') || 'missing (required)'}` : 'private'],
                     ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
@@ -559,7 +609,7 @@ export function ClusterWizardPage() {
 }
 
 /** Drop empty optional envelopes so the server applies its own defaults. */
-function cleanSpec(spec: ClusterSpec): ClusterSpec {
+function cleanSpec(spec: ClusterSpec, targetNamespace: string): ClusterSpec {
   const out: ClusterSpec = structuredClone(spec);
   if (out.backup) {
     if (!out.backup.storage) delete out.backup.storage;
@@ -575,60 +625,115 @@ function cleanSpec(spec: ClusterSpec): ClusterSpec {
   }
   if (out.exposure && !out.exposure.public) out.exposure = { public: false, ipType: out.exposure.ipType };
   if (!out.engineConfig) delete out.engineConfig;
-  if (!out.dataSource) delete out.dataSource;
+  if (out.dataSource) out.dataSource = wireDataSource(out.dataSource, targetNamespace);
+  else delete out.dataSource;
   return out;
 }
 
-export function DataSourceEditor({ value, onChange, clusters, fixedCluster }: { value: Schemas['DataSource'] | undefined; onChange: (d: Schemas['DataSource'] | undefined) => void; clusters: string[]; fixedCluster?: string }) {
+/**
+ * Source namespace + cluster choice shared by clone and in-place restore.
+ * Cross-namespace sources need backups/export on the source cluster, which
+ * the server verifies; the hint only sets expectations from the policy the
+ * UI can see.
+ */
+export function SourceClusterPicker({
+  targetNamespace,
+  namespaces,
+  namespace,
+  cluster,
+  onChange,
+}: {
+  targetNamespace: string;
+  namespaces: string[];
+  namespace: string;
+  cluster: string;
+  onChange: (namespace: string, cluster: string) => void;
+}) {
+  const auth = useAuth();
+  const clusters = useClusters(namespace);
+  const cross = namespace !== targetNamespace;
+  const exportAllowed = !cross || !cluster || auth.can('backups', 'export', clusterObject(namespace, cluster));
+  const options = namespaces.includes(namespace) ? namespaces : [...namespaces, namespace];
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="grid-2">
+        <SelectField label="Source namespace" value={namespace} onChange={(e) => onChange(e.target.value, '')} hint={cross ? 'Restoring across namespaces requires the backups:export permission on the source cluster.' : undefined}>
+          {options.map((n) => (
+            <option key={n} value={n}>
+              {n}
+              {n === targetNamespace ? ' (same namespace)' : ''}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Source cluster"
+          value={cluster}
+          onChange={(e) => onChange(namespace, e.target.value)}
+          error={clusters.error ? errorMessage(clusters.error) : undefined}
+          hint={clusters.data && clusters.data.items.length === 0 ? 'No readable clusters in this namespace.' : undefined}
+        >
+          <option value="">Choose…</option>
+          {clusters.data?.items.map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+      {exportAllowed ? null : (
+        <Callout tone="warn">
+          Your policy does not grant <code>backups:export</code> on <span className="mono">{clusterObject(namespace, cluster)}</span>; the server will refuse this cross-namespace restore.
+        </Callout>
+      )}
+    </div>
+  );
+}
+
+export function DataSourceEditor({ value, onChange, targetNamespace, namespaces }: { value: Schemas['DataSource'] | undefined; onChange: (d: Schemas['DataSource'] | undefined) => void; targetNamespace: string; namespaces: string[] }) {
   const [mode, setMode] = useState<'backup' | 'pitr'>(value?.pitrTime ? 'pitr' : 'backup');
-  const cluster = value?.cluster ?? fixedCluster ?? '';
+  const cluster = value?.cluster ?? '';
+  // Wizard state always carries the source namespace (see data-source.ts); the
+  // fallback only covers values typed as optional, never one this editor built.
+  const namespace = value?.namespace || targetNamespace;
   return (
     <div className="stack" style={{ gap: 14 }}>
-      <Switch
-        label="Restore data from another cluster into this new cluster"
-        checked={Boolean(value)}
-        onChange={(e) => onChange(e.target.checked ? { cluster: fixedCluster ?? clusters[0] ?? '' } : undefined)}
-      />
+      <Switch label="Restore data from another cluster into this new cluster" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked ? dataSourceFor(targetNamespace, '') : undefined)} />
       {value ? (
         <>
-          {fixedCluster ? null : (
-            <SelectField label="Source cluster" value={cluster} onChange={(e) => onChange({ cluster: e.target.value })}>
-              <option value="">Choose…</option>
-              {clusters.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </SelectField>
-          )}
+          <SourceClusterPicker targetNamespace={targetNamespace} namespaces={namespaces} namespace={namespace} cluster={cluster} onChange={(ns, c) => onChange(dataSourceFor(ns, c))} />
           <ChoiceGroup<'backup' | 'pitr'>
             name="ds-mode"
             legend="Restore point"
             value={mode}
             onChange={(m) => {
               setMode(m);
-              onChange({ cluster });
+              onChange(dataSourceFor(namespace, cluster));
             }}
             options={[
               { value: 'backup', title: 'Backup', description: 'A completed backup of the source.' },
               { value: 'pitr', title: 'Point in time', description: 'Any instant inside the source PITR window.' },
             ]}
           />
-          {mode === 'backup' ? <BackupPicker cluster={cluster} value={value.backup} onChange={(backup) => onChange({ cluster, backup })} /> : <PitrPicker cluster={cluster} value={value.pitrTime} onChange={(pitrTime) => onChange({ cluster, pitrTime })} />}
+          {mode === 'backup' ? (
+            <BackupPicker namespace={namespace} cluster={cluster} value={value.backup} onChange={(backup) => onChange(dataSourceFor(namespace, cluster, { backup }))} />
+          ) : (
+            <PitrPicker namespace={namespace} cluster={cluster} value={value.pitrTime} onChange={(pitrTime) => onChange(dataSourceFor(namespace, cluster, { pitrTime }))} />
+          )}
         </>
       ) : null}
     </div>
   );
 }
 
-export function BackupPicker({ cluster, value, onChange }: { cluster: string; value: string | undefined; onChange: (b: string) => void }) {
+export function BackupPicker({ namespace, cluster, value, onChange }: { namespace: string; cluster: string; value: string | undefined; onChange: (b: string) => void }) {
   const [items, setItems] = useState<Schemas['Backup'][] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     if (!cluster) return;
     let cancelled = false;
     setItems(null);
-    unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster }, query: { limit: 200 } } }))
+    setErr(null);
+    unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster }, query: { namespace, limit: 200 } } }))
       .then((r) => {
         if (!cancelled) setItems(r.items.filter((b) => b.phase === 'Succeeded'));
       })
@@ -638,7 +743,7 @@ export function BackupPicker({ cluster, value, onChange }: { cluster: string; va
     return () => {
       cancelled = true;
     };
-  }, [cluster]);
+  }, [namespace, cluster]);
   if (!cluster) return <p className="small muted">Choose a source cluster first.</p>;
   if (err) return <Callout tone="danger">{err}</Callout>;
   if (!items) return <Loading label="Loading backups…" />;
@@ -654,14 +759,15 @@ export function BackupPicker({ cluster, value, onChange }: { cluster: string; va
   );
 }
 
-export function PitrPicker({ cluster, value, onChange }: { cluster: string; value: string | undefined; onChange: (iso: string) => void }) {
+export function PitrPicker({ namespace, cluster, value, onChange }: { namespace: string; cluster: string; value: string | undefined; onChange: (iso: string) => void }) {
   const [win, setWin] = useState<Schemas['PITRWindow'] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     if (!cluster) return;
     let cancelled = false;
     setWin(null);
-    unwrap(api.GET('/clusters/{cluster}/pitr', { params: { path: { cluster } } }))
+    setErr(null);
+    unwrap(api.GET('/clusters/{cluster}/pitr', { params: { path: { cluster }, query: { namespace } } }))
       .then((w) => {
         if (!cancelled) setWin(w);
       })
@@ -671,7 +777,7 @@ export function PitrPicker({ cluster, value, onChange }: { cluster: string; valu
     return () => {
       cancelled = true;
     };
-  }, [cluster]);
+  }, [namespace, cluster]);
   if (!cluster) return <p className="small muted">Choose a source cluster first.</p>;
   if (err) return <Callout tone="danger">{err}</Callout>;
   if (!win) return <Loading label="Reading PITR window…" />;

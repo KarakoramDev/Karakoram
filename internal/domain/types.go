@@ -41,15 +41,19 @@ const (
 
 // Cluster holds desired state, observed state, and provider-owned durable state.
 type Cluster struct {
-	Name          string          `json:"name"`
-	Spec          ClusterSpec     `json:"spec"`
-	Status        ClusterStatus   `json:"status"`
-	Internal      json.RawMessage `json:"-"`
-	Generation    int64           `json:"generation"`
-	Deleting      bool            `json:"deleting"`
-	DeleteOptions DeleteOptions   `json:"deleteOptions,omitempty"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
+	Namespace  string          `json:"namespace,omitempty"`
+	Name       string          `json:"name"`
+	Spec       ClusterSpec     `json:"spec"`
+	Status     ClusterStatus   `json:"status"`
+	Internal   json.RawMessage `json:"-"`
+	Generation int64           `json:"generation"`
+	// RequestedBy belongs to Generation, not to observed-state updates.
+	// It remains empty for generations whose historical requester is unknown.
+	RequestedBy   string        `json:"-"`
+	Deleting      bool          `json:"deleting"`
+	DeleteOptions DeleteOptions `json:"deleteOptions,omitempty"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
 }
 
 // ClusterSpec declares the desired engine, topology, and operational configuration.
@@ -140,9 +144,10 @@ type MonitoringConfig struct {
 
 // DataSource identifies the source of a new cluster restore.
 type DataSource struct {
-	Cluster  string     `json:"cluster,omitempty"`
-	Backup   string     `json:"backup,omitempty"`
-	PITRTime *time.Time `json:"pitrTime,omitempty"`
+	Namespace string     `json:"namespace,omitempty"`
+	Cluster   string     `json:"cluster,omitempty"`
+	Backup    string     `json:"backup,omitempty"`
+	PITRTime  *time.Time `json:"pitrTime,omitempty"`
 }
 
 // DeleteOptions controls preservation of volumes and backup objects.
@@ -300,6 +305,7 @@ type Preset struct {
 
 // BackupStorage describes an S3-compatible destination; credentials never marshal publicly.
 type BackupStorage struct {
+	Namespace      string             `json:"namespace,omitempty"`
 	Name           string             `json:"name"`
 	Type           string             `json:"type"`
 	EndpointURL    string             `json:"endpointURL"`
@@ -320,14 +326,15 @@ type StorageCredentials struct {
 
 // Backup tracks one durable backup inventory entry.
 type Backup struct {
-	Name     string `json:"name"`
-	Cluster  string `json:"cluster"`
-	Storage  string `json:"storage"`
-	Type     string `json:"type"`
-	Trigger  string `json:"trigger"`
-	Schedule string `json:"schedule,omitempty"`
-	Phase    Phase  `json:"phase"`
-	PBMName  string `json:"pbmName,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Cluster   string `json:"cluster"`
+	Storage   string `json:"storage"`
+	Type      string `json:"type"`
+	Trigger   string `json:"trigger"`
+	Schedule  string `json:"schedule,omitempty"`
+	Phase     Phase  `json:"phase"`
+	PBMName   string `json:"pbmName,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -345,14 +352,16 @@ type Backup struct {
 
 // Restore tracks a restore into its target cluster.
 type Restore struct {
-	Name        string        `json:"name"`
-	Cluster     string        `json:"cluster"`
-	Source      RestoreSource `json:"source"`
-	Phase       Phase         `json:"phase"`
-	StartedAt   *time.Time    `json:"startedAt,omitempty"`
-	CompletedAt *time.Time    `json:"completedAt,omitempty"`
-	Error       string        `json:"error,omitempty"`
-	CreatedAt   time.Time     `json:"createdAt"`
+	Namespace       string        `json:"namespace,omitempty"`
+	SourceNamespace string        `json:"sourceNamespace,omitempty"`
+	Name            string        `json:"name"`
+	Cluster         string        `json:"cluster"`
+	Source          RestoreSource `json:"source"`
+	Phase           Phase         `json:"phase"`
+	StartedAt       *time.Time    `json:"startedAt,omitempty"`
+	CompletedAt     *time.Time    `json:"completedAt,omitempty"`
+	Error           string        `json:"error,omitempty"`
+	CreatedAt       time.Time     `json:"createdAt"`
 }
 
 // RestoreSource selects a backup or point in time from a source cluster.
@@ -364,6 +373,7 @@ type RestoreSource struct {
 
 // Operation tracks a durable, checkpointed imperative action.
 type Operation struct {
+	Namespace   string          `json:"namespace,omitempty"`
 	ID          string          `json:"id"`
 	Cluster     string          `json:"cluster"`
 	Kind        string          `json:"kind"`
@@ -382,8 +392,11 @@ type Operation struct {
 
 // Event is a durable audit and lifecycle notification.
 type Event struct {
+	Namespace string    `json:"namespace,omitempty"`
 	ID        int64     `json:"id"`
 	Cluster   string    `json:"cluster,omitempty"`
+	Resource  string    `json:"resource,omitempty"`
+	Target    string    `json:"target,omitempty"`
 	Operation string    `json:"operation,omitempty"`
 	Type      string    `json:"type"`
 	Reason    string    `json:"reason"`
@@ -440,14 +453,16 @@ type PolicyRule struct {
 
 // AgentToken binds a member identity to hashed and encrypted authentication material.
 type AgentToken struct {
-	Cluster string `json:"cluster"`
-	Member  string `json:"member"`
-	Hash    string `json:"-"`
-	Token   string `json:"-"`
+	Namespace string `json:"namespace,omitempty"`
+	Cluster   string `json:"cluster"`
+	Member    string `json:"member"`
+	Hash      string `json:"-"`
+	Token     string `json:"-"`
 }
 
 // MetricSample is one timestamped member metric with optional labels.
 type MetricSample struct {
+	Namespace string            `json:"namespace,omitempty"`
 	Cluster   string            `json:"cluster"`
 	Member    string            `json:"member"`
 	Metric    string            `json:"metric"`
@@ -458,6 +473,7 @@ type MetricSample struct {
 
 // RetainedVolume preserves runtime-to-volume mapping for cluster resumption.
 type RetainedVolume struct {
+	Namespace  string    `json:"namespace,omitempty"`
 	Cluster    string    `json:"cluster"`
 	Member     string    `json:"member"`
 	Hostname   string    `json:"hostname"`

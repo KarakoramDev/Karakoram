@@ -23,20 +23,20 @@ const ROLE_TONE: Record<Member['role'], Tone> = {
 };
 
 export function OverviewTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, can } = useClusterContext();
   const members = useQuery({
-    queryKey: keys.clusterSub(name, 'members'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/members', { params: { path: { cluster: name } } })),
+    queryKey: keys.clusterSub(namespace, name, 'members'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/members', { params: { path: { cluster: name }, query: { namespace } } })),
     refetchInterval: 10_000,
   });
   const placement = useQuery({
-    queryKey: keys.clusterSub(name, 'placement'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/placement', { params: { path: { cluster: name } } })),
+    queryKey: keys.clusterSub(namespace, name, 'placement'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/placement', { params: { path: { cluster: name }, query: { namespace } } })),
     refetchInterval: 60_000,
   });
   const balancer = useQuery({
-    queryKey: keys.clusterSub(name, 'balancer'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/balancer', { params: { path: { cluster: name } } })),
+    queryKey: keys.clusterSub(namespace, name, 'balancer'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/balancer', { params: { path: { cluster: name }, query: { namespace } } })),
     enabled: cluster.spec.topology.type === 'sharded',
     refetchInterval: 30_000,
   });
@@ -199,7 +199,7 @@ export function OverviewTab() {
                 ]}
               />
               <CodeLine value={conn.uri} />
-              <CredentialsReveal name={name} allowed={can('read', 'cluster-credentials')} />
+              <CredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} />
             </div>
           ) : (
             <p className="small muted">Connection details appear once the cluster is initialized.</p>
@@ -266,7 +266,7 @@ export function OverviewTab() {
   );
 }
 
-function CredentialsReveal({ name, allowed }: { name: string; allowed: boolean }) {
+function CredentialsReveal({ namespace, name, allowed }: { namespace: string; name: string; allowed: boolean }) {
   const [data, setData] = useState<Schemas['Connection'] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -285,7 +285,7 @@ function CredentialsReveal({ name, allowed }: { name: string; allowed: boolean }
               setBusy(true);
               setErr(null);
               try {
-                setData(await unwrap(api.GET('/clusters/{cluster}/connection', { params: { path: { cluster: name } } })));
+                setData(await unwrap(api.GET('/clusters/{cluster}/connection', { params: { path: { cluster: name }, query: { namespace } } })));
               } catch (e) {
                 setErr(errorMessage(e));
               } finally {

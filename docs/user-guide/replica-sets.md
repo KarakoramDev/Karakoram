@@ -6,6 +6,12 @@ A replica-set cluster is a managed PSMDB set named `rs0`. Choose **1, 3, 5 or 7*
 
 Before creating a cluster, [install and authenticate](../install.md), check the [version catalog](scaling-and-upgrades.md), and read the [placement limitations](../limitations.md). Three members do not guarantee three physical machines.
 
+Choose the project's [namespace](namespaces.md) in the UI or add `-n NAME` to
+CLI commands below (omitted single-object namespace defaults to `default`).
+Names are unique within a namespace. Connection details use that project's
+private member hostnames: a management relay does not make them reachable by
+application clients in another project.
+
 ## Create
 
 In **Clusters → Create cluster**, choose `replicaSet`, a provider-advertised version, engine replica count and CPU/RAM/disk bounds. Keep `requireTLS` and private exposure unless you have a specific access plan. Names must match `^[a-z][a-z0-9]{1,11}$`: 2–12 lowercase letters/digits, beginning with a letter.

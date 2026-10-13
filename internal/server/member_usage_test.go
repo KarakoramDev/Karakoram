@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 )
 
@@ -23,7 +24,7 @@ type usageDialer struct {
 	ca  []byte
 }
 
-func (d usageDialer) Dial(context.Context, string, string) (*agentapi.Client, error) {
+func (d usageDialer) Dial(context.Context, domain.ClusterRef, string) (*agentapi.Client, error) {
 	return agentapi.NewClient(agentapi.ClientOptions{BaseURL: d.url, Token: "token", CAPEM: d.ca})
 }
 
@@ -115,7 +116,7 @@ func TestMemberResponsesUseFreshCollectorSamples(t *testing.T) {
 	defer deadline.Stop()
 	poll := time.NewTicker(10 * time.Millisecond)
 	defer poll.Stop()
-	for collector.MemberUsage("prod", "prodm0").CPUPercent == nil {
+	for collector.MemberUsage(domain.ClusterRef{Name: "prod"}, "prodm0").CPUPercent == nil {
 		select {
 		case <-poll.C:
 		case <-deadline.C:

@@ -30,7 +30,7 @@ func TestOrphanedVolumeCRUDAndClusterIndependence(t *testing.T) {
 	if err := s.PutOrphanedVolume(ctx, &other); err != nil {
 		t.Fatal(err)
 	}
-	items, err := s.ListOrphanedVolumes(ctx)
+	items, err := s.ListOrphanedVolumes(ctx, "")
 	if err != nil || len(items) != 2 || items[0].Hostname != "am0v" {
 		t.Fatal(items, err)
 	}
@@ -38,7 +38,7 @@ func TestOrphanedVolumeCRUDAndClusterIndependence(t *testing.T) {
 	if err := s.PutOrphanedVolume(ctx, &v); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteCluster(ctx, "demo"); err != nil {
+	if err := s.DeleteCluster(ctx, domain.ParseClusterKey("demo")); err != nil {
 		t.Fatal(err)
 	}
 	// Reopen the same SQLite file to exercise persisted private bookkeeping.
@@ -47,7 +47,7 @@ func TestOrphanedVolumeCRUDAndClusterIndependence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	got, err := reopened.GetOrphanedVolume(ctx, v.Hostname)
+	got, err := reopened.GetOrphanedVolume(ctx, domain.DefaultNamespace, v.Hostname)
 	if err != nil || *got != v {
 		t.Fatalf("round trip: %+v %v", got, err)
 	}
@@ -55,10 +55,10 @@ func TestOrphanedVolumeCRUDAndClusterIndependence(t *testing.T) {
 	if err != nil || strings.Contains(string(data), "processPending") || strings.Contains(string(data), "janitorFailures") {
 		t.Fatal(string(data), err)
 	}
-	if err := reopened.DeleteOrphanedVolume(ctx, v.Hostname); err != nil {
+	if err := reopened.DeleteOrphanedVolume(ctx, domain.DefaultNamespace, v.Hostname); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reopened.GetOrphanedVolume(ctx, v.Hostname); !errors.Is(err, ErrNotFound) {
+	if _, err := reopened.GetOrphanedVolume(ctx, domain.DefaultNamespace, v.Hostname); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }

@@ -26,6 +26,7 @@ type checkpoint struct {
 	Snapshot         string       `json:"snapshot,omitempty"`
 	Physical         bool         `json:"physical,omitempty"`
 	Source           string       `json:"source,omitempty"`
+	SourceNamespace  string       `json:"sourceNamespace,omitempty"`
 	TargetTime       *time.Time   `json:"targetTime,omitempty"`
 	Index            int          `json:"index,omitempty"`
 	Failure          string       `json:"failure,omitempty"`
@@ -87,7 +88,7 @@ func healthyMember(ctx context.Context, env Env) (string, error) {
 		if env.Sharded && n.ReplSet != "cfg" {
 			continue
 		}
-		c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Name, n.Member)
+		c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Ref(), n.Member)
 		if err != nil {
 			last = err
 			continue
@@ -116,7 +117,7 @@ func command(ctx context.Context, env Env, member, requestID, name string, cfg [
 			return nil, err
 		}
 	}
-	c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Name, member)
+	c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Ref(), member)
 	if err != nil {
 		return nil, err
 	}
@@ -170,11 +171,31 @@ func event(ctx context.Context, env Env, op *domain.Operation, reason, message s
 	if env.RC.Events == nil {
 		return nil
 	}
-	return env.RC.Events.Record(ctx, domain.Event{Cluster: env.RC.Cluster.Name, Operation: op.ID, Type: "Normal", Reason: reason, Message: message, CreatedAt: now(env)})
+	if err := env.RC.Events.Record(ctx, domain.Event{Namespace: env.RC.Cluster.Ref().Namespace, Cluster: env.RC.Cluster.Name, Operation: op.ID, Type: "Normal", Reason: reason, Message: message, CreatedAt: now(env)}); err != nil {
+		return err
+	}
+	if reason == "RestoreStarted" || reason == "RestoreCompleted" {
+		name, err := payloadName(op, "restore")
+		if err != nil {
+			return err
+		}
+		restore, err := env.RC.Store.GetRestore(ctx, env.RC.Cluster.Ref(), name)
+		if err != nil {
+			return err
+		}
+		if restore.SourceNamespace != "" && restore.SourceNamespace != env.RC.Cluster.Ref().Namespace {
+			source := restore.Source.SourceCluster
+			if source == "" {
+				source = env.RC.Cluster.Name
+			}
+			return env.RC.Events.Record(ctx, domain.Event{Namespace: restore.SourceNamespace, Cluster: source, Operation: op.ID, Type: "Normal", Reason: reason, Message: message + " into " + env.RC.Cluster.Ref().Namespace + "/" + env.RC.Cluster.Name, CreatedAt: now(env)})
+		}
+	}
+	return nil
 }
 
 func process(ctx context.Context, env Env, member, name, action string) error {
-	c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Name, member)
+	c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Ref(), member)
 	if err != nil {
 		return err
 	}
@@ -183,7 +204,7 @@ func process(ctx context.Context, env Env, member, name, action string) error {
 }
 
 func maintenance(ctx context.Context, env Env, member string, enabled bool) error {
-	c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Name, member)
+	c, err := env.RC.Agents.Dial(ctx, env.RC.Cluster.Ref(), member)
 	if err != nil {
 		return err
 	}

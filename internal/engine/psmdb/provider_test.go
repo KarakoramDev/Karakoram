@@ -127,7 +127,7 @@ type testDialer struct {
 	ca  []byte
 }
 
-func (d testDialer) Dial(context.Context, string, string) (*agentapi.Client, error) {
+func (d testDialer) Dial(context.Context, domain.ClusterRef, string) (*agentapi.Client, error) {
 	return agentapi.NewClient(agentapi.ClientOptions{BaseURL: d.url, Token: "test-token", CAPEM: d.ca})
 }
 func setup(t *testing.T) (*Provider, *engine.Context, *fakeInfra, *int) {
@@ -264,7 +264,7 @@ func TestZeropsYAMLAndConfig(t *testing.T) {
 	if e := save(rc.Cluster, s); e != nil {
 		t.Fatal(e)
 	}
-	text, e := p.zeropsYAML(rc.Cluster, m, "8.0.29-13")
+	text, e := p.zeropsYAML(rc, m, "8.0.29-13")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -332,7 +332,7 @@ func TestSyncInitialStateMachineAndPending(t *testing.T) {
 			if *boot != 1 || len(f.imports) != 1 || len(f.deployments) != 1 {
 				t.Fatal(*boot, len(f.imports), len(f.deployments))
 			}
-			token, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, "demom0")
+			token, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), "demom0")
 			if e != nil || token.Hash != secrets.Hash(token.Token) {
 				t.Fatal(token, e)
 			}
@@ -539,11 +539,11 @@ func TestCleanupDeletesNodeSecrets(t *testing.T) {
 			t.Fatal(f.services)
 		}
 		for _, key := range []string{"tls/ca.key", "users/backup", "members/" + m.Name + "/users/backup", "tls/members/" + m.Name + ".pem"} {
-			if _, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Name, key); !missing(err) {
+			if _, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), key); !missing(err) {
 				t.Fatalf("secret %s survived: %v", key, err)
 			}
 		}
-		if _, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Name, m.Name); !missing(err) {
+		if _, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name); !missing(err) {
 			t.Fatal("agent token survived", err)
 		}
 		return
@@ -628,7 +628,7 @@ func TestAlternateStoragePrefixAndPITRDisabled(t *testing.T) {
 	s, _ := load(rc.Cluster)
 	s.PBMPrefix = "karakoram/demo-uid"
 	plan(rc.Cluster, s)
-	env, err := p.pbmEnvForStorage(ctx, rc, s, "alt")
+	env, err := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, "alt")
 	if err != nil || env.Storage.Name != "alt" || env.Prefix != "custom/karakoram/demo-uid" || env.Credentials.SecretAccessKey != "secret" {
 		t.Fatal(env, err)
 	}

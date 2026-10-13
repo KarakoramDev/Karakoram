@@ -26,6 +26,16 @@ var ErrNotFound = errors.New("resource not found")
 // ErrConflict indicates a duplicate identity or conflicting state transition.
 var ErrConflict = errors.New("resource conflict")
 
+// ErrInvalid indicates an invalid persistence identity.
+var ErrInvalid = errors.New("invalid resource identity")
+
+func storageAAD(namespace, name string) string {
+	if namespace == "" || namespace == domain.DefaultNamespace {
+		return "storage/" + name
+	}
+	return "storage-ns/" + namespace + "/" + name
+}
+
 //go:embed migrations/*.sql
 var migrations embed.FS
 
@@ -160,7 +170,10 @@ func list[T any](ctx context.Context, s *Store, kind, scope string) ([]T, error)
 		q += " AND scope=?"
 		args = append(args, scope)
 	}
-	q += " ORDER BY created,key"
+	return listQuery[T](ctx, s, q+" ORDER BY created,key", args...)
+}
+
+func listQuery[T any](ctx context.Context, s *Store, q string, args ...any) ([]T, error) {
 	rows, err := s.reader.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -179,6 +192,34 @@ func list[T any](ctx context.Context, s *Store, kind, scope string) ([]T, error)
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+func namespaceScope(namespace string) string {
+	if namespace == "" || namespace == domain.DefaultNamespace {
+		return ""
+	}
+	return namespace
+}
+
+func clusterRecordFilter(ref domain.ClusterRef) (string, []any) {
+	if ref.Name != "" {
+		return " AND scope=?", []any{ref.Key()}
+	}
+	if ref.Namespace == "" {
+		return "", nil
+	}
+	if ref.Namespace == domain.DefaultNamespace {
+		return " AND instr(scope, ':')=0", nil
+	}
+	return " AND substr(scope,1,?)=?", []any{len(ref.Namespace) + 1, ref.Namespace + ":"}
+}
+
+func listClusterRecords[T any](ctx context.Context, s *Store, kind string, ref domain.ClusterRef) ([]T, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	filter, args := clusterRecordFilter(ref)
+	return listQuery[T](ctx, s, "SELECT data FROM records WHERE kind=?"+filter+" ORDER BY created,key", append([]any{kind}, args...)...)
 }
 func (s *Store) remove(ctx context.Context, kind, scope, key string) error {
 	result, err := s.writer.ExecContext(ctx, "DELETE FROM records WHERE kind=? AND scope=? AND key=?", kind, scope, key)
@@ -223,24 +264,24 @@ func (s *Store) unseal(identity, value string, out any) error {
 
 // ClusterRepository defines desired and observed cluster persistence.
 type ClusterRepository interface {
-	GetCluster(context.Context, string) (*domain.Cluster, error)
-	ListClusters(context.Context) ([]domain.Cluster, error)
+	GetCluster(context.Context, domain.ClusterRef) (*domain.Cluster, error)
+	ListClusters(context.Context, string) ([]domain.Cluster, error)
 	CreateCluster(context.Context, *domain.Cluster) error
-	UpdateClusterSpec(context.Context, string, domain.ClusterSpec) error
+	UpdateClusterSpec(context.Context, domain.ClusterRef, domain.ClusterSpec) error
 	UpdateClusterState(context.Context, *domain.Cluster) error
-	MarkClusterDeleting(context.Context, string, domain.DeleteOptions) error
-	DeleteCluster(context.Context, string) error
+	MarkClusterDeleting(context.Context, domain.ClusterRef, domain.DeleteOptions) error
+	DeleteCluster(context.Context, domain.ClusterRef) error
 }
 
 // OperationRepository defines durable operation enqueueing and resumption.
 type OperationRepository interface {
 	EnqueueOperation(context.Context, *domain.Operation) error
 	GetOperation(context.Context, string) (*domain.Operation, error)
-	ListOperations(context.Context, string, ...domain.Phase) ([]domain.Operation, error)
+	ListOperations(context.Context, domain.ClusterRef, ...domain.Phase) ([]domain.Operation, error)
 	UpdateOperation(context.Context, *domain.Operation) error
 	UpdateOperationAndClusterState(context.Context, *domain.Operation, *domain.Cluster) error
-	ClaimOperation(context.Context, string) (*domain.Operation, error)
-	ClaimRunningOperation(context.Context, string) (*domain.Operation, error)
+	ClaimOperation(context.Context, domain.ClusterRef) (*domain.Operation, error)
+	ClaimRunningOperation(context.Context, domain.ClusterRef) (*domain.Operation, error)
 }
 
 // EventRepository defines append-only durable event persistence.

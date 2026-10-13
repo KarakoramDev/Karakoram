@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/Primitives';
 export function SettingsLayout() {
   const auth = useAuth();
   const items = [
+    { to: '/settings/namespaces', label: 'Namespaces', show: auth.can('namespaces', 'read') },
     { to: '/settings/backup-storages', label: 'Backup storages', show: auth.can('backup-storages', 'read') },
     { to: '/settings/orphaned-volumes', label: 'Orphaned volumes', show: auth.can('clusters', 'read') },
     { to: '/settings/accounts', label: 'Accounts', show: auth.can('accounts', 'read') },

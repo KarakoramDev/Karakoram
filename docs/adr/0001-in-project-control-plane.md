@@ -8,13 +8,13 @@ Karakoram is self-hosted orchestration software, not a managed database service.
 
 ## Decision
 
-Deploy Karakoram inside the user's existing Zerops project as a separate runtime service named `karakoram`. It manages clusters in that project using a project-scoped Zerops token and private service hostnames. The control plane owns desired state, REST API, CLI-facing workflows, web UI and reconciliation; PSMDB/PBM provide database mechanisms. Neither Kubernetes nor an external hosted coordinator is required.
+Deploy Karakoram inside the user's existing Zerops project as a separate runtime service named `karakoram`. Its own project is namespace `default`, managed using an environment-held project-scoped token and direct private service hostnames. Additional existing projects are managed as namespaces through outbound relays (ADR 0018), each with its own token. The control plane owns desired state, REST API, CLI-facing workflows, web UI and reconciliation; PSMDB/PBM provide database mechanisms. Neither Kubernetes nor an external hosted coordinator is required.
 
 Expose the UI/API through Zerops HTTPS routing to port 8080. Keep the agent-facing TLS listener on port 9443 private. Installation does not create projects or modify the platform's `core` service. Karakoram is the sole product name; references to OpenEverest, Percona and MongoDB describe origins or dependencies, not affiliation.
 
 ## Consequences
 
-Private administration needs no operator-managed VPN and databases remain private by default. Each installation has a project-level failure and trust boundary: project/network loss stops management, and compromise of the control-plane token can affect that project. Running databases are not dependent on control-plane availability for normal replication; cached agent configuration preserves process startup (ADR 0008). Cross-project management is not part of this deployment model. Apache-2.0 reuse retains required attribution without implying trademark rights.
+Private administration needs no operator-managed VPN and databases remain private by default. Project/network loss stops that project's management; control-plane compromise can affect every enrolled namespace. Remote namespace management also depends on the public origin and its relay (ADR 0018). Running databases are not dependent on control-plane availability for normal replication; cached agent configuration preserves process startup (ADR 0008). Apache-2.0 reuse retains required attribution without implying trademark rights.
 
 ## Alternatives considered
 

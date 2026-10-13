@@ -131,7 +131,7 @@ func TestRetainedBackupLifecycle(t *testing.T) {
 	if err := s.Store.CreateBackup(ctx, &backup); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Store.SetClusterSecret(ctx, backup.RecoveryIdentity, "users/userAdmin", []byte("snapshot-password")); err != nil {
+	if err := s.Store.SetClusterSecret(ctx, domain.ClusterRef{Name: backup.RecoveryIdentity}, "users/userAdmin", []byte("snapshot-password")); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/v1/clusters/deleted/backups"
@@ -168,11 +168,11 @@ func TestRetainedBackupLifecycle(t *testing.T) {
 	if w := call(s, "DELETE", path+"/saved", "", admin); w.Code != 500 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	b, err := s.Store.GetBackup(ctx, backup.Cluster, backup.Name)
+	b, err := s.Store.GetBackup(ctx, domain.ClusterRef{Name: backup.Cluster}, backup.Name)
 	if err != nil || b.Phase != domain.PhaseDeleting || !remaining()[base+".pbm.json"] {
 		t.Fatal("partial deletion lost its retry checkpoint", b, err)
 	}
-	if _, err := s.Store.GetClusterSecret(ctx, backup.RecoveryIdentity, "users/userAdmin"); err != nil {
+	if _, err := s.Store.GetClusterSecret(ctx, domain.ClusterRef{Name: backup.RecoveryIdentity}, "users/userAdmin"); err != nil {
 		t.Fatal("partial deletion removed recovery identity", err)
 	}
 	if w := call(s, "POST", "/api/v1/clusters/prod/restores", `{"name":"unsafe","source":{"sourceCluster":"deleted","backup":"saved"}}`, admin); w.Code != 409 {
@@ -195,10 +195,10 @@ func TestRetainedBackupLifecycle(t *testing.T) {
 			t.Fatal("unrelated S3 object deleted", key)
 		}
 	}
-	if _, err := s.Store.GetBackup(ctx, backup.Cluster, backup.Name); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Store.GetBackup(ctx, domain.ClusterRef{Name: backup.Cluster}, backup.Name); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("backup record remains", err)
 	}
-	if _, err := s.Store.GetClusterSecret(ctx, backup.RecoveryIdentity, "users/userAdmin"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Store.GetClusterSecret(ctx, domain.ClusterRef{Name: backup.RecoveryIdentity}, "users/userAdmin"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("snapshot recovery identity remains", err)
 	}
 	if w := call(s, "GET", path+"/saved", "", admin); w.Code != 404 {
@@ -220,7 +220,7 @@ func TestRetainedRestorePreflight(t *testing.T) {
 			b := domain.Backup{Name: "saved", Cluster: "deleted", Storage: "storage", Type: kind, PBMName: "snapshot", PBMPrefix: "archive/old", SourceTopology: domain.Topology{Type: "replicaSet"}, SourceVersion: "8.0", Phase: domain.PhaseSucceeded}
 			if kind == "physical" {
 				b.RecoveryIdentity = "backup-recovery"
-				if err := s.Store.SetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin", []byte("snapshot-password")); err != nil {
+				if err := s.Store.SetClusterSecret(ctx, domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin", []byte("snapshot-password")); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -250,7 +250,7 @@ func TestRetainedRestorePreflight(t *testing.T) {
 				if w := call(s, "POST", "/api/v1/clusters/prod/restores", body, admin); w.Code != 409 || !strings.Contains(w.Body.String(), "recovery identity") {
 					t.Fatal(w.Code, w.Body.String())
 				}
-				if err := s.Store.DeleteCluster(ctx, "copy"); err != nil {
+				if err := s.Store.DeleteCluster(ctx, domain.ClusterRef{Name: "copy"}); err != nil {
 					t.Fatal(err)
 				}
 				if w := call(s, "POST", "/api/v1/clusters", cloneBody, admin); w.Code != 409 || !strings.Contains(w.Body.String(), "recovery identity") {

@@ -62,6 +62,7 @@ const (
 	Asterisk CanRequestAction = "*"
 	Create   CanRequestAction = "create"
 	Delete   CanRequestAction = "delete"
+	Export   CanRequestAction = "export"
 	Read     CanRequestAction = "read"
 	Update   CanRequestAction = "update"
 )
@@ -121,6 +122,14 @@ const (
 	MemberRoleUnknown         MemberRole = "unknown"
 )
 
+// Defines values for NamespacePhase.
+const (
+	NamespacePhaseDeleting NamespacePhase = "Deleting"
+	NamespacePhaseError    NamespacePhase = "Error"
+	NamespacePhasePending  NamespacePhase = "Pending"
+	NamespacePhaseReady    NamespacePhase = "Ready"
+)
+
 // Defines values for OperationPhase.
 const (
 	OperationPhaseFailed    OperationPhase = "Failed"
@@ -171,6 +180,15 @@ const (
 	Unavailable ProviderVersionStatus = "unavailable"
 )
 
+// Defines values for RelayStatusPhase.
+const (
+	RelayStatusPhaseDeploying   RelayStatusPhase = "Deploying"
+	RelayStatusPhaseError       RelayStatusPhase = "Error"
+	RelayStatusPhaseNotRequired RelayStatusPhase = "NotRequired"
+	RelayStatusPhasePending     RelayStatusPhase = "Pending"
+	RelayStatusPhaseReady       RelayStatusPhase = "Ready"
+)
+
 // Defines values for ResourcesCpuMode.
 const (
 	DEDICATED ResourcesCpuMode = "DEDICATED"
@@ -205,6 +223,12 @@ const (
 	Disabled   TLSMode = "disabled"
 	PreferTLS  TLSMode = "preferTLS"
 	RequireTLS TLSMode = "requireTLS"
+)
+
+// Defines values for TokenStatusSource.
+const (
+	Env    TokenStatusSource = "env"
+	Stored TokenStatusSource = "stored"
 )
 
 // Defines values for TopologyType.
@@ -272,19 +296,20 @@ type AgentStatus struct {
 
 // Backup defines model for Backup.
 type Backup struct {
-	Cluster       string        `json:"cluster"`
-	CompletedAt   *time.Time    `json:"completedAt,omitempty"`
-	Error         *string       `json:"error,omitempty"`
-	LastWriteTime *time.Time    `json:"lastWriteTime,omitempty"`
-	Name          string        `json:"name"`
-	PbmName       *string       `json:"pbmName,omitempty"`
-	Phase         BackupPhase   `json:"phase"`
-	Schedule      *string       `json:"schedule,omitempty"`
-	Size          *int64        `json:"size,omitempty"`
-	StartedAt     *time.Time    `json:"startedAt,omitempty"`
-	Storage       string        `json:"storage"`
-	Trigger       BackupTrigger `json:"trigger"`
-	Type          BackupType    `json:"type"`
+	Cluster       string         `json:"cluster"`
+	CompletedAt   *time.Time     `json:"completedAt,omitempty"`
+	Error         *string        `json:"error,omitempty"`
+	LastWriteTime *time.Time     `json:"lastWriteTime,omitempty"`
+	Name          string         `json:"name"`
+	Namespace     *NamespaceName `json:"namespace,omitempty"`
+	PbmName       *string        `json:"pbmName,omitempty"`
+	Phase         BackupPhase    `json:"phase"`
+	Schedule      *string        `json:"schedule,omitempty"`
+	Size          *int64         `json:"size,omitempty"`
+	StartedAt     *time.Time     `json:"startedAt,omitempty"`
+	Storage       string         `json:"storage"`
+	Trigger       BackupTrigger  `json:"trigger"`
+	Type          BackupType     `json:"type"`
 }
 
 // BackupPhase defines model for Backup.Phase.
@@ -334,6 +359,7 @@ type BackupStorage struct {
 	EndpointURL           string            `json:"endpointURL"`
 	ForcePathStyle        bool              `json:"forcePathStyle"`
 	Name                  string            `json:"name"`
+	Namespace             *NamespaceName    `json:"namespace,omitempty"`
 	Prefix                *string           `json:"prefix,omitempty"`
 	Region                string            `json:"region"`
 	Type                  BackupStorageType `json:"type"`
@@ -385,12 +411,13 @@ type ChangePasswordRequest struct {
 
 // Cluster defines model for Cluster.
 type Cluster struct {
-	CreatedAt  time.Time     `json:"createdAt"`
-	Generation int64         `json:"generation"`
-	Name       string        `json:"name"`
-	Spec       ClusterSpec   `json:"spec"`
-	Status     ClusterStatus `json:"status"`
-	UpdatedAt  time.Time     `json:"updatedAt"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	Generation int64          `json:"generation"`
+	Name       string         `json:"name"`
+	Namespace  *NamespaceName `json:"namespace,omitempty"`
+	Spec       ClusterSpec    `json:"spec"`
+	Status     ClusterStatus  `json:"status"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
 // ClusterBackupStatus defines model for ClusterBackupStatus.
@@ -542,15 +569,17 @@ type CreateBackupStorageRequest struct {
 	Bucket string `json:"bucket"`
 
 	// Credentials Write-only; never returned by backup-storage reads.
-	Credentials    S3Credentials                  `json:"credentials"`
-	Description    *string                        `json:"description,omitempty"`
-	EndpointURL    string                         `json:"endpointURL"`
-	ForcePathStyle *bool                          `json:"forcePathStyle,omitempty"`
-	Name           string                         `json:"name"`
-	Prefix         *string                        `json:"prefix,omitempty"`
-	Region         string                         `json:"region"`
-	Type           CreateBackupStorageRequestType `json:"type"`
-	VerifyTLS      *bool                          `json:"verifyTLS,omitempty"`
+	Credentials    S3Credentials `json:"credentials"`
+	Description    *string       `json:"description,omitempty"`
+	EndpointURL    string        `json:"endpointURL"`
+	ForcePathStyle *bool         `json:"forcePathStyle,omitempty"`
+
+	// Name New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable.
+	Name      string                         `json:"name"`
+	Prefix    *string                        `json:"prefix,omitempty"`
+	Region    string                         `json:"region"`
+	Type      CreateBackupStorageRequestType `json:"type"`
+	VerifyTLS *bool                          `json:"verifyTLS,omitempty"`
 }
 
 // CreateBackupStorageRequestType defines model for CreateBackupStorageRequest.Type.
@@ -576,6 +605,9 @@ type CreateRestoreRequest struct {
 
 	// Source Exactly one of backup and pitrTime is required.
 	Source RestoreSource `json:"source"`
+
+	// SourceNamespace Source namespace; defaults to the target cluster namespace.
+	SourceNamespace *NamespaceName `json:"sourceNamespace,omitempty"`
 }
 
 // CreatedAPIToken defines model for CreatedAPIToken.
@@ -609,9 +641,12 @@ type CurrentUser struct {
 
 // DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 type DataSource struct {
-	Backup   *string    `json:"backup,omitempty"`
-	Cluster  string     `json:"cluster"`
-	PitrTime *time.Time `json:"pitrTime,omitempty"`
+	Backup  *string `json:"backup,omitempty"`
+	Cluster string  `json:"cluster"`
+
+	// Namespace Source namespace; defaults to the target cluster namespace.
+	Namespace *NamespaceName `json:"namespace,omitempty"`
+	PitrTime  *time.Time     `json:"pitrTime,omitempty"`
 }
 
 // DatabaseRole defines model for DatabaseRole.
@@ -656,13 +691,23 @@ type Error struct {
 
 // Event defines model for Event.
 type Event struct {
-	Actor       *string   `json:"actor,omitempty"`
-	Cluster     *string   `json:"cluster,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	Id          int64     `json:"id"`
-	Message     string    `json:"message"`
-	OperationId *string   `json:"operationId,omitempty"`
-	Reason      *string   `json:"reason,omitempty"`
+	// Actor Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor.
+	Actor     *string   `json:"actor,omitempty"`
+	Cluster   *string   `json:"cluster,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	Id        int64     `json:"id"`
+	Message   string    `json:"message"`
+
+	// Namespace Namespace of cluster and namespace-level entries; absent for global audit entries.
+	Namespace   *NamespaceName `json:"namespace,omitempty"`
+	OperationId *string        `json:"operationId,omitempty"`
+	Reason      *string        `json:"reason,omitempty"`
+
+	// Resource Resource category for filtering, such as clusters, accounts, auth, rbac or backup-storages.
+	Resource *string `json:"resource,omitempty"`
+
+	// Target Non-secret resource identifier, such as a cluster name, account name or token ID.
+	Target *string `json:"target,omitempty"`
 
 	// Type Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim.
 	Type string `json:"type"`
@@ -778,6 +823,62 @@ type MonitoringSpec struct {
 	Enabled bool `json:"enabled"`
 }
 
+// Namespace defines model for Namespace.
+type Namespace struct {
+	ClusterCount *int      `json:"clusterCount,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
+	Default      bool      `json:"default"`
+	Description  *string   `json:"description,omitempty"`
+
+	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens.
+	Name        NamespaceName  `json:"name"`
+	Phase       NamespacePhase `json:"phase"`
+	ProjectId   string         `json:"projectId"`
+	ProjectName string         `json:"projectName"`
+
+	// Relay Relay health; the default namespace uses direct networking.
+	Relay RelayStatus `json:"relay"`
+
+	// Token Secret-safe token health; never contains a token or fingerprint.
+	Token     TokenStatus `json:"token"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+}
+
+// NamespacePhase defines model for Namespace.Phase.
+type NamespacePhase string
+
+// NamespaceCreate defines model for NamespaceCreate.
+type NamespaceCreate struct {
+	Description *string `json:"description,omitempty"`
+
+	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens.
+	Name      NamespaceName `json:"name"`
+	ProjectId string        `json:"projectId"`
+	Token     *string       `json:"token,omitempty"`
+}
+
+// NamespaceList defines model for NamespaceList.
+type NamespaceList struct {
+	Items []Namespace `json:"items"`
+
+	// NextCursor Opaque continuation cursor; absent at the end.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// NamespaceName Project namespace name, 2–32 lowercase letters, digits or hyphens.
+type NamespaceName = string
+
+// NamespaceTokenRotate defines model for NamespaceTokenRotate.
+type NamespaceTokenRotate struct {
+	Token *string `json:"token,omitempty"`
+}
+
+// NamespaceUpdate defines model for NamespaceUpdate.
+type NamespaceUpdate struct {
+	// Description New description; an empty string clears the description.
+	Description string `json:"description"`
+}
+
 // OIDCConfig Client secret is write-only; omission on update retains the stored secret.
 type OIDCConfig struct {
 	ClientId     *string   `json:"clientId,omitempty"`
@@ -803,12 +904,15 @@ type ObservedResources struct {
 
 // Operation defines model for Operation.
 type Operation struct {
+	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
+	Actor       *string        `json:"actor,omitempty"`
 	Cluster     string         `json:"cluster"`
 	CompletedAt *time.Time     `json:"completedAt,omitempty"`
 	CreatedAt   time.Time      `json:"createdAt"`
 	Error       *Error         `json:"error,omitempty"`
 	Id          string         `json:"id"`
 	Message     *string        `json:"message,omitempty"`
+	Namespace   *NamespaceName `json:"namespace,omitempty"`
 	Phase       OperationPhase `json:"phase"`
 	Progress    *float32       `json:"progress,omitempty"`
 	StartedAt   *time.Time     `json:"startedAt,omitempty"`
@@ -831,18 +935,19 @@ type OperationList struct {
 
 // OrphanedVolume defines model for OrphanedVolume.
 type OrphanedVolume struct {
-	Attempts      int       `json:"attempts"`
-	Cluster       string    `json:"cluster"`
-	FirstError    string    `json:"firstError"`
-	FirstFailedAt time.Time `json:"firstFailedAt"`
-	Hostname      string    `json:"hostname"`
-	LastAttemptAt time.Time `json:"lastAttemptAt"`
-	LastError     string    `json:"lastError"`
-	LastProcessId string    `json:"lastProcessId"`
-	Member        string    `json:"member"`
-	NextAttemptAt time.Time `json:"nextAttemptAt"`
-	OrphanedAt    time.Time `json:"orphanedAt"`
-	ServiceId     string    `json:"serviceId"`
+	Attempts      int            `json:"attempts"`
+	Cluster       string         `json:"cluster"`
+	FirstError    string         `json:"firstError"`
+	FirstFailedAt time.Time      `json:"firstFailedAt"`
+	Hostname      string         `json:"hostname"`
+	LastAttemptAt time.Time      `json:"lastAttemptAt"`
+	LastError     string         `json:"lastError"`
+	LastProcessId string         `json:"lastProcessId"`
+	Member        string         `json:"member"`
+	Namespace     *NamespaceName `json:"namespace,omitempty"`
+	NextAttemptAt time.Time      `json:"nextAttemptAt"`
+	OrphanedAt    time.Time      `json:"orphanedAt"`
+	ServiceId     string         `json:"serviceId"`
 }
 
 // OrphanedVolumeList defines model for OrphanedVolumeList.
@@ -980,6 +1085,24 @@ type RaiseFCVRequest struct {
 	Version string `json:"version"`
 }
 
+// RelayStatus Relay health; the default namespace uses direct networking.
+type RelayStatus struct {
+	CertNotAfter   *time.Time       `json:"certNotAfter,omitempty"`
+	Connected      bool             `json:"connected"`
+	ConnectedSince *time.Time       `json:"connectedSince,omitempty"`
+	DesiredVersion *string          `json:"desiredVersion,omitempty"`
+	Hostname       *string          `json:"hostname,omitempty"`
+	LastError      *string          `json:"lastError,omitempty"`
+	LastSeenAt     *time.Time       `json:"lastSeenAt,omitempty"`
+	Phase          RelayStatusPhase `json:"phase"`
+	Reconnects     int64            `json:"reconnects"`
+	ServiceId      *string          `json:"serviceId,omitempty"`
+	Version        *string          `json:"version,omitempty"`
+}
+
+// RelayStatusPhase defines model for RelayStatus.Phase.
+type RelayStatusPhase string
+
 // ReplaceClusterRequest Replaces the full desired spec; server-owned name, generation, status and timestamps cannot be replaced.
 type ReplaceClusterRequest struct {
 	Spec ClusterSpec `json:"spec"`
@@ -1016,11 +1139,12 @@ type ResourcesCpuMode string
 
 // Restore defines model for Restore.
 type Restore struct {
-	Cluster     string       `json:"cluster"`
-	CompletedAt *time.Time   `json:"completedAt,omitempty"`
-	Error       *string      `json:"error,omitempty"`
-	Name        string       `json:"name"`
-	Phase       RestorePhase `json:"phase"`
+	Cluster     string         `json:"cluster"`
+	CompletedAt *time.Time     `json:"completedAt,omitempty"`
+	Error       *string        `json:"error,omitempty"`
+	Name        string         `json:"name"`
+	Namespace   *NamespaceName `json:"namespace,omitempty"`
+	Phase       RestorePhase   `json:"phase"`
 
 	// Source Exactly one of backup and pitrTime is required.
 	Source    RestoreSource `json:"source"`
@@ -1114,6 +1238,18 @@ type TLSCa string
 // TLSMode defines model for TLS.Mode.
 type TLSMode string
 
+// TokenStatus Secret-safe token health; never contains a token or fingerprint.
+type TokenStatus struct {
+	LastError       *string           `json:"lastError,omitempty"`
+	LastValidatedAt *time.Time        `json:"lastValidatedAt,omitempty"`
+	RotatedAt       *time.Time        `json:"rotatedAt,omitempty"`
+	Source          TokenStatusSource `json:"source"`
+	Valid           bool              `json:"valid"`
+}
+
+// TokenStatusSource defines model for TokenStatus.Source.
+type TokenStatusSource string
+
 // Topology defines model for Topology.
 type Topology struct {
 	Shards *int         `json:"shards,omitempty"`
@@ -1196,6 +1332,12 @@ type Cursor = string
 // Limit defines model for Limit.
 type Limit = int
 
+// NamespacePath Project namespace name, 2–32 lowercase letters, digits or hyphens.
+type NamespacePath = NamespaceName
+
+// NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens.
+type NamespaceQuery = NamespaceName
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
 
@@ -1213,6 +1355,9 @@ type NotFound = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
+
+// UnprocessableEntity defines model for UnprocessableEntity.
+type UnprocessableEntity = Error
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -1317,28 +1462,49 @@ type ListBackupStoragesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateBackupStorageParams defines parameters for CreateBackupStorage.
 type CreateBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteBackupStorageParams defines parameters for DeleteBackupStorage.
 type DeleteBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetBackupStorageParams defines parameters for GetBackupStorage.
+type GetBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceBackupStorageParams defines parameters for ReplaceBackupStorage.
 type ReplaceBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // VerifyBackupStorageParams defines parameters for VerifyBackupStorage.
 type VerifyBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1350,10 +1516,16 @@ type ListClustersParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateClusterParams defines parameters for CreateCluster.
 type CreateClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1363,18 +1535,33 @@ type DeleteClusterParams struct {
 	KeepVolumes *bool `form:"keepVolumes,omitempty" json:"keepVolumes,omitempty"`
 	KeepBackups *bool `form:"keepBackups,omitempty" json:"keepBackups,omitempty"`
 
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetClusterParams defines parameters for GetCluster.
+type GetClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // PatchClusterParams defines parameters for PatchCluster.
 type PatchClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
 type ReplaceClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1386,24 +1573,54 @@ type ListBackupsParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateBackupParams defines parameters for CreateBackup.
 type CreateBackupParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteBackupParams defines parameters for DeleteBackup.
 type DeleteBackupParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetBackupParams defines parameters for GetBackup.
+type GetBackupParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetClusterBalancerParams defines parameters for GetClusterBalancer.
+type GetClusterBalancerParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceClusterBalancerParams defines parameters for ReplaceClusterBalancer.
 type ReplaceClusterBalancerParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetClusterConnectionParams defines parameters for GetClusterConnection.
+type GetClusterConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListDatabaseRolesParams defines parameters for ListDatabaseRoles.
@@ -1413,22 +1630,40 @@ type ListDatabaseRolesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateDatabaseRoleParams defines parameters for CreateDatabaseRole.
 type CreateDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteDatabaseRoleParams defines parameters for DeleteDatabaseRole.
 type DeleteDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetDatabaseRoleParams defines parameters for GetDatabaseRole.
+type GetDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceDatabaseRoleParams defines parameters for ReplaceDatabaseRole.
 type ReplaceDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1440,24 +1675,54 @@ type ListDatabaseUsersParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateDatabaseUserParams defines parameters for CreateDatabaseUser.
 type CreateDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteDatabaseUserParams defines parameters for DeleteDatabaseUser.
 type DeleteDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetDatabaseUserParams defines parameters for GetDatabaseUser.
+type GetDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceDatabaseUserParams defines parameters for ReplaceDatabaseUser.
 type ReplaceDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListClusterMembersParams defines parameters for ListClusterMembers.
+type ListClusterMembersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetClusterMemberParams defines parameters for GetClusterMember.
+type GetClusterMemberParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
@@ -1466,6 +1731,9 @@ type GetMemberLogsParams struct {
 	Lines   *int                        `form:"lines,omitempty" json:"lines,omitempty"`
 	Cursor  *string                     `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Since   *time.Time                  `form:"since,omitempty" json:"since,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetMemberLogsParamsProcess defines parameters for GetMemberLogs.
@@ -1473,6 +1741,9 @@ type GetMemberLogsParamsProcess string
 
 // ReplaceClusterMemberParams defines parameters for ReplaceClusterMember.
 type ReplaceClusterMemberParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1484,6 +1755,9 @@ type GetClusterMetricsParams struct {
 
 	// Step Aggregation interval.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
@@ -1494,16 +1768,37 @@ type ListClusterOperationsParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Phase  *string `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetPITRWindowParams defines parameters for GetPITRWindow.
+type GetPITRWindowParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetClusterPlacementParams defines parameters for GetClusterPlacement.
+type GetClusterPlacementParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1515,28 +1810,61 @@ type ListRestoresParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateRestoreParams defines parameters for CreateRestore.
 type CreateRestoreParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetRestoreParams defines parameters for GetRestore.
+type GetRestoreParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ResumeClusterParams defines parameters for ResumeCluster.
 type ResumeClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetClusterStatusParams defines parameters for GetClusterStatus.
+type GetClusterStatusParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListSystemUsersParams defines parameters for ListSystemUsers.
+type ListSystemUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // RotateSystemUserParams defines parameters for RotateSystemUser.
 type RotateSystemUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1551,6 +1879,15 @@ type ListEventsParams struct {
 	Cluster     *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Type        *string `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
+
+	// Actor Exact actor identity, including token name and ID when applicable.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
+	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // StreamEventsParams defines parameters for StreamEvents.
@@ -1559,11 +1896,65 @@ type StreamEventsParams struct {
 	Type        *string `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
 
+	// Actor Exact actor identity, including token name and ID when applicable.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
+	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+
 	// Cursor Replay events after this durable event cursor.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// LastEventID SSE reconnection cursor; used when cursor is absent.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// GetPrometheusMetricsParams defines parameters for GetPrometheusMetrics.
+type GetPrometheusMetricsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListNamespacesParams defines parameters for ListNamespaces.
+type ListNamespacesParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateNamespaceParams defines parameters for CreateNamespace.
+type CreateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteNamespaceParams defines parameters for DeleteNamespace.
+type DeleteNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// UpdateNamespaceParams defines parameters for UpdateNamespace.
+type UpdateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// RotateNamespaceTokenParams defines parameters for RotateNamespaceToken.
+type RotateNamespaceTokenParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ValidateNamespaceParams defines parameters for ValidateNamespace.
+type ValidateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // ListOperationsParams defines parameters for ListOperations.
@@ -1575,6 +1966,15 @@ type ListOperationsParams struct {
 	Cursor  *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Phase   *string `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListOrphanedVolumesParams defines parameters for ListOrphanedVolumes.
+type ListOrphanedVolumesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CheckPermissionParams defines parameters for CheckPermission.
@@ -1655,6 +2055,15 @@ type RaiseClusterFCVJSONRequestBody = RaiseFCVRequest
 // CreateRestoreJSONRequestBody defines body for CreateRestore for application/json ContentType.
 type CreateRestoreJSONRequestBody = CreateRestoreRequest
 
+// CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
+type CreateNamespaceJSONRequestBody = NamespaceCreate
+
+// UpdateNamespaceJSONRequestBody defines body for UpdateNamespace for application/json ContentType.
+type UpdateNamespaceJSONRequestBody = NamespaceUpdate
+
+// RotateNamespaceTokenJSONRequestBody defines body for RotateNamespaceToken for application/json ContentType.
+type RotateNamespaceTokenJSONRequestBody = NamespaceTokenRotate
+
 // CheckPermissionJSONRequestBody defines body for CheckPermission for application/json ContentType.
 type CheckPermissionJSONRequestBody = CanRequest
 
@@ -1731,7 +2140,7 @@ type ServerInterface interface {
 	DeleteBackupStorage(w http.ResponseWriter, r *http.Request, storage string, params DeleteBackupStorageParams)
 	// Read backup storage configuration
 	// (GET /backup-storages/{storage})
-	GetBackupStorage(w http.ResponseWriter, r *http.Request, storage string)
+	GetBackupStorage(w http.ResponseWriter, r *http.Request, storage string, params GetBackupStorageParams)
 	// Replace backup storage configuration
 	// (PUT /backup-storages/{storage})
 	ReplaceBackupStorage(w http.ResponseWriter, r *http.Request, storage string, params ReplaceBackupStorageParams)
@@ -1749,7 +2158,7 @@ type ServerInterface interface {
 	DeleteCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DeleteClusterParams)
 	// Read cluster desired and observed state
 	// (GET /clusters/{cluster})
-	GetCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	GetCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterParams)
 	// Apply an RFC 7396 cluster merge patch
 	// (PATCH /clusters/{cluster})
 	PatchCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params PatchClusterParams)
@@ -1767,16 +2176,16 @@ type ServerInterface interface {
 	DeleteBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, backup string, params DeleteBackupParams)
 	// Read backup metadata and status
 	// (GET /clusters/{cluster}/backups/{backup})
-	GetBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, backup string)
+	GetBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, backup string, params GetBackupParams)
 	// Read sharded-cluster balancer status
 	// (GET /clusters/{cluster}/balancer)
-	GetClusterBalancer(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	GetClusterBalancer(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterBalancerParams)
 	// Enable or disable sharded-cluster balancing
 	// (PUT /clusters/{cluster}/balancer)
 	ReplaceClusterBalancer(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ReplaceClusterBalancerParams)
 	// Reveal connection credentials with separate authorization
 	// (GET /clusters/{cluster}/connection)
-	GetClusterConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	GetClusterConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterConnectionParams)
 	// List custom database roles
 	// (GET /clusters/{cluster}/database-roles)
 	ListDatabaseRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListDatabaseRolesParams)
@@ -1788,7 +2197,7 @@ type ServerInterface interface {
 	DeleteDatabaseRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, role string, params DeleteDatabaseRoleParams)
 	// Read a custom database role
 	// (GET /clusters/{cluster}/database-roles/{database}/{role})
-	GetDatabaseRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, role string)
+	GetDatabaseRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, role string, params GetDatabaseRoleParams)
 	// Replace role privileges and inherited roles
 	// (PUT /clusters/{cluster}/database-roles/{database}/{role})
 	ReplaceDatabaseRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, role string, params ReplaceDatabaseRoleParams)
@@ -1803,16 +2212,16 @@ type ServerInterface interface {
 	DeleteDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string, params DeleteDatabaseUserParams)
 	// Read an application database user
 	// (GET /clusters/{cluster}/database-users/{database}/{username})
-	GetDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string)
+	GetDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string, params GetDatabaseUserParams)
 	// Replace application user roles and optionally password
 	// (PUT /clusters/{cluster}/database-users/{database}/{username})
 	ReplaceDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string, params ReplaceDatabaseUserParams)
 	// Read member health, role and replica lag
 	// (GET /clusters/{cluster}/members)
-	ListClusterMembers(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	ListClusterMembers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListClusterMembersParams)
 	// Read one member status
 	// (GET /clusters/{cluster}/members/{member})
-	GetClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string)
+	GetClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params GetClusterMemberParams)
 	// Read logs for a member process
 	// (GET /clusters/{cluster}/members/{member}/logs)
 	GetMemberLogs(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params GetMemberLogsParams)
@@ -1827,10 +2236,10 @@ type ServerInterface interface {
 	ListClusterOperations(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListClusterOperationsParams)
 	// Read the continuous restorable PITR window
 	// (GET /clusters/{cluster}/pitr)
-	GetPITRWindow(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	GetPITRWindow(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetPITRWindowParams)
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
-	GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterPlacementParams)
 	// Explicitly raise feature compatibility version
 	// (POST /clusters/{cluster}/raise-fcv)
 	RaiseClusterFCV(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RaiseClusterFCVParams)
@@ -1845,7 +2254,7 @@ type ServerInterface interface {
 	CreateRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateRestoreParams)
 	// Read restore progress and result
 	// (GET /clusters/{cluster}/restores/{restore})
-	GetRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, restore string)
+	GetRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, restore string, params GetRestoreParams)
 	// Recreate runtimes on retained volumes
 	// (POST /clusters/{cluster}/resume)
 	ResumeCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ResumeClusterParams)
@@ -1854,10 +2263,10 @@ type ServerInterface interface {
 	RotateClusterTLS(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RotateClusterTLSParams)
 	// Read observed cluster status
 	// (GET /clusters/{cluster}/status)
-	GetClusterStatus(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	GetClusterStatus(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterStatusParams)
 	// List system-user metadata without passwords
 	// (GET /clusters/{cluster}/system-users)
-	ListSystemUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath)
+	ListSystemUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListSystemUsersParams)
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateSystemUserParams)
@@ -1872,7 +2281,28 @@ type ServerInterface interface {
 	GetHealth(w http.ResponseWriter, r *http.Request)
 	// Scrape Prometheus-compatible cluster metrics
 	// (GET /metrics)
-	GetPrometheusMetrics(w http.ResponseWriter, r *http.Request)
+	GetPrometheusMetrics(w http.ResponseWriter, r *http.Request, params GetPrometheusMetricsParams)
+	// List readable project namespaces
+	// (GET /namespaces)
+	ListNamespaces(w http.ResponseWriter, r *http.Request, params ListNamespacesParams)
+	// Register a project namespace and deploy its relay
+	// (POST /namespaces)
+	CreateNamespace(w http.ResponseWriter, r *http.Request, params CreateNamespaceParams)
+	// Remove an empty namespace and its relay
+	// (DELETE /namespaces/{namespace})
+	DeleteNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params DeleteNamespaceParams)
+	// Read namespace project, token status and relay health
+	// (GET /namespaces/{namespace})
+	GetNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath)
+	// Update a namespace description
+	// (PATCH /namespaces/{namespace})
+	UpdateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params UpdateNamespaceParams)
+	// Validate and atomically rotate a namespace token
+	// (PUT /namespaces/{namespace}/token)
+	RotateNamespaceToken(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params RotateNamespaceTokenParams)
+	// Revalidate a namespace token and project
+	// (POST /namespaces/{namespace}/validate)
+	ValidateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params ValidateNamespaceParams)
 	// List readable durable operations
 	// (GET /operations)
 	ListOperations(w http.ResponseWriter, r *http.Request, params ListOperationsParams)
@@ -1881,7 +2311,7 @@ type ServerInterface interface {
 	GetOperation(w http.ResponseWriter, r *http.Request, operation string)
 	// List orphaned platform volumes
 	// (GET /orphaned-volumes)
-	ListOrphanedVolumes(w http.ResponseWriter, r *http.Request)
+	ListOrphanedVolumes(w http.ResponseWriter, r *http.Request, params ListOrphanedVolumesParams)
 	// Resolve caller permissions and role inheritance
 	// (GET /permissions)
 	GetPermissions(w http.ResponseWriter, r *http.Request)
@@ -2767,6 +3197,14 @@ func (siw *ServerInterfaceWrapper) ListBackupStorages(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListBackupStorages(w, r, params)
 	}))
@@ -2793,6 +3231,14 @@ func (siw *ServerInterfaceWrapper) CreateBackupStorage(w http.ResponseWriter, r 
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateBackupStorageParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -2851,6 +3297,14 @@ func (siw *ServerInterfaceWrapper) DeleteBackupStorage(w http.ResponseWriter, r 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params DeleteBackupStorageParams
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
@@ -2905,8 +3359,19 @@ func (siw *ServerInterfaceWrapper) GetBackupStorage(w http.ResponseWriter, r *ht
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBackupStorageParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetBackupStorage(w, r, storage)
+		siw.Handler.GetBackupStorage(w, r, storage, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2940,6 +3405,14 @@ func (siw *ServerInterfaceWrapper) ReplaceBackupStorage(w http.ResponseWriter, r
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceBackupStorageParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -2997,6 +3470,14 @@ func (siw *ServerInterfaceWrapper) VerifyBackupStorage(w http.ResponseWriter, r 
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params VerifyBackupStorageParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3062,6 +3543,14 @@ func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListClusters(w, r, params)
 	}))
@@ -3088,6 +3577,14 @@ func (siw *ServerInterfaceWrapper) CreateCluster(w http.ResponseWriter, r *http.
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3162,6 +3659,14 @@ func (siw *ServerInterfaceWrapper) DeleteCluster(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
@@ -3216,8 +3721,19 @@ func (siw *ServerInterfaceWrapper) GetCluster(w http.ResponseWriter, r *http.Req
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetCluster(w, r, cluster)
+		siw.Handler.GetCluster(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3251,6 +3767,14 @@ func (siw *ServerInterfaceWrapper) PatchCluster(w http.ResponseWriter, r *http.R
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params PatchClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3308,6 +3832,14 @@ func (siw *ServerInterfaceWrapper) ReplaceCluster(w http.ResponseWriter, r *http
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3382,6 +3914,14 @@ func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListBackups(w, r, cluster, params)
 	}))
@@ -3417,6 +3957,14 @@ func (siw *ServerInterfaceWrapper) CreateBackup(w http.ResponseWriter, r *http.R
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateBackupParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3484,6 +4032,14 @@ func (siw *ServerInterfaceWrapper) DeleteBackup(w http.ResponseWriter, r *http.R
 	// Parameter object where we will unmarshal all parameters from the context
 	var params DeleteBackupParams
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
@@ -3547,8 +4103,19 @@ func (siw *ServerInterfaceWrapper) GetBackup(w http.ResponseWriter, r *http.Requ
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBackupParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetBackup(w, r, cluster, backup)
+		siw.Handler.GetBackup(w, r, cluster, backup, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3580,8 +4147,19 @@ func (siw *ServerInterfaceWrapper) GetClusterBalancer(w http.ResponseWriter, r *
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterBalancerParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterBalancer(w, r, cluster)
+		siw.Handler.GetClusterBalancer(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3615,6 +4193,14 @@ func (siw *ServerInterfaceWrapper) ReplaceClusterBalancer(w http.ResponseWriter,
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceClusterBalancerParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3670,8 +4256,19 @@ func (siw *ServerInterfaceWrapper) GetClusterConnection(w http.ResponseWriter, r
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterConnection(w, r, cluster)
+		siw.Handler.GetClusterConnection(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3722,6 +4319,14 @@ func (siw *ServerInterfaceWrapper) ListDatabaseRoles(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDatabaseRoles(w, r, cluster, params)
 	}))
@@ -3757,6 +4362,14 @@ func (siw *ServerInterfaceWrapper) CreateDatabaseRole(w http.ResponseWriter, r *
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateDatabaseRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -3833,6 +4446,14 @@ func (siw *ServerInterfaceWrapper) DeleteDatabaseRole(w http.ResponseWriter, r *
 	// Parameter object where we will unmarshal all parameters from the context
 	var params DeleteDatabaseRoleParams
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
@@ -3905,8 +4526,19 @@ func (siw *ServerInterfaceWrapper) GetDatabaseRole(w http.ResponseWriter, r *htt
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDatabaseRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetDatabaseRole(w, r, cluster, database, role)
+		siw.Handler.GetDatabaseRole(w, r, cluster, database, role, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3958,6 +4590,14 @@ func (siw *ServerInterfaceWrapper) ReplaceDatabaseRole(w http.ResponseWriter, r 
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceDatabaseRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4032,6 +4672,14 @@ func (siw *ServerInterfaceWrapper) ListDatabaseUsers(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDatabaseUsers(w, r, cluster, params)
 	}))
@@ -4067,6 +4715,14 @@ func (siw *ServerInterfaceWrapper) CreateDatabaseUser(w http.ResponseWriter, r *
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateDatabaseUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4143,6 +4799,14 @@ func (siw *ServerInterfaceWrapper) DeleteDatabaseUser(w http.ResponseWriter, r *
 	// Parameter object where we will unmarshal all parameters from the context
 	var params DeleteDatabaseUserParams
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
@@ -4215,8 +4879,19 @@ func (siw *ServerInterfaceWrapper) GetDatabaseUser(w http.ResponseWriter, r *htt
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDatabaseUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetDatabaseUser(w, r, cluster, database, username)
+		siw.Handler.GetDatabaseUser(w, r, cluster, database, username, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4268,6 +4943,14 @@ func (siw *ServerInterfaceWrapper) ReplaceDatabaseUser(w http.ResponseWriter, r 
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceDatabaseUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4323,8 +5006,19 @@ func (siw *ServerInterfaceWrapper) ListClusterMembers(w http.ResponseWriter, r *
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListClusterMembersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListClusterMembers(w, r, cluster)
+		siw.Handler.ListClusterMembers(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4365,8 +5059,19 @@ func (siw *ServerInterfaceWrapper) GetClusterMember(w http.ResponseWriter, r *ht
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterMemberParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterMember(w, r, cluster, member)
+		siw.Handler.GetClusterMember(w, r, cluster, member, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4442,6 +5147,14 @@ func (siw *ServerInterfaceWrapper) GetMemberLogs(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMemberLogs(w, r, cluster, member, params)
 	}))
@@ -4486,6 +5199,14 @@ func (siw *ServerInterfaceWrapper) ReplaceClusterMember(w http.ResponseWriter, r
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceClusterMemberParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4560,6 +5281,14 @@ func (siw *ServerInterfaceWrapper) GetClusterMetrics(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterMetrics(w, r, cluster, params)
 	}))
@@ -4620,6 +5349,14 @@ func (siw *ServerInterfaceWrapper) ListClusterOperations(w http.ResponseWriter, 
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListClusterOperations(w, r, cluster, params)
 	}))
@@ -4653,8 +5390,19 @@ func (siw *ServerInterfaceWrapper) GetPITRWindow(w http.ResponseWriter, r *http.
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPITRWindowParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetPITRWindow(w, r, cluster)
+		siw.Handler.GetPITRWindow(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4686,8 +5434,19 @@ func (siw *ServerInterfaceWrapper) GetClusterPlacement(w http.ResponseWriter, r 
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterPlacementParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterPlacement(w, r, cluster)
+		siw.Handler.GetClusterPlacement(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4721,6 +5480,14 @@ func (siw *ServerInterfaceWrapper) RaiseClusterFCV(w http.ResponseWriter, r *htt
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RaiseClusterFCVParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4778,6 +5545,14 @@ func (siw *ServerInterfaceWrapper) RestartCluster(w http.ResponseWriter, r *http
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RestartClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4852,6 +5627,14 @@ func (siw *ServerInterfaceWrapper) ListRestores(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRestores(w, r, cluster, params)
 	}))
@@ -4887,6 +5670,14 @@ func (siw *ServerInterfaceWrapper) CreateRestore(w http.ResponseWriter, r *http.
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateRestoreParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -4951,8 +5742,19 @@ func (siw *ServerInterfaceWrapper) GetRestore(w http.ResponseWriter, r *http.Req
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRestoreParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRestore(w, r, cluster, restore)
+		siw.Handler.GetRestore(w, r, cluster, restore, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4986,6 +5788,14 @@ func (siw *ServerInterfaceWrapper) ResumeCluster(w http.ResponseWriter, r *http.
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ResumeClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -5044,6 +5854,14 @@ func (siw *ServerInterfaceWrapper) RotateClusterTLS(w http.ResponseWriter, r *ht
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RotateClusterTLSParams
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
@@ -5098,8 +5916,19 @@ func (siw *ServerInterfaceWrapper) GetClusterStatus(w http.ResponseWriter, r *ht
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetClusterStatusParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetClusterStatus(w, r, cluster)
+		siw.Handler.GetClusterStatus(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5131,8 +5960,19 @@ func (siw *ServerInterfaceWrapper) ListSystemUsers(w http.ResponseWriter, r *htt
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSystemUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSystemUsers(w, r, cluster)
+		siw.Handler.ListSystemUsers(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5175,6 +6015,14 @@ func (siw *ServerInterfaceWrapper) RotateSystemUser(w http.ResponseWriter, r *ht
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RotateSystemUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
 
 	headers := r.Header
 
@@ -5264,6 +6112,30 @@ func (siw *ServerInterfaceWrapper) ListEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "actor", r.URL.Query(), &params.Actor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "resource" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "resource", r.URL.Query(), &params.Resource)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListEvents(w, r, params)
 	}))
@@ -5315,11 +6187,35 @@ func (siw *ServerInterfaceWrapper) StreamEvents(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "actor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "actor", r.URL.Query(), &params.Actor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "resource" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "resource", r.URL.Query(), &params.Resource)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resource", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "cursor" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
 	}
 
@@ -5372,14 +6268,379 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 // GetPrometheusMetrics operation middleware
 func (siw *ServerInterfaceWrapper) GetPrometheusMetrics(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPrometheusMetricsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetPrometheusMetrics(w, r)
+		siw.Handler.GetPrometheusMetrics(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNamespaces operation middleware
+func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNamespacesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNamespaces(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNamespace operation middleware
+func (siw *ServerInterfaceWrapper) CreateNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateNamespaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNamespace(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNamespace operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace NamespacePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", r.PathValue("namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteNamespaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNamespace(w, r, namespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNamespace operation middleware
+func (siw *ServerInterfaceWrapper) GetNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace NamespacePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", r.PathValue("namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNamespace(w, r, namespace)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateNamespace operation middleware
+func (siw *ServerInterfaceWrapper) UpdateNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace NamespacePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", r.PathValue("namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateNamespaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateNamespace(w, r, namespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateNamespaceToken operation middleware
+func (siw *ServerInterfaceWrapper) RotateNamespaceToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace NamespacePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", r.PathValue("namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotateNamespaceTokenParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateNamespaceToken(w, r, namespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ValidateNamespace operation middleware
+func (siw *ServerInterfaceWrapper) ValidateNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "namespace" -------------
+	var namespace NamespacePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "namespace", r.PathValue("namespace"), &namespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ValidateNamespaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ValidateNamespace(w, r, namespace, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5437,6 +6698,14 @@ func (siw *ServerInterfaceWrapper) ListOperations(w http.ResponseWriter, r *http
 		return
 	}
 
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListOperations(w, r, params)
 	}))
@@ -5484,6 +6753,8 @@ func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.R
 // ListOrphanedVolumes operation middleware
 func (siw *ServerInterfaceWrapper) ListOrphanedVolumes(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -5492,8 +6763,19 @@ func (siw *ServerInterfaceWrapper) ListOrphanedVolumes(w http.ResponseWriter, r 
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrphanedVolumesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListOrphanedVolumes(w, r)
+		siw.Handler.ListOrphanedVolumes(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5971,6 +7253,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/events/stream", wrapper.StreamEvents)
 	m.HandleFunc("GET "+options.BaseURL+"/healthz", wrapper.GetHealth)
 	m.HandleFunc("GET "+options.BaseURL+"/metrics", wrapper.GetPrometheusMetrics)
+	m.HandleFunc("GET "+options.BaseURL+"/namespaces", wrapper.ListNamespaces)
+	m.HandleFunc("POST "+options.BaseURL+"/namespaces", wrapper.CreateNamespace)
+	m.HandleFunc("DELETE "+options.BaseURL+"/namespaces/{namespace}", wrapper.DeleteNamespace)
+	m.HandleFunc("GET "+options.BaseURL+"/namespaces/{namespace}", wrapper.GetNamespace)
+	m.HandleFunc("PATCH "+options.BaseURL+"/namespaces/{namespace}", wrapper.UpdateNamespace)
+	m.HandleFunc("PUT "+options.BaseURL+"/namespaces/{namespace}/token", wrapper.RotateNamespaceToken)
+	m.HandleFunc("POST "+options.BaseURL+"/namespaces/{namespace}/validate", wrapper.ValidateNamespace)
 	m.HandleFunc("GET "+options.BaseURL+"/operations", wrapper.ListOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/operations/{operation}", wrapper.GetOperation)
 	m.HandleFunc("GET "+options.BaseURL+"/orphaned-volumes", wrapper.ListOrphanedVolumes)
@@ -5998,6 +7287,8 @@ type InternalErrorJSONResponse Error
 type NotFoundJSONResponse Error
 
 type UnauthorizedJSONResponse Error
+
+type UnprocessableEntityJSONResponse Error
 
 type ListAccountsRequestObject struct {
 	Params ListAccountsParams
@@ -7527,6 +8818,7 @@ func (response DeleteBackupStorage500JSONResponse) VisitDeleteBackupStorageRespo
 
 type GetBackupStorageRequestObject struct {
 	Storage string `json:"storage"`
+	Params  GetBackupStorageParams
 }
 
 type GetBackupStorageResponseObject interface {
@@ -7957,6 +9249,7 @@ func (response DeleteCluster500JSONResponse) VisitDeleteClusterResponse(w http.R
 
 type GetClusterRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  GetClusterParams
 }
 
 type GetClusterResponseObject interface {
@@ -8401,6 +9694,7 @@ func (response DeleteBackup500JSONResponse) VisitDeleteBackupResponse(w http.Res
 type GetBackupRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Backup  string      `json:"backup"`
+	Params  GetBackupParams
 }
 
 type GetBackupResponseObject interface {
@@ -8472,6 +9766,7 @@ func (response GetBackup500JSONResponse) VisitGetBackupResponse(w http.ResponseW
 
 type GetClusterBalancerRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  GetClusterBalancerParams
 }
 
 type GetClusterBalancerResponseObject interface {
@@ -8616,6 +9911,7 @@ func (response ReplaceClusterBalancer500JSONResponse) VisitReplaceClusterBalance
 
 type GetClusterConnectionRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  GetClusterConnectionParams
 }
 
 type GetClusterConnectionResponseObject interface {
@@ -8915,6 +10211,7 @@ type GetDatabaseRoleRequestObject struct {
 	Cluster  ClusterPath `json:"cluster"`
 	Database string      `json:"database"`
 	Role     string      `json:"role"`
+	Params   GetDatabaseRoleParams
 }
 
 type GetDatabaseRoleResponseObject interface {
@@ -9289,6 +10586,7 @@ type GetDatabaseUserRequestObject struct {
 	Cluster  ClusterPath `json:"cluster"`
 	Database string      `json:"database"`
 	Username string      `json:"username"`
+	Params   GetDatabaseUserParams
 }
 
 type GetDatabaseUserResponseObject interface {
@@ -9435,6 +10733,7 @@ func (response ReplaceDatabaseUser500JSONResponse) VisitReplaceDatabaseUserRespo
 
 type ListClusterMembersRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  ListClusterMembersParams
 }
 
 type ListClusterMembersResponseObject interface {
@@ -9507,6 +10806,7 @@ func (response ListClusterMembers500JSONResponse) VisitListClusterMembersRespons
 type GetClusterMemberRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Member  string      `json:"member"`
+	Params  GetClusterMemberParams
 }
 
 type GetClusterMemberResponseObject interface {
@@ -9868,6 +11168,7 @@ func (response ListClusterOperations500JSONResponse) VisitListClusterOperationsR
 
 type GetPITRWindowRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  GetPITRWindowParams
 }
 
 type GetPITRWindowResponseObject interface {
@@ -9939,6 +11240,7 @@ func (response GetPITRWindow500JSONResponse) VisitGetPITRWindowResponse(w http.R
 
 type GetClusterPlacementRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  GetClusterPlacementParams
 }
 
 type GetClusterPlacementResponseObject interface {
@@ -10301,6 +11603,7 @@ func (response CreateRestore500JSONResponse) VisitCreateRestoreResponse(w http.R
 type GetRestoreRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Restore string      `json:"restore"`
+	Params  GetRestoreParams
 }
 
 type GetRestoreResponseObject interface {
@@ -10516,6 +11819,7 @@ func (response RotateClusterTLS500JSONResponse) VisitRotateClusterTLSResponse(w 
 
 type GetClusterStatusRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  GetClusterStatusParams
 }
 
 type GetClusterStatusResponseObject interface {
@@ -10587,6 +11891,7 @@ func (response GetClusterStatus500JSONResponse) VisitGetClusterStatusResponse(w 
 
 type ListSystemUsersRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
+	Params  ListSystemUsersParams
 }
 
 type ListSystemUsersResponseObject interface {
@@ -10952,6 +12257,7 @@ func (response GetHealth500JSONResponse) VisitGetHealthResponse(w http.ResponseW
 }
 
 type GetPrometheusMetricsRequestObject struct {
+	Params GetPrometheusMetricsParams
 }
 
 type GetPrometheusMetricsResponseObject interface {
@@ -11016,6 +12322,490 @@ func (response GetPrometheusMetrics409JSONResponse) VisitGetPrometheusMetricsRes
 type GetPrometheusMetrics500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetPrometheusMetrics500JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNamespacesRequestObject struct {
+	Params ListNamespacesParams
+}
+
+type ListNamespacesResponseObject interface {
+	VisitListNamespacesResponse(w http.ResponseWriter) error
+}
+
+type ListNamespaces200JSONResponse NamespaceList
+
+func (response ListNamespaces200JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNamespaces400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListNamespaces400JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListNamespaces401JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNamespaces403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListNamespaces403JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNamespaces500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListNamespaces500JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespaceRequestObject struct {
+	Params CreateNamespaceParams
+	Body   *CreateNamespaceJSONRequestBody
+}
+
+type CreateNamespaceResponseObject interface {
+	VisitCreateNamespaceResponse(w http.ResponseWriter) error
+}
+
+type CreateNamespace201JSONResponse Namespace
+
+func (response CreateNamespace201JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespace400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateNamespace400JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateNamespace401JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateNamespace403JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateNamespace409JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateNamespace422JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateNamespace500JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNamespaceRequestObject struct {
+	Namespace NamespacePath `json:"namespace"`
+	Params    DeleteNamespaceParams
+}
+
+type DeleteNamespaceResponseObject interface {
+	VisitDeleteNamespaceResponse(w http.ResponseWriter) error
+}
+
+type DeleteNamespace202Response struct {
+}
+
+func (response DeleteNamespace202Response) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type DeleteNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteNamespace401JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteNamespace403JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNamespace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteNamespace404JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNamespace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteNamespace409JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNamespace500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteNamespace500JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNamespaceRequestObject struct {
+	Namespace NamespacePath `json:"namespace"`
+}
+
+type GetNamespaceResponseObject interface {
+	VisitGetNamespaceResponse(w http.ResponseWriter) error
+}
+
+type GetNamespace200JSONResponse Namespace
+
+func (response GetNamespace200JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetNamespace401JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetNamespace403JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNamespace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetNamespace404JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNamespace500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetNamespace500JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespaceRequestObject struct {
+	Namespace NamespacePath `json:"namespace"`
+	Params    UpdateNamespaceParams
+	Body      *UpdateNamespaceJSONRequestBody
+}
+
+type UpdateNamespaceResponseObject interface {
+	VisitUpdateNamespaceResponse(w http.ResponseWriter) error
+}
+
+type UpdateNamespace200JSONResponse Namespace
+
+func (response UpdateNamespace200JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateNamespace400JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateNamespace401JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateNamespace403JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateNamespace404JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateNamespace409JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateNamespace422JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateNamespace500JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceTokenRequestObject struct {
+	Namespace NamespacePath `json:"namespace"`
+	Params    RotateNamespaceTokenParams
+	Body      *RotateNamespaceTokenJSONRequestBody
+}
+
+type RotateNamespaceTokenResponseObject interface {
+	VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error
+}
+
+type RotateNamespaceToken200JSONResponse Namespace
+
+func (response RotateNamespaceToken200JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotateNamespaceToken400JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotateNamespaceToken401JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotateNamespaceToken403JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotateNamespaceToken404JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotateNamespaceToken409JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response RotateNamespaceToken422JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateNamespaceToken500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotateNamespaceToken500JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespaceRequestObject struct {
+	Namespace NamespacePath `json:"namespace"`
+	Params    ValidateNamespaceParams
+}
+
+type ValidateNamespaceResponseObject interface {
+	VisitValidateNamespaceResponse(w http.ResponseWriter) error
+}
+
+type ValidateNamespace200JSONResponse Namespace
+
+func (response ValidateNamespace200JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ValidateNamespace401JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ValidateNamespace403JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ValidateNamespace404JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ValidateNamespace409JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response ValidateNamespace422JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ValidateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ValidateNamespace500JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -11165,6 +12955,7 @@ func (response GetOperation500JSONResponse) VisitGetOperationResponse(w http.Res
 }
 
 type ListOrphanedVolumesRequestObject struct {
+	Params ListOrphanedVolumesParams
 }
 
 type ListOrphanedVolumesResponseObject interface {
@@ -12044,6 +13835,27 @@ type StrictServerInterface interface {
 	// Scrape Prometheus-compatible cluster metrics
 	// (GET /metrics)
 	GetPrometheusMetrics(ctx context.Context, request GetPrometheusMetricsRequestObject) (GetPrometheusMetricsResponseObject, error)
+	// List readable project namespaces
+	// (GET /namespaces)
+	ListNamespaces(ctx context.Context, request ListNamespacesRequestObject) (ListNamespacesResponseObject, error)
+	// Register a project namespace and deploy its relay
+	// (POST /namespaces)
+	CreateNamespace(ctx context.Context, request CreateNamespaceRequestObject) (CreateNamespaceResponseObject, error)
+	// Remove an empty namespace and its relay
+	// (DELETE /namespaces/{namespace})
+	DeleteNamespace(ctx context.Context, request DeleteNamespaceRequestObject) (DeleteNamespaceResponseObject, error)
+	// Read namespace project, token status and relay health
+	// (GET /namespaces/{namespace})
+	GetNamespace(ctx context.Context, request GetNamespaceRequestObject) (GetNamespaceResponseObject, error)
+	// Update a namespace description
+	// (PATCH /namespaces/{namespace})
+	UpdateNamespace(ctx context.Context, request UpdateNamespaceRequestObject) (UpdateNamespaceResponseObject, error)
+	// Validate and atomically rotate a namespace token
+	// (PUT /namespaces/{namespace}/token)
+	RotateNamespaceToken(ctx context.Context, request RotateNamespaceTokenRequestObject) (RotateNamespaceTokenResponseObject, error)
+	// Revalidate a namespace token and project
+	// (POST /namespaces/{namespace}/validate)
+	ValidateNamespace(ctx context.Context, request ValidateNamespaceRequestObject) (ValidateNamespaceResponseObject, error)
 	// List readable durable operations
 	// (GET /operations)
 	ListOperations(ctx context.Context, request ListOperationsRequestObject) (ListOperationsResponseObject, error)
@@ -12718,10 +14530,11 @@ func (sh *strictHandler) DeleteBackupStorage(w http.ResponseWriter, r *http.Requ
 }
 
 // GetBackupStorage operation middleware
-func (sh *strictHandler) GetBackupStorage(w http.ResponseWriter, r *http.Request, storage string) {
+func (sh *strictHandler) GetBackupStorage(w http.ResponseWriter, r *http.Request, storage string, params GetBackupStorageParams) {
 	var request GetBackupStorageRequestObject
 
 	request.Storage = storage
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetBackupStorage(ctx, request.(GetBackupStorageRequestObject))
@@ -12891,10 +14704,11 @@ func (sh *strictHandler) DeleteCluster(w http.ResponseWriter, r *http.Request, c
 }
 
 // GetCluster operation middleware
-func (sh *strictHandler) GetCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) GetCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterParams) {
 	var request GetClusterRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetCluster(ctx, request.(GetClusterRequestObject))
@@ -13074,11 +14888,12 @@ func (sh *strictHandler) DeleteBackup(w http.ResponseWriter, r *http.Request, cl
 }
 
 // GetBackup operation middleware
-func (sh *strictHandler) GetBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, backup string) {
+func (sh *strictHandler) GetBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, backup string, params GetBackupParams) {
 	var request GetBackupRequestObject
 
 	request.Cluster = cluster
 	request.Backup = backup
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetBackup(ctx, request.(GetBackupRequestObject))
@@ -13101,10 +14916,11 @@ func (sh *strictHandler) GetBackup(w http.ResponseWriter, r *http.Request, clust
 }
 
 // GetClusterBalancer operation middleware
-func (sh *strictHandler) GetClusterBalancer(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) GetClusterBalancer(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterBalancerParams) {
 	var request GetClusterBalancerRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetClusterBalancer(ctx, request.(GetClusterBalancerRequestObject))
@@ -13161,10 +14977,11 @@ func (sh *strictHandler) ReplaceClusterBalancer(w http.ResponseWriter, r *http.R
 }
 
 // GetClusterConnection operation middleware
-func (sh *strictHandler) GetClusterConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) GetClusterConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterConnectionParams) {
 	var request GetClusterConnectionRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetClusterConnection(ctx, request.(GetClusterConnectionRequestObject))
@@ -13277,12 +15094,13 @@ func (sh *strictHandler) DeleteDatabaseRole(w http.ResponseWriter, r *http.Reque
 }
 
 // GetDatabaseRole operation middleware
-func (sh *strictHandler) GetDatabaseRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, role string) {
+func (sh *strictHandler) GetDatabaseRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, role string, params GetDatabaseRoleParams) {
 	var request GetDatabaseRoleRequestObject
 
 	request.Cluster = cluster
 	request.Database = database
 	request.Role = role
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetDatabaseRole(ctx, request.(GetDatabaseRoleRequestObject))
@@ -13431,12 +15249,13 @@ func (sh *strictHandler) DeleteDatabaseUser(w http.ResponseWriter, r *http.Reque
 }
 
 // GetDatabaseUser operation middleware
-func (sh *strictHandler) GetDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string) {
+func (sh *strictHandler) GetDatabaseUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, username string, params GetDatabaseUserParams) {
 	var request GetDatabaseUserRequestObject
 
 	request.Cluster = cluster
 	request.Database = database
 	request.Username = username
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetDatabaseUser(ctx, request.(GetDatabaseUserRequestObject))
@@ -13495,10 +15314,11 @@ func (sh *strictHandler) ReplaceDatabaseUser(w http.ResponseWriter, r *http.Requ
 }
 
 // ListClusterMembers operation middleware
-func (sh *strictHandler) ListClusterMembers(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) ListClusterMembers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListClusterMembersParams) {
 	var request ListClusterMembersRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListClusterMembers(ctx, request.(ListClusterMembersRequestObject))
@@ -13521,11 +15341,12 @@ func (sh *strictHandler) ListClusterMembers(w http.ResponseWriter, r *http.Reque
 }
 
 // GetClusterMember operation middleware
-func (sh *strictHandler) GetClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string) {
+func (sh *strictHandler) GetClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params GetClusterMemberParams) {
 	var request GetClusterMemberRequestObject
 
 	request.Cluster = cluster
 	request.Member = member
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetClusterMember(ctx, request.(GetClusterMemberRequestObject))
@@ -13658,10 +15479,11 @@ func (sh *strictHandler) ListClusterOperations(w http.ResponseWriter, r *http.Re
 }
 
 // GetPITRWindow operation middleware
-func (sh *strictHandler) GetPITRWindow(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) GetPITRWindow(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetPITRWindowParams) {
 	var request GetPITRWindowRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetPITRWindow(ctx, request.(GetPITRWindowRequestObject))
@@ -13684,10 +15506,11 @@ func (sh *strictHandler) GetPITRWindow(w http.ResponseWriter, r *http.Request, c
 }
 
 // GetClusterPlacement operation middleware
-func (sh *strictHandler) GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterPlacementParams) {
 	var request GetClusterPlacementRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetClusterPlacement(ctx, request.(GetClusterPlacementRequestObject))
@@ -13832,11 +15655,12 @@ func (sh *strictHandler) CreateRestore(w http.ResponseWriter, r *http.Request, c
 }
 
 // GetRestore operation middleware
-func (sh *strictHandler) GetRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, restore string) {
+func (sh *strictHandler) GetRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, restore string, params GetRestoreParams) {
 	var request GetRestoreRequestObject
 
 	request.Cluster = cluster
 	request.Restore = restore
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetRestore(ctx, request.(GetRestoreRequestObject))
@@ -13913,10 +15737,11 @@ func (sh *strictHandler) RotateClusterTLS(w http.ResponseWriter, r *http.Request
 }
 
 // GetClusterStatus operation middleware
-func (sh *strictHandler) GetClusterStatus(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) GetClusterStatus(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterStatusParams) {
 	var request GetClusterStatusRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetClusterStatus(ctx, request.(GetClusterStatusRequestObject))
@@ -13939,10 +15764,11 @@ func (sh *strictHandler) GetClusterStatus(w http.ResponseWriter, r *http.Request
 }
 
 // ListSystemUsers operation middleware
-func (sh *strictHandler) ListSystemUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath) {
+func (sh *strictHandler) ListSystemUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListSystemUsersParams) {
 	var request ListSystemUsersRequestObject
 
 	request.Cluster = cluster
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListSystemUsers(ctx, request.(ListSystemUsersRequestObject))
@@ -14069,8 +15895,10 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPrometheusMetrics operation middleware
-func (sh *strictHandler) GetPrometheusMetrics(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) GetPrometheusMetrics(w http.ResponseWriter, r *http.Request, params GetPrometheusMetricsParams) {
 	var request GetPrometheusMetricsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetPrometheusMetrics(ctx, request.(GetPrometheusMetricsRequestObject))
@@ -14085,6 +15913,213 @@ func (sh *strictHandler) GetPrometheusMetrics(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPrometheusMetricsResponseObject); ok {
 		if err := validResponse.VisitGetPrometheusMetricsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNamespaces operation middleware
+func (sh *strictHandler) ListNamespaces(w http.ResponseWriter, r *http.Request, params ListNamespacesParams) {
+	var request ListNamespacesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNamespaces(ctx, request.(ListNamespacesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNamespaces")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNamespacesResponseObject); ok {
+		if err := validResponse.VisitListNamespacesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNamespace operation middleware
+func (sh *strictHandler) CreateNamespace(w http.ResponseWriter, r *http.Request, params CreateNamespaceParams) {
+	var request CreateNamespaceRequestObject
+
+	request.Params = params
+
+	var body CreateNamespaceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNamespace(ctx, request.(CreateNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNamespaceResponseObject); ok {
+		if err := validResponse.VisitCreateNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteNamespace operation middleware
+func (sh *strictHandler) DeleteNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params DeleteNamespaceParams) {
+	var request DeleteNamespaceRequestObject
+
+	request.Namespace = namespace
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteNamespace(ctx, request.(DeleteNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteNamespaceResponseObject); ok {
+		if err := validResponse.VisitDeleteNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNamespace operation middleware
+func (sh *strictHandler) GetNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath) {
+	var request GetNamespaceRequestObject
+
+	request.Namespace = namespace
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNamespace(ctx, request.(GetNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNamespaceResponseObject); ok {
+		if err := validResponse.VisitGetNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateNamespace operation middleware
+func (sh *strictHandler) UpdateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params UpdateNamespaceParams) {
+	var request UpdateNamespaceRequestObject
+
+	request.Namespace = namespace
+	request.Params = params
+
+	var body UpdateNamespaceJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateNamespace(ctx, request.(UpdateNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateNamespaceResponseObject); ok {
+		if err := validResponse.VisitUpdateNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateNamespaceToken operation middleware
+func (sh *strictHandler) RotateNamespaceToken(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params RotateNamespaceTokenParams) {
+	var request RotateNamespaceTokenRequestObject
+
+	request.Namespace = namespace
+	request.Params = params
+
+	var body RotateNamespaceTokenJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateNamespaceToken(ctx, request.(RotateNamespaceTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateNamespaceToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateNamespaceTokenResponseObject); ok {
+		if err := validResponse.VisitRotateNamespaceTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ValidateNamespace operation middleware
+func (sh *strictHandler) ValidateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params ValidateNamespaceParams) {
+	var request ValidateNamespaceRequestObject
+
+	request.Namespace = namespace
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ValidateNamespace(ctx, request.(ValidateNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ValidateNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ValidateNamespaceResponseObject); ok {
+		if err := validResponse.VisitValidateNamespaceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -14145,8 +16180,10 @@ func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, op
 }
 
 // ListOrphanedVolumes operation middleware
-func (sh *strictHandler) ListOrphanedVolumes(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListOrphanedVolumes(w http.ResponseWriter, r *http.Request, params ListOrphanedVolumesParams) {
 	var request ListOrphanedVolumesRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListOrphanedVolumes(ctx, request.(ListOrphanedVolumesRequestObject))

@@ -168,10 +168,10 @@ type triggerSpy struct {
 	names []string
 }
 
-func (t *triggerSpy) Trigger(name string) {
+func (t *triggerSpy) Trigger(ref domain.ClusterRef) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.names = append(t.names, name)
+	t.names = append(t.names, ref.Key())
 }
 func testServer(t *testing.T) (*Server, *secrets.Sealer, string) {
 	t.Helper()

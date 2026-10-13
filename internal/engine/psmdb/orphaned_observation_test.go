@@ -33,7 +33,7 @@ func TestFailedDeleteProcessCrossesOrphanThreshold(t *testing.T) {
 	if _, err := p.Sync(context.Background(), rc); err != nil {
 		t.Fatal(err)
 	}
-	items, err := rc.Store.ListOrphanedVolumes(context.Background())
+	items, err := rc.Store.ListOrphanedVolumes(context.Background(), rc.Cluster.Ref().Namespace)
 	if err != nil || len(items) != 1 || items[0].Attempts != 5 || items[0].LastProcessID != "latest-failed-process" || items[0].FirstError != "still mounted" || !strings.Contains(items[0].LastError, "other services") || len(events.items) != 1 {
 		t.Fatal(items, events.items, err)
 	}

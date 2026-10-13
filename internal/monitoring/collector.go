@@ -26,7 +26,7 @@ import (
 )
 
 // Target identifies one member exporter.
-type Target struct{ Cluster, Member string }
+type Target struct{ Namespace, Cluster, Member string }
 
 // Options supplies storage, agent connections, target discovery and retention settings.
 type Options struct {
@@ -120,7 +120,7 @@ func parseMetrics(data []byte, target Target, now time.Time) (map[string]*dto.Me
 		for _, metric := range family.Metric {
 			labels := map[string]string{}
 			for _, label := range metric.Label {
-				if label.GetName() != "cluster" && label.GetName() != "member" {
+				if label.GetName() != "namespace" && label.GetName() != "cluster" && label.GetName() != "member" {
 					labels[label.GetName()] = label.GetValue()
 				}
 			}
@@ -137,7 +137,7 @@ func parseMetrics(data []byte, target Target, now time.Time) (map[string]*dto.Me
 			if math.IsNaN(value) || math.IsInf(value, 0) {
 				continue
 			}
-			samples = append(samples, domain.MetricSample{Cluster: target.Cluster, Member: target.Member, Metric: v.name, Timestamp: now, Value: value, Labels: labels})
+			samples = append(samples, domain.MetricSample{Namespace: domain.NormalizedNamespace(target.Namespace), Cluster: target.Cluster, Member: target.Member, Metric: v.name, Timestamp: now, Value: value, Labels: labels})
 		}
 	}
 	return families, samples, nil
@@ -146,6 +146,7 @@ func parseMetrics(data []byte, target Target, now time.Time) (map[string]*dto.Me
 // cacheScrape replaces exposition even on failure; old health samples must not
 // acquire fresh scrape timestamps when an exporter becomes unreachable.
 func (c *Collector) cacheScrape(target Target, families map[string]*dto.MetricFamily, samples []domain.MetricSample, now time.Time) {
+	target.Namespace = domain.NormalizedNamespace(target.Namespace)
 	success := families != nil
 	if families == nil {
 		families = make(map[string]*dto.MetricFamily, 1)
@@ -194,13 +195,13 @@ func (c *Collector) cacheScrape(target Target, families map[string]*dto.MetricFa
 // MemberUsage returns values only from a successful scrape within two scrape
 // intervals. CPU uses the same reset-aware, 0–100% counter rate as Series and
 // requires a preceding fresh sample; failed scrapes discard that baseline.
-func (c *Collector) MemberUsage(cluster, member string) MemberUsage {
+func (c *Collector) MemberUsage(cluster domain.ClusterRef, member string) MemberUsage {
 	if c == nil {
 		return MemberUsage{}
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	latest := c.latestUsage[Target{Cluster: cluster, Member: member}]
+	latest := c.latestUsage[Target{Namespace: domain.NormalizedNamespace(cluster.Namespace), Cluster: cluster.Name, Member: member}]
 	if time.Since(latest.at) > 2*c.o.Interval {
 		return MemberUsage{}
 	}
@@ -214,8 +215,9 @@ func (c *Collector) scrape(ctx context.Context) error {
 	}
 	live := map[Target]bool{}
 	for _, target := range targets {
+		target.Namespace = domain.NormalizedNamespace(target.Namespace)
 		live[target] = true
-		client, err := c.o.Dialer.Dial(ctx, target.Cluster, target.Member)
+		client, err := c.o.Dialer.Dial(ctx, domain.ClusterRef{Namespace: target.Namespace, Name: target.Cluster}, target.Member)
 		if err != nil {
 			c.o.Logger.Warn("metrics dial failed", "cluster", target.Cluster, "member", target.Member, "error", err)
 			c.cacheScrape(target, nil, nil, time.Now().UTC())
@@ -311,14 +313,14 @@ func sampleValue(sample domain.MetricSample, previous *domain.MetricSample) (flo
 }
 
 // Series reads canonical samples, derives reset-aware counter rates, and buckets by step.
-func (c *Collector) Series(ctx context.Context, cluster string, metrics []string, start, end time.Time, step time.Duration) ([]Series, error) {
+func (c *Collector) Series(ctx context.Context, cluster domain.ClusterRef, metrics []string, start, end time.Time, step time.Duration) ([]Series, error) {
 	if step <= 0 {
 		step = c.o.Interval
 	}
 	if !end.After(start) {
 		return nil, errors.New("metric end must follow start")
 	}
-	samples, err := c.o.Store.QueryMetricSamples(ctx, store.MetricQuery{Cluster: cluster, Start: start.Add(-c.o.Interval * 2), End: end})
+	samples, err := c.o.Store.QueryMetricSamples(ctx, store.MetricQuery{Namespace: domain.NormalizedNamespace(cluster.Namespace), Cluster: cluster.Name, Start: start.Add(-c.o.Interval * 2), End: end})
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +402,7 @@ func (c *Collector) Series(ctx context.Context, cluster string, metrics []string
 // WritePrometheus federates latest exposition with authoritative cluster/member
 // labels. Failed scrapes expose only karakoram_member_scrape_success=0, not
 // cached database health values.
-func (c *Collector) WritePrometheus(ctx context.Context, w io.Writer, allow func(string) bool) error {
+func (c *Collector) WritePrometheus(ctx context.Context, w io.Writer, allow func(domain.ClusterRef) bool) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	families := map[string]*dto.MetricFamily{}
@@ -408,7 +410,7 @@ func (c *Collector) WritePrometheus(ctx context.Context, w io.Writer, allow func
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if allow != nil && !allow(target.Cluster) {
+		if allow != nil && !allow(domain.ClusterRef{Namespace: domain.NormalizedNamespace(target.Namespace), Name: target.Cluster}) {
 			continue
 		}
 		for name, family := range scrape {
@@ -420,13 +422,13 @@ func (c *Collector) WritePrometheus(ctx context.Context, w io.Writer, allow func
 			for _, sample := range family.Metric {
 				copy := &dto.Metric{Gauge: sample.Gauge, Counter: sample.Counter, Summary: sample.Summary, Histogram: sample.Histogram, Untyped: sample.Untyped}
 				for _, label := range sample.Label {
-					if label.GetName() != "cluster" && label.GetName() != "member" {
+					if label.GetName() != "namespace" && label.GetName() != "cluster" && label.GetName() != "member" {
 						copy.Label = append(copy.Label, label)
 					}
 				}
-				cluster, member := target.Cluster, target.Member
-				clusterName, memberName := "cluster", "member"
-				copy.Label = append(copy.Label, &dto.LabelPair{Name: &clusterName, Value: &cluster}, &dto.LabelPair{Name: &memberName, Value: &member})
+				namespace, cluster, member := domain.NormalizedNamespace(target.Namespace), target.Cluster, target.Member
+				namespaceName, clusterName, memberName := "namespace", "cluster", "member"
+				copy.Label = append(copy.Label, &dto.LabelPair{Name: &namespaceName, Value: &namespace}, &dto.LabelPair{Name: &clusterName, Value: &cluster}, &dto.LabelPair{Name: &memberName, Value: &member})
 				dest.Metric = append(dest.Metric, copy)
 			}
 		}

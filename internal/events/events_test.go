@@ -31,9 +31,9 @@ func (*memoryEvents) ListEvents(context.Context, store.EventFilter) ([]domain.Ev
 }
 func TestDurablePublishAndBoundedHub(t *testing.T) {
 	hub := NewHub(1)
-	all, stop := hub.Subscribe("")
+	all, stop := hub.Subscribe("", "")
 	defer stop()
-	filtered, unsub := hub.Subscribe("one")
+	filtered, unsub := hub.Subscribe("", "one")
 	defer unsub()
 	db := &memoryEvents{}
 	r := NewRecorder(db, hub)
@@ -81,10 +81,33 @@ func TestConcurrentPublishUnsubscribe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, cancel := h.Subscribe("one")
+			_, cancel := h.Subscribe("", "one")
 			h.Publish(domain.Event{Cluster: "one"})
 			cancel()
 		}()
 	}
 	wg.Wait()
+}
+
+func TestNamespaceSubscriptionsAndRecorderDefault(t *testing.T) {
+	h := NewHub(4)
+	stream, cancel := h.Subscribe("other", "same")
+	defer cancel()
+	all, stop := h.Subscribe("", "")
+	defer stop()
+	r := NewRecorder(&memoryEvents{}, h)
+	for _, ns := range []string{"", "other"} {
+		if err := r.Record(context.Background(), domain.Event{Namespace: ns, Cluster: "same"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(stream) != 1 || (<-stream).Namespace != "other" {
+		t.Fatal("namespace filter ignored")
+	}
+	if event := <-all; event.Namespace != domain.DefaultNamespace {
+		t.Fatal(event)
+	}
+	if event := <-all; event.Namespace != "other" {
+		t.Fatal(event)
+	}
 }

@@ -4,11 +4,16 @@
 import { Link } from 'react-router-dom';
 import { useClusters } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
+import { DEFAULT_NAMESPACE } from '@/auth/permissions';
+import { spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
 import { Badge, Card, CodeLine, KV } from '@/components/ui/Primitives';
+import { clusterPath } from '../clusters/detail/ClusterDetail';
 
 export function MonitoringSettingsPage() {
   const auth = useAuth();
-  const clusters = useClusters();
+  const { namespace } = useNamespace();
+  const clusters = useClusters(namespace);
+  const showNamespace = !namespace && spansNamespaces(clusters.data?.items ?? []);
   const origin = window.location.origin;
   const scrapeURL = `${origin}/metrics`;
   const enabled = (clusters.data?.items ?? []).filter((c) => c.spec.monitoring?.enabled !== false);
@@ -31,7 +36,7 @@ export function MonitoringSettingsPage() {
             Karakoram's node agents collect engine metrics from every member and the control plane aggregates them. Per-cluster dashboards live under each cluster's Monitoring tab; external systems scrape all clusters at once from the endpoint below using
             an API token. Only clusters the token's owner may read (<code>monitoring:read</code>) are included.
           </p>
-          <KV items={[['Endpoint', <CodeLine value={scrapeURL} />], ['Auth', 'Authorization: Bearer <API token> (create under API tokens)'], ['Format', 'Prometheus text exposition; labels cluster, member, set, role']]} />
+          <KV items={[['Endpoint', <CodeLine value={scrapeURL} />], ['Auth', 'Authorization: Bearer <API token> (create under API tokens)'], ['Format', 'Prometheus text exposition; labels cluster, member, set, role'], ['Filter', 'Optional ?namespace=<name> limits the scrape to one namespace']]} />
           <div className="section-title">Example scrape config</div>
           <pre className="code">{scrapeConfig}</pre>
           <p className="xs faint">
@@ -44,6 +49,7 @@ export function MonitoringSettingsPage() {
           <table className="table">
             <thead>
               <tr>
+                {showNamespace ? <th>Namespace</th> : null}
                 <th>Cluster</th>
                 <th>Metrics</th>
                 <th>Members reporting</th>
@@ -51,9 +57,10 @@ export function MonitoringSettingsPage() {
             </thead>
             <tbody>
               {[...enabled, ...disabled].map((c) => (
-                <tr key={c.name}>
+                <tr key={`${c.namespace || DEFAULT_NAMESPACE}/${c.name}`}>
+                  {showNamespace ? <td className="mono small">{c.namespace || DEFAULT_NAMESPACE}</td> : null}
                   <td>
-                    <Link to={`/clusters/${encodeURIComponent(c.name)}/monitoring`} className="mono strong">
+                    <Link to={`${clusterPath(c.namespace || DEFAULT_NAMESPACE, c.name)}/monitoring`} className="mono strong">
                       {c.name}
                     </Link>
                   </td>
@@ -69,7 +76,7 @@ export function MonitoringSettingsPage() {
               ))}
               {(clusters.data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="table-empty">
+                  <td colSpan={showNamespace ? 4 : 3} className="table-empty">
                     {auth.can('clusters', 'read') ? 'No clusters.' : 'No clusters visible to you.'}
                   </td>
                 </tr>

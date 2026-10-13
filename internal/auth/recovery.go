@@ -128,7 +128,7 @@ func (s *Service) RecoverAdmin(ctx context.Context, name, password, masterKey st
 	if err = s.recoverAdminPolicy(ctx, name); err != nil {
 		return false, err
 	}
-	event := domain.Event{Type: "Warning", Reason: "AdminAccessRecovered", Actor: "system:startup", Message: "Local administrator access recovered for " + name + "; password change required", CreatedAt: s.now()}
+	event := domain.Event{Resource: "accounts", Target: name, Type: "Warning", Reason: "AdminAccessRecovered", Actor: "system:startup", Message: "Local administrator access recovered for " + name + "; password change required", CreatedAt: s.now()}
 	if err = s.o.Store.AppendEvent(ctx, &event); err != nil {
 		return false, err
 	}
@@ -166,9 +166,11 @@ func (s *Service) recoverAdminPolicy(ctx context.Context, name string) error {
 				continue
 			}
 		}
-		// Replace, rather than duplicate, the built-in unrestricted grant.
+		// Replace, rather than duplicate, the built-in unrestricted grant
+		// (stored policies normalize the object `*` to `**`).
 		if rule.PType == "p" && rule.Values[0] == "role:admin" &&
-			rule.Values[1] == "*" && rule.Values[2] == "*" && rule.Values[3] == "*" {
+			rule.Values[1] == "*" && rule.Values[2] == "*" &&
+			(rule.Values[3] == "*" || rule.Values[3] == "**") {
 			continue
 		}
 		row[0] = rule.PType
@@ -177,7 +179,7 @@ func (s *Service) recoverAdminPolicy(ctx context.Context, name string) error {
 			return err
 		}
 	}
-	if err = writer.Write([]string{"p", "role:admin", "*", "*", "*", "allow"}); err != nil {
+	if err = writer.Write([]string{"p", "role:admin", "*", "*", "**", "allow"}); err != nil {
 		return err
 	}
 	if err = writer.Write([]string{"g", user, "role:admin"}); err != nil {

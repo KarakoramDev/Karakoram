@@ -24,6 +24,14 @@ paths:
     get:
       operationId: getClusterConnection
       x-karakoram-rbac: {resource: cluster-credentials, action: read, object: cluster}
+  /namespaces/{namespace}:
+    get:
+      operationId: getNamespace
+      x-karakoram-rbac: {resource: namespaces, action: read, object: namespace}
+  /backup-storages/{storage}:
+    get:
+      operationId: getBackupStorage
+      x-karakoram-rbac: {resource: backup-storages, action: read, object: storage}
 `
 
 func TestGenerateDeterministicAndCompilable(t *testing.T) {
@@ -51,6 +59,11 @@ func TestGenerateDeterministicAndCompilable(t *testing.T) {
 	if !strings.Contains(text, `"getVersion":`) || !strings.Contains(text, `Public: true`) {
 		t.Fatal("public operation was lost")
 	}
+	for _, object := range []string{"namespace", "storage"} {
+		if !strings.Contains(text, `ObjectParam: "`+object+`", Public: false`) {
+			t.Fatalf("%s authorization was lost", object)
+		}
+	}
 	if strings.Index(text, `"getClusterConnection"`) > strings.Index(text, `"getVersion"`) {
 		t.Fatal("operation IDs are not sorted")
 	}
@@ -71,6 +84,12 @@ func TestRejectInvalidMetadata(t *testing.T) {
 		{"incorrect parameter", strings.Replace(validSpec, "object: cluster", "object: member", 1), "object must be"},
 		{"incorrect wildcard", strings.Replace(validSpec, "object: cluster", "object: '*'", 1), "cluster-scoped operation"},
 		{"unbound cluster", strings.Replace(validSpec, "/clusters/{cluster}/connection", "/connection", 1), "object must be"},
+		{"unbound namespace", strings.Replace(validSpec, "/namespaces/{namespace}", "/namespaces/example", 1), "object must be"},
+		{"unbound storage", strings.Replace(validSpec, "/backup-storages/{storage}", "/backup-storages/example", 1), "object must be"},
+		{"namespace wildcard", strings.Replace(validSpec, "object: namespace", "object: '*'", 1), "namespace-scoped operation"},
+		{"storage wildcard", strings.Replace(validSpec, "object: storage", "object: '*'", 1), "storage-scoped operation"},
+		{"namespace wrong kind", strings.Replace(validSpec, "object: namespace", "object: storage", 1), "storage path parameter"},
+		{"storage wrong kind", strings.Replace(validSpec, "object: storage", "object: namespace", 1), "namespace path parameter"},
 		{"empty paths", "openapi: 3.0.3\npaths: {}\n", "no paths"},
 		{"empty operations", "openapi: 3.0.3\npaths:\n  /version:\n    summary: Version\n", "no operations"},
 		{"invalid yaml", "openapi: [", "yaml"},
@@ -117,5 +136,30 @@ func TestRunPreservesGeneratedSourcesAndAnnotatesOnce(t *testing.T) {
 	}
 	if !bytes.Equal(annotated, append([]byte(licenseHeader), original...)) {
 		t.Fatal("annotation modified source content or repeated the header")
+	}
+}
+
+func TestAdditionalAuditPermission(t *testing.T) {
+	spec := validSpec + `  /events:
+    get:
+      operationId: listEvents
+      x-karakoram-rbac: {resource: events, action: read, object: '*'}
+      x-karakoram-rbac-extra: {resource: audit, action: read, object: '*'}
+`
+	generated, err := generate([]byte(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(generated), `AdditionalRBAC = []RBACRule{`) || !strings.Contains(string(generated), `{Resource: "audit", Action: "read", ObjectParam: "*"},`) {
+		t.Fatal("additional audit permission omitted")
+	}
+	for _, invalid := range []string{
+		strings.Replace(spec, "resource: audit", "resource: unknown", 1),
+		strings.Replace(spec, "resource: audit, action: read", "resource: audit, action: reveal", 1),
+		strings.Replace(spec, "resource: audit, action: read, object: '*'", "resource: audit, action: read, object: cluster", 1),
+	} {
+		if _, err := generate([]byte(invalid)); err == nil {
+			t.Fatal("invalid additional permission accepted")
+		}
 	}
 }

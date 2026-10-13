@@ -7,6 +7,12 @@
 // changes and disabled/deleted accounts invalidate access immediately. Refresh
 // secrets and API tokens are persisted only as SHA-256 hashes. Access/refresh
 // lifetimes may be configured through Options. A replay revokes the whole family.
+// Login, refresh and authenticated logout append durable auth-resource events.
+// Failed local logins record only validated attempted account names, never
+// passwords or addresses; backoff/admission denials do not produce audit floods.
+// OIDC failures are attributed only to verified, matching persisted identities.
+// Actor identities include the persisted OIDC issuer and public token metadata,
+// so provider identities and separate API tokens remain distinguishable.
 package auth
 
 import (
@@ -62,7 +68,39 @@ type Principal struct {
 	Via                string
 	MustChangePassword bool
 	TokenID            string
+	TokenName          string
+	OIDCIssuer         string
 	CSRFToken          string
+}
+
+// Actor returns the persisted account identity scoped to its OIDC issuer,
+// distinguishing API tokens by public name and ID without credential material.
+func (p Principal) Actor() string {
+	if p.Via == "token" {
+		if p.OIDCIssuer != "" {
+			if p.TokenName == "" {
+				return p.Account + " (oidc: " + p.OIDCIssuer + ") (token: [" + p.TokenID + "])"
+			}
+			return p.Account + " (oidc: " + p.OIDCIssuer + ") (token: " + p.TokenName + " [" + p.TokenID + "])"
+		}
+		if p.TokenName == "" {
+			return p.Account + " (token: [" + p.TokenID + "])"
+		}
+		return p.Account + " (token: " + p.TokenName + " [" + p.TokenID + "])"
+	}
+	if p.OIDCIssuer != "" {
+		return p.Account + " (oidc: " + p.OIDCIssuer + ")"
+	}
+	return p.Account
+}
+
+func (s *Service) auditAuthentication(ctx context.Context, principal Principal, reason, message string) error {
+	kind := "Normal"
+	if reason == "LoginFailed" {
+		kind = "Warning"
+	}
+	event := domain.Event{Resource: "auth", Target: principal.Account, Type: kind, Reason: reason, Actor: principal.Actor(), Message: message, CreatedAt: s.now()}
+	return s.o.Store.AppendEvent(ctx, &event)
 }
 
 // SessionInfo is returned with newly issued cookies and includes the CSRF token.

@@ -23,6 +23,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/events"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
@@ -33,20 +34,25 @@ import (
 
 // Options supplies the real control-plane dependencies; providers remain independently testable.
 type Options struct {
-	Store      *store.Store
-	Auth       *auth.Service
-	RBAC       *rbac.Enforcer
-	Registry   *engine.Registry
-	Context    engine.Context
-	Trigger    interface{ Trigger(string) }
-	Hub        *events.Hub
-	Monitoring *monitoring.Collector
-	PublicURL  string
-	Logger     *slog.Logger
+	Store        *store.Store
+	Auth         *auth.Service
+	RBAC         *rbac.Enforcer
+	Registry     *engine.Registry
+	Context      engine.Context
+	Trigger      interface{ Trigger(domain.ClusterRef) }
+	Hub          *events.Hub
+	Monitoring   *monitoring.Collector
+	PublicURL    string
+	Logger       *slog.Logger
+	Namespaces   engine.Namespaces
+	RelayHandler http.Handler
 }
 
 // Server implements all generated strict operations.
-type Server struct{ Options }
+type Server struct {
+	Options
+	namespaces engine.Namespaces
+}
 
 // New assembles HTTP handlers over initialized dependencies.
 func New(o Options) (*Server, error) {
@@ -56,14 +62,18 @@ func New(o Options) (*Server, error) {
 	if o.Logger == nil {
 		o.Logger = slog.Default()
 	}
-	return &Server{Options: o}, nil
+	if o.Namespaces == nil {
+		o.Namespaces = engine.StaticNamespaces{DefaultBackend: o.Context.Backend, DefaultAgentURL: o.Context.AgentURL}
+	}
+	return &Server{Options: o, namespaces: o.Namespaces}, nil
 }
 
 type requestKey struct{}
 type identityKey struct{}
+type triggerKey struct{}
 type input struct {
-	Body                                                                                                           any
-	Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
+	Body                                                                                                                      any
+	Namespace, Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
 }
 type response struct {
 	status  int
@@ -95,12 +105,20 @@ func fail(status int, code, message string) response {
 	return response{status: status, body: api.Error{Code: code, Message: message}}
 }
 func (s *Server) failure(err error) response {
+	var namespaceConflict *store.NamespaceConflictError
+	if errors.As(err, &namespaceConflict) {
+		return fail(409, "conflict", namespaceConflict.Error())
+	}
+	var invalidRef *domain.ClusterRefValidationError
+	if errors.As(err, &invalidRef) {
+		return fail(400, "invalid_request", invalidRef.Error())
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
 	case errors.Is(err, store.ErrConflict), errors.Is(err, engine.ErrConflict), errors.Is(err, engine.ErrNotSupported):
 		return fail(409, "conflict", "Request conflicts with the resource state")
-	case errors.Is(err, engine.ErrInvalid), errors.Is(err, auth.ErrInvalid):
+	case errors.Is(err, engine.ErrInvalid), errors.Is(err, auth.ErrInvalid), errors.Is(err, store.ErrInvalid):
 		var v *engine.ValidationError
 		if errors.As(err, &v) {
 			return fail(400, "invalid_request", v.Message)
@@ -142,7 +160,7 @@ func selfService(id string) bool {
 }
 func collection(id string) bool {
 	switch id {
-	case "listClusters", "listOrphanedVolumes", "listOperations", "listEvents", "streamEvents", "getPrometheusMetrics", "getOperation":
+	case "listClusters", "listOrphanedVolumes", "listOperations", "listEvents", "streamEvents", "getPrometheusMetrics", "getOperation", "listBackupStorages", "listNamespaces":
 		return true
 	}
 	return false
@@ -155,6 +173,21 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 			return fail(403, "forbidden", "Unknown API operation"), nil
 		}
 		ctx = context.WithValue(ctx, requestKey{}, r)
+		if cluster := r.PathValue("cluster"); cluster != "" {
+			if err := domain.ValidateClusterName(cluster); err != nil {
+				return fail(404, "not_found", "Resource not found"), nil
+			}
+		}
+		if namespace := r.PathValue("namespace"); namespace != "" {
+			if err := domain.ValidateNamespaceName(namespace); err != nil {
+				return fail(404, "not_found", "Resource not found"), nil
+			}
+		}
+		if namespaces, present := r.URL.Query()["namespace"]; present {
+			if len(namespaces) != 1 || domain.ValidateNamespaceName(namespaces[0]) != nil {
+				return invalid(), nil
+			}
+		}
 		if id == "login" || id == "refreshSession" || id == "logout" || id == "oidcLogin" {
 			if !s.sameOrigin(r) {
 				return fail(403, "forbidden", "Cross-origin authentication request rejected"), nil
@@ -181,13 +214,27 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 				if p.MustChangePassword && id != "changePassword" && id != "getCurrentUser" && id != "logout" {
 					return fail(403, "password_change_required", "Change your password before continuing"), nil
 				}
+				namespace := r.URL.Query().Get("namespace")
+				if namespace == "" {
+					namespace = "default"
+				}
 				obj := "*"
-				if rule.ObjectParam == "cluster" {
-					obj = r.PathValue("cluster")
+				switch rule.ObjectParam {
+				case "cluster":
+					obj = namespace + "/" + r.PathValue("cluster")
+				case "namespace":
+					obj = r.PathValue("namespace")
+				case "storage":
+					obj = namespace + "/" + r.PathValue("storage")
 				}
 				if id == "createCluster" {
 					if q, yes := v.(api.CreateClusterRequestObject); yes && q.Body != nil {
-						obj = q.Body.Name
+						obj = namespace + "/" + q.Body.Name
+					}
+				}
+				if id == "createBackupStorage" {
+					if q, yes := v.(api.CreateBackupStorageRequestObject); yes && q.Body != nil {
+						obj = namespace + "/" + q.Body.Name
 					}
 				}
 				if !selfService(id) && !collection(id) && !s.RBAC.Can(p.Subjects, rule.Resource, rule.Action, obj) {
@@ -256,6 +303,10 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	mux := http.NewServeMux()
+	// Relay authentication is performed by its inner mutual-TLS tunnel, not API RBAC.
+	if s.RelayHandler != nil {
+		mux.Handle("GET /relay/v1/connect", s.RelayHandler)
+	}
 	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: operationMux{mux}, ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 		_ = fail(400, "invalid_request", "Invalid request parameters").write(w)
 	}})
@@ -334,8 +385,8 @@ func listResponse[T any](s *Server, ctx context.Context, items []T, err error) r
 	}
 	return ok(p)
 }
-func (s *Server) context(ctx context.Context, name string) (*engine.Context, engine.Provider, error) {
-	c, err := s.Store.GetCluster(ctx, name)
+func (s *Server) context(ctx context.Context, ref domain.ClusterRef) (*engine.Context, engine.Provider, error) {
+	c, err := s.Store.GetCluster(ctx, ref)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -345,11 +396,28 @@ func (s *Server) context(ctx context.Context, name string) (*engine.Context, eng
 	}
 	rc := s.Context
 	rc.Cluster = c
+	rc.Namespace = domain.NormalizedNamespace(c.Namespace)
 	return &rc, p, nil
 }
-func (s *Server) trigger(name string) {
+
+func (s *Server) providerContext(rc *engine.Context) *response {
+	backend, err := s.namespaces.Backend(rc.Namespace)
+	if err != nil {
+		r := fail(503, "invalid_namespace", "Namespace "+rc.Namespace+" is unavailable; repair its token or relay")
+		return &r
+	}
+	rc.Backend = backend
+	rc.Dialer = s.namespaces.Dialer(rc.Namespace)
+	rc.AgentURL = s.namespaces.AgentURL(rc.Namespace)
+	return nil
+}
+func (s *Server) trigger(ctx context.Context, ref domain.ClusterRef) {
+	if pending, ok := ctx.Value(triggerKey{}).(*domain.ClusterRef); ok {
+		*pending = ref
+		return
+	}
 	if s.Trigger != nil {
-		s.Trigger.Trigger(name)
+		s.Trigger.Trigger(ref)
 	}
 }
 func invalid() response { return fail(400, "invalid_request", "Invalid request") }
@@ -361,10 +429,45 @@ func value[T any](p *T) T {
 	var zero T
 	return zero
 }
+func namespaceFilter(ctx context.Context) string {
+	if r := request(ctx); r.URL != nil {
+		return r.URL.Query().Get("namespace")
+	}
+	return ""
+}
+func clusterRef(ctx context.Context, name string) domain.ClusterRef {
+	return domain.ClusterRef{Namespace: domain.NormalizedNamespace(namespaceFilter(ctx)), Name: name}
+}
+func clusterObject(namespace, name string) string {
+	return domain.NormalizedNamespace(namespace) + "/" + name
+}
+func (s *Server) usableNamespace(namespace string) *response {
+	if _, err := s.namespaces.Backend(namespace); err != nil {
+		r := fail(422, "invalid_namespace", "Namespace "+namespace+" does not exist or is unavailable")
+		return &r
+	}
+	return nil
+}
 func (s *Server) handle(ctx context.Context, name string, in input) response {
+	var pending domain.ClusterRef
+	ctx = context.WithValue(ctx, triggerKey{}, &pending)
+	if p := principal(ctx); p != nil {
+		ctx = store.WithActor(ctx, p.Actor())
+	}
+	result := s.dispatch(ctx, name, in)
+	if err := s.auditAction(ctx, name, in, result); err != nil {
+		return s.failure(err)
+	}
+	if pending.Name != "" && s.Trigger != nil {
+		s.Trigger.Trigger(pending)
+	}
+	return result
+}
+
+func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 	switch name {
 	case "GetHealth":
-		_, err := s.Store.ListClusters(ctx)
+		_, err := s.Store.ListClusters(ctx, "")
 		if err != nil {
 			return s.failure(err)
 		}
@@ -373,6 +476,8 @@ func (s *Server) handle(ctx context.Context, name string, in input) response {
 		return s.identity(ctx, name, in)
 	case "ListBackupStorages", "CreateBackupStorage", "GetBackupStorage", "ReplaceBackupStorage", "DeleteBackupStorage", "VerifyBackupStorage":
 		return s.storage(ctx, name, in)
+	case "CreateNamespace", "UpdateNamespace", "RotateNamespaceToken", "ValidateNamespace", "DeleteNamespace":
+		return s.namespaceMutation(ctx, name, in)
 	case "ListOrphanedVolumes":
 		return s.orphanedVolumes(ctx)
 	case "ListEvents", "StreamEvents", "ListOperations", "GetOperation", "GetPrometheusMetrics", "GetClusterMetrics":

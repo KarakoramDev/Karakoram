@@ -18,7 +18,12 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	if err := domain.ValidateClusterName(c.Name); err != nil {
 		return err
 	}
+	c.Namespace = domain.NormalizedNamespace(c.Namespace)
+	if err := domain.ValidateNamespaceName(c.Namespace); err != nil {
+		return err
+	}
 	c.Generation = 1
+	c.RequestedBy = Actor(ctx)
 	c.CreatedAt = time.Now().UTC()
 	c.UpdatedAt = c.CreatedAt
 	if c.Status.Phase == "" {
@@ -40,8 +45,18 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	if !json.Valid(internal) {
 		return errors.New("invalid provider internal JSON")
 	}
-	_, err = s.writer.ExecContext(ctx, "INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?)", c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano())
-	return typed(err)
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = namespaceForInsert(ctx, tx, c.Namespace); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy); err != nil {
+		return typed(err)
+	}
+	return tx.Commit()
 }
 
 type scanner interface{ Scan(...any) error }
@@ -50,7 +65,7 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	var c domain.Cluster
 	var spec, status, internal, opts []byte
 	var created, updated int64
-	err := row.Scan(&c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated)
+	err := row.Scan(&c.Namespace, &c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated, &c.RequestedBy)
 	if err != nil {
 		return nil, typed(err)
 	}
@@ -68,16 +83,25 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	return &c, nil
 }
 
-const clusterColumns = "name,spec,status,internal,generation,deleting,delete_options,created,updated"
+const clusterColumns = "namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by"
 
 // GetCluster loads cluster.
-func (s *Store) GetCluster(ctx context.Context, name string) (*domain.Cluster, error) {
-	return scanCluster(s.reader.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE name=?", name))
+func (s *Store) GetCluster(ctx context.Context, ref domain.ClusterRef) (*domain.Cluster, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	return scanCluster(s.reader.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name))
 }
 
 // ListClusters returns ordered clusters.
-func (s *Store) ListClusters(ctx context.Context) ([]domain.Cluster, error) {
-	rows, err := s.reader.QueryContext(ctx, "SELECT "+clusterColumns+" FROM clusters ORDER BY name")
+func (s *Store) ListClusters(ctx context.Context, namespace string) ([]domain.Cluster, error) {
+	query := "SELECT " + clusterColumns + " FROM clusters"
+	var args []any
+	if namespace != "" {
+		query += " WHERE namespace=?"
+		args = append(args, namespace)
+	}
+	rows, err := s.reader.QueryContext(ctx, query+" ORDER BY namespace,name", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +118,15 @@ func (s *Store) ListClusters(ctx context.Context) ([]domain.Cluster, error) {
 }
 
 // UpdateClusterSpec persists changes to cluster spec.
-func (s *Store) UpdateClusterSpec(ctx context.Context, name string, spec domain.ClusterSpec) error {
+func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, spec domain.ClusterSpec) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	data, err := json.Marshal(spec)
 	if err != nil {
 		return err
 	}
-	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,spec=?,updated=? WHERE name=?", data, data, time.Now().UTC().UnixNano(), name)
+	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	return affected(result, err)
 }
 func affected(result sql.Result, err error) error {
@@ -119,6 +146,9 @@ func (s *Store) UpdateClusterState(ctx context.Context, c *domain.Cluster) error
 }
 
 func updateClusterState(ctx context.Context, db executor, c *domain.Cluster) error {
+	if err := c.Ref().Validate(); err != nil {
+		return err
+	}
 	status, err := json.Marshal(c.Status)
 	if err != nil {
 		return err
@@ -130,23 +160,26 @@ func updateClusterState(ctx context.Context, db executor, c *domain.Cluster) err
 	if !json.Valid(internal) {
 		return errors.New("invalid provider internal JSON")
 	}
-	r, err := db.ExecContext(ctx, "UPDATE clusters SET status=?,internal=?,updated=? WHERE name=?", status, []byte(internal), time.Now().UTC().UnixNano(), c.Name)
+	r, err := db.ExecContext(ctx, "UPDATE clusters SET status=?,internal=?,updated=? WHERE namespace=? AND name=?", status, []byte(internal), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(c.Namespace), c.Name)
 	return affected(r, err)
 }
 
 // MarkClusterDeleting sets deletion intent and retires work before cleanup starts.
-func (s *Store) MarkClusterDeleting(ctx context.Context, name string, opts domain.DeleteOptions) error {
+func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, opts domain.DeleteOptions) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	data, _ := json.Marshal(opts)
-	r, err := tx.ExecContext(ctx, "UPDATE clusters SET deleting=1,delete_options=?,updated=? WHERE name=?", data, time.Now().UTC().UnixNano(), name)
+	r, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN deleting=0 OR delete_options<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN deleting=0 OR delete_options<>? THEN ? ELSE requested_by END,deleting=1,delete_options=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(r, err); err != nil {
 		return err
 	}
-	if err = retireOperations(ctx, tx, name, "Cluster deletion requested"); err != nil {
+	if err = retireOperations(ctx, tx, ref.Key(), "Cluster deletion requested"); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -154,23 +187,29 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, name string, opts domai
 
 // SuspendCluster retains state and suspends cluster.
 func (s *Store) SuspendCluster(ctx context.Context, c *domain.Cluster) error {
+	if err := c.Ref().Validate(); err != nil {
+		return err
+	}
 	c.Status.Phase = domain.PhaseSuspended
 	status, err := json.Marshal(c.Status)
 	if err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "UPDATE clusters SET deleting=0,status=?,internal=?,updated=? WHERE name=?", status, []byte(c.Internal), time.Now().UTC().UnixNano(), c.Name)
+	r, err := s.writer.ExecContext(ctx, "UPDATE clusters SET deleting=0,status=?,internal=?,updated=? WHERE namespace=? AND name=?", status, []byte(c.Internal), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(c.Namespace), c.Name)
 	return affected(r, err)
 }
 
 // ResumeCluster increments generation and resumes cluster.
-func (s *Store) ResumeCluster(ctx context.Context, name string) error {
+func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	c, err := scanCluster(tx.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE name=?", name))
+	c, err := scanCluster(tx.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name))
 	if err != nil {
 		return err
 	}
@@ -179,7 +218,7 @@ func (s *Store) ResumeCluster(ctx context.Context, name string) error {
 	}
 	c.Status.Phase = domain.PhaseCreating
 	data, _ := json.Marshal(c.Status)
-	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,deleting=0,updated=? WHERE name=?", data, time.Now().UTC().UnixNano(), name)
+	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,requested_by=?,deleting=0,updated=? WHERE namespace=? AND name=?", data, Actor(ctx), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err != nil {
 		return err
 	}
@@ -188,20 +227,23 @@ func (s *Store) ResumeCluster(ctx context.Context, name string) error {
 
 // DeleteCluster removes cluster and atomically fails unfinished operations so
 // recreating its name cannot resume work belonging to the removed cluster.
-func (s *Store) DeleteCluster(ctx context.Context, name string) error {
+func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if err = retireOperations(ctx, tx, name, "Cluster deleted"); err != nil {
+	if err = retireOperations(ctx, tx, ref.Key(), "Cluster deleted"); err != nil {
 		return err
 	}
-	r, err := tx.ExecContext(ctx, "DELETE FROM clusters WHERE name=?", name)
+	r, err := tx.ExecContext(ctx, "DELETE FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(r, err); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "DELETE FROM records WHERE scope=? AND kind IN ('secret','agent-token','volume')", name)
+	_, err = tx.ExecContext(ctx, "DELETE FROM records WHERE scope=? AND kind IN ('secret','agent-token','volume')", ref.Key())
 	if err != nil {
 		return err
 	}

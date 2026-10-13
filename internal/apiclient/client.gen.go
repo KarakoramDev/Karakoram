@@ -62,6 +62,7 @@ const (
 	Asterisk CanRequestAction = "*"
 	Create   CanRequestAction = "create"
 	Delete   CanRequestAction = "delete"
+	Export   CanRequestAction = "export"
 	Read     CanRequestAction = "read"
 	Update   CanRequestAction = "update"
 )
@@ -121,6 +122,14 @@ const (
 	MemberRoleUnknown         MemberRole = "unknown"
 )
 
+// Defines values for NamespacePhase.
+const (
+	NamespacePhaseDeleting NamespacePhase = "Deleting"
+	NamespacePhaseError    NamespacePhase = "Error"
+	NamespacePhasePending  NamespacePhase = "Pending"
+	NamespacePhaseReady    NamespacePhase = "Ready"
+)
+
 // Defines values for OperationPhase.
 const (
 	OperationPhaseFailed    OperationPhase = "Failed"
@@ -171,6 +180,15 @@ const (
 	Unavailable ProviderVersionStatus = "unavailable"
 )
 
+// Defines values for RelayStatusPhase.
+const (
+	RelayStatusPhaseDeploying   RelayStatusPhase = "Deploying"
+	RelayStatusPhaseError       RelayStatusPhase = "Error"
+	RelayStatusPhaseNotRequired RelayStatusPhase = "NotRequired"
+	RelayStatusPhasePending     RelayStatusPhase = "Pending"
+	RelayStatusPhaseReady       RelayStatusPhase = "Ready"
+)
+
 // Defines values for ResourcesCpuMode.
 const (
 	DEDICATED ResourcesCpuMode = "DEDICATED"
@@ -205,6 +223,12 @@ const (
 	Disabled   TLSMode = "disabled"
 	PreferTLS  TLSMode = "preferTLS"
 	RequireTLS TLSMode = "requireTLS"
+)
+
+// Defines values for TokenStatusSource.
+const (
+	Env    TokenStatusSource = "env"
+	Stored TokenStatusSource = "stored"
 )
 
 // Defines values for TopologyType.
@@ -272,19 +296,20 @@ type AgentStatus struct {
 
 // Backup defines model for Backup.
 type Backup struct {
-	Cluster       string        `json:"cluster"`
-	CompletedAt   *time.Time    `json:"completedAt,omitempty"`
-	Error         *string       `json:"error,omitempty"`
-	LastWriteTime *time.Time    `json:"lastWriteTime,omitempty"`
-	Name          string        `json:"name"`
-	PbmName       *string       `json:"pbmName,omitempty"`
-	Phase         BackupPhase   `json:"phase"`
-	Schedule      *string       `json:"schedule,omitempty"`
-	Size          *int64        `json:"size,omitempty"`
-	StartedAt     *time.Time    `json:"startedAt,omitempty"`
-	Storage       string        `json:"storage"`
-	Trigger       BackupTrigger `json:"trigger"`
-	Type          BackupType    `json:"type"`
+	Cluster       string         `json:"cluster"`
+	CompletedAt   *time.Time     `json:"completedAt,omitempty"`
+	Error         *string        `json:"error,omitempty"`
+	LastWriteTime *time.Time     `json:"lastWriteTime,omitempty"`
+	Name          string         `json:"name"`
+	Namespace     *NamespaceName `json:"namespace,omitempty"`
+	PbmName       *string        `json:"pbmName,omitempty"`
+	Phase         BackupPhase    `json:"phase"`
+	Schedule      *string        `json:"schedule,omitempty"`
+	Size          *int64         `json:"size,omitempty"`
+	StartedAt     *time.Time     `json:"startedAt,omitempty"`
+	Storage       string         `json:"storage"`
+	Trigger       BackupTrigger  `json:"trigger"`
+	Type          BackupType     `json:"type"`
 }
 
 // BackupPhase defines model for Backup.Phase.
@@ -334,6 +359,7 @@ type BackupStorage struct {
 	EndpointURL           string            `json:"endpointURL"`
 	ForcePathStyle        bool              `json:"forcePathStyle"`
 	Name                  string            `json:"name"`
+	Namespace             *NamespaceName    `json:"namespace,omitempty"`
 	Prefix                *string           `json:"prefix,omitempty"`
 	Region                string            `json:"region"`
 	Type                  BackupStorageType `json:"type"`
@@ -385,12 +411,13 @@ type ChangePasswordRequest struct {
 
 // Cluster defines model for Cluster.
 type Cluster struct {
-	CreatedAt  time.Time     `json:"createdAt"`
-	Generation int64         `json:"generation"`
-	Name       string        `json:"name"`
-	Spec       ClusterSpec   `json:"spec"`
-	Status     ClusterStatus `json:"status"`
-	UpdatedAt  time.Time     `json:"updatedAt"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	Generation int64          `json:"generation"`
+	Name       string         `json:"name"`
+	Namespace  *NamespaceName `json:"namespace,omitempty"`
+	Spec       ClusterSpec    `json:"spec"`
+	Status     ClusterStatus  `json:"status"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
 // ClusterBackupStatus defines model for ClusterBackupStatus.
@@ -542,15 +569,17 @@ type CreateBackupStorageRequest struct {
 	Bucket string `json:"bucket"`
 
 	// Credentials Write-only; never returned by backup-storage reads.
-	Credentials    S3Credentials                  `json:"credentials"`
-	Description    *string                        `json:"description,omitempty"`
-	EndpointURL    string                         `json:"endpointURL"`
-	ForcePathStyle *bool                          `json:"forcePathStyle,omitempty"`
-	Name           string                         `json:"name"`
-	Prefix         *string                        `json:"prefix,omitempty"`
-	Region         string                         `json:"region"`
-	Type           CreateBackupStorageRequestType `json:"type"`
-	VerifyTLS      *bool                          `json:"verifyTLS,omitempty"`
+	Credentials    S3Credentials `json:"credentials"`
+	Description    *string       `json:"description,omitempty"`
+	EndpointURL    string        `json:"endpointURL"`
+	ForcePathStyle *bool         `json:"forcePathStyle,omitempty"`
+
+	// Name New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable.
+	Name      string                         `json:"name"`
+	Prefix    *string                        `json:"prefix,omitempty"`
+	Region    string                         `json:"region"`
+	Type      CreateBackupStorageRequestType `json:"type"`
+	VerifyTLS *bool                          `json:"verifyTLS,omitempty"`
 }
 
 // CreateBackupStorageRequestType defines model for CreateBackupStorageRequest.Type.
@@ -576,6 +605,9 @@ type CreateRestoreRequest struct {
 
 	// Source Exactly one of backup and pitrTime is required.
 	Source RestoreSource `json:"source"`
+
+	// SourceNamespace Source namespace; defaults to the target cluster namespace.
+	SourceNamespace *NamespaceName `json:"sourceNamespace,omitempty"`
 }
 
 // CreatedAPIToken defines model for CreatedAPIToken.
@@ -609,9 +641,12 @@ type CurrentUser struct {
 
 // DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 type DataSource struct {
-	Backup   *string    `json:"backup,omitempty"`
-	Cluster  string     `json:"cluster"`
-	PitrTime *time.Time `json:"pitrTime,omitempty"`
+	Backup  *string `json:"backup,omitempty"`
+	Cluster string  `json:"cluster"`
+
+	// Namespace Source namespace; defaults to the target cluster namespace.
+	Namespace *NamespaceName `json:"namespace,omitempty"`
+	PitrTime  *time.Time     `json:"pitrTime,omitempty"`
 }
 
 // DatabaseRole defines model for DatabaseRole.
@@ -656,13 +691,23 @@ type Error struct {
 
 // Event defines model for Event.
 type Event struct {
-	Actor       *string   `json:"actor,omitempty"`
-	Cluster     *string   `json:"cluster,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	Id          int64     `json:"id"`
-	Message     string    `json:"message"`
-	OperationId *string   `json:"operationId,omitempty"`
-	Reason      *string   `json:"reason,omitempty"`
+	// Actor Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor.
+	Actor     *string   `json:"actor,omitempty"`
+	Cluster   *string   `json:"cluster,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	Id        int64     `json:"id"`
+	Message   string    `json:"message"`
+
+	// Namespace Namespace of cluster and namespace-level entries; absent for global audit entries.
+	Namespace   *NamespaceName `json:"namespace,omitempty"`
+	OperationId *string        `json:"operationId,omitempty"`
+	Reason      *string        `json:"reason,omitempty"`
+
+	// Resource Resource category for filtering, such as clusters, accounts, auth, rbac or backup-storages.
+	Resource *string `json:"resource,omitempty"`
+
+	// Target Non-secret resource identifier, such as a cluster name, account name or token ID.
+	Target *string `json:"target,omitempty"`
 
 	// Type Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim.
 	Type string `json:"type"`
@@ -778,6 +823,62 @@ type MonitoringSpec struct {
 	Enabled bool `json:"enabled"`
 }
 
+// Namespace defines model for Namespace.
+type Namespace struct {
+	ClusterCount *int      `json:"clusterCount,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
+	Default      bool      `json:"default"`
+	Description  *string   `json:"description,omitempty"`
+
+	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens.
+	Name        NamespaceName  `json:"name"`
+	Phase       NamespacePhase `json:"phase"`
+	ProjectId   string         `json:"projectId"`
+	ProjectName string         `json:"projectName"`
+
+	// Relay Relay health; the default namespace uses direct networking.
+	Relay RelayStatus `json:"relay"`
+
+	// Token Secret-safe token health; never contains a token or fingerprint.
+	Token     TokenStatus `json:"token"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+}
+
+// NamespacePhase defines model for Namespace.Phase.
+type NamespacePhase string
+
+// NamespaceCreate defines model for NamespaceCreate.
+type NamespaceCreate struct {
+	Description *string `json:"description,omitempty"`
+
+	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens.
+	Name      NamespaceName `json:"name"`
+	ProjectId string        `json:"projectId"`
+	Token     *string       `json:"token,omitempty"`
+}
+
+// NamespaceList defines model for NamespaceList.
+type NamespaceList struct {
+	Items []Namespace `json:"items"`
+
+	// NextCursor Opaque continuation cursor; absent at the end.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// NamespaceName Project namespace name, 2–32 lowercase letters, digits or hyphens.
+type NamespaceName = string
+
+// NamespaceTokenRotate defines model for NamespaceTokenRotate.
+type NamespaceTokenRotate struct {
+	Token *string `json:"token,omitempty"`
+}
+
+// NamespaceUpdate defines model for NamespaceUpdate.
+type NamespaceUpdate struct {
+	// Description New description; an empty string clears the description.
+	Description string `json:"description"`
+}
+
 // OIDCConfig Client secret is write-only; omission on update retains the stored secret.
 type OIDCConfig struct {
 	ClientId     *string   `json:"clientId,omitempty"`
@@ -803,12 +904,15 @@ type ObservedResources struct {
 
 // Operation defines model for Operation.
 type Operation struct {
+	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
+	Actor       *string        `json:"actor,omitempty"`
 	Cluster     string         `json:"cluster"`
 	CompletedAt *time.Time     `json:"completedAt,omitempty"`
 	CreatedAt   time.Time      `json:"createdAt"`
 	Error       *Error         `json:"error,omitempty"`
 	Id          string         `json:"id"`
 	Message     *string        `json:"message,omitempty"`
+	Namespace   *NamespaceName `json:"namespace,omitempty"`
 	Phase       OperationPhase `json:"phase"`
 	Progress    *float32       `json:"progress,omitempty"`
 	StartedAt   *time.Time     `json:"startedAt,omitempty"`
@@ -831,18 +935,19 @@ type OperationList struct {
 
 // OrphanedVolume defines model for OrphanedVolume.
 type OrphanedVolume struct {
-	Attempts      int       `json:"attempts"`
-	Cluster       string    `json:"cluster"`
-	FirstError    string    `json:"firstError"`
-	FirstFailedAt time.Time `json:"firstFailedAt"`
-	Hostname      string    `json:"hostname"`
-	LastAttemptAt time.Time `json:"lastAttemptAt"`
-	LastError     string    `json:"lastError"`
-	LastProcessId string    `json:"lastProcessId"`
-	Member        string    `json:"member"`
-	NextAttemptAt time.Time `json:"nextAttemptAt"`
-	OrphanedAt    time.Time `json:"orphanedAt"`
-	ServiceId     string    `json:"serviceId"`
+	Attempts      int            `json:"attempts"`
+	Cluster       string         `json:"cluster"`
+	FirstError    string         `json:"firstError"`
+	FirstFailedAt time.Time      `json:"firstFailedAt"`
+	Hostname      string         `json:"hostname"`
+	LastAttemptAt time.Time      `json:"lastAttemptAt"`
+	LastError     string         `json:"lastError"`
+	LastProcessId string         `json:"lastProcessId"`
+	Member        string         `json:"member"`
+	Namespace     *NamespaceName `json:"namespace,omitempty"`
+	NextAttemptAt time.Time      `json:"nextAttemptAt"`
+	OrphanedAt    time.Time      `json:"orphanedAt"`
+	ServiceId     string         `json:"serviceId"`
 }
 
 // OrphanedVolumeList defines model for OrphanedVolumeList.
@@ -980,6 +1085,24 @@ type RaiseFCVRequest struct {
 	Version string `json:"version"`
 }
 
+// RelayStatus Relay health; the default namespace uses direct networking.
+type RelayStatus struct {
+	CertNotAfter   *time.Time       `json:"certNotAfter,omitempty"`
+	Connected      bool             `json:"connected"`
+	ConnectedSince *time.Time       `json:"connectedSince,omitempty"`
+	DesiredVersion *string          `json:"desiredVersion,omitempty"`
+	Hostname       *string          `json:"hostname,omitempty"`
+	LastError      *string          `json:"lastError,omitempty"`
+	LastSeenAt     *time.Time       `json:"lastSeenAt,omitempty"`
+	Phase          RelayStatusPhase `json:"phase"`
+	Reconnects     int64            `json:"reconnects"`
+	ServiceId      *string          `json:"serviceId,omitempty"`
+	Version        *string          `json:"version,omitempty"`
+}
+
+// RelayStatusPhase defines model for RelayStatus.Phase.
+type RelayStatusPhase string
+
 // ReplaceClusterRequest Replaces the full desired spec; server-owned name, generation, status and timestamps cannot be replaced.
 type ReplaceClusterRequest struct {
 	Spec ClusterSpec `json:"spec"`
@@ -1016,11 +1139,12 @@ type ResourcesCpuMode string
 
 // Restore defines model for Restore.
 type Restore struct {
-	Cluster     string       `json:"cluster"`
-	CompletedAt *time.Time   `json:"completedAt,omitempty"`
-	Error       *string      `json:"error,omitempty"`
-	Name        string       `json:"name"`
-	Phase       RestorePhase `json:"phase"`
+	Cluster     string         `json:"cluster"`
+	CompletedAt *time.Time     `json:"completedAt,omitempty"`
+	Error       *string        `json:"error,omitempty"`
+	Name        string         `json:"name"`
+	Namespace   *NamespaceName `json:"namespace,omitempty"`
+	Phase       RestorePhase   `json:"phase"`
 
 	// Source Exactly one of backup and pitrTime is required.
 	Source    RestoreSource `json:"source"`
@@ -1114,6 +1238,18 @@ type TLSCa string
 // TLSMode defines model for TLS.Mode.
 type TLSMode string
 
+// TokenStatus Secret-safe token health; never contains a token or fingerprint.
+type TokenStatus struct {
+	LastError       *string           `json:"lastError,omitempty"`
+	LastValidatedAt *time.Time        `json:"lastValidatedAt,omitempty"`
+	RotatedAt       *time.Time        `json:"rotatedAt,omitempty"`
+	Source          TokenStatusSource `json:"source"`
+	Valid           bool              `json:"valid"`
+}
+
+// TokenStatusSource defines model for TokenStatus.Source.
+type TokenStatusSource string
+
 // Topology defines model for Topology.
 type Topology struct {
 	Shards *int         `json:"shards,omitempty"`
@@ -1196,6 +1332,12 @@ type Cursor = string
 // Limit defines model for Limit.
 type Limit = int
 
+// NamespacePath Project namespace name, 2–32 lowercase letters, digits or hyphens.
+type NamespacePath = NamespaceName
+
+// NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens.
+type NamespaceQuery = NamespaceName
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
 
@@ -1213,6 +1355,9 @@ type NotFound = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
+
+// UnprocessableEntity defines model for UnprocessableEntity.
+type UnprocessableEntity = Error
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -1317,28 +1462,49 @@ type ListBackupStoragesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateBackupStorageParams defines parameters for CreateBackupStorage.
 type CreateBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteBackupStorageParams defines parameters for DeleteBackupStorage.
 type DeleteBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetBackupStorageParams defines parameters for GetBackupStorage.
+type GetBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceBackupStorageParams defines parameters for ReplaceBackupStorage.
 type ReplaceBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // VerifyBackupStorageParams defines parameters for VerifyBackupStorage.
 type VerifyBackupStorageParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1350,10 +1516,16 @@ type ListClustersParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateClusterParams defines parameters for CreateCluster.
 type CreateClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1363,18 +1535,33 @@ type DeleteClusterParams struct {
 	KeepVolumes *bool `form:"keepVolumes,omitempty" json:"keepVolumes,omitempty"`
 	KeepBackups *bool `form:"keepBackups,omitempty" json:"keepBackups,omitempty"`
 
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetClusterParams defines parameters for GetCluster.
+type GetClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // PatchClusterParams defines parameters for PatchCluster.
 type PatchClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
 type ReplaceClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1386,24 +1573,54 @@ type ListBackupsParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateBackupParams defines parameters for CreateBackup.
 type CreateBackupParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteBackupParams defines parameters for DeleteBackup.
 type DeleteBackupParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetBackupParams defines parameters for GetBackup.
+type GetBackupParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetClusterBalancerParams defines parameters for GetClusterBalancer.
+type GetClusterBalancerParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceClusterBalancerParams defines parameters for ReplaceClusterBalancer.
 type ReplaceClusterBalancerParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetClusterConnectionParams defines parameters for GetClusterConnection.
+type GetClusterConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListDatabaseRolesParams defines parameters for ListDatabaseRoles.
@@ -1413,22 +1630,40 @@ type ListDatabaseRolesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateDatabaseRoleParams defines parameters for CreateDatabaseRole.
 type CreateDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteDatabaseRoleParams defines parameters for DeleteDatabaseRole.
 type DeleteDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetDatabaseRoleParams defines parameters for GetDatabaseRole.
+type GetDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceDatabaseRoleParams defines parameters for ReplaceDatabaseRole.
 type ReplaceDatabaseRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1440,24 +1675,54 @@ type ListDatabaseUsersParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateDatabaseUserParams defines parameters for CreateDatabaseUser.
 type CreateDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // DeleteDatabaseUserParams defines parameters for DeleteDatabaseUser.
 type DeleteDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetDatabaseUserParams defines parameters for GetDatabaseUser.
+type GetDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ReplaceDatabaseUserParams defines parameters for ReplaceDatabaseUser.
 type ReplaceDatabaseUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListClusterMembersParams defines parameters for ListClusterMembers.
+type ListClusterMembersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetClusterMemberParams defines parameters for GetClusterMember.
+type GetClusterMemberParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
@@ -1466,6 +1731,9 @@ type GetMemberLogsParams struct {
 	Lines   *int                        `form:"lines,omitempty" json:"lines,omitempty"`
 	Cursor  *string                     `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Since   *time.Time                  `form:"since,omitempty" json:"since,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetMemberLogsParamsProcess defines parameters for GetMemberLogs.
@@ -1473,6 +1741,9 @@ type GetMemberLogsParamsProcess string
 
 // ReplaceClusterMemberParams defines parameters for ReplaceClusterMember.
 type ReplaceClusterMemberParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1484,6 +1755,9 @@ type GetClusterMetricsParams struct {
 
 	// Step Aggregation interval.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
@@ -1494,16 +1768,37 @@ type ListClusterOperationsParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Phase  *string `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetPITRWindowParams defines parameters for GetPITRWindow.
+type GetPITRWindowParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GetClusterPlacementParams defines parameters for GetClusterPlacement.
+type GetClusterPlacementParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1515,28 +1810,61 @@ type ListRestoresParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateRestoreParams defines parameters for CreateRestore.
 type CreateRestoreParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetRestoreParams defines parameters for GetRestore.
+type GetRestoreParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // ResumeClusterParams defines parameters for ResumeCluster.
 type ResumeClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// GetClusterStatusParams defines parameters for GetClusterStatus.
+type GetClusterStatusParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListSystemUsersParams defines parameters for ListSystemUsers.
+type ListSystemUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // RotateSystemUserParams defines parameters for RotateSystemUser.
 type RotateSystemUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -1551,6 +1879,15 @@ type ListEventsParams struct {
 	Cluster     *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Type        *string `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
+
+	// Actor Exact actor identity, including token name and ID when applicable.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
+	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // StreamEventsParams defines parameters for StreamEvents.
@@ -1559,11 +1896,65 @@ type StreamEventsParams struct {
 	Type        *string `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
 
+	// Actor Exact actor identity, including token name and ID when applicable.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
+	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+
 	// Cursor Replay events after this durable event cursor.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
 	// LastEventID SSE reconnection cursor; used when cursor is absent.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// GetPrometheusMetricsParams defines parameters for GetPrometheusMetrics.
+type GetPrometheusMetricsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListNamespacesParams defines parameters for ListNamespaces.
+type ListNamespacesParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateNamespaceParams defines parameters for CreateNamespace.
+type CreateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteNamespaceParams defines parameters for DeleteNamespace.
+type DeleteNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// UpdateNamespaceParams defines parameters for UpdateNamespace.
+type UpdateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// RotateNamespaceTokenParams defines parameters for RotateNamespaceToken.
+type RotateNamespaceTokenParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ValidateNamespaceParams defines parameters for ValidateNamespace.
+type ValidateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // ListOperationsParams defines parameters for ListOperations.
@@ -1575,6 +1966,15 @@ type ListOperationsParams struct {
 	Cursor  *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Phase   *string `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListOrphanedVolumesParams defines parameters for ListOrphanedVolumes.
+type ListOrphanedVolumesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CheckPermissionParams defines parameters for CheckPermission.
@@ -1654,6 +2054,15 @@ type RaiseClusterFCVJSONRequestBody = RaiseFCVRequest
 
 // CreateRestoreJSONRequestBody defines body for CreateRestore for application/json ContentType.
 type CreateRestoreJSONRequestBody = CreateRestoreRequest
+
+// CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
+type CreateNamespaceJSONRequestBody = NamespaceCreate
+
+// UpdateNamespaceJSONRequestBody defines body for UpdateNamespace for application/json ContentType.
+type UpdateNamespaceJSONRequestBody = NamespaceUpdate
+
+// RotateNamespaceTokenJSONRequestBody defines body for RotateNamespaceToken for application/json ContentType.
+type RotateNamespaceTokenJSONRequestBody = NamespaceTokenRotate
 
 // CheckPermissionJSONRequestBody defines body for CheckPermission for application/json ContentType.
 type CheckPermissionJSONRequestBody = CanRequest
@@ -1817,7 +2226,7 @@ type ClientInterface interface {
 	DeleteBackupStorage(ctx context.Context, storage string, params *DeleteBackupStorageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetBackupStorage request
-	GetBackupStorage(ctx context.Context, storage string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetBackupStorage(ctx context.Context, storage string, params *GetBackupStorageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceBackupStorageWithBody request with any body
 	ReplaceBackupStorageWithBody(ctx context.Context, storage string, params *ReplaceBackupStorageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1839,7 +2248,7 @@ type ClientInterface interface {
 	DeleteCluster(ctx context.Context, cluster ClusterPath, params *DeleteClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCluster request
-	GetCluster(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetCluster(ctx context.Context, cluster ClusterPath, params *GetClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PatchClusterWithBody request with any body
 	PatchClusterWithBody(ctx context.Context, cluster ClusterPath, params *PatchClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1863,10 +2272,10 @@ type ClientInterface interface {
 	DeleteBackup(ctx context.Context, cluster ClusterPath, backup string, params *DeleteBackupParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetBackup request
-	GetBackup(ctx context.Context, cluster ClusterPath, backup string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetBackup(ctx context.Context, cluster ClusterPath, backup string, params *GetBackupParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterBalancer request
-	GetClusterBalancer(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetClusterBalancer(ctx context.Context, cluster ClusterPath, params *GetClusterBalancerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceClusterBalancerWithBody request with any body
 	ReplaceClusterBalancerWithBody(ctx context.Context, cluster ClusterPath, params *ReplaceClusterBalancerParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1874,7 +2283,7 @@ type ClientInterface interface {
 	ReplaceClusterBalancer(ctx context.Context, cluster ClusterPath, params *ReplaceClusterBalancerParams, body ReplaceClusterBalancerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterConnection request
-	GetClusterConnection(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetClusterConnection(ctx context.Context, cluster ClusterPath, params *GetClusterConnectionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListDatabaseRoles request
 	ListDatabaseRoles(ctx context.Context, cluster ClusterPath, params *ListDatabaseRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1888,7 +2297,7 @@ type ClientInterface interface {
 	DeleteDatabaseRole(ctx context.Context, cluster ClusterPath, database string, role string, params *DeleteDatabaseRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetDatabaseRole request
-	GetDatabaseRole(ctx context.Context, cluster ClusterPath, database string, role string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetDatabaseRole(ctx context.Context, cluster ClusterPath, database string, role string, params *GetDatabaseRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceDatabaseRoleWithBody request with any body
 	ReplaceDatabaseRoleWithBody(ctx context.Context, cluster ClusterPath, database string, role string, params *ReplaceDatabaseRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1907,7 +2316,7 @@ type ClientInterface interface {
 	DeleteDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, params *DeleteDatabaseUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetDatabaseUser request
-	GetDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, params *GetDatabaseUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceDatabaseUserWithBody request with any body
 	ReplaceDatabaseUserWithBody(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1915,10 +2324,10 @@ type ClientInterface interface {
 	ReplaceDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, body ReplaceDatabaseUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListClusterMembers request
-	ListClusterMembers(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListClusterMembers(ctx context.Context, cluster ClusterPath, params *ListClusterMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterMember request
-	GetClusterMember(ctx context.Context, cluster ClusterPath, member string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetClusterMember(ctx context.Context, cluster ClusterPath, member string, params *GetClusterMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMemberLogs request
 	GetMemberLogs(ctx context.Context, cluster ClusterPath, member string, params *GetMemberLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1933,10 +2342,10 @@ type ClientInterface interface {
 	ListClusterOperations(ctx context.Context, cluster ClusterPath, params *ListClusterOperationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPITRWindow request
-	GetPITRWindow(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetPITRWindow(ctx context.Context, cluster ClusterPath, params *GetPITRWindowParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterPlacement request
-	GetClusterPlacement(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RaiseClusterFCVWithBody request with any body
 	RaiseClusterFCVWithBody(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1955,7 +2364,7 @@ type ClientInterface interface {
 	CreateRestore(ctx context.Context, cluster ClusterPath, params *CreateRestoreParams, body CreateRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRestore request
-	GetRestore(ctx context.Context, cluster ClusterPath, restore string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetRestore(ctx context.Context, cluster ClusterPath, restore string, params *GetRestoreParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ResumeCluster request
 	ResumeCluster(ctx context.Context, cluster ClusterPath, params *ResumeClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1964,10 +2373,10 @@ type ClientInterface interface {
 	RotateClusterTLS(ctx context.Context, cluster ClusterPath, params *RotateClusterTLSParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterStatus request
-	GetClusterStatus(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetClusterStatus(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSystemUsers request
-	ListSystemUsers(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListSystemUsers(ctx context.Context, cluster ClusterPath, params *ListSystemUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RotateSystemUser request
 	RotateSystemUser(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1982,7 +2391,34 @@ type ClientInterface interface {
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPrometheusMetrics request
-	GetPrometheusMetrics(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetPrometheusMetrics(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListNamespaces request
+	ListNamespaces(ctx context.Context, params *ListNamespacesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateNamespaceWithBody request with any body
+	CreateNamespaceWithBody(ctx context.Context, params *CreateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateNamespace(ctx context.Context, params *CreateNamespaceParams, body CreateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteNamespace request
+	DeleteNamespace(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetNamespace request
+	GetNamespace(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateNamespaceWithBody request with any body
+	UpdateNamespaceWithBody(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateNamespace(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, body UpdateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateNamespaceTokenWithBody request with any body
+	RotateNamespaceTokenWithBody(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RotateNamespaceToken(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, body RotateNamespaceTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ValidateNamespace request
+	ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOperations request
 	ListOperations(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1991,7 +2427,7 @@ type ClientInterface interface {
 	GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrphanedVolumes request
-	ListOrphanedVolumes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPermissions request
 	GetPermissions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2375,8 +2811,8 @@ func (c *Client) DeleteBackupStorage(ctx context.Context, storage string, params
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetBackupStorage(ctx context.Context, storage string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetBackupStorageRequest(c.Server, storage)
+func (c *Client) GetBackupStorage(ctx context.Context, storage string, params *GetBackupStorageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBackupStorageRequest(c.Server, storage, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2471,8 +2907,8 @@ func (c *Client) DeleteCluster(ctx context.Context, cluster ClusterPath, params 
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetCluster(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterRequest(c.Server, cluster)
+func (c *Client) GetCluster(ctx context.Context, cluster ClusterPath, params *GetClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2579,8 +3015,8 @@ func (c *Client) DeleteBackup(ctx context.Context, cluster ClusterPath, backup s
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetBackup(ctx context.Context, cluster ClusterPath, backup string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetBackupRequest(c.Server, cluster, backup)
+func (c *Client) GetBackup(ctx context.Context, cluster ClusterPath, backup string, params *GetBackupParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBackupRequest(c.Server, cluster, backup, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2591,8 +3027,8 @@ func (c *Client) GetBackup(ctx context.Context, cluster ClusterPath, backup stri
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetClusterBalancer(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterBalancerRequest(c.Server, cluster)
+func (c *Client) GetClusterBalancer(ctx context.Context, cluster ClusterPath, params *GetClusterBalancerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterBalancerRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2627,8 +3063,8 @@ func (c *Client) ReplaceClusterBalancer(ctx context.Context, cluster ClusterPath
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetClusterConnection(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterConnectionRequest(c.Server, cluster)
+func (c *Client) GetClusterConnection(ctx context.Context, cluster ClusterPath, params *GetClusterConnectionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterConnectionRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2687,8 +3123,8 @@ func (c *Client) DeleteDatabaseRole(ctx context.Context, cluster ClusterPath, da
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetDatabaseRole(ctx context.Context, cluster ClusterPath, database string, role string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetDatabaseRoleRequest(c.Server, cluster, database, role)
+func (c *Client) GetDatabaseRole(ctx context.Context, cluster ClusterPath, database string, role string, params *GetDatabaseRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDatabaseRoleRequest(c.Server, cluster, database, role, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2771,8 +3207,8 @@ func (c *Client) DeleteDatabaseUser(ctx context.Context, cluster ClusterPath, da
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetDatabaseUserRequest(c.Server, cluster, database, username)
+func (c *Client) GetDatabaseUser(ctx context.Context, cluster ClusterPath, database string, username string, params *GetDatabaseUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDatabaseUserRequest(c.Server, cluster, database, username, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2807,8 +3243,8 @@ func (c *Client) ReplaceDatabaseUser(ctx context.Context, cluster ClusterPath, d
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListClusterMembers(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListClusterMembersRequest(c.Server, cluster)
+func (c *Client) ListClusterMembers(ctx context.Context, cluster ClusterPath, params *ListClusterMembersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListClusterMembersRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2819,8 +3255,8 @@ func (c *Client) ListClusterMembers(ctx context.Context, cluster ClusterPath, re
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetClusterMember(ctx context.Context, cluster ClusterPath, member string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterMemberRequest(c.Server, cluster, member)
+func (c *Client) GetClusterMember(ctx context.Context, cluster ClusterPath, member string, params *GetClusterMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterMemberRequest(c.Server, cluster, member, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2879,8 +3315,8 @@ func (c *Client) ListClusterOperations(ctx context.Context, cluster ClusterPath,
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetPITRWindow(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetPITRWindowRequest(c.Server, cluster)
+func (c *Client) GetPITRWindow(ctx context.Context, cluster ClusterPath, params *GetPITRWindowParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPITRWindowRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2891,8 +3327,8 @@ func (c *Client) GetPITRWindow(ctx context.Context, cluster ClusterPath, reqEdit
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetClusterPlacement(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterPlacementRequest(c.Server, cluster)
+func (c *Client) GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterPlacementRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2975,8 +3411,8 @@ func (c *Client) CreateRestore(ctx context.Context, cluster ClusterPath, params 
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetRestore(ctx context.Context, cluster ClusterPath, restore string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetRestoreRequest(c.Server, cluster, restore)
+func (c *Client) GetRestore(ctx context.Context, cluster ClusterPath, restore string, params *GetRestoreParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRestoreRequest(c.Server, cluster, restore, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3011,8 +3447,8 @@ func (c *Client) RotateClusterTLS(ctx context.Context, cluster ClusterPath, para
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetClusterStatus(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetClusterStatusRequest(c.Server, cluster)
+func (c *Client) GetClusterStatus(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterStatusRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3023,8 +3459,8 @@ func (c *Client) GetClusterStatus(ctx context.Context, cluster ClusterPath, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListSystemUsers(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSystemUsersRequest(c.Server, cluster)
+func (c *Client) ListSystemUsers(ctx context.Context, cluster ClusterPath, params *ListSystemUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSystemUsersRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3083,8 +3519,128 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetPrometheusMetrics(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetPrometheusMetricsRequest(c.Server)
+func (c *Client) GetPrometheusMetrics(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPrometheusMetricsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListNamespaces(ctx context.Context, params *ListNamespacesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListNamespacesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateNamespaceWithBody(ctx context.Context, params *CreateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateNamespaceRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateNamespace(ctx context.Context, params *CreateNamespaceParams, body CreateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateNamespaceRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteNamespace(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteNamespaceRequest(c.Server, namespace, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetNamespace(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNamespaceRequest(c.Server, namespace)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateNamespaceWithBody(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateNamespaceRequestWithBody(c.Server, namespace, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateNamespace(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, body UpdateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateNamespaceRequest(c.Server, namespace, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateNamespaceTokenWithBody(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateNamespaceTokenRequestWithBody(c.Server, namespace, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateNamespaceToken(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, body RotateNamespaceTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateNamespaceTokenRequest(c.Server, namespace, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewValidateNamespaceRequest(c.Server, namespace, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3119,8 +3675,8 @@ func (c *Client) GetOperation(ctx context.Context, operation string, reqEditors 
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListOrphanedVolumes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListOrphanedVolumesRequest(c.Server)
+func (c *Client) ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrphanedVolumesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4248,6 +4804,22 @@ func NewListBackupStoragesRequest(server string, params *ListBackupStoragesParam
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -4287,6 +4859,28 @@ func NewCreateBackupStorageRequestWithBody(server string, params *CreateBackupSt
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -4340,6 +4934,28 @@ func NewDeleteBackupStorageRequest(server string, storage string, params *Delete
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -4364,7 +4980,7 @@ func NewDeleteBackupStorageRequest(server string, storage string, params *Delete
 }
 
 // NewGetBackupStorageRequest generates requests for GetBackupStorage
-func NewGetBackupStorageRequest(server string, storage string) (*http.Request, error) {
+func NewGetBackupStorageRequest(server string, storage string, params *GetBackupStorageParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4387,6 +5003,28 @@ func NewGetBackupStorageRequest(server string, storage string) (*http.Request, e
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -4432,6 +5070,28 @@ func NewReplaceBackupStorageRequestWithBody(server string, storage string, param
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
@@ -4483,6 +5143,28 @@ func NewVerifyBackupStorageRequest(server string, storage string, params *Verify
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
@@ -4562,6 +5244,22 @@ func NewListClustersRequest(server string, params *ListClustersParams) (*http.Re
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -4601,6 +5299,28 @@ func NewCreateClusterRequestWithBody(server string, params *CreateClusterParams,
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -4689,6 +5409,22 @@ func NewDeleteClusterRequest(server string, cluster ClusterPath, params *DeleteC
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -4716,7 +5452,7 @@ func NewDeleteClusterRequest(server string, cluster ClusterPath, params *DeleteC
 }
 
 // NewGetClusterRequest generates requests for GetCluster
-func NewGetClusterRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewGetClusterRequest(server string, cluster ClusterPath, params *GetClusterParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4739,6 +5475,28 @@ func NewGetClusterRequest(server string, cluster ClusterPath) (*http.Request, er
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -4784,6 +5542,28 @@ func NewPatchClusterRequestWithBody(server string, cluster ClusterPath, params *
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("PATCH", queryURL.String(), body)
@@ -4846,6 +5626,28 @@ func NewReplaceClusterRequestWithBody(server string, cluster ClusterPath, params
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
@@ -4934,6 +5736,22 @@ func NewListBackupsRequest(server string, cluster ClusterPath, params *ListBacku
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -4980,6 +5798,28 @@ func NewCreateBackupRequestWithBody(server string, cluster ClusterPath, params *
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -5040,6 +5880,28 @@ func NewDeleteBackupRequest(server string, cluster ClusterPath, backup string, p
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5064,7 +5926,7 @@ func NewDeleteBackupRequest(server string, cluster ClusterPath, backup string, p
 }
 
 // NewGetBackupRequest generates requests for GetBackup
-func NewGetBackupRequest(server string, cluster ClusterPath, backup string) (*http.Request, error) {
+func NewGetBackupRequest(server string, cluster ClusterPath, backup string, params *GetBackupParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5096,6 +5958,28 @@ func NewGetBackupRequest(server string, cluster ClusterPath, backup string) (*ht
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5105,7 +5989,7 @@ func NewGetBackupRequest(server string, cluster ClusterPath, backup string) (*ht
 }
 
 // NewGetClusterBalancerRequest generates requests for GetClusterBalancer
-func NewGetClusterBalancerRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewGetClusterBalancerRequest(server string, cluster ClusterPath, params *GetClusterBalancerParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5128,6 +6012,28 @@ func NewGetClusterBalancerRequest(server string, cluster ClusterPath) (*http.Req
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -5175,6 +6081,28 @@ func NewReplaceClusterBalancerRequestWithBody(server string, cluster ClusterPath
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
 	if err != nil {
 		return nil, err
@@ -5201,7 +6129,7 @@ func NewReplaceClusterBalancerRequestWithBody(server string, cluster ClusterPath
 }
 
 // NewGetClusterConnectionRequest generates requests for GetClusterConnection
-func NewGetClusterConnectionRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewGetClusterConnectionRequest(server string, cluster ClusterPath, params *GetClusterConnectionParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5224,6 +6152,28 @@ func NewGetClusterConnectionRequest(server string, cluster ClusterPath) (*http.R
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -5295,6 +6245,22 @@ func NewListDatabaseRolesRequest(server string, cluster ClusterPath, params *Lis
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -5341,6 +6307,28 @@ func NewCreateDatabaseRoleRequestWithBody(server string, cluster ClusterPath, pa
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -5408,6 +6396,28 @@ func NewDeleteDatabaseRoleRequest(server string, cluster ClusterPath, database s
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5432,7 +6442,7 @@ func NewDeleteDatabaseRoleRequest(server string, cluster ClusterPath, database s
 }
 
 // NewGetDatabaseRoleRequest generates requests for GetDatabaseRole
-func NewGetDatabaseRoleRequest(server string, cluster ClusterPath, database string, role string) (*http.Request, error) {
+func NewGetDatabaseRoleRequest(server string, cluster ClusterPath, database string, role string, params *GetDatabaseRoleParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5469,6 +6479,28 @@ func NewGetDatabaseRoleRequest(server string, cluster ClusterPath, database stri
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -5528,6 +6560,28 @@ func NewReplaceDatabaseRoleRequestWithBody(server string, cluster ClusterPath, d
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
@@ -5616,6 +6670,22 @@ func NewListDatabaseUsersRequest(server string, cluster ClusterPath, params *Lis
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -5662,6 +6732,28 @@ func NewCreateDatabaseUserRequestWithBody(server string, cluster ClusterPath, pa
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -5729,6 +6821,28 @@ func NewDeleteDatabaseUserRequest(server string, cluster ClusterPath, database s
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5753,7 +6867,7 @@ func NewDeleteDatabaseUserRequest(server string, cluster ClusterPath, database s
 }
 
 // NewGetDatabaseUserRequest generates requests for GetDatabaseUser
-func NewGetDatabaseUserRequest(server string, cluster ClusterPath, database string, username string) (*http.Request, error) {
+func NewGetDatabaseUserRequest(server string, cluster ClusterPath, database string, username string, params *GetDatabaseUserParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5790,6 +6904,28 @@ func NewGetDatabaseUserRequest(server string, cluster ClusterPath, database stri
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -5851,6 +6987,28 @@ func NewReplaceDatabaseUserRequestWithBody(server string, cluster ClusterPath, d
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
 	if err != nil {
 		return nil, err
@@ -5877,7 +7035,7 @@ func NewReplaceDatabaseUserRequestWithBody(server string, cluster ClusterPath, d
 }
 
 // NewListClusterMembersRequest generates requests for ListClusterMembers
-func NewListClusterMembersRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewListClusterMembersRequest(server string, cluster ClusterPath, params *ListClusterMembersParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5902,6 +7060,28 @@ func NewListClusterMembersRequest(server string, cluster ClusterPath) (*http.Req
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5911,7 +7091,7 @@ func NewListClusterMembersRequest(server string, cluster ClusterPath) (*http.Req
 }
 
 // NewGetClusterMemberRequest generates requests for GetClusterMember
-func NewGetClusterMemberRequest(server string, cluster ClusterPath, member string) (*http.Request, error) {
+func NewGetClusterMemberRequest(server string, cluster ClusterPath, member string, params *GetClusterMemberParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5941,6 +7121,28 @@ func NewGetClusterMemberRequest(server string, cluster ClusterPath, member strin
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -6051,6 +7253,22 @@ func NewGetMemberLogsRequest(server string, cluster ClusterPath, member string, 
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -6093,6 +7311,28 @@ func NewReplaceClusterMemberRequest(server string, cluster ClusterPath, member s
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
@@ -6166,6 +7406,22 @@ func NewGetClusterMetricsRequest(server string, cluster ClusterPath, params *Get
 		if params.Step != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "step", runtime.ParamLocationQuery, *params.Step); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -6267,6 +7523,22 @@ func NewListClusterOperationsRequest(server string, cluster ClusterPath, params 
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -6279,7 +7551,7 @@ func NewListClusterOperationsRequest(server string, cluster ClusterPath, params 
 }
 
 // NewGetPITRWindowRequest generates requests for GetPITRWindow
-func NewGetPITRWindowRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewGetPITRWindowRequest(server string, cluster ClusterPath, params *GetPITRWindowParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6304,6 +7576,28 @@ func NewGetPITRWindowRequest(server string, cluster ClusterPath) (*http.Request,
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -6313,7 +7607,7 @@ func NewGetPITRWindowRequest(server string, cluster ClusterPath) (*http.Request,
 }
 
 // NewGetClusterPlacementRequest generates requests for GetClusterPlacement
-func NewGetClusterPlacementRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewGetClusterPlacementRequest(server string, cluster ClusterPath, params *GetClusterPlacementParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6336,6 +7630,28 @@ func NewGetClusterPlacementRequest(server string, cluster ClusterPath) (*http.Re
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -6381,6 +7697,28 @@ func NewRaiseClusterFCVRequestWithBody(server string, cluster ClusterPath, param
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -6432,6 +7770,28 @@ func NewRestartClusterRequest(server string, cluster ClusterPath, params *Restar
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
@@ -6518,6 +7878,22 @@ func NewListRestoresRequest(server string, cluster ClusterPath, params *ListRest
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -6566,6 +7942,28 @@ func NewCreateRestoreRequestWithBody(server string, cluster ClusterPath, params 
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
@@ -6592,7 +7990,7 @@ func NewCreateRestoreRequestWithBody(server string, cluster ClusterPath, params 
 }
 
 // NewGetRestoreRequest generates requests for GetRestore
-func NewGetRestoreRequest(server string, cluster ClusterPath, restore string) (*http.Request, error) {
+func NewGetRestoreRequest(server string, cluster ClusterPath, restore string, params *GetRestoreParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6622,6 +8020,28 @@ func NewGetRestoreRequest(server string, cluster ClusterPath, restore string) (*
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -6656,6 +8076,28 @@ func NewResumeClusterRequest(server string, cluster ClusterPath, params *ResumeC
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
@@ -6707,6 +8149,28 @@ func NewRotateClusterTLSRequest(server string, cluster ClusterPath, params *Rota
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -6731,7 +8195,7 @@ func NewRotateClusterTLSRequest(server string, cluster ClusterPath, params *Rota
 }
 
 // NewGetClusterStatusRequest generates requests for GetClusterStatus
-func NewGetClusterStatusRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewGetClusterStatusRequest(server string, cluster ClusterPath, params *GetClusterStatusParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6756,6 +8220,28 @@ func NewGetClusterStatusRequest(server string, cluster ClusterPath) (*http.Reque
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -6765,7 +8251,7 @@ func NewGetClusterStatusRequest(server string, cluster ClusterPath) (*http.Reque
 }
 
 // NewListSystemUsersRequest generates requests for ListSystemUsers
-func NewListSystemUsersRequest(server string, cluster ClusterPath) (*http.Request, error) {
+func NewListSystemUsersRequest(server string, cluster ClusterPath, params *ListSystemUsersParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6788,6 +8274,28 @@ func NewListSystemUsersRequest(server string, cluster ClusterPath) (*http.Reques
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -6829,6 +8337,28 @@ func NewRotateSystemUserRequest(server string, cluster ClusterPath, user string,
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
@@ -6956,6 +8486,54 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 
 		}
 
+		if params.Actor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "actor", runtime.ParamLocationQuery, *params.Actor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Resource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "resource", runtime.ParamLocationQuery, *params.Resource); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -7037,9 +8615,57 @@ func NewStreamEventsRequest(server string, params *StreamEventsParams) (*http.Re
 
 		}
 
+		if params.Actor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "actor", runtime.ParamLocationQuery, *params.Actor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Resource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "resource", runtime.ParamLocationQuery, *params.Resource); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		if params.Cursor != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -7107,7 +8733,7 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 }
 
 // NewGetPrometheusMetricsRequest generates requests for GetPrometheusMetrics
-func NewGetPrometheusMetricsRequest(server string) (*http.Request, error) {
+func NewGetPrometheusMetricsRequest(server string, params *GetPrometheusMetricsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7125,9 +8751,407 @@ func NewGetPrometheusMetricsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListNamespacesRequest generates requests for ListNamespaces
+func NewListNamespacesRequest(server string, params *ListNamespacesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateNamespaceRequest calls the generic CreateNamespace builder with application/json body
+func NewCreateNamespaceRequest(server string, params *CreateNamespaceParams, body CreateNamespaceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateNamespaceRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateNamespaceRequestWithBody generates requests for CreateNamespace with any type of body
+func NewCreateNamespaceRequestWithBody(server string, params *CreateNamespaceParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteNamespaceRequest generates requests for DeleteNamespace
+func NewDeleteNamespaceRequest(server string, namespace NamespacePath, params *DeleteNamespaceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "namespace", runtime.ParamLocationPath, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetNamespaceRequest generates requests for GetNamespace
+func NewGetNamespaceRequest(server string, namespace NamespacePath) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "namespace", runtime.ParamLocationPath, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateNamespaceRequest calls the generic UpdateNamespace builder with application/json body
+func NewUpdateNamespaceRequest(server string, namespace NamespacePath, params *UpdateNamespaceParams, body UpdateNamespaceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateNamespaceRequestWithBody(server, namespace, params, "application/json", bodyReader)
+}
+
+// NewUpdateNamespaceRequestWithBody generates requests for UpdateNamespace with any type of body
+func NewUpdateNamespaceRequestWithBody(server string, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "namespace", runtime.ParamLocationPath, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRotateNamespaceTokenRequest calls the generic RotateNamespaceToken builder with application/json body
+func NewRotateNamespaceTokenRequest(server string, namespace NamespacePath, params *RotateNamespaceTokenParams, body RotateNamespaceTokenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateNamespaceTokenRequestWithBody(server, namespace, params, "application/json", bodyReader)
+}
+
+// NewRotateNamespaceTokenRequestWithBody generates requests for RotateNamespaceToken with any type of body
+func NewRotateNamespaceTokenRequestWithBody(server string, namespace NamespacePath, params *RotateNamespaceTokenParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "namespace", runtime.ParamLocationPath, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces/%s/token", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewValidateNamespaceRequest generates requests for ValidateNamespace
+func NewValidateNamespaceRequest(server string, namespace NamespacePath, params *ValidateNamespaceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "namespace", runtime.ParamLocationPath, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/namespaces/%s/validate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7219,6 +9243,22 @@ func NewListOperationsRequest(server string, params *ListOperationsParams) (*htt
 
 		}
 
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -7265,7 +9305,7 @@ func NewGetOperationRequest(server string, operation string) (*http.Request, err
 }
 
 // NewListOrphanedVolumesRequest generates requests for ListOrphanedVolumes
-func NewListOrphanedVolumesRequest(server string) (*http.Request, error) {
+func NewListOrphanedVolumesRequest(server string, params *ListOrphanedVolumesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7281,6 +9321,28 @@ func NewListOrphanedVolumesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -7748,7 +9810,7 @@ type ClientWithResponsesInterface interface {
 	DeleteBackupStorageWithResponse(ctx context.Context, storage string, params *DeleteBackupStorageParams, reqEditors ...RequestEditorFn) (*DeleteBackupStorageResponse, error)
 
 	// GetBackupStorageWithResponse request
-	GetBackupStorageWithResponse(ctx context.Context, storage string, reqEditors ...RequestEditorFn) (*GetBackupStorageResponse, error)
+	GetBackupStorageWithResponse(ctx context.Context, storage string, params *GetBackupStorageParams, reqEditors ...RequestEditorFn) (*GetBackupStorageResponse, error)
 
 	// ReplaceBackupStorageWithBodyWithResponse request with any body
 	ReplaceBackupStorageWithBodyWithResponse(ctx context.Context, storage string, params *ReplaceBackupStorageParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceBackupStorageResponse, error)
@@ -7770,7 +9832,7 @@ type ClientWithResponsesInterface interface {
 	DeleteClusterWithResponse(ctx context.Context, cluster ClusterPath, params *DeleteClusterParams, reqEditors ...RequestEditorFn) (*DeleteClusterResponse, error)
 
 	// GetClusterWithResponse request
-	GetClusterWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterResponse, error)
+	GetClusterWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterParams, reqEditors ...RequestEditorFn) (*GetClusterResponse, error)
 
 	// PatchClusterWithBodyWithResponse request with any body
 	PatchClusterWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *PatchClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchClusterResponse, error)
@@ -7794,10 +9856,10 @@ type ClientWithResponsesInterface interface {
 	DeleteBackupWithResponse(ctx context.Context, cluster ClusterPath, backup string, params *DeleteBackupParams, reqEditors ...RequestEditorFn) (*DeleteBackupResponse, error)
 
 	// GetBackupWithResponse request
-	GetBackupWithResponse(ctx context.Context, cluster ClusterPath, backup string, reqEditors ...RequestEditorFn) (*GetBackupResponse, error)
+	GetBackupWithResponse(ctx context.Context, cluster ClusterPath, backup string, params *GetBackupParams, reqEditors ...RequestEditorFn) (*GetBackupResponse, error)
 
 	// GetClusterBalancerWithResponse request
-	GetClusterBalancerWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterBalancerResponse, error)
+	GetClusterBalancerWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterBalancerParams, reqEditors ...RequestEditorFn) (*GetClusterBalancerResponse, error)
 
 	// ReplaceClusterBalancerWithBodyWithResponse request with any body
 	ReplaceClusterBalancerWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *ReplaceClusterBalancerParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceClusterBalancerResponse, error)
@@ -7805,7 +9867,7 @@ type ClientWithResponsesInterface interface {
 	ReplaceClusterBalancerWithResponse(ctx context.Context, cluster ClusterPath, params *ReplaceClusterBalancerParams, body ReplaceClusterBalancerJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceClusterBalancerResponse, error)
 
 	// GetClusterConnectionWithResponse request
-	GetClusterConnectionWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterConnectionResponse, error)
+	GetClusterConnectionWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterConnectionParams, reqEditors ...RequestEditorFn) (*GetClusterConnectionResponse, error)
 
 	// ListDatabaseRolesWithResponse request
 	ListDatabaseRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListDatabaseRolesParams, reqEditors ...RequestEditorFn) (*ListDatabaseRolesResponse, error)
@@ -7819,7 +9881,7 @@ type ClientWithResponsesInterface interface {
 	DeleteDatabaseRoleWithResponse(ctx context.Context, cluster ClusterPath, database string, role string, params *DeleteDatabaseRoleParams, reqEditors ...RequestEditorFn) (*DeleteDatabaseRoleResponse, error)
 
 	// GetDatabaseRoleWithResponse request
-	GetDatabaseRoleWithResponse(ctx context.Context, cluster ClusterPath, database string, role string, reqEditors ...RequestEditorFn) (*GetDatabaseRoleResponse, error)
+	GetDatabaseRoleWithResponse(ctx context.Context, cluster ClusterPath, database string, role string, params *GetDatabaseRoleParams, reqEditors ...RequestEditorFn) (*GetDatabaseRoleResponse, error)
 
 	// ReplaceDatabaseRoleWithBodyWithResponse request with any body
 	ReplaceDatabaseRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, database string, role string, params *ReplaceDatabaseRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceDatabaseRoleResponse, error)
@@ -7838,7 +9900,7 @@ type ClientWithResponsesInterface interface {
 	DeleteDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, params *DeleteDatabaseUserParams, reqEditors ...RequestEditorFn) (*DeleteDatabaseUserResponse, error)
 
 	// GetDatabaseUserWithResponse request
-	GetDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, reqEditors ...RequestEditorFn) (*GetDatabaseUserResponse, error)
+	GetDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, params *GetDatabaseUserParams, reqEditors ...RequestEditorFn) (*GetDatabaseUserResponse, error)
 
 	// ReplaceDatabaseUserWithBodyWithResponse request with any body
 	ReplaceDatabaseUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceDatabaseUserResponse, error)
@@ -7846,10 +9908,10 @@ type ClientWithResponsesInterface interface {
 	ReplaceDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, params *ReplaceDatabaseUserParams, body ReplaceDatabaseUserJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceDatabaseUserResponse, error)
 
 	// ListClusterMembersWithResponse request
-	ListClusterMembersWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*ListClusterMembersResponse, error)
+	ListClusterMembersWithResponse(ctx context.Context, cluster ClusterPath, params *ListClusterMembersParams, reqEditors ...RequestEditorFn) (*ListClusterMembersResponse, error)
 
 	// GetClusterMemberWithResponse request
-	GetClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, reqEditors ...RequestEditorFn) (*GetClusterMemberResponse, error)
+	GetClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, params *GetClusterMemberParams, reqEditors ...RequestEditorFn) (*GetClusterMemberResponse, error)
 
 	// GetMemberLogsWithResponse request
 	GetMemberLogsWithResponse(ctx context.Context, cluster ClusterPath, member string, params *GetMemberLogsParams, reqEditors ...RequestEditorFn) (*GetMemberLogsResponse, error)
@@ -7864,10 +9926,10 @@ type ClientWithResponsesInterface interface {
 	ListClusterOperationsWithResponse(ctx context.Context, cluster ClusterPath, params *ListClusterOperationsParams, reqEditors ...RequestEditorFn) (*ListClusterOperationsResponse, error)
 
 	// GetPITRWindowWithResponse request
-	GetPITRWindowWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetPITRWindowResponse, error)
+	GetPITRWindowWithResponse(ctx context.Context, cluster ClusterPath, params *GetPITRWindowParams, reqEditors ...RequestEditorFn) (*GetPITRWindowResponse, error)
 
 	// GetClusterPlacementWithResponse request
-	GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error)
+	GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error)
 
 	// RaiseClusterFCVWithBodyWithResponse request with any body
 	RaiseClusterFCVWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RaiseClusterFCVResponse, error)
@@ -7886,7 +9948,7 @@ type ClientWithResponsesInterface interface {
 	CreateRestoreWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRestoreParams, body CreateRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRestoreResponse, error)
 
 	// GetRestoreWithResponse request
-	GetRestoreWithResponse(ctx context.Context, cluster ClusterPath, restore string, reqEditors ...RequestEditorFn) (*GetRestoreResponse, error)
+	GetRestoreWithResponse(ctx context.Context, cluster ClusterPath, restore string, params *GetRestoreParams, reqEditors ...RequestEditorFn) (*GetRestoreResponse, error)
 
 	// ResumeClusterWithResponse request
 	ResumeClusterWithResponse(ctx context.Context, cluster ClusterPath, params *ResumeClusterParams, reqEditors ...RequestEditorFn) (*ResumeClusterResponse, error)
@@ -7895,10 +9957,10 @@ type ClientWithResponsesInterface interface {
 	RotateClusterTLSWithResponse(ctx context.Context, cluster ClusterPath, params *RotateClusterTLSParams, reqEditors ...RequestEditorFn) (*RotateClusterTLSResponse, error)
 
 	// GetClusterStatusWithResponse request
-	GetClusterStatusWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterStatusResponse, error)
+	GetClusterStatusWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*GetClusterStatusResponse, error)
 
 	// ListSystemUsersWithResponse request
-	ListSystemUsersWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*ListSystemUsersResponse, error)
+	ListSystemUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListSystemUsersParams, reqEditors ...RequestEditorFn) (*ListSystemUsersResponse, error)
 
 	// RotateSystemUserWithResponse request
 	RotateSystemUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*RotateSystemUserResponse, error)
@@ -7913,7 +9975,34 @@ type ClientWithResponsesInterface interface {
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
 	// GetPrometheusMetricsWithResponse request
-	GetPrometheusMetricsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPrometheusMetricsResponse, error)
+	GetPrometheusMetricsWithResponse(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*GetPrometheusMetricsResponse, error)
+
+	// ListNamespacesWithResponse request
+	ListNamespacesWithResponse(ctx context.Context, params *ListNamespacesParams, reqEditors ...RequestEditorFn) (*ListNamespacesResponse, error)
+
+	// CreateNamespaceWithBodyWithResponse request with any body
+	CreateNamespaceWithBodyWithResponse(ctx context.Context, params *CreateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNamespaceResponse, error)
+
+	CreateNamespaceWithResponse(ctx context.Context, params *CreateNamespaceParams, body CreateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNamespaceResponse, error)
+
+	// DeleteNamespaceWithResponse request
+	DeleteNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*DeleteNamespaceResponse, error)
+
+	// GetNamespaceWithResponse request
+	GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error)
+
+	// UpdateNamespaceWithBodyWithResponse request with any body
+	UpdateNamespaceWithBodyWithResponse(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateNamespaceResponse, error)
+
+	UpdateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, body UpdateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateNamespaceResponse, error)
+
+	// RotateNamespaceTokenWithBodyWithResponse request with any body
+	RotateNamespaceTokenWithBodyWithResponse(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateNamespaceTokenResponse, error)
+
+	RotateNamespaceTokenWithResponse(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, body RotateNamespaceTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateNamespaceTokenResponse, error)
+
+	// ValidateNamespaceWithResponse request
+	ValidateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*ValidateNamespaceResponse, error)
 
 	// ListOperationsWithResponse request
 	ListOperationsWithResponse(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*ListOperationsResponse, error)
@@ -7922,7 +10011,7 @@ type ClientWithResponsesInterface interface {
 	GetOperationWithResponse(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
 
 	// ListOrphanedVolumesWithResponse request
-	ListOrphanedVolumesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error)
+	ListOrphanedVolumesWithResponse(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error)
 
 	// GetPermissionsWithResponse request
 	GetPermissionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error)
@@ -9877,6 +11966,198 @@ func (r GetPrometheusMetricsResponse) StatusCode() int {
 	return 0
 }
 
+type ListNamespacesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *NamespaceList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListNamespacesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListNamespacesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateNamespaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Namespace
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateNamespaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteNamespaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteNamespaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetNamespaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Namespace
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetNamespaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateNamespaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Namespace
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateNamespaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotateNamespaceTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Namespace
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateNamespaceTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateNamespaceTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ValidateNamespaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Namespace
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ValidateNamespaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ValidateNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListOperationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10463,8 +12744,8 @@ func (c *ClientWithResponses) DeleteBackupStorageWithResponse(ctx context.Contex
 }
 
 // GetBackupStorageWithResponse request returning *GetBackupStorageResponse
-func (c *ClientWithResponses) GetBackupStorageWithResponse(ctx context.Context, storage string, reqEditors ...RequestEditorFn) (*GetBackupStorageResponse, error) {
-	rsp, err := c.GetBackupStorage(ctx, storage, reqEditors...)
+func (c *ClientWithResponses) GetBackupStorageWithResponse(ctx context.Context, storage string, params *GetBackupStorageParams, reqEditors ...RequestEditorFn) (*GetBackupStorageResponse, error) {
+	rsp, err := c.GetBackupStorage(ctx, storage, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10533,8 +12814,8 @@ func (c *ClientWithResponses) DeleteClusterWithResponse(ctx context.Context, clu
 }
 
 // GetClusterWithResponse request returning *GetClusterResponse
-func (c *ClientWithResponses) GetClusterWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterResponse, error) {
-	rsp, err := c.GetCluster(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) GetClusterWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterParams, reqEditors ...RequestEditorFn) (*GetClusterResponse, error) {
+	rsp, err := c.GetCluster(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10611,8 +12892,8 @@ func (c *ClientWithResponses) DeleteBackupWithResponse(ctx context.Context, clus
 }
 
 // GetBackupWithResponse request returning *GetBackupResponse
-func (c *ClientWithResponses) GetBackupWithResponse(ctx context.Context, cluster ClusterPath, backup string, reqEditors ...RequestEditorFn) (*GetBackupResponse, error) {
-	rsp, err := c.GetBackup(ctx, cluster, backup, reqEditors...)
+func (c *ClientWithResponses) GetBackupWithResponse(ctx context.Context, cluster ClusterPath, backup string, params *GetBackupParams, reqEditors ...RequestEditorFn) (*GetBackupResponse, error) {
+	rsp, err := c.GetBackup(ctx, cluster, backup, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10620,8 +12901,8 @@ func (c *ClientWithResponses) GetBackupWithResponse(ctx context.Context, cluster
 }
 
 // GetClusterBalancerWithResponse request returning *GetClusterBalancerResponse
-func (c *ClientWithResponses) GetClusterBalancerWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterBalancerResponse, error) {
-	rsp, err := c.GetClusterBalancer(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) GetClusterBalancerWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterBalancerParams, reqEditors ...RequestEditorFn) (*GetClusterBalancerResponse, error) {
+	rsp, err := c.GetClusterBalancer(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10646,8 +12927,8 @@ func (c *ClientWithResponses) ReplaceClusterBalancerWithResponse(ctx context.Con
 }
 
 // GetClusterConnectionWithResponse request returning *GetClusterConnectionResponse
-func (c *ClientWithResponses) GetClusterConnectionWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterConnectionResponse, error) {
-	rsp, err := c.GetClusterConnection(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) GetClusterConnectionWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterConnectionParams, reqEditors ...RequestEditorFn) (*GetClusterConnectionResponse, error) {
+	rsp, err := c.GetClusterConnection(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10690,8 +12971,8 @@ func (c *ClientWithResponses) DeleteDatabaseRoleWithResponse(ctx context.Context
 }
 
 // GetDatabaseRoleWithResponse request returning *GetDatabaseRoleResponse
-func (c *ClientWithResponses) GetDatabaseRoleWithResponse(ctx context.Context, cluster ClusterPath, database string, role string, reqEditors ...RequestEditorFn) (*GetDatabaseRoleResponse, error) {
-	rsp, err := c.GetDatabaseRole(ctx, cluster, database, role, reqEditors...)
+func (c *ClientWithResponses) GetDatabaseRoleWithResponse(ctx context.Context, cluster ClusterPath, database string, role string, params *GetDatabaseRoleParams, reqEditors ...RequestEditorFn) (*GetDatabaseRoleResponse, error) {
+	rsp, err := c.GetDatabaseRole(ctx, cluster, database, role, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10751,8 +13032,8 @@ func (c *ClientWithResponses) DeleteDatabaseUserWithResponse(ctx context.Context
 }
 
 // GetDatabaseUserWithResponse request returning *GetDatabaseUserResponse
-func (c *ClientWithResponses) GetDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, reqEditors ...RequestEditorFn) (*GetDatabaseUserResponse, error) {
-	rsp, err := c.GetDatabaseUser(ctx, cluster, database, username, reqEditors...)
+func (c *ClientWithResponses) GetDatabaseUserWithResponse(ctx context.Context, cluster ClusterPath, database string, username string, params *GetDatabaseUserParams, reqEditors ...RequestEditorFn) (*GetDatabaseUserResponse, error) {
+	rsp, err := c.GetDatabaseUser(ctx, cluster, database, username, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10777,8 +13058,8 @@ func (c *ClientWithResponses) ReplaceDatabaseUserWithResponse(ctx context.Contex
 }
 
 // ListClusterMembersWithResponse request returning *ListClusterMembersResponse
-func (c *ClientWithResponses) ListClusterMembersWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*ListClusterMembersResponse, error) {
-	rsp, err := c.ListClusterMembers(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) ListClusterMembersWithResponse(ctx context.Context, cluster ClusterPath, params *ListClusterMembersParams, reqEditors ...RequestEditorFn) (*ListClusterMembersResponse, error) {
+	rsp, err := c.ListClusterMembers(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10786,8 +13067,8 @@ func (c *ClientWithResponses) ListClusterMembersWithResponse(ctx context.Context
 }
 
 // GetClusterMemberWithResponse request returning *GetClusterMemberResponse
-func (c *ClientWithResponses) GetClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, reqEditors ...RequestEditorFn) (*GetClusterMemberResponse, error) {
-	rsp, err := c.GetClusterMember(ctx, cluster, member, reqEditors...)
+func (c *ClientWithResponses) GetClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, params *GetClusterMemberParams, reqEditors ...RequestEditorFn) (*GetClusterMemberResponse, error) {
+	rsp, err := c.GetClusterMember(ctx, cluster, member, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10831,8 +13112,8 @@ func (c *ClientWithResponses) ListClusterOperationsWithResponse(ctx context.Cont
 }
 
 // GetPITRWindowWithResponse request returning *GetPITRWindowResponse
-func (c *ClientWithResponses) GetPITRWindowWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetPITRWindowResponse, error) {
-	rsp, err := c.GetPITRWindow(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) GetPITRWindowWithResponse(ctx context.Context, cluster ClusterPath, params *GetPITRWindowParams, reqEditors ...RequestEditorFn) (*GetPITRWindowResponse, error) {
+	rsp, err := c.GetPITRWindow(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10840,8 +13121,8 @@ func (c *ClientWithResponses) GetPITRWindowWithResponse(ctx context.Context, clu
 }
 
 // GetClusterPlacementWithResponse request returning *GetClusterPlacementResponse
-func (c *ClientWithResponses) GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error) {
-	rsp, err := c.GetClusterPlacement(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error) {
+	rsp, err := c.GetClusterPlacement(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10901,8 +13182,8 @@ func (c *ClientWithResponses) CreateRestoreWithResponse(ctx context.Context, clu
 }
 
 // GetRestoreWithResponse request returning *GetRestoreResponse
-func (c *ClientWithResponses) GetRestoreWithResponse(ctx context.Context, cluster ClusterPath, restore string, reqEditors ...RequestEditorFn) (*GetRestoreResponse, error) {
-	rsp, err := c.GetRestore(ctx, cluster, restore, reqEditors...)
+func (c *ClientWithResponses) GetRestoreWithResponse(ctx context.Context, cluster ClusterPath, restore string, params *GetRestoreParams, reqEditors ...RequestEditorFn) (*GetRestoreResponse, error) {
+	rsp, err := c.GetRestore(ctx, cluster, restore, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10928,8 +13209,8 @@ func (c *ClientWithResponses) RotateClusterTLSWithResponse(ctx context.Context, 
 }
 
 // GetClusterStatusWithResponse request returning *GetClusterStatusResponse
-func (c *ClientWithResponses) GetClusterStatusWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*GetClusterStatusResponse, error) {
-	rsp, err := c.GetClusterStatus(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) GetClusterStatusWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*GetClusterStatusResponse, error) {
+	rsp, err := c.GetClusterStatus(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10937,8 +13218,8 @@ func (c *ClientWithResponses) GetClusterStatusWithResponse(ctx context.Context, 
 }
 
 // ListSystemUsersWithResponse request returning *ListSystemUsersResponse
-func (c *ClientWithResponses) ListSystemUsersWithResponse(ctx context.Context, cluster ClusterPath, reqEditors ...RequestEditorFn) (*ListSystemUsersResponse, error) {
-	rsp, err := c.ListSystemUsers(ctx, cluster, reqEditors...)
+func (c *ClientWithResponses) ListSystemUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListSystemUsersParams, reqEditors ...RequestEditorFn) (*ListSystemUsersResponse, error) {
+	rsp, err := c.ListSystemUsers(ctx, cluster, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10982,12 +13263,99 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 }
 
 // GetPrometheusMetricsWithResponse request returning *GetPrometheusMetricsResponse
-func (c *ClientWithResponses) GetPrometheusMetricsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPrometheusMetricsResponse, error) {
-	rsp, err := c.GetPrometheusMetrics(ctx, reqEditors...)
+func (c *ClientWithResponses) GetPrometheusMetricsWithResponse(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*GetPrometheusMetricsResponse, error) {
+	rsp, err := c.GetPrometheusMetrics(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetPrometheusMetricsResponse(rsp)
+}
+
+// ListNamespacesWithResponse request returning *ListNamespacesResponse
+func (c *ClientWithResponses) ListNamespacesWithResponse(ctx context.Context, params *ListNamespacesParams, reqEditors ...RequestEditorFn) (*ListNamespacesResponse, error) {
+	rsp, err := c.ListNamespaces(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListNamespacesResponse(rsp)
+}
+
+// CreateNamespaceWithBodyWithResponse request with arbitrary body returning *CreateNamespaceResponse
+func (c *ClientWithResponses) CreateNamespaceWithBodyWithResponse(ctx context.Context, params *CreateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNamespaceResponse, error) {
+	rsp, err := c.CreateNamespaceWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateNamespaceResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateNamespaceWithResponse(ctx context.Context, params *CreateNamespaceParams, body CreateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNamespaceResponse, error) {
+	rsp, err := c.CreateNamespace(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateNamespaceResponse(rsp)
+}
+
+// DeleteNamespaceWithResponse request returning *DeleteNamespaceResponse
+func (c *ClientWithResponses) DeleteNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*DeleteNamespaceResponse, error) {
+	rsp, err := c.DeleteNamespace(ctx, namespace, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteNamespaceResponse(rsp)
+}
+
+// GetNamespaceWithResponse request returning *GetNamespaceResponse
+func (c *ClientWithResponses) GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error) {
+	rsp, err := c.GetNamespace(ctx, namespace, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetNamespaceResponse(rsp)
+}
+
+// UpdateNamespaceWithBodyWithResponse request with arbitrary body returning *UpdateNamespaceResponse
+func (c *ClientWithResponses) UpdateNamespaceWithBodyWithResponse(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateNamespaceResponse, error) {
+	rsp, err := c.UpdateNamespaceWithBody(ctx, namespace, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateNamespaceResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, body UpdateNamespaceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateNamespaceResponse, error) {
+	rsp, err := c.UpdateNamespace(ctx, namespace, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateNamespaceResponse(rsp)
+}
+
+// RotateNamespaceTokenWithBodyWithResponse request with arbitrary body returning *RotateNamespaceTokenResponse
+func (c *ClientWithResponses) RotateNamespaceTokenWithBodyWithResponse(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateNamespaceTokenResponse, error) {
+	rsp, err := c.RotateNamespaceTokenWithBody(ctx, namespace, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateNamespaceTokenResponse(rsp)
+}
+
+func (c *ClientWithResponses) RotateNamespaceTokenWithResponse(ctx context.Context, namespace NamespacePath, params *RotateNamespaceTokenParams, body RotateNamespaceTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateNamespaceTokenResponse, error) {
+	rsp, err := c.RotateNamespaceToken(ctx, namespace, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateNamespaceTokenResponse(rsp)
+}
+
+// ValidateNamespaceWithResponse request returning *ValidateNamespaceResponse
+func (c *ClientWithResponses) ValidateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*ValidateNamespaceResponse, error) {
+	rsp, err := c.ValidateNamespace(ctx, namespace, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseValidateNamespaceResponse(rsp)
 }
 
 // ListOperationsWithResponse request returning *ListOperationsResponse
@@ -11009,8 +13377,8 @@ func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, oper
 }
 
 // ListOrphanedVolumesWithResponse request returning *ListOrphanedVolumesResponse
-func (c *ClientWithResponses) ListOrphanedVolumesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error) {
-	rsp, err := c.ListOrphanedVolumes(ctx, reqEditors...)
+func (c *ClientWithResponses) ListOrphanedVolumesWithResponse(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error) {
+	rsp, err := c.ListOrphanedVolumes(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15710,6 +18078,454 @@ func ParseGetPrometheusMetricsResponse(rsp *http.Response) (*GetPrometheusMetric
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListNamespacesResponse parses an HTTP response from a ListNamespacesWithResponse call
+func ParseListNamespacesResponse(rsp *http.Response) (*ListNamespacesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListNamespacesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NamespaceList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateNamespaceResponse parses an HTTP response from a CreateNamespaceWithResponse call
+func ParseCreateNamespaceResponse(rsp *http.Response) (*CreateNamespaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateNamespaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Namespace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteNamespaceResponse parses an HTTP response from a DeleteNamespaceWithResponse call
+func ParseDeleteNamespaceResponse(rsp *http.Response) (*DeleteNamespaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteNamespaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetNamespaceResponse parses an HTTP response from a GetNamespaceWithResponse call
+func ParseGetNamespaceResponse(rsp *http.Response) (*GetNamespaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetNamespaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Namespace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateNamespaceResponse parses an HTTP response from a UpdateNamespaceWithResponse call
+func ParseUpdateNamespaceResponse(rsp *http.Response) (*UpdateNamespaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateNamespaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Namespace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateNamespaceTokenResponse parses an HTTP response from a RotateNamespaceTokenWithResponse call
+func ParseRotateNamespaceTokenResponse(rsp *http.Response) (*RotateNamespaceTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateNamespaceTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Namespace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseValidateNamespaceResponse parses an HTTP response from a ValidateNamespaceWithResponse call
+func ParseValidateNamespaceResponse(rsp *http.Response) (*ValidateNamespaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ValidateNamespaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Namespace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError

@@ -241,7 +241,7 @@ func testAPIWorkflow(t *testing.T) {
 	if !s.keep {
 		run(nil, nil, "backups", "delete", name, backupName)
 		s.poll("CLI backup deletion", operationTimeout, func() bool {
-			r, err := s.client.GetBackup(s.ctx, name, backupName)
+			r, err := s.client.GetBackup(s.ctx, name, backupName, nil)
 			if err != nil {
 				t.Fatal("backup deletion status transport failed")
 			}

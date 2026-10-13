@@ -14,11 +14,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
-// Existing backup endpoints retain their cluster-name RBAC object even after
+// Existing backup endpoints retain their namespace/cluster RBAC object even after
 // cluster deletion. All other cluster endpoints still require a live resource.
 func (s *Server) retainedBackup(ctx context.Context, name string, in input) response {
 	if name == "ListBackups" {
-		items, err := s.Store.ListBackups(ctx, in.Cluster)
+		items, err := s.Store.ListBackups(ctx, clusterRef(ctx, in.Cluster))
 		if err != nil {
 			return s.failure(err)
 		}
@@ -27,21 +27,30 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		}
 		out := make([]api.Backup, 0, len(items))
 		for _, b := range items {
-			out = append(out, backupAPI(b))
+			if s.allowed(ctx, "backups", "read", clusterObject(b.Namespace, b.Cluster)) {
+				out = append(out, backupAPI(b))
+			}
 		}
 		return listResponse(s, ctx, out, nil)
 	}
-	b, err := s.Store.GetBackup(ctx, in.Cluster, in.Backup)
+	b, err := s.Store.GetBackup(ctx, clusterRef(ctx, in.Cluster), in.Backup)
 	if errors.Is(err, store.ErrNotFound) && name == "DeleteBackup" {
 		return response{status: 204}
 	}
 	if err != nil {
 		return s.failure(err)
 	}
+	action := "read"
+	if name == "DeleteBackup" {
+		action = "delete"
+	}
+	if !s.allowed(ctx, "backups", action, clusterObject(b.Namespace, b.Cluster)) {
+		return fail(403, "forbidden", "Permission denied")
+	}
 	if name == "GetBackup" {
 		return ok(backupAPI(*b))
 	}
-	storage, err := s.Store.GetBackupStorage(ctx, b.Storage)
+	storage, err := s.Store.GetBackupStorage(ctx, b.Namespace, b.Storage)
 	if err != nil {
 		return s.failure(err)
 	}
@@ -57,11 +66,11 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		return s.failure(err)
 	}
 	if b.RecoveryIdentity != "" {
-		if err := s.Context.Secrets.DeleteClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin"); err != nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, engine.ErrNotFound) {
+		if err := s.Context.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); err != nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, engine.ErrNotFound) {
 			return s.failure(err)
 		}
 	}
-	if err := s.Store.DeleteBackup(ctx, b.Cluster, b.Name); err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err := s.Store.DeleteBackup(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster}, b.Name); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return s.failure(err)
 	}
 	return response{status: 204}
@@ -70,7 +79,7 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 // Reject legacy/unrecoverable retained snapshots before provisioning a clone
 // or enqueueing destructive restore work. Modern records are self-contained:
 // physical recovery uses a separately protected snapshot userAdmin identity.
-func (s *Server) retainedRestoreSource(ctx context.Context, cluster, backup string) *response {
+func (s *Server) retainedRestoreSource(ctx context.Context, cluster domain.ClusterRef, backup string) *response {
 	_, err := s.Store.GetCluster(ctx, cluster)
 	if err == nil {
 		return nil
@@ -93,7 +102,7 @@ func (s *Server) retainedRestoreSource(ctx context.Context, cluster, backup stri
 		if b.RecoveryIdentity == "" {
 			message = "Retained physical backup has no protected recovery identity and its source credentials no longer exist"
 		} else {
-			pw, err := s.Context.Secrets.GetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin")
+			pw, err := s.Context.Secrets.GetClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin")
 			if errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound) || (err == nil && len(pw) == 0) {
 				message = "Retained physical backup's protected recovery credential is unavailable"
 			} else if err != nil {

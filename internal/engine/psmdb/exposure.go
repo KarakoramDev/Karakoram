@@ -16,6 +16,12 @@ import (
 func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s *internalState, m *member) (int, error) {
 	p.portMu.Lock()
 	defer p.portMu.Unlock()
+	namespace := rc.Cluster.Ref().Namespace
+	reservations := p.portReservations[namespace]
+	if reservations == nil {
+		reservations = make(map[int]string)
+		p.portReservations[namespace] = reservations
+	}
 	routes, e := rc.Backend.ListPublicPorts(ctx)
 	if e != nil {
 		return 0, e
@@ -24,7 +30,7 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	for _, route := range routes {
 		external[route.Port] = route.Hostname
 	}
-	clusters, e := rc.Store.ListClusters(ctx)
+	clusters, e := rc.Store.ListClusters(ctx, rc.Cluster.Ref().Namespace)
 	if e != nil {
 		return 0, e
 	}
@@ -37,30 +43,30 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 		}
 		for _, member := range state.Members {
 			if member.PublicPort > 0 {
-				p.portReservations[member.PublicPort] = cluster.Name + "/" + member.Name
+				reservations[member.PublicPort] = cluster.Name + "/" + member.Name
 			}
 		}
 	}
-	for port, owner := range p.portReservations {
+	for port, owner := range reservations {
 		cluster, _, _ := strings.Cut(owner, "/")
 		if !live[cluster] {
-			delete(p.portReservations, port)
+			delete(reservations, port)
 		}
 	}
 	for _, member := range s.Members {
 		if member.PublicPort > 0 {
-			p.portReservations[member.PublicPort] = rc.Cluster.Name + "/" + member.Name
+			reservations[member.PublicPort] = rc.Cluster.Name + "/" + member.Name
 		}
 	}
 	owner := rc.Cluster.Name + "/" + m.Name
-	for port, existing := range p.portReservations {
+	for port, existing := range reservations {
 		if existing == owner && (external[port] == "" || external[port] == m.Name) {
 			return port, nil
 		}
 	}
 	for port := 27017; port <= 65535; port++ {
-		if _, used := p.portReservations[port]; !used && external[port] == "" {
-			p.portReservations[port] = owner
+		if _, used := reservations[port]; !used && external[port] == "" {
+			reservations[port] = owner
 			return port, nil
 		}
 	}

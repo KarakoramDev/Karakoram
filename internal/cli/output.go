@@ -95,7 +95,7 @@ func (a *app) table(rows []any) error {
 		}
 	}
 	keys := sortedKeys(all)
-	preferred := []string{"name", "id", "username", "cluster", "database", "type", "phase", "state", "version", "role", "health", "message"}
+	preferred := []string{"namespace", "name", "id", "username", "cluster", "resource", "target", "database", "type", "phase", "actor", "state", "version", "role", "health", "message"}
 	ordered := make([]string, 0, len(keys))
 	for _, p := range preferred {
 		if _, ok := all[p]; ok {
@@ -149,14 +149,14 @@ func (a *app) orphanedVolumesTable(v any) error {
 		return err
 	}
 	w := tabwriter.NewWriter(a.opts.Out, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "HOSTNAME\tSERVICE ID\tCLUSTER\tMEMBER\tATTEMPTS\tNEXT ATTEMPT\tLAST PROCESS")
+	fmt.Fprintln(w, "NAMESPACE\tHOSTNAME\tSERVICE ID\tCLUSTER\tMEMBER\tATTEMPTS\tNEXT ATTEMPT\tLAST PROCESS")
 	for _, row := range rows {
 		m, ok := row.(map[string]any)
 		if !ok {
 			return fmt.Errorf("unexpected orphaned volume record")
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			cell(m["hostname"]), cell(m["serviceId"]), cell(m["cluster"]),
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			cell(m["namespace"]), cell(m["hostname"]), cell(m["serviceId"]), cell(m["cluster"]),
 			cell(m["member"]), cell(m["attempts"]), cell(m["nextAttemptAt"]),
 			cell(m["lastProcessId"]))
 	}

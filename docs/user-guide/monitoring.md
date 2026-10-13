@@ -15,13 +15,17 @@ karactl clusters members demo
 
 Ranges/steps are Go-duration forms such as `1h`, `30m`, `30s`; the metrics API permits a positive range at most 24 hours and a positive step no greater than the range. The default range is one hour, step thirty seconds. JSON `series` has member/name/unit/labels and timestamped points. Counter series are converted to reset-aware rates; a graph missing data is not evidence of a healthy zero.
 
+Clusters with the same name in different namespaces have independent metric history and member usage. Select the cluster's namespace for JSON queries (`?namespace=<name>` in the API, or `karactl --namespace <name> clusters metrics ...`); omitted namespace selects `default`.
+
 Member status/roles/lag and agent connectivity remain separate from charts. Monitoring failure cannot prove the database is unavailable, and a connected exporter cannot prove quorum. Normal database health uses authenticated provider observation; platform exec readiness only probes local TCP availability.
 
 Disable collection using an API-shaped merge patch (`spec.monitoring.enabled: false`). Historical samples persist until retention prunes them; do not expect disabling monitoring to delete all history instantly. Control-plane unavailability interrupts scraping/aggregation even while databases continue.
 
 ## Prometheus scraping
 
-The public endpoint is **`GET /metrics` at the installation root**, not `/api/v1/metrics`. It exports Prometheus text with `cluster` and `member` labels. Obtain a Karakoram API token for an account permitted to `read` `monitoring` on global object `*`; the server then filters individual cluster objects by the same policy. It is not a Zerops integration token.
+The public endpoint is **`GET /metrics` at the installation root**, not `/api/v1/metrics`. It exports Prometheus text with authoritative `namespace`, `cluster` and `member` labels. Obtain a Karakoram API token for an account permitted to `read` `monitoring`; the server filters individual `<namespace>/<cluster>` objects by the same policy. It is not a Zerops integration token.
+
+Without a `namespace` query parameter the endpoint includes all authorized namespaces. Set `?namespace=<name>` to restrict the scrape to one namespace.
 
 ```yaml
 scrape_configs:
@@ -42,7 +46,7 @@ Store only the token value in the owner-readable credentials file, mounted from 
 
 ## Metric vocabulary
 
-Every public metric includes `cluster` and `member`. Additional `operation`/`direction` labels are noted below; `set`/`role` are member-status properties, not guaranteed metric labels. Availability-dependent metrics may be absent (mongos has no replica-set oplog or WiredTiger cache).
+Every public metric includes `namespace`, `cluster` and `member`. Include the namespace in queries and alert grouping to distinguish identically named clusters. Additional `operation`/`direction` labels are noted below; `set`/`role` are member-status properties, not guaranteed metric labels. Availability-dependent metrics may be absent (mongos has no replica-set oplog or WiredTiger cache).
 
 | Prometheus metric | Type/unit | JSON series / meaning |
 | --- | --- | --- |
@@ -70,8 +74,10 @@ Use `rate(karakoram_opcounters_total[5m])` for operation throughput in Prometheu
 
 ## Troubleshooting
 
-- **403 scrape:** check root/global `monitoring, read, *` authority as well as per-cluster policy and account/token status.
+- **403 scrape:** check per-cluster `monitoring, read, <namespace>/<cluster>` policy and account/token status.
 - **Empty charts:** check enabled collection, connected agents, time range, monitor credentials/CA and enough samples for a counter rate.
+- **Namespace unavailable:** check that namespace's project token and relay connectivity. A namespace routing failure degrades only its clusters, emits a namespaced `NamespaceUnavailable` event, and retries with backoff; collection and reconciliation in other namespaces continue.
+- **Remote scrape/config pull failed:** inspect [relay health](namespaces.md#relay-health), public-origin reachability and namespace-qualified agent routing. Relay platform readiness proves only its private listener, not the tunnel; do not disable CA/hostname verification.
 - **PBM up but no backups:** the metric indicates a supervised process only; inspect PBM registration and backup/error records.
 - **Memory near bound:** RSS excludes other processes; inspect Zerops allocation/runtime logs before concluding the complete container fits.
 

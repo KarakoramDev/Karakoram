@@ -42,11 +42,11 @@ function toSeries(all: Schemas['MetricSeries'][], names: string[], multiName: bo
 }
 
 export function MonitoringTab() {
-  const { cluster, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
   const [range, setRange] = useState<Range>('1h');
   const metrics = useQuery({
-    queryKey: [...keys.clusterSub(name, 'metrics'), range],
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/metrics', { params: { path: { cluster: name }, query: { range, step: STEP_FOR[range] } } })),
+    queryKey: [...keys.clusterSub(namespace, name, 'metrics'), range],
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/metrics', { params: { path: { cluster: name }, query: { namespace, range, step: STEP_FOR[range] } } })),
     refetchInterval: 30_000,
     enabled: can('read', 'monitoring'),
   });
@@ -66,7 +66,7 @@ export function MonitoringTab() {
         <div className="small muted">
           {cluster.spec.monitoring?.enabled === false ? (
             <>
-              Metrics collection is disabled for this cluster. Enable it under <Link to={`/clusters/${encodeURIComponent(name)}/topology`}>Topology &amp; scaling</Link>.
+              Metrics collection is disabled for this cluster. Enable it under <Link to={`${base}/topology`}>Topology &amp; scaling</Link>.
             </>
           ) : (
             <>

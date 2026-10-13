@@ -84,6 +84,7 @@ func (a *app) addCommands(root *cobra.Command) {
 		parent.AddCommand(c)
 	}
 	a.addAuth(root)
+	a.addConfig(root)
 }
 func commandDescription(s commandSpec) string {
 	if s.body {
@@ -146,6 +147,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	}
 	if op == "listOrphanedVolumes" && a.format == "table" {
 		return a.orphanedVolumesTable(result)
+	}
+	if op == "listNamespaces" && a.format == "table" {
+		return a.namespacesTable(result)
 	}
 	return a.print(result)
 }

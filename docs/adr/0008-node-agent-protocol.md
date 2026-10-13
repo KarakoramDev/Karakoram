@@ -8,7 +8,7 @@ Zerops has no public container-exec API. MongoDB administration can use the wire
 
 ## Decision
 
-Run `karakoram agent` as the member's supervisor. Pull `GET /internal/agent/v1/config` from `https://karakoram:9443`, authenticated with a random per-member Bearer token and verified against the pinned internal CA supplied at provisioning. Store only the token hash plus an encrypted recoverable copy in control-plane state. Tokens authorize their assigned member only; they are not public API credentials.
+Run `karakoram agent` as the member's supervisor. Pull `GET /internal/agent/v1/config` from the control plane's private `https://karakoram:9443` in namespace `default`, or `https://<relay hostname>:9443` in another namespace (ADR 0018). The relay forwards bytes to the existing internal TLS listener; TLS remains end-to-end agent-to-control-plane, verified against the pinned internal CA. Reissue the internal server leaf under the same CA when a required relay hostname SAN is missing. Authenticate with a random per-member Bearer token, storing its hash plus an encrypted recoverable copy in control-plane state. Tokens authorize their assigned namespace/cluster/member only; they are not public API credentials.
 
 Return versioned `MemberConfig`: role, replset, config overrides, keyfile, engine TLS material, agent server certificate/key, required local system credentials, PBM/process intent and maintenance mode. Cache it at `{DATA_DIR}/karakoram/config.json` with mode 0600; pull every 60 seconds and on reload. Render protected configuration files and supervise mongod/mongos/pbm-agent, forwarding SIGTERM for clean shutdown. Mongos without a data volume cannot rely on cache persistence across redeploys and must refetch configuration then.
 

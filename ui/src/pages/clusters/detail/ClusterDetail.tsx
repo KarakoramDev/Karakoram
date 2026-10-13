@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useState } from 'react';
-import { Link, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, unwrap } from '@/api/client';
+import { api, ApiError, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useCluster, type Cluster } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
-import type { Action, Resource } from '@/auth/permissions';
+import { DEFAULT_NAMESPACE, clusterObject, type Action, type Resource } from '@/auth/permissions';
+import { rememberNamespace } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Badge, Callout, ErrorBlock, Loading, Menu, MenuItem, PageHeader, Tabs } from '@/components/ui/Primitives';
@@ -17,7 +18,10 @@ import { PhaseBadge, topologySummary } from '../cluster-utils';
 
 export interface ClusterContext {
   cluster: Cluster;
+  namespace: string;
   name: string;
+  /** Namespace-aware route prefix of this cluster (`/clusters/<ns>/<name>`). */
+  base: string;
   can: (action: Action, resource?: Resource) => boolean;
 }
 
@@ -25,31 +29,50 @@ export function useClusterContext(): ClusterContext {
   return useOutletContext<ClusterContext>();
 }
 
-export function ClusterDetailLayout() {
+/** Route prefix of a cluster's detail pages. */
+export function clusterPath(namespace: string, name: string): string {
+  return `/clusters/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`;
+}
+
+const TAB_SEGMENTS: Record<string, true> = { topology: true, upgrades: true, backups: true, restores: true, users: true, monitoring: true, events: true, operations: true, delete: true };
+
+/** Pre-namespace `/clusters/<name>` links land on the default namespace. */
+export function LegacyClusterRedirect() {
   const { name = '' } = useParams();
+  return <Navigate to={clusterPath(DEFAULT_NAMESPACE, name)} replace />;
+}
+
+export function ClusterDetailLayout() {
+  const { namespace = DEFAULT_NAMESPACE, name = '' } = useParams();
   const auth = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const q = useCluster(name);
+  const q = useCluster(namespace, name);
   const [confirm, setConfirm] = useState<null | 'restart' | 'rotate-tls' | 'resume'>(null);
+  const base = clusterPath(namespace, name);
 
   const action = useMutation({
     mutationFn: async (kind: 'restart' | 'rotate-tls' | 'resume') => {
-      const path = { params: { path: { cluster: name } } };
+      const path = { params: { path: { cluster: name }, query: { namespace } } };
       if (kind === 'restart') return unwrap(api.POST('/clusters/{cluster}/restart', path));
       if (kind === 'rotate-tls') return unwrap(api.POST('/clusters/{cluster}/rotate-tls', path));
       return unwrap(api.POST('/clusters/{cluster}/resume', path));
     },
     onSuccess: (_r, kind) => {
-      void queryClient.invalidateQueries({ queryKey: keys.cluster(name) });
+      void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(kind === 'resume' ? 'Resuming cluster.' : kind === 'restart' ? 'Rolling restart started.' : 'TLS rotation started.');
       setConfirm(null);
-      if (kind !== 'resume') navigate(`/clusters/${encodeURIComponent(name)}/operations`);
+      if (kind !== 'resume') navigate(`${base}/operations`);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
+
+  // Collection views that follow from here keep showing this namespace.
+  useEffect(() => {
+    rememberNamespace(namespace);
+  }, [namespace]);
 
   if (q.isPending) {
     return (
@@ -59,12 +82,18 @@ export function ClusterDetailLayout() {
     );
   }
   if (q.error || !q.data) {
+    // A pre-namespace `/clusters/<name>/<tab>` link parses as namespace
+    // `<name>` and cluster `<tab>`; when the server knows no such cluster,
+    // resend it to the default namespace.
+    if (q.error instanceof ApiError && q.error.status === 404 && TAB_SEGMENTS[name]) {
+      return <Navigate to={`${clusterPath(DEFAULT_NAMESPACE, namespace)}/${name}`} replace />;
+    }
     return (
       <div className="page">
         <PageHeader
           crumbs={
             <>
-              <Link to="/clusters">Clusters</Link> <span>/</span> <span className="mono">{name}</span>
+              <Link to="/clusters">Clusters</Link> <span>/</span> <span className="mono">{namespace}</span> <span>/</span> <span className="mono">{name}</span>
             </>
           }
           title={name}
@@ -74,8 +103,7 @@ export function ClusterDetailLayout() {
     );
   }
   const cluster = q.data;
-  const can: ClusterContext['can'] = (act, resource = 'clusters') => auth.can(resource, act, name);
-  const base = `/clusters/${encodeURIComponent(name)}`;
+  const can: ClusterContext['can'] = (act, resource = 'clusters') => auth.can(resource, act, clusterObject(namespace, name));
   const suspended = cluster.status.phase === 'Suspended';
   const colocated = cluster.status.placement?.groups.some((g) => g.members.length > 1);
 
@@ -84,7 +112,11 @@ export function ClusterDetailLayout() {
       <PageHeader
         crumbs={
           <>
-            <Link to="/clusters">Clusters</Link> <span>/</span> <span className="mono">{name}</span>
+            <Link to="/clusters">Clusters</Link> <span>/</span>{' '}
+            <Link to={`/clusters?namespace=${encodeURIComponent(namespace)}`} className="mono">
+              {namespace}
+            </Link>{' '}
+            <span>/</span> <span className="mono">{name}</span>
           </>
         }
         title={
@@ -118,7 +150,7 @@ export function ClusterDetailLayout() {
                 <MenuItem onClick={() => setConfirm('rotate-tls')} disabled={cluster.spec.tls?.mode === 'disabled'} title={cluster.spec.tls?.mode === 'disabled' ? 'TLS is disabled' : undefined}>
                   Rotate TLS certificates…
                 </MenuItem>
-                <MenuItem onClick={() => navigate(`/clusters/new?from=${encodeURIComponent(name)}`)}>Clone into new cluster…</MenuItem>
+                <MenuItem onClick={() => navigate(`/clusters/new?namespace=${encodeURIComponent(namespace)}&from=${encodeURIComponent(name)}`)}>Clone into new cluster…</MenuItem>
               </Menu>
             ) : null}
           </>
@@ -143,7 +175,7 @@ export function ClusterDetailLayout() {
           { to: `${base}/delete`, label: 'Delete' },
         ]}
       />
-      <Outlet context={{ cluster, name, can } satisfies ClusterContext} />
+      <Outlet context={{ cluster, namespace, name, base, can } satisfies ClusterContext} />
 
       <ConfirmDialog
         open={confirm === 'restart'}

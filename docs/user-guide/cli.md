@@ -15,7 +15,7 @@ karactl --context production logout
 
 Login prompts without echo on a terminal, starts a temporary password session, creates an owner-scoped API token, saves it and closes the browser-style session. Finish a forced password change in the UI before CLI login. Login saves the selected context as current. There is no separate `contexts` command: `--context NAME` selects a saved connection, and login creates/updates it. An explicitly selected nonexistent context is rejected outside login.
 
-Contexts live at `~/.config/karakoram/config.yaml` (independent of XDG overrides), in owner-only files (0600) and a newly created directory (0700). Each holds server, token and tokenID. Protect it like a credential. Server/token precedence is **explicit flags > KARAKORAM_SERVER/KARAKORAM_TOKEN > selected saved context**. With no explicit selection, the saved currentContext is used, otherwise `default`. Server URLs may use the origin or end in `/api/v1`; root health/metrics still use the installation base.
+Contexts live at `~/.config/karakoram/config.yaml` (independent of XDG overrides), in owner-only files (0600) and a newly created directory (0700). Each holds server, token, tokenID and an optional namespace. Protect it like a credential. Server/token precedence is **explicit flags > KARAKORAM_SERVER/KARAKORAM_TOKEN > selected saved context**. Namespace precedence for object commands is **`--namespace/-n` > context namespace > `default`**; collection commands without an explicit `-n` include all authorized namespaces. With no explicit context selection, the saved currentContext is used, otherwise `default`. Server URLs may use the origin or end in `/api/v1`; root health/metrics still use the installation base.
 
 For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret manager. Avoid `--token` in process listings/history. Karakoram API tokens are not Zerops integration tokens. Logout normally revokes the matching saved CLI token before clearing local credentials; `logout --local` deliberately leaves server authority active. With an overriding token, do not assume logout revoked a different saved token—revoke its ID explicitly when needed.
 
@@ -29,10 +29,11 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - Cluster mutations with `--wait` observe operation completion and cluster generation. Default timeout is thirty minutes; `--timeout` changes it. A wait timeout does not cancel server work. Inspect status before another submission.
 - Backup/restore creation returns accepted records; inspect the corresponding Operation and record with `operations wait ID`, `backups get` or `restores get`. Those creation commands do not have an invented `--wait` flag.
 - `events watch` streams SSE, supports replay/filter flags, and runs until interrupted. `operations wait` polls a persisted operation until its terminal phase.
+- Events and Operations show the initiating `actor` alongside `namespace` in table/JSON/YAML output, including cluster-scoped views and event watch. `events list --actor VALUE --resource VALUE` and `events watch --actor VALUE --resource VALUE` add exact, case-sensitive AND filters that compose with `--namespace/-n`; omit a flag to leave it unrestricted. Cluster records require `events:read` or `audit:read` on `<namespace>/<cluster>`, namespace-level audit requires `audit:read` on `<namespace>`, and global installation audit requires it on `*`. Use the full persisted account/token actor string and preserve all filters with `--cursor`.
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
-Examples and safety prerequisites: [replica sets](replica-sets.md), [sharding](sharding.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
+Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
 
 ## Orphaned platform volumes
 
@@ -48,6 +49,8 @@ The default output is a table; `-o json` preserves the structured `{items: [...]
 ## Generated command tree
 
 Use `karactl --help` and each subcommand's `--help` for the current command and flag reference. Make installs the CLI as `bin/karactl`. `[flags]` and inherited global flags are omitted from tree rows for readability.
+
+Use `--namespace NAME` (`-n NAME`) to select a project namespace. Single-object, create and mutation commands resolve **flag > saved context namespace > `default`**. Unfiltered collections show all authorized namespaces and a `NAMESPACE` table column; an explicit `-n` filters them even when a context has a namespace saved. Set that optional context value with `karactl config set-context NAME --namespace PROJECT`. Namespace tokens are accepted only through `namespaces create/rotate-token --token-file FILE` (`-` reads stdin). Restore and clone commands accept `--source-namespace`; `restores create --into-new` creates its target in the namespace selected by `-n`.
 
 ```text
 karactl
@@ -97,6 +100,8 @@ karactl
     fish
     powershell
     zsh
+  config
+    set-context <name>
   db-roles
     create <cluster>
     delete <cluster> <database> <role>
@@ -116,6 +121,14 @@ karactl
   login
   logout
   metrics
+  namespaces
+    create
+    delete <namespace>
+    get <namespace>
+    list
+    rotate-token <namespace>
+    update <namespace>
+    validate <namespace>
   operations
     cluster <cluster>
     get <id>
@@ -467,20 +480,24 @@ Commands absent below have no additional non-help flags. Query flags only reach 
 ### `karactl events list`
 
 ```text
+      --actor string       API actor parameter
       --cluster string     API cluster parameter
       --cursor string      API cursor parameter
       --limit int          API limit parameter (default 100)
       --operation string   API operationId parameter
+      --resource string    API resource parameter
       --type string        API type parameter
 ```
 
 ### `karactl events watch`
 
 ```text
+      --actor string           API actor parameter
       --cluster string         API cluster parameter
       --cursor string          API cursor parameter
       --last-event-id string   API Last-Event-ID parameter
       --operation string       API operationId parameter
+      --resource string        API resource parameter
       --type string            API type parameter
 ```
 

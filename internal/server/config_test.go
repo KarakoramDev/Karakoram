@@ -93,30 +93,30 @@ func TestAgentDialerCacheInvalidatesRotatedCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Store.SetClusterSecret(ctx, "prod", "tls/ca.crt", ca.CertPEM); err != nil {
+	if err = s.Store.SetClusterSecret(ctx, domain.ClusterRef{Name: "prod"}, "tls/ca.crt", ca.CertPEM); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.Store.SetAgentToken(ctx, &domain.AgentToken{Cluster: "prod", Member: "prodm0", Token: "first-token"}); err != nil {
 		t.Fatal(err)
 	}
-	d := NewAgentDialer(s.Store)
+	d := NewAgentDialer(s.Store, nil)
 	defer d.Close()
-	first, err := d.Dial(ctx, "prod", "prodm0")
+	first, err := d.Dial(ctx, domain.ClusterRef{Name: "prod"}, "prodm0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := d.Dial(ctx, "prod", "prodm0")
+	second, err := d.Dial(ctx, domain.ClusterRef{Name: "prod"}, "prodm0")
 	if err != nil || first != second {
 		t.Fatal("cache miss", err)
 	}
 	if err = s.Store.SetAgentToken(ctx, &domain.AgentToken{Cluster: "prod", Member: "prodm0", Token: "second-token"}); err != nil {
 		t.Fatal(err)
 	}
-	third, err := d.Dial(ctx, "prod", "prodm0")
+	third, err := d.Dial(ctx, domain.ClusterRef{Name: "prod"}, "prodm0")
 	if err != nil || first == third {
 		t.Fatal("rotated token retained", err)
 	}
-	if _, err = d.Dial(ctx, "prod", "other.example/path"); err == nil {
+	if _, err = d.Dial(ctx, domain.ClusterRef{Name: "prod"}, "other.example/path"); err == nil {
 		t.Fatal("unsafe hostname accepted")
 	}
 }
@@ -126,7 +126,7 @@ func TestProviderTopologyDefaultsAndObservedMemberMapping(t *testing.T) {
 		t.Fatal(p)
 	}
 	bounds := domain.Resources{CPUMode: "DEDICATED", MinCPU: 2, MaxCPU: 2, MinRAM: 1, MaxRAM: 2, MinDisk: 1, MaxDisk: 3}
-	m := (&Server{}).memberAPI("prod", domain.MemberStatus{Name: "prodm0", PublicHost: "public.example:10000", Resources: &domain.ObservedResources{CPUCores: 1, MemoryGB: 0.5, DiskGB: 5}, Autoscaling: &bounds})
+	m := (&Server{}).memberAPI(domain.ClusterRef{Name: "prod"}, domain.MemberStatus{Name: "prodm0", PublicHost: "public.example:10000", Resources: &domain.ObservedResources{CPUCores: 1, MemoryGB: 0.5, DiskGB: 5}, Autoscaling: &bounds})
 	if m.PublicHost == nil || m.Resources == nil || m.Resources.MemoryGB != 0.5 {
 		t.Fatal(m)
 	}
@@ -159,7 +159,7 @@ func TestTLSInputsStayWriteOnlyAndRejectCAReplacement(t *testing.T) {
 	if w.Code != 201 || strings.Contains(w.Body.String(), "PRIVATE KEY") || strings.Contains(w.Body.String(), "caPrivateKey") {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	stored, err := s.Store.GetClusterSecret(context.Background(), "tlsdemo", "tls/ca.key")
+	stored, err := s.Store.GetClusterSecret(context.Background(), domain.ClusterRef{Name: "tlsdemo"}, "tls/ca.key")
 	if err != nil || string(stored) != key {
 		t.Fatal("CA key not persisted", err)
 	}
@@ -178,11 +178,11 @@ func TestTLSInputsStayWriteOnlyAndRejectCAReplacement(t *testing.T) {
 	if w.Code != 409 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	cluster, err := s.Store.GetCluster(context.Background(), "tlsdemo")
+	cluster, err := s.Store.GetCluster(context.Background(), domain.ClusterRef{Name: "tlsdemo"})
 	if err != nil || cluster.Generation != 1 {
 		t.Fatal(cluster, err)
 	}
-	stored, err = s.Store.GetClusterSecret(t.Context(), "tlsdemo", "tls/ca.key")
+	stored, err = s.Store.GetClusterSecret(t.Context(), domain.ClusterRef{Name: "tlsdemo"}, "tls/ca.key")
 	if err != nil || string(stored) != string(ca.KeyPEM) {
 		t.Fatal("rejected replacement changed active CA", err)
 	}

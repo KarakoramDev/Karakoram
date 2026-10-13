@@ -41,7 +41,7 @@ func TestDeletionChoices(t *testing.T) {
 			t.Setenv("KARAKORAM_E2E_STORAGE_NAME", "")
 			storage := s.storage()
 			var configured api.BackupStorage
-			s.expect(&configured)(s.client.GetBackupStorage(s.ctx, storage))
+			s.expect(&configured)(s.client.GetBackupStorage(s.ctx, storage, nil))
 			if configured.Prefix == nil || *configured.Prefix != "karakoram-e2e/"+storage {
 				t.Fatal("refusing S3 inspection outside the test-created prefix")
 			}
@@ -122,10 +122,10 @@ func TestDeletionChoices(t *testing.T) {
 					s.restore(name, api.RestoreSource{Backup: ptr(backup.Name), SourceCluster: name})
 					s.proof(name, "suspend-proof", "durable")
 				} else {
-					s.expect(nil, 404)(s.client.GetBackup(s.ctx, name, backup.Name))
+					s.expect(nil, 404)(s.client.GetBackup(s.ctx, name, backup.Name, nil))
 				}
 			} else {
-				s.expect(nil, 404)(s.client.GetCluster(s.ctx, name))
+				s.expect(nil, 404)(s.client.GetCluster(s.ctx, name, nil))
 				if choice.backups {
 					var retained api.BackupList
 					s.expect(&retained)(s.client.ListBackups(s.ctx, name, &api.ListBackupsParams{Limit: ptr(100)}))
@@ -139,7 +139,7 @@ func TestDeletionChoices(t *testing.T) {
 						t.Fatal("deleted source's retained backup is not listed")
 					}
 					var inspected api.Backup
-					s.expect(&inspected)(s.client.GetBackup(s.ctx, name, backup.Name))
+					s.expect(&inspected)(s.client.GetBackup(s.ctx, name, backup.Name, nil))
 					if inspected.PbmName == nil || *inspected.PbmName != *backup.PbmName {
 						t.Fatal("retained backup lost its PBM identity")
 					}
@@ -152,7 +152,7 @@ func TestDeletionChoices(t *testing.T) {
 					// longer prevents storage deletion.
 					s.deleteClusterOptions(clone, false, false)
 					s.expect(nil, 204)(s.client.DeleteBackup(s.ctx, name, backup.Name, &api.DeleteBackupParams{}))
-					s.expect(nil, 404)(s.client.GetBackup(s.ctx, name, backup.Name))
+					s.expect(nil, 404)(s.client.GetBackup(s.ctx, name, backup.Name, nil))
 					removed := list(s.ctx, name+"-s3-after-retained-delete")
 					for key := range snapshotKeys {
 						if _, exists := removed[key]; exists {

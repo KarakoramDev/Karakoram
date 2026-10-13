@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
@@ -23,11 +24,11 @@ func TestSetClusterSecretsAtomicRoundTrip(t *testing.T) {
 	defer st.Close()
 	ctx := context.Background()
 	in := map[string][]byte{"tls/ca.crt": []byte("cert"), "tls/ca.key": []byte("key")}
-	if err := st.SetClusterSecrets(ctx, "demo", in); err != nil {
+	if err := st.SetClusterSecrets(ctx, domain.ParseClusterKey("demo"), in); err != nil {
 		t.Fatal(err)
 	}
 	for k, want := range in {
-		got, err := st.GetClusterSecret(ctx, "demo", k)
+		got, err := st.GetClusterSecret(ctx, domain.ParseClusterKey("demo"), k)
 		if err != nil || string(got) != string(want) {
 			t.Fatalf("%s: got %q, %v", k, got, err)
 		}

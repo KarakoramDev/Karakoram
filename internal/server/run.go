@@ -8,11 +8,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/events"
 	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
+	"github.com/KarakoramDev/Karakoram/internal/namespaces"
 	"github.com/KarakoramDev/Karakoram/internal/orphanvolumes"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/reconciler"
@@ -69,7 +71,8 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	tlsConfig, ca, err := internalTLS(ctx, st, sealer, c.Hostname)
+	relayHostname := envDefault("KARAKORAM_RELAY_HOSTNAME", namespaces.RelayHostname(c.Hostname))
+	tlsConfig, ca, err := internalTLS(ctx, st, sealer, c.Hostname, relayHostname)
 	if err != nil {
 		return err
 	}
@@ -82,12 +85,17 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	dialer := NewAgentDialer(st)
-	defer dialer.Close()
 	hub := events.NewHub(128)
 	recorder := events.NewRecorder(st, hub)
-	rc := engine.Context{Backend: backend, Secrets: st, Store: st, Events: recorder, Agents: dialer, Artifact: engine.ExecutableArtifact{}, Logger: logger, Clock: engine.RealClock{}}
-	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Context: rc})
+	namespaceRegistry, err := namespaces.New(ctx, namespaces.Options{Store: st, DefaultBackend: backend, Zerops: zerops.Options{Token: c.ZeropsToken, ProjectID: c.ZeropsProjectID, BaseURL: c.ZeropsAPIURL}, PublicURL: c.PublicURL, AdvertiseURL: c.AdvertiseURL, RelayHostname: relayHostname, Events: recorder, Logger: logger})
+	if err != nil {
+		return err
+	}
+	defer namespaceRegistry.Close()
+	dialer := NewAgentDialer(st, namespaceRegistry)
+	defer dialer.Close()
+	rc := engine.Context{Namespace: domain.DefaultNamespace, AgentURL: c.AdvertiseURL, Backend: backend, Secrets: st, Store: st, Events: recorder, Agents: dialer, Artifact: engine.ExecutableArtifact{}, Logger: logger, Clock: engine.RealClock{}}
+	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Namespaces: namespaceRegistry, Context: rc})
 	if err != nil {
 		return err
 	}
@@ -95,9 +103,9 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	janitor := orphanvolumes.New(orphanvolumes.Options{Store: st, Backend: backend, Events: recorder, Logger: logger, Now: time.Now})
+	janitor := orphanvolumes.New(orphanvolumes.Options{Store: st, Namespaces: namespaceRegistry, Events: recorder, Logger: logger, Now: time.Now})
 	collector := monitoring.New(monitoring.Options{Store: st, Dialer: dialer, Logger: logger, Targets: func(ctx context.Context) ([]monitoring.Target, error) {
-		clusters, err := st.ListClusters(ctx)
+		clusters, err := st.ListClusters(ctx, "")
 		if err != nil {
 			return nil, err
 		}
@@ -107,12 +115,12 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 				continue
 			}
 			for _, m := range c.Status.Members {
-				out = append(out, monitoring.Target{Cluster: c.Name, Member: m.Name})
+				out = append(out, monitoring.Target{Namespace: domain.NormalizedNamespace(c.Namespace), Cluster: c.Name, Member: m.Name})
 			}
 		}
 		return out, nil
 	}})
-	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger})
+	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger})
 	if err != nil {
 		return err
 	}
@@ -132,11 +140,13 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	defer cancel()
 	public.BaseContext = func(net.Listener) context.Context { return child }
 	internal.BaseContext = func(net.Listener) context.Context { return child }
-	results := make(chan error, 6)
+	results := make(chan error, 8)
 	var workers sync.WaitGroup
 	launch := func(run func() error) { workers.Add(1); go func() { defer workers.Done(); results <- run() }() }
 	launch(func() error { return public.Serve(publicListener) })
 	launch(func() error { return internal.Serve(tls.NewListener(internalListener, tlsConfig)) })
+	launch(func() error { return internal.Serve(tls.NewListener(namespaceRegistry.Hub.Listener(), tlsConfig)) })
+	launch(func() error { return namespaceRegistry.Run(child) })
 	launch(func() error { return manager.Run(child) })
 	launch(func() error { return schedules.Run(child) })
 	launch(func() error { return janitor.Run(child) })
@@ -154,6 +164,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	_ = internal.Shutdown(shutdown)
 	_ = public.Close()
 	_ = internal.Close()
+	_ = namespaceRegistry.Close()
 	workers.Wait()
 	if errors.Is(runErr, http.ErrServerClosed) || errors.Is(runErr, context.Canceled) {
 		return nil

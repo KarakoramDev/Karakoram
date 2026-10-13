@@ -12,8 +12,9 @@ import (
 )
 
 type subscription struct {
-	cluster string
-	ch      chan domain.Event
+	namespace string
+	cluster   string
+	ch        chan domain.Event
 }
 
 // Hub fans out live events without blocking producers.
@@ -34,12 +35,12 @@ func NewHub(buffer int) *Hub {
 
 // Subscribe returns a bounded stream and an idempotent cancellation function.
 // Slow consumers may lose live events and recover them from the durable log.
-func (h *Hub) Subscribe(cluster string) (<-chan domain.Event, func()) {
+func (h *Hub) Subscribe(namespace, cluster string) (<-chan domain.Event, func()) {
 	h.mu.Lock()
 	h.next++
 	id := h.next
 	ch := make(chan domain.Event, h.buffer)
-	h.subscribers[id] = subscription{cluster: cluster, ch: ch}
+	h.subscribers[id] = subscription{namespace: namespace, cluster: cluster, ch: ch}
 	h.mu.Unlock()
 	var once sync.Once
 	cancel := func() { once.Do(func() { h.mu.Lock(); delete(h.subscribers, id); close(ch); h.mu.Unlock() }) }
@@ -48,9 +49,13 @@ func (h *Hub) Subscribe(cluster string) (<-chan domain.Event, func()) {
 
 // Publish offers an event to matching subscribers without blocking.
 func (h *Hub) Publish(event domain.Event) {
+	event.Namespace = domain.NormalizedNamespace(event.Namespace)
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, s := range h.subscribers {
+		if s.namespace != "" && s.namespace != event.Namespace {
+			continue
+		}
 		if s.cluster != "" && s.cluster != event.Cluster {
 			continue
 		}
@@ -74,6 +79,7 @@ func NewRecorder(repository store.EventRepository, hub *Hub) *Recorder {
 
 // Record durably appends an event before broadcasting its assigned ID.
 func (r *Recorder) Record(ctx context.Context, event domain.Event) error {
+	event.Namespace = domain.NormalizedNamespace(event.Namespace)
 	if err := r.store.AppendEvent(ctx, &event); err != nil {
 		return err
 	}

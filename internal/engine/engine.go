@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"sort"
 	"sync"
 	"time"
@@ -54,23 +55,23 @@ type OpResult struct {
 
 // SecretStore provides encrypted cluster and agent credential persistence.
 type SecretStore interface {
-	GetClusterSecret(context.Context, string, string) ([]byte, error)
-	SetClusterSecret(context.Context, string, string, []byte) error
-	DeleteClusterSecret(context.Context, string, string) error
-	GetAgentToken(context.Context, string, string) (*domain.AgentToken, error)
+	GetClusterSecret(context.Context, domain.ClusterRef, string) ([]byte, error)
+	SetClusterSecret(context.Context, domain.ClusterRef, string, []byte) error
+	DeleteClusterSecret(context.Context, domain.ClusterRef, string) error
+	GetAgentToken(context.Context, domain.ClusterRef, string) (*domain.AgentToken, error)
 	SetAgentToken(context.Context, *domain.AgentToken) error
-	DeleteAgentToken(context.Context, string, string) error
+	DeleteAgentToken(context.Context, domain.ClusterRef, string) error
 }
 
 // ClusterStore exposes the inventory and cluster reads needed by a provider.
 type ClusterStore interface {
-	GetCluster(context.Context, string) (*domain.Cluster, error)
-	ListClusters(context.Context) ([]domain.Cluster, error)
-	GetBackupStorage(context.Context, string) (*domain.BackupStorage, error)
-	GetBackup(context.Context, string, string) (*domain.Backup, error)
-	ListBackups(context.Context, string) ([]domain.Backup, error)
+	GetCluster(context.Context, domain.ClusterRef) (*domain.Cluster, error)
+	ListClusters(context.Context, string) ([]domain.Cluster, error)
+	GetBackupStorage(context.Context, string, string) (*domain.BackupStorage, error)
+	GetBackup(context.Context, domain.ClusterRef, string) (*domain.Backup, error)
+	ListBackups(context.Context, domain.ClusterRef) ([]domain.Backup, error)
 	UpdateBackup(context.Context, *domain.Backup) error
-	DeleteBackup(context.Context, string, string) error
+	DeleteBackup(context.Context, domain.ClusterRef, string) error
 	CreateBackup(context.Context, *domain.Backup) error
 	CreateRestore(context.Context, *domain.Restore) error
 	// EnqueueOperation durably queues an operation for the cluster's worker.
@@ -80,15 +81,15 @@ type ClusterStore interface {
 	// EnqueueRestore atomically creates a Pending restore record and its restore operation.
 	EnqueueRestore(context.Context, *domain.Restore, *domain.Operation) error
 	GetOperation(context.Context, string) (*domain.Operation, error)
-	GetRestore(context.Context, string, string) (*domain.Restore, error)
+	GetRestore(context.Context, domain.ClusterRef, string) (*domain.Restore, error)
 	UpdateRestore(context.Context, *domain.Restore) error
-	ListRetainedVolumes(context.Context, string) ([]domain.RetainedVolume, error)
+	ListRetainedVolumes(context.Context, domain.ClusterRef) ([]domain.RetainedVolume, error)
 	CreateRetainedVolume(context.Context, *domain.RetainedVolume) error
-	DeleteRetainedVolume(context.Context, string, string) error
+	DeleteRetainedVolume(context.Context, domain.ClusterRef, string) error
 	PutOrphanedVolume(context.Context, *domain.OrphanedVolume) error
-	GetOrphanedVolume(context.Context, string) (*domain.OrphanedVolume, error)
-	ListOrphanedVolumes(context.Context) ([]domain.OrphanedVolume, error)
-	DeleteOrphanedVolume(context.Context, string) error
+	GetOrphanedVolume(context.Context, string, string) (*domain.OrphanedVolume, error)
+	ListOrphanedVolumes(context.Context, string) ([]domain.OrphanedVolume, error)
+	DeleteOrphanedVolume(context.Context, string, string) error
 }
 
 // Recorder persists an event before publishing it to live subscribers.
@@ -98,7 +99,7 @@ type Recorder interface {
 
 // AgentDialer constructs authenticated, CA-pinned member clients.
 type AgentDialer interface {
-	Dial(context.Context, string, string) (*agentapi.Client, error)
+	Dial(context.Context, domain.ClusterRef, string) (*agentapi.Client, error)
 }
 
 // ArtifactSource opens a stream of the deployable agent tar.gz artifact.
@@ -115,17 +116,53 @@ type RealClock struct{}
 // Now returns the current UTC wall-clock timestamp.
 func (RealClock) Now() time.Time { return time.Now().UTC() }
 
+// ContextDialer routes connections through a namespace's network.
+type ContextDialer interface {
+	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
+}
+
+// Namespaces resolves project-scoped infrastructure and transport dependencies.
+type Namespaces interface {
+	Backend(namespace string) (infra.Backend, error)
+	Dialer(namespace string) ContextDialer
+	AgentURL(namespace string) string
+}
+
+// StaticNamespaces preserves single-project installations.
+type StaticNamespaces struct {
+	DefaultBackend  infra.Backend
+	DefaultAgentURL string
+}
+
+func (s StaticNamespaces) Backend(namespace string) (infra.Backend, error) {
+	if namespace != "" && namespace != domain.DefaultNamespace {
+		return nil, fmt.Errorf("namespace %q does not exist", namespace)
+	}
+	return s.DefaultBackend, nil
+}
+
+func (s StaticNamespaces) Dialer(string) ContextDialer { return nil }
+func (s StaticNamespaces) AgentURL(namespace string) string {
+	if namespace == "" || namespace == domain.DefaultNamespace {
+		return s.DefaultAgentURL
+	}
+	return ""
+}
+
 // Context contains the dependencies and mutable state for one provider invocation.
 type Context struct {
-	Cluster  *domain.Cluster
-	Backend  infra.Backend
-	Secrets  SecretStore
-	Store    ClusterStore
-	Events   Recorder
-	Agents   AgentDialer
-	Artifact ArtifactSource
-	Logger   *slog.Logger
-	Clock    Clock
+	Namespace string
+	Dialer    ContextDialer
+	AgentURL  string
+	Cluster   *domain.Cluster
+	Backend   infra.Backend
+	Secrets   SecretStore
+	Store     ClusterStore
+	Events    Recorder
+	Agents    AgentDialer
+	Artifact  ArtifactSource
+	Logger    *slog.Logger
+	Clock     Clock
 }
 
 // Registry owns providers indexed by their unique names.
