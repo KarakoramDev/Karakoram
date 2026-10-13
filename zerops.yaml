@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+zerops:
+  - setup: karakoram
+    build:
+      # go.mod selects Go 1.24.0 through automatic toolchain download.
+      base: [go@1, nodejs@22]
+      buildCommands:
+        - cd ui && npm ci && npm run build
+        - >-
+          CGO_ENABLED=0 go build -tags ui -trimpath
+          -ldflags "-s -w
+          -X github.com/KarakoramDev/Karakoram/internal/version.Version=${KARAKORAM_VERSION:-dev}
+          -X github.com/KarakoramDev/Karakoram/internal/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || printf unknown)
+          -X github.com/KarakoramDev/Karakoram/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          -o karakoram ./cmd/karakoram
+      deployFiles: [karakoram]
+    deploy:
+      # SQLite and its Local Storage volume must have only one active writer.
+      temporaryShutdown: true
+      readinessCheck:
+        httpGet:
+          port: 8080
+          path: /healthz
+        failureTimeout: "120s"
+        retryPeriod: "10s"
+    run:
+      base: ubuntu@24.04
+      volume:
+        hostname: karakoramdata
+      ports:
+        - port: 8080
+          protocol: tcp
+          httpSupport: true
+        - port: 9443
+          protocol: tcp
+          httpSupport: false
+      envVariables:
+        KARAKORAM_DATA_DIR: /mnt/karakoramdata
+        KARAKORAM_ZEROPS_PROJECT_ID: ${projectId}
+        KARAKORAM_PUBLIC_URL: ${zeropsSubdomain}
+      start: ./karakoram server

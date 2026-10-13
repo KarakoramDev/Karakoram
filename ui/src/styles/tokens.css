@@ -1,0 +1,82 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright 2026 The Karakoram Authors */
+
+/*
+ * Karakoram design tokens.
+ * Palette: deep "ridge" navy chrome, cool off-white workspace, glacier-blue
+ * accent. Status colours are kept distinguishable without relying on hue alone
+ * (badges always carry text).
+ */
+:root {
+  color-scheme: light;
+
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.625rem;
+
+  --ridge-900: #0b1322;
+  --ridge-800: #0f1a2b;
+  --ridge-700: #182841;
+  --ridge-600: #223558;
+  --ridge-300: #8ea2c2;
+  --ridge-200: #b7c5db;
+  --ridge-100: #e2e9f4;
+
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2f7;
+  --border: #dde3ec;
+  --border-strong: #c5cfdd;
+  --text: #121a27;
+  --text-2: #4a566a;
+  --text-3: #7b879a;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #e6eefc;
+  --accent-text: #1e40af;
+
+  --ok: #15803d;
+  --ok-soft: #e4f5ea;
+  --warn: #b45309;
+  --warn-soft: #fdf1dc;
+  --danger: #b91c1c;
+  --danger-soft: #fde8e8;
+  --info: #0e7490;
+  --info-soft: #e0f4f8;
+  --neutral: #475569;
+  --neutral-soft: #eceff4;
+  --progress: #6d28d9;
+  --progress-soft: #ede9fe;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 26, 43, 0.06);
+  --shadow: 0 4px 16px rgba(15, 26, 43, 0.1);
+  --shadow-lg: 0 20px 48px rgba(15, 26, 43, 0.22);
+
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.35);
+
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 60px;
+  --topbar-h: 52px;
+  --content-max: 1480px;
+
+  --dur: 140ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+  }
+}

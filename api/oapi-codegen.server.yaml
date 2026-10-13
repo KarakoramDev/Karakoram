@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+package: api
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
+output: ../internal/api/gen.go
+output-options:
+  skip-prune: true

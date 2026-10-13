@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+# TEST ONLY: auto-authenticates all visitors; never deploy as a production IdP.
+zerops:
+  - setup: oidcissuer
+    build:
+      base: go@1
+      buildCommands:
+        - CGO_ENABLED=0 go build -trimpath -o oidc-issuer ./test/oidc-issuer
+      deployFiles: [oidc-issuer]
+    deploy:
+      readinessCheck:
+        httpGet:
+          port: 8080
+          path: /healthz
+        failureTimeout: "120s"
+        retryPeriod: "10s"
+    run:
+      base: ubuntu@24.04
+      ports:
+        - port: 8080
+          protocol: tcp
+          httpSupport: true
+      envVariables:
+        OIDC_ISSUER_URL: ${zeropsSubdomain}
+        # Replace with your control plane's callback URL before deployment.
+        OIDC_CALLBACK_URL: https://karakoram.example.com/api/v1/auth/oidc/callback
+      start: ./oidc-issuer

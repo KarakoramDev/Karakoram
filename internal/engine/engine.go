@@ -1,0 +1,186 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package engine
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+)
+
+// Provider defines idempotent engine reconciliation and resumable operations.
+type Provider interface {
+	Name() string
+	Describe() domain.ProviderInfo
+	ApplyDefaults(*domain.ClusterSpec)
+	Validate(context.Context, *domain.Cluster, *domain.Cluster) error
+	Sync(context.Context, *Context) (Result, error)
+	Status(context.Context, *Context) (domain.ClusterStatus, error)
+	RunOperation(context.Context, *Context, *domain.Operation) (OpResult, error)
+	Cleanup(context.Context, *Context, domain.DeleteOptions) (bool, error)
+}
+
+// OperationSyncPolicy optionally permits ordinary Sync after a nonterminal,
+// successful RunOperation call. Without this policy, Running operations exclude
+// Sync and Status, which may be unsafe while restore stops database processes.
+// The decision uses the newly returned checkpoint. PSMDB must opt in only at
+// replacement provisioning/join checkpoints so Sync can create the new member;
+// restore, restart and credential-recovery checkpoints must remain isolated.
+type OperationSyncPolicy interface {
+	SyncDuringOperation(op *domain.Operation) bool
+}
+
+// Result requests a delay before the next level-triggered reconciliation.
+type Result struct{ RequeueAfter time.Duration }
+
+// OpResult reports operation completion and the next durable checkpoint.
+type OpResult struct {
+	Done         bool
+	RequeueAfter time.Duration
+	Step         string
+	Message      string
+	Checkpoint   json.RawMessage
+}
+
+// SecretStore provides encrypted cluster and agent credential persistence.
+type SecretStore interface {
+	GetClusterSecret(context.Context, string, string) ([]byte, error)
+	SetClusterSecret(context.Context, string, string, []byte) error
+	DeleteClusterSecret(context.Context, string, string) error
+	GetAgentToken(context.Context, string, string) (*domain.AgentToken, error)
+	SetAgentToken(context.Context, *domain.AgentToken) error
+	DeleteAgentToken(context.Context, string, string) error
+}
+
+// ClusterStore exposes the inventory and cluster reads needed by a provider.
+type ClusterStore interface {
+	GetCluster(context.Context, string) (*domain.Cluster, error)
+	ListClusters(context.Context) ([]domain.Cluster, error)
+	GetBackupStorage(context.Context, string) (*domain.BackupStorage, error)
+	GetBackup(context.Context, string, string) (*domain.Backup, error)
+	ListBackups(context.Context, string) ([]domain.Backup, error)
+	UpdateBackup(context.Context, *domain.Backup) error
+	DeleteBackup(context.Context, string, string) error
+	CreateBackup(context.Context, *domain.Backup) error
+	CreateRestore(context.Context, *domain.Restore) error
+	// EnqueueOperation durably queues an operation for the cluster's worker.
+	EnqueueOperation(context.Context, *domain.Operation) error
+	// EnqueueBackup atomically creates a Pending backup record and its backup operation.
+	EnqueueBackup(context.Context, *domain.Backup, *domain.Operation) error
+	// EnqueueRestore atomically creates a Pending restore record and its restore operation.
+	EnqueueRestore(context.Context, *domain.Restore, *domain.Operation) error
+	GetOperation(context.Context, string) (*domain.Operation, error)
+	GetRestore(context.Context, string, string) (*domain.Restore, error)
+	UpdateRestore(context.Context, *domain.Restore) error
+	ListRetainedVolumes(context.Context, string) ([]domain.RetainedVolume, error)
+	CreateRetainedVolume(context.Context, *domain.RetainedVolume) error
+	DeleteRetainedVolume(context.Context, string, string) error
+	PutOrphanedVolume(context.Context, *domain.OrphanedVolume) error
+	GetOrphanedVolume(context.Context, string) (*domain.OrphanedVolume, error)
+	ListOrphanedVolumes(context.Context) ([]domain.OrphanedVolume, error)
+	DeleteOrphanedVolume(context.Context, string) error
+}
+
+// Recorder persists an event before publishing it to live subscribers.
+type Recorder interface {
+	Record(context.Context, domain.Event) error
+}
+
+// AgentDialer constructs authenticated, CA-pinned member clients.
+type AgentDialer interface {
+	Dial(context.Context, string, string) (*agentapi.Client, error)
+}
+
+// ArtifactSource opens a stream of the deployable agent tar.gz artifact.
+type ArtifactSource interface {
+	Open(context.Context) (io.ReadCloser, error)
+}
+
+// Clock supplies timestamps and supports deterministic tests.
+type Clock interface{ Now() time.Time }
+
+// RealClock supplies wall-clock UTC timestamps.
+type RealClock struct{}
+
+// Now returns the current UTC wall-clock timestamp.
+func (RealClock) Now() time.Time { return time.Now().UTC() }
+
+// Context contains the dependencies and mutable state for one provider invocation.
+type Context struct {
+	Cluster  *domain.Cluster
+	Backend  infra.Backend
+	Secrets  SecretStore
+	Store    ClusterStore
+	Events   Recorder
+	Agents   AgentDialer
+	Artifact ArtifactSource
+	Logger   *slog.Logger
+	Clock    Clock
+}
+
+// Registry owns providers indexed by their unique names.
+type Registry struct {
+	mu        sync.RWMutex
+	providers map[string]Provider
+}
+
+// NewRegistry registers providers, rejecting duplicate or empty names.
+func NewRegistry(providers ...Provider) (*Registry, error) {
+	r := &Registry{providers: make(map[string]Provider)}
+	for _, p := range providers {
+		if err := r.Register(p); err != nil {
+			return nil, err
+		}
+	}
+	return r, nil
+}
+
+// Register adds a uniquely named provider.
+func (r *Registry) Register(p Provider) error {
+	if p == nil || p.Name() == "" {
+		return fmt.Errorf("provider name is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.providers == nil {
+		r.providers = make(map[string]Provider)
+	}
+	if _, ok := r.providers[p.Name()]; ok {
+		return fmt.Errorf("provider %q already registered", p.Name())
+	}
+	r.providers[p.Name()] = p
+	return nil
+}
+
+// Get returns the provider registered under a name.
+func (r *Registry) Get(name string) (Provider, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p, ok := r.providers[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown provider %q", name)
+	}
+	return p, nil
+}
+
+// List returns provider descriptions in name order.
+func (r *Registry) List() []domain.ProviderInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]domain.ProviderInfo, 0, len(r.providers))
+	for _, p := range r.providers {
+		out = append(out, p.Describe())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}

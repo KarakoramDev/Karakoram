@@ -1,0 +1,29 @@
+#yamlPreprocessor=on
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+# No inline pipeline: import infrastructure first, then push the local checkout.
+services:
+  - hostname: karakoramdata
+    type: local-storage:single@1
+    verticalAutoscaling:
+      minDisk: 5
+      maxDisk: 5
+  - hostname: karakoram
+    type: ubuntu@24.04
+    minContainers: 1
+    maxContainers: 1
+    enableSubdomainAccess: true
+    envSecrets:
+      KARAKORAM_MASTER_KEY: <@generateRandomString(<48>)>
+      KARAKORAM_ADMIN_PASSWORD: <@generateRandomString(<24>)>
+      # Replace before import, or set in the service GUI before the initial push.
+      # Zerops reserves ZEROPS_* for system variables.
+      KARAKORAM_ZEROPS_TOKEN: ""
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minCpu: 1
+      maxCpu: 1
+      minRam: 0.5
+      maxRam: 1
+      minDisk: 1
+      maxDisk: 2

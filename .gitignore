@@ -1,0 +1,8 @@
+bin/
+ui/node_modules/
+ui/dist/
+internal/ui/dist/
+*.db
+*.db-shm
+*.db-wal
+.env

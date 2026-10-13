@@ -1,0 +1,25 @@
+# 0006 — A thin infrastructure Backend and owned Zerops REST client
+
+Status: Accepted
+
+## Context
+
+Zerops exposes projects, service stacks, Local Storage services, environment secrets, app versions, public routes and asynchronous Processes. Its API is not a database controller. The broad `zerops-go` SDK is useful endpoint/DTO research, but exposing platform DTOs throughout the engine would tightly couple lifecycle code to that API.
+
+## Decision
+
+Define `infra.Backend` around required operations: project information; batch import; inspect/list/delete services; artifact deployment; service secret environment; lifecycle/resource changes; public port routing; containers/logs; and non-blocking operation status. Zerops is the sole implementation. Do not add speculative backends.
+
+Own a thin HTTP REST client in `internal/infra/zerops`, implementing only those endpoints and their wire types. Use `zerops-go` and platform documentation as references, not as the public domain contract or a runtime dependency. Preserve returned Process IDs in reconciliation state and poll `GET /process/{id}`; HTTP acceptance is not completion. `GetService` distinguishes an absent service from an API failure.
+
+Load the project-scoped token at runtime, send it only in authorization headers, and never include it in logs, artifacts or browser responses. Scope lookups/mutations to the configured project and owned resource identities; never manage the system `core` service. The engine requests intent through Backend types instead of constructing Zerops HTTP calls.
+
+## Consequences
+
+Wire/API changes are isolated and testable, and artifact streaming need not be forced through an unrelated abstraction. Karakoram owns endpoint coverage, error interpretation and compatibility maintenance. No platform rate-limit number or webhook/watch guarantee is invented; reconciliation uses polling. Logs are diagnostics, not durable controller truth.
+
+## Alternatives considered
+
+- **Use `zerops-go` directly:** broad ready-made endpoint coverage, but larger dependency/API surface and transport/DTO coupling; reconsider if its supported subset demonstrably reduces maintenance.
+- **Invoke `zcli`:** familiar operations, but subprocess/configuration dependencies and output parsing are undesirable inside the control plane.
+- **No Backend seam:** less initial code, but mixes platform and engine responsibilities.
