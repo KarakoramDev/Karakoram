@@ -169,6 +169,11 @@ func TestRabbitMQAgent(t *testing.T) {
 			}
 			return nil
 		})
+		// Zerops runs readiness checks as root with an empty environment and the
+		// provider's explicit engine and data-directory arguments.
+		if out, err := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "env", "-i", "/karakoram", "agent", "readiness", "--engine=rabbitmq", "--data-dir=/data").CombinedOutput(); err != nil {
+			t.Fatalf("platform-style readiness: %v: %s", err, out)
+		}
 		roots := x509.NewCertPool()
 		roots.AppendCertsFromPEM(ca.CertPEM)
 		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", docker("port", name, "5671/tcp"), &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12})

@@ -9,11 +9,15 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -23,6 +27,7 @@ import (
 
 func (s *suite) rabbitSpec(version string) api.ClusterSpec {
 	spec := api.ClusterSpec{Provider: "rabbitmq", Version: version, Topology: api.Topology{Type: api.TopologyTypeCluster}, Components: api.Components{Engine: api.Component{Replicas: 3, Resources: smallResources()}}, Tls: &api.TLS{Mode: api.TLSModeRequireTLS, Ca: api.TLSCaSelfSigned}, Exposure: &api.Exposure{Public: false}, Monitoring: &api.MonitoringSpec{Enabled: true}}
+	spec.EngineOptions = ptr(map[string]interface{}{"plugins": []string{"rabbitmq_stream"}})
 	if os.Getenv("KARAKORAM_E2E_ALLOW_CIDR") != "" {
 		spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.ExposureIpTypeIPV6), Allowlist: ptr([]string{requireCIDR(s.t)})}
 	}
@@ -248,6 +253,201 @@ func (s *suite) rabbitProof(name, vhost, user, password, queue, payload string) 
 	s.snapshot(name+"-quorum-proof", map[string]any{"queue": queue, "verifiedThroughAllMembers": true})
 }
 
+func (s *suite) rabbitStreamPublish(name, vhost, user, password, stream, payload string) {
+	s.t.Helper()
+	conn, ch := s.rabbitChannel(name, vhost, user, password, 0)
+	defer conn.Close()
+	defer ch.Close()
+	q, err := ch.QueueDeclare(stream, true, false, false, false, amqp.Table{"x-queue-type": "stream"})
+	if err != nil || q.Name != stream {
+		s.t.Fatal("declaring durable stream failed")
+	}
+	if err := ch.Confirm(false); err != nil {
+		s.t.Fatal("enabling stream publisher confirmations failed")
+	}
+	confirmation, err := ch.PublishWithDeferredConfirm("", stream, true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, ContentType: "text/plain", MessageId: stream, Body: []byte(payload)})
+	if err != nil || confirmation == nil {
+		s.t.Fatal("publishing persistent stream message failed")
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, time.Minute)
+	defer cancel()
+	ok, err := confirmation.WaitContext(ctx)
+	if err != nil || !ok {
+		s.t.Fatal("stream message was not positively confirmed")
+	}
+	s.snapshot(name+"-stream-publish", map[string]any{"stream": stream, "confirmed": true, "persistent": true})
+}
+
+// Each consumer starts at the first offset; acknowledgements do not remove
+// stream messages, so later phases can prove the original bytes again.
+func (s *suite) rabbitStreamProof(name, vhost, user, password, stream, payload string) {
+	s.t.Helper()
+	for endpoint := range s.members(name) {
+		func() {
+			conn, ch := s.rabbitChannel(name, vhost, user, password, endpoint)
+			defer conn.Close()
+			defer ch.Close()
+			q, err := ch.QueueDeclarePassive(stream, true, false, false, false, amqp.Table{"x-queue-type": "stream"})
+			if err != nil || q.Name != stream {
+				s.t.Fatal("durable stream disappeared")
+			}
+			if err := ch.Qos(10, 0, false); err != nil {
+				s.t.Fatal("setting stream consumer prefetch failed")
+			}
+			tag := s.name()
+			deliveries, err := ch.Consume(stream, tag, false, false, false, false, amqp.Table{"x-stream-offset": "first"})
+			if err != nil {
+				s.t.Fatal("starting stream consumer failed")
+			}
+			ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+			defer cancel()
+			for {
+				select {
+				case delivery, ok := <-deliveries:
+					if !ok {
+						s.t.Fatal("stream consumer closed before proof")
+					}
+					matched := string(delivery.Body) == payload
+					if matched && (delivery.DeliveryMode != amqp.Persistent || delivery.MessageId != stream) {
+						s.t.Fatal("persistent stream message metadata changed")
+					}
+					if err := delivery.Ack(false); err != nil {
+						s.t.Fatal("acknowledging stream message failed")
+					}
+					if matched {
+						if err := ch.Cancel(tag, false); err != nil {
+							s.t.Fatal("cancelling stream consumer failed")
+						}
+						return
+					}
+				case <-ctx.Done():
+					s.t.Fatal("persistent stream payload not observed within deadline")
+				}
+			}
+		}()
+	}
+	s.snapshot(name+"-stream-proof", map[string]any{"stream": stream, "verifiedThroughAllMembers": true})
+}
+
+func (s *suite) assertRabbitTLS(name string) {
+	s.t.Helper()
+	connection := s.connection(name)
+	roots := x509.NewCertPool()
+	if connection.CaCertificate == nil || !roots.AppendCertsFromPEM([]byte(*connection.CaCertificate)) {
+		s.t.Fatal("RabbitMQ cluster CA missing or invalid")
+	}
+	if len(connection.Connection.Hosts) == 0 {
+		s.t.Fatal("RabbitMQ private hosts missing")
+	}
+	for _, published := range connection.Connection.Hosts {
+		host, _, err := net.SplitHostPort(published)
+		if err != nil || host == "" {
+			s.t.Fatal("RabbitMQ published private host is not host:port")
+		}
+		for _, port := range []string{"5671", "5551"} {
+			ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+			dialer := tls.Dialer{Config: &tls.Config{RootCAs: roots, ServerName: host, MinVersion: tls.VersionTLS12}}
+			conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+			cancel()
+			if err != nil {
+				s.t.Fatalf("private RabbitMQ port %s failed CA and hostname verified TLS (%T)", port, err)
+			}
+			conn.Close()
+		}
+		s.rabbitPlaintextRejected(host, "5672", []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}, false)
+		// Minimal stream peer-properties request (version 1, empty properties).
+		s.rabbitPlaintextRejected(host, "5552", []byte{0, 0, 0, 8, 0, 17, 0, 1, 0, 0, 0, 0}, false)
+		verified := false
+		config := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			// Distribution certificates identify peers, not a public endpoint.
+			// VerifyConnection still requires a chain signed by the cluster CA.
+			InsecureSkipVerify: true,
+			VerifyConnection: func(state tls.ConnectionState) error {
+				if len(state.PeerCertificates) == 0 {
+					return errors.New("distribution server certificate missing")
+				}
+				intermediates := x509.NewCertPool()
+				for _, cert := range state.PeerCertificates[1:] {
+					intermediates.AddCert(cert)
+				}
+				_, err := state.PeerCertificates[0].Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}})
+				verified = err == nil
+				return err
+			},
+		}
+		ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+		dialer := tls.Dialer{Config: config}
+		conn, _ := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, "25672"))
+		cancel()
+		if conn != nil {
+			conn.Close()
+		}
+		// A missing client certificate may abort the handshake after the
+		// server chain is verified, but cannot excuse an unobserved chain.
+		if !verified {
+			s.t.Fatal("distribution TLS did not present a cluster-CA-signed server certificate")
+		}
+		// Modern Erlang send_name: tag, flags, creation, name length, name.
+		node := []byte("e2e@localhost")
+		packet := make([]byte, 17+len(node))
+		binary.BigEndian.PutUint16(packet[:2], uint16(len(packet)-2))
+		packet[2] = 'N'
+		binary.BigEndian.PutUint64(packet[3:11], 0x1074f9c)
+		binary.BigEndian.PutUint16(packet[15:17], uint16(len(node)))
+		copy(packet[17:], node)
+		s.rabbitPlaintextRejected(host, "25672", packet, true)
+	}
+	s.snapshot(name+"-private-tls", map[string]bool{"amqpsCAVerified": true, "amqpsHostnameVerified": true, "amqpPlaintextRejected": true, "distributionCAVerified": true, "distributionPlaintextRejected": true, "streamCAVerified": true, "streamHostnameVerified": true, "streamPlaintextRejected": true})
+}
+
+func (s *suite) rabbitPlaintextRejected(host, port string, probe []byte, distribution bool) {
+	s.t.Helper()
+	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return
+		}
+		s.t.Fatalf("private plaintext port %s probe inconclusive (%T)", port, err)
+	}
+	defer conn.Close()
+	deadline, _ := ctx.Deadline()
+	if err := conn.SetDeadline(deadline); err != nil {
+		s.t.Fatal("setting private plaintext probe deadline failed")
+	}
+	if _, err := conn.Write(probe); err != nil {
+		if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+			return
+		}
+		s.t.Fatalf("writing private plaintext port %s probe failed (%T)", port, err)
+	}
+	if distribution {
+		var header [2]byte
+		if _, err := io.ReadFull(conn, header[:]); err != nil {
+			return // Close or no valid reply within the bounded deadline.
+		}
+		size := binary.BigEndian.Uint16(header[:])
+		if size == 0 {
+			return
+		}
+		reply := make([]byte, int(size))
+		if _, err := io.ReadFull(conn, reply); err == nil && ((reply[0] == 's' && size > 1) || (reply[0] == 'N' && size >= 19) || (reply[0] == 'n' && size >= 11)) {
+			s.t.Fatal("plaintext Erlang distribution handshake reply observed")
+		}
+		return
+	}
+	var reply [1]byte
+	n, err := conn.Read(reply[:])
+	if n > 0 {
+		s.t.Fatalf("private plaintext port %s accepted a protocol probe", port)
+	}
+	if err == nil || !(errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET)) {
+		s.t.Fatalf("private plaintext port %s did not refuse or close (%T)", port, err)
+	}
+}
+
 func (s *suite) assertRabbitMetrics(name string) {
 	var baseline api.ClusterMetrics
 	s.expect(&baseline)(s.client.GetClusterMetrics(s.ctx, name, &api.GetClusterMetricsParams{Range: ptr("15m")}))
@@ -283,7 +483,7 @@ func (s *suite) rabbitUpgrade(name string) {
 	c := s.cluster(name)
 	c.Spec.Version = "4.3.6"
 	var changed api.Cluster
-	s.expect(&changed)(s.client.ReplaceCluster(s.ctx, name, nil, api.ReplaceClusterRequest{Spec: c.Spec}))
+	s.expect(&changed)(s.client.ReplaceClusterWithBody(s.ctx, name, &api.ReplaceClusterParams{Namespace: s.namespace}, "application/json", s.clusterBody(clusterWriteEnvelope{Spec: c.Spec})))
 	mixed := false
 	s.poll("rolling RabbitMQ 4.3.5 to 4.3.6 upgrade", convergenceTimeout, func() bool {
 		current := s.cluster(name)
