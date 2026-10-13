@@ -122,3 +122,17 @@ func TestTLSRotationWaitsForAcknowledgement(t *testing.T) {
 		t.Fatalf("acknowledgement: %+v %v", result, err)
 	}
 }
+
+// Every listed system user must be accepted by the rotation operation, so the
+// UI never offers a rotation that fails as unsupported.
+func TestSystemUsersAreRotatable(t *testing.T) {
+	users, err := (&Provider{}).SystemUsers(context.Background(), nil)
+	if err != nil || len(users) == 0 {
+		t.Fatal(users, err)
+	}
+	for _, u := range users {
+		if key, _ := rotationTarget(u.Name); key == "" {
+			t.Errorf("system user %q is not rotatable", u.Name)
+		}
+	}
+}

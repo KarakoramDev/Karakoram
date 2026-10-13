@@ -304,10 +304,12 @@ func (p *Provider) Connection(ctx context.Context, rc *engine.Context) (domain.C
 	return v, nil
 }
 
-// SystemUsers lists managed identities without credential material.
+// SystemUsers lists the managed identities that the rotate-system-user
+// operation accepts, without credential material. The control-plane admin
+// user is internal to the file realm and is not rotated through this list.
 func (*Provider) SystemUsers(context.Context, *engine.Context) ([]domain.SystemUser, error) {
 	out := []domain.SystemUser{}
-	for _, name := range []string{AdminUser, MonitorUser, "elastic", LogstashUser, APMUser, "kibana-token", "apm-secret-token"} {
+	for _, name := range []string{"elastic", MonitorUser, "kibana-token", "logstash", "apm", "apm-secret-token"} {
 		out = append(out, domain.SystemUser{Name: name})
 	}
 	return out, nil
