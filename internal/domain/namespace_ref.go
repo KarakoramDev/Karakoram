@@ -15,6 +15,11 @@ const DefaultNamespace = "default"
 // ClusterRef identifies a cluster within a namespace.
 type ClusterRef struct{ Namespace, Name string }
 
+// ClusterRefValidationError identifies an invalid namespace or ambiguous cluster name.
+type ClusterRefValidationError struct{ Message string }
+
+func (e *ClusterRefValidationError) Error() string { return e.Message }
+
 // NormalizedNamespace supplies the legacy default for omitted identities.
 func NormalizedNamespace(namespace string) string {
 	if namespace == "" {
@@ -31,10 +36,10 @@ func (c Cluster) Ref() ClusterRef {
 // An empty name is allowed for namespace-wide collection filters.
 func (r ClusterRef) Validate() error {
 	if err := ValidateNamespaceName(NormalizedNamespace(r.Namespace)); err != nil {
-		return err
+		return &ClusterRefValidationError{Message: err.Error()}
 	}
 	if strings.ContainsAny(r.Name, ":/") {
-		return fmt.Errorf("cluster identity contains a reserved separator")
+		return &ClusterRefValidationError{Message: "cluster identity contains a reserved separator"}
 	}
 	return nil
 }

@@ -115,6 +115,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "CreateCluster":
 		b := in.Body.(*api.CreateClusterRequest)
 		namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
+		if err := domain.ValidateClusterName(b.Name); err != nil {
+			return fail(400, "invalid_request", err.Error())
+		}
+		if err := domain.ValidateNamespaceName(namespace); err != nil {
+			return fail(400, "invalid_request", err.Error())
+		}
 		if failure := s.usableNamespace(namespace); failure != nil {
 			return *failure
 		}

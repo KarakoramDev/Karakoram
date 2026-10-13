@@ -106,6 +106,61 @@ func TestRevokedPendingSessionCannotReplaceCurrent(t *testing.T) {
 	}
 }
 
+func TestConditionalRevocationPreservesSessionAndOverlapFence(t *testing.T) {
+	f := newFixture(t)
+	old, err := ParseCertificatePEM(f.o.CertPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, key, err := IssueClientCertificate(f.ca, f.key, f.o.Namespace, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := ParseCertificatePEM(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.hub.SetPolicy(f.o.Namespace, []string{"member:27017"})
+	oldMux, oldControl := pendingControl(t, f, f.o)
+	if err = WriteHeader(oldControl, Reply{OK: true}); err != nil {
+		t.Fatal(err)
+	}
+	f.connected()
+	f.hub.Enroll(f.o.Namespace, current.SerialNumber.String(), old.SerialNumber.String(), old.NotAfter)
+	snapshot := f.hub.Status(f.o.Namespace)
+	next := f.o
+	next.CertPEM, next.KeyPEM = cert, key
+	currentMux, currentControl := pendingControl(t, f, next)
+	if err = WriteHeader(currentControl, Reply{OK: true}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return f.hub.Status(next.Namespace).CertificateSerial == current.SerialNumber.String() })
+	expectPeerClosed(t, oldMux)
+	status := f.hub.RevokeIfSerial(next.Namespace, snapshot.CertificateSerial)
+	if !status.Connected || status.CertificateSerial != current.SerialNumber.String() {
+		t.Fatal("stale revocation closed the new session", status)
+	}
+	f.hub.Enroll(next.Namespace, current.SerialNumber.String(), old.SerialNumber.String(), old.NotAfter)
+	if f.hub.AcceptsSerial(next.Namespace, old.SerialNumber.String()) {
+		t.Fatal("stale revocation discarded the overlap fence")
+	}
+	status = f.hub.RevokeIfSerial(next.Namespace, current.SerialNumber.String())
+	if status != (SessionStatus{}) {
+		t.Fatal("matching revocation retained session status", status)
+	}
+	expectPeerClosed(t, currentMux)
+	f.hub.Enroll(next.Namespace, current.SerialNumber.String(), old.SerialNumber.String(), old.NotAfter)
+	if f.hub.AcceptsSerial(next.Namespace, old.SerialNumber.String()) {
+		t.Fatal("matching revocation discarded the overlap fence")
+	}
+	f.hub.mu.Lock()
+	targets := len(f.hub.states[next.Namespace].policy.Targets)
+	f.hub.mu.Unlock()
+	if targets != 1 {
+		t.Fatal("session reconciliation discarded namespace policy")
+	}
+}
+
 func TestPublicationReauthorizesEnrollment(t *testing.T) {
 	f := newFixture(t)
 	f.hub.Close()

@@ -14,6 +14,10 @@ backup settings and schedules resolve storage names in their own namespace.
 Verification runs from the control plane's network, while backup payloads go
 directly between members and S3, not through the relay.
 
+New storage names must not contain `:` or `/`. Existing storages in namespace
+`default` with either character in their name remain readable and updatable;
+this creation-only restriction does not rename or invalidate legacy storages.
+
 For the CLI, prepare a protected API-shaped YAML/JSON request and pass it with `-f`:
 
 ```yaml

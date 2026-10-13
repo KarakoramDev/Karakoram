@@ -38,7 +38,10 @@ func startTestRelay(t *testing.T, r *Registry, n *domain.Namespace) {
 			t.Error(err)
 		}
 	})
-	waitNamespace(t, func() bool { return r.Hub.Status(n.Name).Connected })
+	waitNamespace(t, func() bool {
+		s := r.Hub.Status(n.Name)
+		return s.Connected && s.CertificateSerial == n.ClientSerial
+	})
 }
 
 func waitNamespace(t *testing.T, ready func() bool) {
@@ -100,6 +103,72 @@ func TestSessionStatusRejectsReusedNamespaceEnrollment(t *testing.T) {
 	r.syncSession(t.Context(), &replacement)
 	if replacement.Relay.Connected || replacement.Relay.Version != "" || !replacement.Relay.ConnectedSince.IsZero() || r.Hub.Status(n.Name).Connected {
 		t.Fatal("old session status trusted for new enrollment")
+	}
+}
+
+func TestSessionSnapshotCannotRevokePublishedEnrollment(t *testing.T) {
+	r, _, _ := setupRegistry(t)
+	n := createTestNamespace(t, r)
+	startTestRelay(t, r, n)
+	oldCert, err := relay.ParseCertificatePEM(n.ClientCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := r.issue(n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.o.Store.PutNamespaceRelayKey(t.Context(), n.Name, key); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.save(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := r.Hub.Status(n.Name)
+	if snapshot.CertificateSerial != oldCert.SerialNumber.String() || !snapshot.Connected {
+		t.Fatal("renewal did not retain the previous session")
+	}
+	// Pause synchronization after its snapshot, then publish the current leaf.
+	startTestRelay(t, r, n)
+	published := r.Hub.Status(n.Name)
+	if r.Hub.AcceptsSerial(n.Name, oldCert.SerialNumber.String()) {
+		t.Fatal("current publication did not revoke the previous serial")
+	}
+	r.syncSessionSnapshot(t.Context(), n, snapshot)
+	if !n.Relay.Connected || n.Relay.ConnectedSince != published.ConnectedSince || n.PreviousClientSerial != "" || !n.PreviousCertNotAfter.IsZero() {
+		t.Fatal("stale snapshot lost current session or retained previous enrollment")
+	}
+	if err = r.save(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	status := r.Hub.Status(n.Name)
+	if !status.Connected || status.CertificateSerial != n.ClientSerial || status.ConnectedSince != published.ConnectedSince {
+		t.Fatal("synchronization revoked the newly published session")
+	}
+	if r.Authorize(t.Context(), n.Name, oldCert) == nil {
+		t.Fatal("save restored the revoked serial")
+	}
+	persisted, err := r.Get(t.Context(), n.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.PreviousClientSerial != "" || !persisted.PreviousCertNotAfter.IsZero() {
+		t.Fatal("previous enrollment revocation was not persisted")
+	}
+	restored, err := New(t.Context(), r.o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	if restored.Authorize(t.Context(), n.Name, oldCert) == nil || restored.Hub.AcceptsSerial(n.Name, oldCert.SerialNumber.String()) {
+		t.Fatal("reload restored the revoked serial")
+	}
+	currentCert, err := relay.ParseCertificatePEM(n.ClientCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = restored.Authorize(t.Context(), n.Name, currentCert); err != nil {
+		t.Fatal("reload rejected current enrollment", err)
 	}
 }
 

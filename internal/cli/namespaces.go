@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -67,6 +68,32 @@ func (a *app) namespaceBody(cmd *cobra.Command, op string) (any, error) {
 		return map[string]any{"description": description}, nil
 	default:
 		return nil, nil
+	}
+}
+
+// listNamespaces enumerates every authorized page for both commands and internal callers.
+func (a *app) listNamespaces(ctx context.Context) (any, error) {
+	query := map[string]any{}
+	items := []any{}
+	for {
+		resp, err := dispatch(ctx, a.client, a.root, "listNamespaces", nil, query, nil)
+		if err != nil {
+			return nil, err
+		}
+		page, err := decodeResponse(resp)
+		if err != nil {
+			return nil, err
+		}
+		rows, ok := nested(page, "items").([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected namespace list response")
+		}
+		items = append(items, rows...)
+		cursor, _ := nested(page, "nextCursor").(string)
+		if cursor == "" {
+			return map[string]any{"items": items}, nil
+		}
+		query["cursor"] = cursor
 	}
 }
 

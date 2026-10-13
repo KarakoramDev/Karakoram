@@ -165,6 +165,9 @@ func (a *app) connect(cmd *cobra.Command) error {
 }
 
 func (a *app) request(ctx context.Context, op string, args []string, q map[string]any, body any) (any, error) {
+	if op == "listNamespaces" {
+		return a.listNamespaces(ctx)
+	}
 	q = a.namespaceQuery(op, q)
 	var b []byte
 	var err error

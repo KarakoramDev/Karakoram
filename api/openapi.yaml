@@ -4334,7 +4334,13 @@ components:
     CreateBackupStorageRequest:
       type: object
       properties:
-        name: *id006
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[^:/]+$'
+          description: New storage names must not contain ':' or '/'. Existing default
+            storages with these characters remain readable and updatable.
         type: *id013
         endpointURL: *id014
         region: *id015

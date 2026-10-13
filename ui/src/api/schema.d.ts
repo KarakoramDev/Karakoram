@@ -1614,6 +1614,7 @@ export type components = {
             endpointURL: string;
             /** @default true */
             forcePathStyle: boolean;
+            /** @description New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable. */
             name: string;
             prefix?: string;
             region: string;

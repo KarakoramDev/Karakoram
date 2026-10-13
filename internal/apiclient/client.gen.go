@@ -569,15 +569,17 @@ type CreateBackupStorageRequest struct {
 	Bucket string `json:"bucket"`
 
 	// Credentials Write-only; never returned by backup-storage reads.
-	Credentials    S3Credentials                  `json:"credentials"`
-	Description    *string                        `json:"description,omitempty"`
-	EndpointURL    string                         `json:"endpointURL"`
-	ForcePathStyle *bool                          `json:"forcePathStyle,omitempty"`
-	Name           string                         `json:"name"`
-	Prefix         *string                        `json:"prefix,omitempty"`
-	Region         string                         `json:"region"`
-	Type           CreateBackupStorageRequestType `json:"type"`
-	VerifyTLS      *bool                          `json:"verifyTLS,omitempty"`
+	Credentials    S3Credentials `json:"credentials"`
+	Description    *string       `json:"description,omitempty"`
+	EndpointURL    string        `json:"endpointURL"`
+	ForcePathStyle *bool         `json:"forcePathStyle,omitempty"`
+
+	// Name New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable.
+	Name      string                         `json:"name"`
+	Prefix    *string                        `json:"prefix,omitempty"`
+	Region    string                         `json:"region"`
+	Type      CreateBackupStorageRequestType `json:"type"`
+	VerifyTLS *bool                          `json:"verifyTLS,omitempty"`
 }
 
 // CreateBackupStorageRequestType defines model for CreateBackupStorageRequest.Type.

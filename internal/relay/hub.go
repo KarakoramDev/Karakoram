@@ -559,6 +559,27 @@ func (h *Hub) AcceptsSerial(namespace, serial string) bool {
 	return s != nil && s.accepts(serial)
 }
 
+// RevokeIfSerial clears only the snapshotted session and returns the latest status.
+// Unlike namespace deletion, reconciliation must preserve enrollment, overlap fences
+// and policy even when the snapshot still matches.
+func (h *Hub) RevokeIfSerial(namespace, serial string) SessionStatus {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.states[namespace]
+	if s == nil {
+		return SessionStatus{}
+	}
+	if serial != "" && s.status.CertificateSerial == serial {
+		if s.session != nil && s.session.serial == serial {
+			s.session.cancel()
+			s.session.mux.Close()
+			s.session = nil
+		}
+		s.status = SessionStatus{}
+	}
+	return s.status
+}
+
 // Revoke closes active and pending sessions and forgets policy and observed status.
 func (h *Hub) Revoke(namespace string) {
 	h.mu.Lock()

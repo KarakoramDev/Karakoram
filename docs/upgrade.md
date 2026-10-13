@@ -122,6 +122,20 @@ rather than granting remote-project access. New `namespaces` rules keep bare
 namespace names. Submitted policy is normalized the same way. Review the
 canonical policy and new namespace-qualified objects in [RBAC](user-guide/rbac-and-auth.md).
 
+The built-in operator/viewer `namespaces, read, **` grants are **fresh-install
+defaults**. Upgraded installations retain their stored policy; normalization
+does not add these grants. If those roles should see namespaces, add these
+rules to the existing complete policy, retaining administrator access:
+
+```csv
+p, role:operator, namespaces, read, **
+p, role:viewer, namespaces, read, **
+```
+
+Without namespace-read grants, the UI shows only `default`, even if the account
+can read clusters in other namespaces. Use narrower namespace-read grants
+instead if those roles should enumerate only selected projects.
+
 Take the consistent pre-upgrade state backup above **before** this migration.
 A pre-namespace binary cannot read the migrated schema: rollback requires
 stopping the writer and restoring the complete **pre-upgrade state backup**,

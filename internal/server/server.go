@@ -108,6 +108,10 @@ func (s *Server) failure(err error) response {
 	if errors.As(err, &namespaceConflict) {
 		return fail(409, "conflict", namespaceConflict.Error())
 	}
+	var invalidRef *domain.ClusterRefValidationError
+	if errors.As(err, &invalidRef) {
+		return fail(400, "invalid_request", invalidRef.Error())
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")

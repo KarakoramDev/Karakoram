@@ -12,6 +12,7 @@ npm run gen:api     # regenerate src/api/schema.d.ts from ../api/openapi.yaml (n
 npm run dev         # Vite on :5173, proxies /api -> http://localhost:8080 (override KARAKORAM_API_URL)
 npm run typecheck
 npm run lint
+npm test            # unit tests via node --test; needs Node 22.6+ (TypeScript type stripping)
 npm run build       # writes ../internal/ui/dist
 ```
 
@@ -33,6 +34,8 @@ serves a "UI not built" page, so Go builds and tests never need Node:
 - `src/namespaces` – the namespace scope of collection views: `useNamespace()` reads `?namespace=`
   (authoritative) with a non-secret localStorage fallback so the choice survives navigation;
   `undefined` means every readable namespace, which is also the API default.
+  The switcher, namespace settings and creation/restore selectors fetch every authorized namespace
+  page before exposing the collection; choices are not capped at the API page size.
 - `src/components/ui` – dependency-free component kit (buttons, fields, native `<dialog>`, toasts,
   SVG line chart).
 - `src/layout` – app shell with the sidebar namespace switcher.

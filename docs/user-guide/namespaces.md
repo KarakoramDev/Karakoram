@@ -10,7 +10,11 @@ Namespace names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters
 
 CLI single-object/create/mutation commands resolve namespace as **`--namespace/-n` > saved context namespace > `default`**. Collection commands without an explicit `-n` list all authorized namespaces; with `-n` they filter. Save a default for object commands with `karactl config set-context production --namespace prod`. Responses carry `namespace`, and unfiltered tables identify it.
 
+`karactl namespaces list` follows every authorized result page in all output formats.
+
 The UI namespace switcher offers **All namespaces** and authorized namespace names with health indicators. Selection is carried in `?namespace=` and a non-secret localStorage preference; cluster detail routes include the namespace. Choose an explicit namespace when creating a cluster/storage. A shared link does not bypass authorization. Reading namespace metadata is separate from reading its clusters.
+
+The UI switcher, namespace settings list and namespace selectors follow every authorized result page, rather than stopping at the first page.
 
 ## Add, validate and rotate
 
@@ -69,6 +73,8 @@ A relay's platform readiness command probes its local private listener only; it 
 
 Register storage in the cluster's namespace (`karactl -n dev storages create -f FILE`). Cluster backup settings and schedules refer to names in that same namespace. Identically named storages in different namespaces need not describe the same bucket or credentials. Member access to S3 is direct; control-plane storage verification runs from the control-plane network, not through the relay.
 
+New backup-storage names must not contain `:` or `/`. Existing `default` storages whose names contain these characters remain readable and updatable; the creation restriction does not rename or invalidate them.
+
 For a snapshot from `prod/orders`, restore into an existing compatible `dev/orderscopy`:
 
 ```sh
@@ -109,7 +115,14 @@ p, user:bob, backups, export, prod/**
 
 `dev/**` matches the namespace itself and its objects; `dev/*` does not span additional `/` separators. Existing object `*` normalizes to `**`, and legacy bare cluster patterns normalize to `default/<pattern>`. Bare `namespaces` objects remain namespace names. Namespace creation requires `namespaces/create` on global `*`, not merely `dev/**`. See [RBAC policy format](rbac-and-auth.md#policy-format).
 
-Built-in operator and viewer roles can read namespace metadata across all namespaces for the switcher; neither grants namespace creation, updates or deletion.
+On **fresh installations**, the built-in operator and viewer roles include `namespaces, read, **` for namespace metadata across all namespaces; neither grants namespace creation, updates or deletion. Upgraded installations keep their stored policy, and normalization does not add these grants. To let those roles see namespaces, add the following to the existing complete policy:
+
+```csv
+p, role:operator, namespaces, read, **
+p, role:viewer, namespaces, read, **
+```
+
+Without namespace-read grants, the UI shows only `default`; existing cluster permissions do not imply namespace metadata access. Narrower namespace-read rules may be used instead. See [upgrade policy guidance](../upgrade.md#existing-single-project-installations).
 
 ## Remove
 

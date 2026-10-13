@@ -204,6 +204,67 @@ func TestNamespaceStatusTable(t *testing.T) {
 	}
 }
 
+func TestNamespaceListFollowsAllPages(t *testing.T) {
+	for _, format := range []string{"table", "json", "yaml"} {
+		t.Run(format, func(t *testing.T) {
+			var cursors []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/namespaces" {
+					t.Errorf("unexpected namespace request: %s", r.URL)
+				}
+				cursor := r.URL.Query().Get("cursor")
+				cursors = append(cursors, cursor)
+				w.Header().Set("Content-Type", "application/json")
+				switch cursor {
+				case "":
+					fmt.Fprint(w, `{"items":[{"name":"dev","projectId":"proj-test"}],"nextCursor":"page/+two="}`)
+				case "page/+two=":
+					fmt.Fprint(w, `{"items":[{"name":"prod","projectId":"proj-other"}]}`)
+				default:
+					t.Errorf("unexpected cursor: %q", cursor)
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			}))
+			defer server.Close()
+			out, stderr, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "namespaces", "list", "-o", format)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(cursors) != 2 || cursors[0] != "" || cursors[1] != "page/+two=" {
+				t.Fatalf("did not follow namespace pages: %v", cursors)
+			}
+			if !strings.Contains(out, "dev") || !strings.Contains(out, "prod") {
+				t.Fatalf("namespace output omitted a page: %q", out)
+			}
+			if strings.Contains(out, "nextCursor") || strings.Contains(stderr, "Next page") {
+				t.Fatalf("complete collection still advertises another page: %q %q", out, stderr)
+			}
+		})
+	}
+}
+
+func TestNamespaceListPageFailureDoesNotPrintPartialCollection(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("cursor") == "" {
+			fmt.Fprint(w, `{"items":[{"name":"dev"}],"nextCursor":"second"}`)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, `{"code":"forbidden","message":"namespace read denied"}`)
+	}))
+	defer server.Close()
+	out, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "namespaces", "list")
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+		t.Fatalf("expected the second page error, got %v", err)
+	}
+	if requests != 2 || out != "" {
+		t.Fatalf("partial namespace collection printed after page failure: requests=%d output=%q", requests, out)
+	}
+}
+
 func TestNamespaceOperationGetAndWaitUseGlobalID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/operations/one" || r.URL.Query().Get("namespace") != "" {

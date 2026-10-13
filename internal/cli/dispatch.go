@@ -21,7 +21,11 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	_ = q
 	switch op {
 	case "listNamespaces":
-		return c.ListNamespaces(ctx, nil)
+		var p apiclient.ListNamespacesParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListNamespaces(ctx, &p)
 	case "getNamespace":
 		return c.GetNamespace(ctx, args[0])
 	case "createNamespace":

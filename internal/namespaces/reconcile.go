@@ -90,10 +90,18 @@ func (r *Registry) sessionEvent(ctx context.Context, notice sessionNotice) {
 	_ = r.save(ctx, n)
 }
 func (r *Registry) syncSession(ctx context.Context, n *domain.Namespace) {
-	s := r.Hub.Status(n.Name)
-	if n.Phase == "Deleting" || (s.CertificateSerial != "" && (!acceptsSerial(n, s.CertificateSerial) || !r.Hub.AcceptsSerial(n.Name, s.CertificateSerial))) {
+	r.syncSessionSnapshot(ctx, n, r.Hub.Status(n.Name))
+}
+
+func (r *Registry) syncSessionSnapshot(ctx context.Context, n *domain.Namespace, s relay.SessionStatus) {
+	if n.Phase == "Deleting" {
 		r.Hub.Revoke(n.Name)
 		s = relay.SessionStatus{}
+	}
+	for s.CertificateSerial != "" && (!acceptsSerial(n, s.CertificateSerial) || !r.Hub.AcceptsSerial(n.Name, s.CertificateSerial)) {
+		// Publication may have replaced this snapshot. Only revoke its serial,
+		// then reconcile the returned status so current enrollment is persisted.
+		s = r.Hub.RevokeIfSerial(n.Name, s.CertificateSerial)
 	}
 	was := n.Relay.Connected
 	if s.CertificateSerial != "" && s.CertificateSerial == n.ClientSerial {

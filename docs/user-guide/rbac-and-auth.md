@@ -35,6 +35,15 @@ Self-service password changes use `/api/v1/auth/change-password` (`currentPasswo
 | `role:operator` | All actions on clusters, backups (including export), restores, database-users (including roles), operations, events and monitoring; read backup-storages/providers and namespace metadata; no namespace administration, credential reveal or account/token/RBAC/settings administration |
 | `role:viewer` | Read operational resources, namespace metadata, storages and providers; no backup export, cluster credentials, accounts, api-tokens, rbac or settings |
 
+These are **fresh-install defaults**. In particular, operator/viewer namespace visibility comes from `namespaces, read, **`. Upgraded installations keep their stored policy; startup normalization does not add these grants. To give those roles namespace visibility, add the following to the existing complete policy, retaining administrator access:
+
+```csv
+p, role:operator, namespaces, read, **
+p, role:viewer, namespaces, read, **
+```
+
+Without namespace-read grants, the UI shows only `default`, even when cluster permissions allow access elsewhere. Narrower namespace-read rules may be used instead; see [upgrade guidance](../upgrade.md#existing-single-project-installations).
+
 New accounts are not automatically bound to viewer/operator. Permissions accumulate via direct rules and role inheritance, subject to **deny overrides**. Give automation a dedicated account with only necessary rules; a token is not a second independently scoped role.
 
 ## Policy format

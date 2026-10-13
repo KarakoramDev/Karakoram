@@ -30,6 +30,49 @@ func (unavailableNamespaces) Dialer(string) engine.ContextDialer {
 }
 func (unavailableNamespaces) AgentURL(string) string { panic("persisted read resolved agent URL") }
 
+func TestCreateClusterRejectsInvalidIdentityBeforeLookup(t *testing.T) {
+	s, admin := namespaceServer(t)
+	// Authentication retains its store; cluster creation must not reach its store
+	// or resolve an unavailable namespace for an invalid submitted identity.
+	s.Store = nil
+	s.namespaces = unavailableNamespaces{}
+	for _, name := range []string{"prod:orders", "prod/orders", "", "a", "Orders", "orders-prod", "orders1234567"} {
+		for _, query := range []string{"", "?namespace=dev"} {
+			body, err := json.Marshal(api.CreateClusterRequest{Name: name, Spec: api.ClusterSpec{Provider: "fake", Version: "8.0", Topology: api.Topology{Type: "replicaSet"}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := decodeNamespaceResponse[api.Error](t, call(s, "POST", "/api/v1/clusters"+query, string(body), admin), 400)
+			if got.Code != "invalid_request" || !strings.Contains(got.Message, "cluster name") {
+				t.Fatalf("name %q%s: %+v", name, query, got)
+			}
+		}
+	}
+	for _, query := range []string{"?namespace=prod:orders", "?namespace=dev/orders", "?namespace="} {
+		got := decodeNamespaceResponse[api.Error](t, call(s, "POST", "/api/v1/clusters"+query, `{"name":"orders","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"}}}`, admin), 400)
+		if got.Code != "invalid_request" {
+			t.Fatal(query, got)
+		}
+	}
+}
+
+func TestClusterReferenceValidationFailuresAreClientErrors(t *testing.T) {
+	s, _ := namespaceServer(t)
+	for _, ref := range []domain.ClusterRef{{Name: "prod:orders"}, {Name: "prod/orders"}, {Namespace: "prod:orders", Name: "orders"}} {
+		_, err := s.Store.GetCluster(t.Context(), ref)
+		if err == nil {
+			t.Fatalf("accepted reference %+v", ref)
+		}
+		for _, failure := range []error{err, fmt.Errorf("load cluster: %w", err)} {
+			r := s.failure(failure)
+			got := r.body.(api.Error)
+			if r.status != 400 || got.Code != "invalid_request" {
+				t.Fatalf("reference %+v: %d %+v", ref, r.status, got)
+			}
+		}
+	}
+}
+
 func TestInvalidPathIdentitiesCannotReadRetainedBackups(t *testing.T) {
 	s, _ := namespaceServer(t)
 	ctx := t.Context()

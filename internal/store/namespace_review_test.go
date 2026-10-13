@@ -47,6 +47,53 @@ func TestStorageAADSeparatesLegacyAndNamespacedIdentities(t *testing.T) {
 	}
 }
 
+func TestLegacyDefaultStorageNamesRemainReadableAndUpdatable(t *testing.T) {
+	for _, name := range []string{"prod:archive", "prod/archive"} {
+		t.Run(name, func(t *testing.T) {
+			s, _ := testStore(t)
+			ctx := t.Context()
+			legacy := domain.BackupStorage{Name: name, Credentials: domain.StorageCredentials{SecretAccessKey: "legacy-secret"}}
+			sealed, err := s.seal(storageAAD("default", name), legacy.Credentials)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = put(ctx, s.writer, "storage", "", name, &legacy, sealed, "", "", true); err != nil {
+				t.Fatal(err)
+			}
+			got, err := s.GetBackupStorage(ctx, "default", name)
+			if err != nil || got.Credentials.SecretAccessKey != "legacy-secret" {
+				t.Fatal(got, err)
+			}
+			got.Description = "Updated legacy storage"
+			got.Credentials.SecretAccessKey = "replacement-secret"
+			if err = s.UpdateBackupStorage(ctx, got); err != nil {
+				t.Fatal(err)
+			}
+			updated, err := s.GetBackupStorage(ctx, "default", name)
+			if err != nil || updated.Description != got.Description || updated.Credentials.SecretAccessKey != "replacement-secret" {
+				t.Fatal(updated, err)
+			}
+		})
+	}
+}
+
+func TestStoreClusterReferenceErrorsAreTyped(t *testing.T) {
+	s, _ := testStore(t)
+	for _, ref := range []domain.ClusterRef{{Name: "prod:orders"}, {Name: "prod/orders"}, {Namespace: "prod:orders", Name: "orders"}} {
+		_, clusterErr := s.GetCluster(t.Context(), ref)
+		_, backupErr := s.GetBackup(t.Context(), ref, "saved")
+		_, listErr := s.ListBackups(t.Context(), ref)
+		deleteErr := s.DeleteBackup(t.Context(), ref, "saved")
+		secretErr := s.SetClusterSecret(t.Context(), ref, "password", []byte("secret"))
+		for _, err := range []error{clusterErr, backupErr, listErr, deleteErr, secretErr} {
+			var validation *domain.ClusterRefValidationError
+			if !errors.As(err, &validation) {
+				t.Fatalf("reference %+v: want typed validation error, got %v", ref, err)
+			}
+		}
+	}
+}
+
 func TestStoreRejectsAmbiguousClusterReferences(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := t.Context()

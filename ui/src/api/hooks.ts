@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, unwrap, type Schemas } from './client';
 import { keys } from './keys';
+import { fetchAllNamespaces } from './namespaces';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 import { namespaceQuery } from '@/namespaces/useNamespace';
@@ -60,13 +61,13 @@ export function useOrphanedVolumes(enabled = true, namespace?: string) {
 }
 
 /**
- * Namespaces the current user may read. The server filters per item, so a
- * user without any namespace grant simply gets an empty list.
+ * All namespaces the current user may read, following every authorized page.
+ * A user without any namespace grant simply gets an empty list.
  */
 export function useNamespaces(enabled = true) {
   return useQuery({
     queryKey: keys.namespaces,
-    queryFn: () => unwrap(api.GET('/namespaces', { params: { query: { limit: 200 } } })),
+    queryFn: () => fetchAllNamespaces((cursor) => unwrap(api.GET('/namespaces', { params: { query: { limit: 200, cursor } } }))),
     enabled,
     staleTime: 30_000,
     refetchInterval: 30_000,
