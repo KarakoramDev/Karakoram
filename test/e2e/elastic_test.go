@@ -35,7 +35,7 @@ func TestElasticLifecycle(t *testing.T) {
 	}{
 		{"Create", func() {
 			c := f.s.cluster(f.name)
-			if c.Spec.Provider != "elasticsearch" || c.Spec.Version != "9.4.8" || c.Spec.Topology.Type != api.TopologyTypeCluster || c.Spec.Components.Engine.Replicas != 3 {
+			if c.Spec.Provider != "elasticsearch" || c.Spec.Version != "9.5.4" || c.Spec.Topology.Type != api.TopologyTypeCluster || c.Spec.Components.Engine.Replicas != 3 {
 				f.s.t.Fatal("created cluster does not match requested topology/version")
 			}
 			if c.Spec.Components.Engine.Resources.MinRam != 2 || c.Spec.Components.Engine.Resources.MaxRam != 2 {
@@ -88,19 +88,14 @@ func TestElasticLifecycle(t *testing.T) {
 		{"Restore", f.restoreChecks},
 		{"Clone", f.cloneChecks},
 		{"Upgrade", f.upgradeChecks},
-		{"Scale", func() {
-			for _, count := range []int{4, 3} {
-				start := time.Now()
-				f.s.t.Logf("scaling engine to %d", count)
-				f.update(func(spec *api.ClusterSpec) { spec.Components.Engine.Replicas = count })
-				f.health(f.name, count)
-				f.proof(f.name)
-				f.s.t.Logf("scale=%d elapsed=%s", count, time.Since(start).Round(time.Second))
-			}
-		}},
+		{"Scale", f.scaleChecks},
+		{"DeleteKeep", f.deleteKeepChecks},
 		{"Delete", func() {
+			f.snapshotBackup()
+			backups := f.backupInventory()
 			f.s.deleteClusterOptions(f.name, false, false)
 			f.assertDeleted(f.name)
+			f.assertBackupsDeleted(backups)
 		}},
 	}
 	for _, phase := range phases {
@@ -109,6 +104,56 @@ func TestElasticLifecycle(t *testing.T) {
 			return
 		}
 	}
+}
+
+func TestElasticDedicatedMasters(t *testing.T) {
+	s := newSuite(t, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
+	t.Cleanup(cancel)
+	s.ctx = ctx
+	f := &elasticFixture{root: s, s: s, name: s.name()}
+	start := time.Now()
+	t.Cleanup(func() {
+		t.Logf("phase=%s elapsed=%s failed=%t", t.Name(), time.Since(start).Round(time.Second), t.Failed())
+		s.snapshot("timing", map[string]interface{}{"phase": t.Name(), "elapsedSeconds": time.Since(start).Seconds(), "failed": t.Failed()})
+		if t.Failed() {
+			f.failureEvidence()
+		}
+	})
+	spec := elasticSpec("", 2, false)
+	spec.Backup = nil
+	spec.Topology.Type = api.TopologyTypeDedicatedMasters
+	(*spec.Components.Extra)["master"] = api.Component{Replicas: 3, Resources: spec.Components.Engine.Resources}
+	f.create(f.name, spec)
+	f.health(f.name, 5)
+	var nodes []struct {
+		Name string `json:"name"`
+		Role string `json:"node.role"`
+	}
+	f.connect(f.name).json(http.MethodGet, "/_cat/nodes?format=json&h=name,node.role", nil, &nodes, 200)
+	masters, data := 0, 0
+	for _, node := range nodes {
+		master := strings.Contains(node.Role, "m")
+		// "d" is the generic data role; c/f/h/s/w are tier-specific data roles.
+		hasData := strings.ContainsAny(node.Role, "dcfhsw")
+		switch {
+		case master && !hasData && node.Role == "m":
+			masters++
+		case hasData && !master:
+			data++
+		default:
+			t.Fatalf("member=%s unexpected roles=%s", node.Name, node.Role)
+		}
+	}
+	if len(nodes) != 5 || masters != 3 || data != 2 {
+		t.Fatalf("node roles: master-only=%d data=%d total=%d want=3/2/5", masters, data, len(nodes))
+	}
+	s.snapshot("dedicated-master-nodes", nodes)
+	f.seed()
+	f.health(f.name, 5)
+	f.proof(f.name)
+	s.deleteClusterOptions(f.name, false, false)
+	f.assertDeleted(f.name)
 }
 
 func (f *elasticFixture) accessChecks() {
@@ -229,7 +274,7 @@ func (f *elasticFixture) kibanaStatus(version string) {
 }
 
 func (f *elasticFixture) kibanaChecks() {
-	f.kibanaStatus("9.4.8")
+	f.kibanaStatus("9.5.4")
 	c := f.s.connection(f.name)
 	_, password := credential(c, "elastic")
 	e := f.component(f.publicEndpoint("kibana"))
@@ -379,8 +424,11 @@ func (f *elasticFixture) cloneChecks() {
 }
 
 func (f *elasticFixture) upgradeChecks() {
-	f.s.t.Log("upgrading Elastic Stack 9.4.8 -> 9.5.5")
-	f.update(func(spec *api.ClusterSpec) { spec.Version = "9.5.5" })
+	f.s.t.Log("rolling PATCH upgrade of Elastic Stack 9.5.4 -> 9.5.5")
+	f.s.expect(nil, 200)(f.s.client.PatchClusterWithApplicationMergePatchPlusJSONBody(f.s.ctx, f.name, &api.PatchClusterParams{Namespace: f.s.namespace}, api.ClusterMergePatch{"spec": map[string]interface{}{"version": "9.5.5"}}))
+	if c := f.ready(f.name); c.Spec.Version != "9.5.5" {
+		f.s.t.Fatal("upgrade desired version is not 9.5.5")
+	}
 	f.health(f.name, 3)
 	var nodes struct {
 		Nodes map[string]struct {
@@ -428,4 +476,91 @@ func (f *elasticFixture) assertDeleted(name string) {
 		cursor = list.NextCursor
 	}
 	f.s.snapshot(fmt.Sprintf("%s-deleted", name), map[string]interface{}{"status404": true, "absentFromClusterList": true, "keepVolumes": false, "keepBackups": false})
+}
+
+func (f *elasticFixture) scaleChecks() {
+	for _, count := range []int{4, 3} {
+		start := time.Now()
+		before := map[string]bool{}
+		for _, member := range f.s.members(f.name) {
+			if strings.HasPrefix(member.Name, f.name+"n") {
+				before[member.Name] = true
+			}
+		}
+		f.s.t.Logf("scaling engine to %d", count)
+		f.update(func(spec *api.ClusterSpec) { spec.Components.Engine.Replicas = count })
+		f.health(f.name, count)
+		f.proof(f.name)
+		if count == 3 {
+			for _, member := range f.s.members(f.name) {
+				delete(before, member.Name)
+			}
+			if len(before) != 1 {
+				f.s.t.Fatalf("scale-down removed %d nodes want=1", len(before))
+			}
+			f.assertScaleExclusionsCleared(before)
+		}
+		f.s.t.Logf("scale=%d elapsed=%s", count, time.Since(start).Round(time.Second))
+	}
+}
+
+func (f *elasticFixture) assertScaleExclusionsCleared(removed map[string]bool) {
+	e := f.connect(f.name)
+	var state struct {
+		Metadata struct {
+			Coordination struct {
+				Exclusions []json.RawMessage `json:"voting_config_exclusions"`
+			} `json:"cluster_coordination"`
+		} `json:"metadata"`
+	}
+	e.json(http.MethodGet, "/_cluster/state/metadata", nil, &state, 200)
+	if state.Metadata.Coordination.Exclusions == nil {
+		f.s.t.Fatal("cluster metadata omitted voting configuration exclusions")
+	}
+	if len(state.Metadata.Coordination.Exclusions) != 0 {
+		f.s.t.Fatal("voting configuration exclusions remain after scale-down")
+	}
+	var settings struct {
+		Persistent map[string]json.RawMessage `json:"persistent"`
+		Transient  map[string]json.RawMessage `json:"transient"`
+	}
+	e.json(http.MethodGet, "/_cluster/settings?flat_settings=true", nil, &settings, 200)
+	for scope, values := range map[string]map[string]json.RawMessage{"persistent": settings.Persistent, "transient": settings.Transient} {
+		raw, exists := values["cluster.routing.allocation.exclude._name"]
+		if !exists {
+			continue
+		}
+		var excluded string
+		if err := json.Unmarshal(raw, &excluded); err != nil {
+			f.s.t.Fatalf("%s allocation exclusions have invalid shape", scope)
+		}
+		for _, name := range strings.Split(excluded, ",") {
+			if removed[strings.TrimSpace(name)] {
+				f.s.t.Fatalf("%s allocation exclusion still names removed node %s", scope, name)
+			}
+		}
+	}
+	f.s.snapshot("scale-exclusions", map[string]interface{}{"removedNodes": removed, "votingExclusions": state.Metadata.Coordination.Exclusions, "settings": settings})
+}
+
+func (f *elasticFixture) deleteKeepChecks() {
+	b := f.snapshotBackup()
+	backups := f.backupInventory()
+	if backup, found := backups[b.Name]; !found || backup.Phase != api.BackupPhaseSucceeded {
+		f.s.t.Fatal("successful snapshot missing from pre-suspension backup inventory")
+	}
+	f.s.deleteClusterOptions(f.name, true, true)
+	f.s.phase(f.name, api.ClusterStatusPhaseSuspended)
+	f.assertBackupsRetained(backups)
+	var resumed api.Cluster
+	f.s.expect(&resumed, 202)(f.s.client.ResumeCluster(f.s.ctx, f.name, &api.ResumeClusterParams{Namespace: f.s.namespace}))
+	f.ready(f.name)
+	f.health(f.name, 3)
+	f.proof(f.name)
+	f.assertBackupsRetained(backups)
+	// Ready requires the configured Stack components to be reprovisioned too.
+	if members := f.s.members(f.name); len(members) != 6 {
+		f.s.t.Fatalf("resumed Stack member count=%d want=6", len(members))
+	}
+	f.kibanaStatus(f.s.cluster(f.name).Spec.Version)
 }

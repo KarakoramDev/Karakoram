@@ -190,7 +190,7 @@ health, data-preservation, operation, backup, restore, and monitoring records.
 Failed phases also capture available cluster status, events, and operations;
 credentials, API-key values, session cookies, and intake tokens are not saved.
 
-The suite provisions Elasticsearch **9.4.8**, three combined nodes with fixed
+The suite provisions Elasticsearch **9.5.4** (then upgrades it to 9.5.5), three combined nodes with fixed
 2 GB RAM each, and one replica each of Kibana (2 GB), Logstash (1.5 GB), and APM
 Server (0.5 GB). Kibana and APM receive public HTTPS subdomains. Allow capacity
 for a temporary fourth Elasticsearch node (replacement/scaling) and a separate
@@ -220,10 +220,10 @@ fixture in the listed order. The first failed phase stops later mutations.
 
 | Phase | Checks |
 | --- | --- |
-| `Create` | Requested provider/topology/version, fixed RAM, optional components, green health with exactly three Elasticsearch nodes, indexed documents and exact search contents. |
+| `Create` | Elasticsearch 9.5.4 with combined-node topology, fixed 2 GB RAM, one Kibana/Logstash/APM replica each, green health with exactly three Elasticsearch nodes, indexed documents and exact search contents. |
 | `TLSData` | Connection-details CA and elastic password, HTTPS certificate chain and node-hostname verification, exact document count and search contents. |
 | `Access` | Native users/roles CRUD and lists, real allowed/denied index reads, password change, role revocation, scoped API-key authentication/list/invalidation (401), user/role deletion. |
-| `Kibana` | Private `/api/status` and version, public HTTPS basic login with `kbn-xsrf`. |
+| `Kibana` | Private `/api/status` reports 9.5.4; public HTTPS basic login with `kbn-xsrf`. |
 | `Logstash` | Three HTTP-input JSON documents indexed under `logs-*`, with a logs data stream present. |
 | `APM` | Secret-token NDJSON transaction intake through both private and public endpoints (202), both unique traces searchable under `traces-apm*`. |
 | `Monitoring` | Elasticsearch-prefixed monitoring series with samples for every Elasticsearch member. |
@@ -232,9 +232,11 @@ fixture in the listed order. The first failed phase stops later mutations.
 | `Backup` | Native snapshot backup reaches Succeeded. |
 | `Restore` | Delete the proof index, in-place restore reaches Succeeded, index returns with all twelve exact documents and green health. |
 | `Clone` | Single-node cluster from `spec.dataSource`, without optional components, contains exact restored documents; delete clone and verify 404/list absence. A one-replica index may correctly make the singleton yellow. |
-| `Upgrade` | Rolling 9.4.8→9.5.5 upgrade; all Elasticsearch nodes and Stack members report 9.5.5, Kibana reports 9.5.5, green health and exact proof data. |
-| `Scale` | Engine replicas 3→4→3; each step returns green and preserves exact proof data. |
-| `Delete` | Delete with `keepVolumes=false, keepBackups=false`, verify status 404 and absence from paginated cluster inventory. |
+| `Upgrade` | Rolling patch upgrade 9.5.4→9.5.5 via merge PATCH; desired spec, all Elasticsearch nodes and Stack members report 9.5.5, Kibana reports 9.5.5, green health and exact proof data. |
+| `Scale` | Engine replicas 3→4→3; each step returns green and preserves exact proof data. After scale-down, voting configuration exclusions are empty and neither persistent nor transient allocation exclusions name the removed node. |
+| `DeleteKeep` | Delete with `keepVolumes=true, keepBackups=true`, reach Suspended, preserve the complete paginated backup inventory and individual backup records; resume to Ready with three green Elasticsearch nodes, six Stack members, healthy matching-version Kibana and exact proof data; backup inventory remains unchanged. |
+| `Delete` | Ensure a successful snapshot exists, delete with `keepVolumes=false, keepBackups=false`, verify cluster 404/list absence, every prior backup record returns 404 and the backup inventory is empty. This checks API records, not direct S3 object removal. |
+| `TestElasticDedicatedMasters` (standalone test) | Elasticsearch 9.5.4, three master-only plus two data nodes with fixed 2 GB RAM and no Stack components; Ready and green five-node health, `_cat/nodes` role counts, twelve indexed documents and exact search contents; delete with both keep flags false and verify cluster 404/list absence. No backup storage is required. |
 
 Generic lifecycle calls use the generated API client. Elasticsearch
 users/roles/API-key routes use authenticated raw HTTP with that client's base

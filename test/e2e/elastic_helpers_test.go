@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func elasticSpec(storage string, replicas int, components bool) api.ClusterSpec 
 	}
 	options := map[string]interface{}{"kibana": map[string]interface{}{"public": components}, "apm": map[string]interface{}{"public": components}}
 	return api.ClusterSpec{
-		Provider: "elasticsearch", Version: "9.4.8", Topology: api.Topology{Type: api.TopologyTypeCluster},
+		Provider: "elasticsearch", Version: "9.5.4", Topology: api.Topology{Type: api.TopologyTypeCluster},
 		Components:    api.Components{Engine: api.Component{Replicas: replicas, Resources: resources}, Extra: &extra},
 		EngineOptions: &options, Backup: &api.BackupSpec{Storage: ptr(storage)},
 		Tls: &api.TLS{Mode: api.TLSMode("requireTLS"), Ca: api.TLSCa("selfSigned")}, Exposure: &api.Exposure{Public: false}, Monitoring: &api.MonitoringSpec{Enabled: true},
@@ -91,19 +92,24 @@ func (f *elasticFixture) ensure() {
 		f.create(f.name, elasticSpec(f.storage, 3, true))
 		f.created = true
 	}
-	if !f.seeded {
-		e := f.connect(f.name)
-		for _, index := range []string{elasticIndex, elasticPrivateIndex} {
-			e.json(http.MethodPut, "/"+index, map[string]interface{}{"settings": map[string]interface{}{"number_of_shards": 1, "number_of_replicas": 1}}, nil, 200)
-		}
-		for i := range elasticDocuments {
-			e.json(http.MethodPut, fmt.Sprintf("/%s/_doc/%d?refresh=wait_for", elasticIndex, i), map[string]interface{}{"marker": f.name, "sequence": i}, nil, 201)
-		}
-		e.json(http.MethodPut, "/"+elasticPrivateIndex+"/_doc/1?refresh=wait_for", map[string]interface{}{"private": true}, nil, 201)
-		f.seeded = true
-	}
+	f.seed()
 	f.health(f.name, 3)
 	f.proof(f.name)
+}
+
+func (f *elasticFixture) seed() {
+	if f.seeded {
+		return
+	}
+	e := f.connect(f.name)
+	for _, index := range []string{elasticIndex, elasticPrivateIndex} {
+		e.json(http.MethodPut, "/"+index, map[string]interface{}{"settings": map[string]interface{}{"number_of_shards": 1, "number_of_replicas": 1}}, nil, 200)
+	}
+	for i := range elasticDocuments {
+		e.json(http.MethodPut, fmt.Sprintf("/%s/_doc/%d?refresh=wait_for", elasticIndex, i), map[string]interface{}{"marker": f.name, "sequence": i}, nil, 201)
+	}
+	e.json(http.MethodPut, "/"+elasticPrivateIndex+"/_doc/1?refresh=wait_for", map[string]interface{}{"private": true}, nil, 201)
+	f.seeded = true
 }
 
 func (f *elasticFixture) create(name string, spec api.ClusterSpec) {
@@ -397,4 +403,48 @@ func (f *elasticFixture) waitSearch(pattern string, query interface{}) {
 		return len(result.Hits.Hits) > 0
 	})
 	f.s.snapshot("ingestion", map[string]interface{}{"indexPattern": pattern, "found": true})
+}
+
+func (f *elasticFixture) backupInventory() map[string]api.Backup {
+	f.s.t.Helper()
+	backups := map[string]api.Backup{}
+	var cursor *string
+	for {
+		var list api.BackupList
+		f.s.expect(&list, 200)(f.s.client.ListBackups(f.s.ctx, f.name, &api.ListBackupsParams{Namespace: f.s.namespace, Limit: ptr(100), Cursor: cursor}))
+		for _, backup := range list.Items {
+			backups[backup.Name] = backup
+		}
+		if list.NextCursor == nil {
+			break
+		}
+		cursor = list.NextCursor
+	}
+	return backups
+}
+
+func (f *elasticFixture) assertBackupsRetained(before map[string]api.Backup) {
+	f.s.t.Helper()
+	if after := f.backupInventory(); !reflect.DeepEqual(before, after) {
+		f.s.t.Fatal("retained backup inventory changed")
+	}
+	for name, want := range before {
+		var got api.Backup
+		f.s.expect(&got, 200)(f.s.client.GetBackup(f.s.ctx, f.name, name, &api.GetBackupParams{Namespace: f.s.namespace}))
+		if !reflect.DeepEqual(want, got) {
+			f.s.t.Fatalf("retained backup %s changed", name)
+		}
+	}
+	f.s.snapshot("backups-retained", before)
+}
+
+func (f *elasticFixture) assertBackupsDeleted(before map[string]api.Backup) {
+	f.s.t.Helper()
+	for name := range before {
+		f.s.expect(nil, 404)(f.s.client.GetBackup(f.s.ctx, f.name, name, &api.GetBackupParams{Namespace: f.s.namespace}))
+	}
+	if len(f.backupInventory()) != 0 {
+		f.s.t.Fatal("deleted cluster still has backup records")
+	}
+	f.s.snapshot("backups-deleted", map[string]interface{}{"recordsRemoved": len(before), "status404": true, "inventoryEmpty": true})
 }
