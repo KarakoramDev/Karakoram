@@ -248,7 +248,7 @@ func hubPeerCertificate(t *testing.T, r *Registry, server *httptest.Server, n *d
 }
 
 func TestPeriodicHubCertificateRenewalPublishesAndPersists(t *testing.T) {
-	r, _, _ := setupRegistry(t)
+	r, _, log := setupRegistry(t)
 	n := createTestNamespace(t, r)
 	cert, key, err := relay.IssueHubCertificate(r.pki.CACert, r.pki.CAKey, time.Now().Add(-340*24*time.Hour))
 	if err != nil {
@@ -276,6 +276,18 @@ func TestPeriodicHubCertificateRenewalPublishesAndPersists(t *testing.T) {
 	cancel()
 	if err = <-done; !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+	found := false
+	for _, e := range log.items {
+		if e.Reason == "RelayHubCertificateRenewed" {
+			found = true
+			if e.Namespace != "" || e.Cluster != "" || e.Actor != "system" || e.Target != "relay-hub" || e.Resource != "namespaces" {
+				t.Fatal("hub renewal audit has incorrect scope or actor", e)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("hub certificate renewal was not audited")
 	}
 	after := hubPeerCertificate(t, r, server, n)
 	if before.SerialNumber.Cmp(after.SerialNumber) == 0 || relay.NeedsRenewal(after, time.Now()) {

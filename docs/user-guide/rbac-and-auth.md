@@ -32,8 +32,8 @@ Self-service password changes use `/api/v1/auth/change-password` (`currentPasswo
 | Role | Default authority |
 | --- | --- |
 | `role:admin` | All resources/actions/objects; bootstrap `user:admin` is bound to it |
-| `role:operator` | All actions on clusters, backups (including export), restores, database-users (including roles), operations, events and monitoring; read backup-storages/providers and namespace metadata; no namespace administration, credential reveal or account/token/RBAC/settings administration |
-| `role:viewer` | Read operational resources, namespace metadata, storages and providers; no backup export, cluster credentials, accounts, api-tokens, rbac or settings |
+| `role:operator` | All actions on clusters, backups (including export), restores, database-users (including roles), operations, events and monitoring; read backup-storages/providers and namespace metadata; no namespace administration, credential reveal, audit or account/token/RBAC/settings administration |
+| `role:viewer` | Read operational resources, namespace metadata, storages and providers; no backup export, cluster credentials, audit, accounts, api-tokens, rbac or settings |
 
 These are **fresh-install defaults**. In particular, operator/viewer namespace visibility comes from `namespaces, read, **`. Upgraded installations keep their stored policy; startup normalization does not add these grants. To give those roles namespace visibility, add the following to the existing complete policy, retaining administrator access:
 
@@ -57,7 +57,7 @@ g, SUBJECT, role:ROLE
 
 The five-field `p` form defaults to allow; the optional sixth field is effect. Subjects are `user:NAME`, `group:OIDC_GROUP` or `role:NAME`. `g` binds a user/group/role to a role. Resource/action/object use glob matching. Cluster-scoped objects are **`<namespace>/<cluster>`**, storage objects **`<namespace>/<storage>`**, and `namespaces` objects are bare namespace names. Global resources use `*`. `*` does not cross `/`; `dev/**` matches `dev` and its objects. No match means deny, and any matching deny defeats a matching allow across the identity's subjects/roles. Comments beginning with `#` are supported.
 
-Resources: `namespaces`, `clusters`, `cluster-credentials`, `database-users`, `backups`, `restores`, `backup-storages`, `operations`, `events`, `monitoring`, `accounts`, `api-tokens`, `rbac`, `settings`, `providers`. Database role CRUD shares `database-users`; there is no separate `database-roles` policy resource. Actions are `create`, `read`, `update`, `delete`, source backup **`export`**, or a glob such as `*`, as appropriate for each operation. Credential reveal is **`cluster-credentials, read`**, not `read-credentials` on clusters. Namespace token rotation/validation use `namespaces/update`. The annotations in [OpenAPI](../../api/openapi.yaml) define the route mapping.
+Resources: `namespaces`, `clusters`, `cluster-credentials`, `database-users`, `backups`, `restores`, `backup-storages`, `operations`, `events`, `audit`, `monitoring`, `accounts`, `api-tokens`, `rbac`, `settings`, `providers`. Database role CRUD shares `database-users`; there is no separate `database-roles` policy resource. Actions are `create`, `read`, `update`, `delete`, source backup **`export`**, or a glob such as `*`, as appropriate for each operation. Credential reveal is **`cluster-credentials, read`**, not `read-credentials` on clusters. Namespace token rotation/validation use `namespaces/update`. Audit reads use the affected `<namespace>/<cluster>`, bare namespace for namespace-level records, and global `*` for installation records. Actor/resource/namespace filters do not widen visibility. The annotations in [OpenAPI](../../api/openapi.yaml) define the route mapping.
 
 Example additions to the existing policy:
 
@@ -70,11 +70,14 @@ p, role:production-operator, monitoring, read, prod/**, allow
 p, role:production-operator, namespaces, read, prod, allow
 p, role:production-operator, clusters, delete, prod/critical, deny
 p, user:breakglass, cluster-credentials, read, prod/orders, allow
+# Audit and namespace metadata are separate permissions.
+p, user:alice, audit, read, dev/**
+p, user:alice, namespaces, read, dev
 ```
 
 These are additions, **not a complete replacement policy**: retain the bootstrap/admin binding and appropriate existing defaults. Root `/metrics` filters each `<namespace>/<cluster>` by monitoring read; a global grant is not required. Namespace list similarly filters per namespace; creating a namespace requires `namespaces/create` on global `*`.
 
-Normalization applies at startup and to every submitted policy: object `*` becomes `**`; a legacy bare cluster pattern such as `orders*` becomes `default/orders*`, never an implicit grant in another project. Bare objects on the `namespaces` resource remain namespace names. Built-in roles use `**`; inspect the canonical returned policy after updates.
+Normalization applies at startup and to every submitted policy: object `*` becomes `**`; a legacy bare cluster pattern such as `orders*` becomes `default/orders*`, never an implicit grant in another project. Bare audit patterns follow this same legacy normalization: use `dev/**`, not bare `dev`, to read namespace-level and cluster audit records in dev. Bare objects on the `namespaces` resource remain namespace names. Built-in roles use `**`; inspect the canonical returned policy after updates.
 
 Cross-namespace clone/restore requires source `backups/read` **and `backups/export`**, plus target `clusters/create` or `restores/create`. Same-namespace recovery needs no export grant. See [dev/stage/prod examples](namespaces.md#rbac-examples) for explicit credential denies and separate namespace metadata permissions.
 

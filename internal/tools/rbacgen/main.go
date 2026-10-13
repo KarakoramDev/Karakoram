@@ -21,7 +21,7 @@ import (
 const licenseHeader = "// SPDX-License-Identifier: Apache-2.0\n// Copyright 2026 The Karakoram Authors\n\n"
 
 var methods = map[string]bool{"get": true, "put": true, "post": true, "delete": true, "patch": true, "head": true, "options": true, "trace": true}
-var resources = map[string]bool{"namespaces": true, "clusters": true, "cluster-credentials": true, "database-users": true, "backups": true, "restores": true, "backup-storages": true, "operations": true, "events": true, "monitoring": true, "accounts": true, "api-tokens": true, "rbac": true, "settings": true, "providers": true}
+var resources = map[string]bool{"audit": true, "namespaces": true, "clusters": true, "cluster-credentials": true, "database-users": true, "backups": true, "restores": true, "backup-storages": true, "operations": true, "events": true, "monitoring": true, "accounts": true, "api-tokens": true, "rbac": true, "settings": true, "providers": true}
 var actions = map[string]bool{"create": true, "read": true, "update": true, "delete": true, "*": true}
 var operationIDPattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 
@@ -91,6 +91,7 @@ func generate(input []byte) ([]byte, error) {
 		return nil, fmt.Errorf("specification has no paths")
 	}
 	rules := make(map[string]rule)
+	extraRules := make(map[string]rule)
 	for path, item := range document.Paths {
 		for method, node := range item {
 			if !methods[method] {
@@ -100,6 +101,7 @@ func generate(input []byte) ([]byte, error) {
 				ID       string    `yaml:"operationId"`
 				RBAC     yaml.Node `yaml:"x-karakoram-rbac"`
 				Security yaml.Node `yaml:"security"`
+				Extra    *rule     `yaml:"x-karakoram-rbac-extra"`
 			}
 			if err := node.Decode(&operation); err != nil {
 				return nil, fmt.Errorf("%s %s: %w", method, path, err)
@@ -145,6 +147,12 @@ func generate(input []byte) ([]byte, error) {
 				return nil, fmt.Errorf("%s: missing x-karakoram-rbac", operation.ID)
 			}
 			rules[operation.ID] = entry
+			if extra := operation.Extra; extra != nil {
+				if !resources[extra.Resource] || !actions[extra.Action] || extra.Object != "*" {
+					return nil, fmt.Errorf("%s: invalid additional RBAC resource/action/object", operation.ID)
+				}
+				extraRules[extra.Resource+":"+extra.Action] = *extra
+			}
 		}
 	}
 	if len(rules) == 0 {
@@ -163,6 +171,17 @@ func generate(input []byte) ([]byte, error) {
 	for _, id := range ids {
 		entry := rules[id]
 		fmt.Fprintf(&output, "%q: {Resource: %q, Action: %q, ObjectParam: %q, Public: %t},\n", id, entry.Resource, entry.Action, entry.Object, entry.Public)
+	}
+	output.WriteString("}\n")
+	extraIDs := make([]string, 0, len(extraRules))
+	for id := range extraRules {
+		extraIDs = append(extraIDs, id)
+	}
+	sort.Strings(extraIDs)
+	output.WriteString("\n// AdditionalRBAC declares per-result permissions beyond operation-level grants.\nvar AdditionalRBAC = []RBACRule{\n")
+	for _, id := range extraIDs {
+		entry := extraRules[id]
+		fmt.Fprintf(&output, "{Resource: %q, Action: %q, ObjectParam: %q},\n", entry.Resource, entry.Action, entry.Object)
 	}
 	output.WriteString("}\n")
 	return format.Source(output.Bytes())

@@ -157,6 +157,65 @@ func TestCommandsAgainstServer(t *testing.T) {
 	}
 }
 
+func TestActivityActorOutputAndEventFilters(t *testing.T) {
+	const actor = "admin (token: deploy [token-one])"
+	const event = `{"id":12,"namespace":"dev","cluster":"demo","type":"Normal","actor":"admin (token: deploy [token-one])","resource":"clusters","target":"demo","message":"updated"}`
+	const operation = `{"id":"operation-one","namespace":"dev","cluster":"demo","type":"restart","phase":"Succeeded","actor":"admin (token: deploy [token-one])"}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/api/v1/operations/operation-one" && r.URL.Query().Get("namespace") != "dev" {
+			t.Errorf("namespace filter not preserved: %v", r.URL.Query())
+		}
+		switch r.URL.Path {
+		case "/api/v1/events", "/api/v1/events/stream":
+			query := r.URL.Query()
+			if query.Get("actor") != actor || query.Get("resource") != "clusters" || query.Get("cluster") != "demo" {
+				t.Errorf("event filters not preserved: %v", query)
+			}
+			if r.URL.Path == "/api/v1/events/stream" {
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprintf(w, "event: event\nid: 12\ndata: %s\n\n", event)
+			} else {
+				fmt.Fprintf(w, `{"items":[%s]}`, event)
+			}
+		case "/api/v1/operations", "/api/v1/clusters/demo/operations":
+			fmt.Fprintf(w, `{"items":[%s]}`, operation)
+		case "/api/v1/operations/operation-one":
+			fmt.Fprint(w, operation)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	config := filepath.Join(t.TempDir(), "config.yaml")
+	for _, tt := range []struct {
+		name  string
+		args  []string
+		table bool
+	}{
+		{"events", []string{"events", "list", "--cluster", "demo", "--actor", actor, "--resource", "clusters"}, true},
+		{"event watch", []string{"events", "watch", "--cluster", "demo", "--actor", actor, "--resource", "clusters"}, false},
+		{"global operations", []string{"operations", "list"}, true},
+		{"cluster operations", []string{"operations", "cluster", "demo"}, true},
+		{"operation detail", []string{"operations", "get", "operation-one"}, false},
+		{"operation wait", []string{"operations", "wait", "operation-one"}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			out, _, err := execute(t, server.URL, config, "", append([]string{"-n", "dev"}, tt.args...)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, actor) {
+				t.Fatalf("actor missing from output %q", out)
+			}
+			if tt.table && (!strings.HasPrefix(out, "NAMESPACE") || !strings.Contains(out, "ACTOR")) {
+				t.Fatalf("namespace/actor columns missing from output %q", out)
+			}
+		})
+	}
+}
+
 func TestOrphanedVolumesList(t *testing.T) {
 	const body = `{"items":[{"hostname":"prodm0v","serviceId":"service-one","cluster":"prod","member":"prodm0","attempts":7,"nextAttemptAt":"2024-01-07T10:32:00Z","lastProcessId":"process-one","firstError":"first mounted failure","lastError":"last mounted failure","firstFailedAt":"2024-01-07T10:00:00Z","orphanedAt":"2024-01-07T10:30:00Z","lastAttemptAt":"2024-01-07T10:30:00Z"}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -78,18 +78,7 @@ func (s *Server) ListNamespaces(ctx context.Context, request api.ListNamespacesR
 }
 func (r response) VisitListNamespacesResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) CreateNamespace(ctx context.Context, request api.CreateNamespaceRequestObject) (api.CreateNamespaceResponseObject, error) {
-	if request.Body == nil || request.Body.Token == nil {
-		return invalid(), nil
-	}
-	r, err := s.namespaceRegistry()
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	n, err := r.Create(ctx, request.Body.Name, request.Body.ProjectId, *request.Body.Token, value(request.Body.Description))
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	return s.namespaceResponse(ctx, r, n, 201), nil
+	return s.handle(ctx, "CreateNamespace", input{Body: request.Body}), nil
 }
 func (r response) VisitCreateNamespaceResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) GetNamespace(ctx context.Context, request api.GetNamespaceRequestObject) (api.GetNamespaceResponseObject, error) {
@@ -105,55 +94,59 @@ func (s *Server) GetNamespace(ctx context.Context, request api.GetNamespaceReque
 }
 func (r response) VisitGetNamespaceResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) UpdateNamespace(ctx context.Context, request api.UpdateNamespaceRequestObject) (api.UpdateNamespaceResponseObject, error) {
-	if request.Body == nil {
-		return invalid(), nil
-	}
-	r, err := s.namespaceRegistry()
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	n, err := r.Update(ctx, request.Namespace, request.Body.Description)
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	return s.namespaceResponse(ctx, r, n, 200), nil
+	return s.handle(ctx, "UpdateNamespace", input{Namespace: request.Namespace, Body: request.Body}), nil
 }
 func (r response) VisitUpdateNamespaceResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) RotateNamespaceToken(ctx context.Context, request api.RotateNamespaceTokenRequestObject) (api.RotateNamespaceTokenResponseObject, error) {
-	if request.Body == nil || request.Body.Token == nil {
-		return invalid(), nil
-	}
-	r, err := s.namespaceRegistry()
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	n, err := r.RotateToken(ctx, request.Namespace, *request.Body.Token)
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	return s.namespaceResponse(ctx, r, n, 200), nil
+	return s.handle(ctx, "RotateNamespaceToken", input{Namespace: request.Namespace, Body: request.Body}), nil
 }
 func (r response) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) ValidateNamespace(ctx context.Context, request api.ValidateNamespaceRequestObject) (api.ValidateNamespaceResponseObject, error) {
-	r, err := s.namespaceRegistry()
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	n, err := r.Validate(ctx, request.Namespace)
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	return s.namespaceResponse(ctx, r, n, 200), nil
+	return s.handle(ctx, "ValidateNamespace", input{Namespace: request.Namespace}), nil
 }
 func (r response) VisitValidateNamespaceResponse(w http.ResponseWriter) error { return r.write(w) }
 func (s *Server) DeleteNamespace(ctx context.Context, request api.DeleteNamespaceRequestObject) (api.DeleteNamespaceResponseObject, error) {
-	r, err := s.namespaceRegistry()
-	if err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	if err = r.Delete(ctx, request.Namespace); err != nil {
-		return s.namespaceFailure(err), nil
-	}
-	return response{status: 202, noStore: true}, nil
+	return s.handle(ctx, "DeleteNamespace", input{Namespace: request.Namespace}), nil
 }
 func (r response) VisitDeleteNamespaceResponse(w http.ResponseWriter) error { return r.write(w) }
+
+func (s *Server) namespaceMutation(ctx context.Context, name string, in input) response {
+	r, err := s.namespaceRegistry()
+	if err != nil {
+		return s.namespaceFailure(err)
+	}
+	var n *domain.Namespace
+	status := 200
+	switch name {
+	case "CreateNamespace":
+		b := in.Body.(*api.CreateNamespaceJSONRequestBody)
+		if b == nil || b.Token == nil {
+			return invalid()
+		}
+		n, err = r.Create(ctx, b.Name, b.ProjectId, *b.Token, value(b.Description))
+		status = 201
+	case "UpdateNamespace":
+		b := in.Body.(*api.UpdateNamespaceJSONRequestBody)
+		if b == nil {
+			return invalid()
+		}
+		n, err = r.Update(ctx, in.Namespace, b.Description)
+	case "RotateNamespaceToken":
+		b := in.Body.(*api.RotateNamespaceTokenJSONRequestBody)
+		if b == nil || b.Token == nil {
+			return invalid()
+		}
+		n, err = r.RotateToken(ctx, in.Namespace, *b.Token)
+	case "ValidateNamespace":
+		n, err = r.Validate(ctx, in.Namespace)
+	case "DeleteNamespace":
+		if err = r.Delete(ctx, in.Namespace); err != nil {
+			return s.namespaceFailure(err)
+		}
+		return response{status: 202, noStore: true}
+	}
+	if err != nil {
+		return s.namespaceFailure(err)
+	}
+	return s.namespaceResponse(ctx, r, n, status)
+}

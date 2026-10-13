@@ -263,7 +263,7 @@ func (r *Registry) backend(name string) Backend {
 }
 func (r *Registry) event(ctx context.Context, n *domain.Namespace, kind, message string) {
 	if r.o.Events != nil {
-		if err := r.o.Events.Record(ctx, domain.Event{Namespace: n.Name, Type: "Normal", Reason: kind, Message: message, CreatedAt: time.Now().UTC()}); err != nil {
+		if err := r.o.Events.Record(ctx, domain.Event{Namespace: n.Name, Resource: "namespaces", Target: n.Name, Actor: "system", Type: "Normal", Reason: kind, Message: message, CreatedAt: time.Now().UTC()}); err != nil {
 			r.o.Logger.Error("Namespace event persistence failed", "namespace", n.Name, "error", err)
 		}
 	}
@@ -364,7 +364,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	r.mu.Lock()
 	r.backends[name] = b
 	r.mu.Unlock()
-	r.event(ctx, n, "NamespaceCreated", "Namespace registered")
+	r.event(ctx, n, "RelayEnrolled", "Relay credentials enrolled")
 	r.trigger()
 	return n, nil
 }
@@ -422,7 +422,6 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 		r.backends[name] = replacement
 		r.mu.Unlock()
 	}
-	r.event(ctx, n, "NamespaceTokenRotated", "Project token rotated")
 	r.trigger()
 	return n, nil
 }
@@ -446,8 +445,6 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 		}
 	}
 	_, p, validation := r.o.Validate(ctx, z)
-	was := n.Token.Valid
-	first := n.Token.LastValidatedAt.IsZero()
 	n.Token.Valid = validation == nil
 	n.Token.LastValidatedAt = time.Now().UTC()
 	n.Token.LastError = ""
@@ -459,13 +456,6 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 	updatePhase(n)
 	if err = r.save(ctx, n); err != nil {
 		return nil, err
-	}
-	if first || was != n.Token.Valid {
-		if n.Token.Valid {
-			r.event(ctx, n, "NamespaceValidated", "Project token validated")
-		} else {
-			r.event(ctx, n, "NamespaceValidationFailed", "Project token validation failed")
-		}
 	}
 	return n, nil
 }
@@ -489,7 +479,6 @@ func (r *Registry) Delete(ctx context.Context, name string) error {
 	r.Hub.Revoke(name)
 	if n.Phase != "Deleting" {
 		n.Phase = "Deleting"
-		r.event(ctx, n, "NamespaceDeleting", "Namespace deletion requested")
 	}
 	r.trigger()
 	return nil
@@ -583,6 +572,11 @@ func (r *Registry) renewHubCertificate(ctx context.Context, now time.Time) error
 	}
 	r.pki.HubCert, r.pki.HubKey = next.HubCert, next.HubKey
 	r.Hub.SetCertificate(pair)
+	if r.o.Events != nil {
+		if err = r.o.Events.Record(ctx, domain.Event{Resource: "namespaces", Target: "relay-hub", Actor: "system", Type: "Normal", Reason: "RelayHubCertificateRenewed", Message: "Relay hub certificate renewed", CreatedAt: now.UTC()}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 func owned(n *domain.Namespace, s *infra.Service) bool {

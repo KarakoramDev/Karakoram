@@ -86,12 +86,14 @@ func (testArtifact) Open(context.Context) (io.ReadCloser, error) {
 type eventLog struct {
 	mu      sync.Mutex
 	reasons []string
+	items   []domain.Event
 }
 
 func (l *eventLog) Record(_ context.Context, e domain.Event) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.reasons = append(l.reasons, e.Reason)
+	l.items = append(l.items, e)
 	return nil
 }
 func setupRegistry(t *testing.T) (*Registry, *projectBackend, *eventLog) {
@@ -455,7 +457,16 @@ func TestTokenHealthEventsOnlyOnTransitions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 3 {
-		got, err := r.Validate(ctx, n.Name)
+		current, err := r.o.Store.GetNamespaceForUpdate(ctx, n.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		current.Token.LastValidatedAt = time.Now().Add(-10 * time.Minute)
+		if err = r.o.Store.UpdateNamespace(ctx, current); err != nil {
+			t.Fatal(err)
+		}
+		r.step(ctx, n.Name)
+		got, err := r.Get(ctx, n.Name)
 		if err != nil || got.Token.Valid || got.Phase != "Error" {
 			t.Fatal("failed validation state", err)
 		}
@@ -519,5 +530,49 @@ func TestStartupIsolatesUnavailableStoredToken(t *testing.T) {
 	}
 	if _, err = restored.Backend(n.Name); err != nil {
 		t.Fatal("recovered backend unavailable", err)
+	}
+}
+
+func TestRegistryLifecycleEventsUseSystemActor(t *testing.T) {
+	r, b, log := setupRegistry(t)
+	ctx := store.WithActor(t.Context(), "alice")
+	n, err := r.Create(ctx, "testing", "proj-test", "valid-token", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 4 {
+		r.step(ctx, n.Name)
+	}
+	n, err = r.o.Store.GetNamespaceForUpdate(ctx, n.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.syncSessionSnapshot(ctx, n, relay.SessionStatus{Connected: true})
+	r.syncSessionSnapshot(ctx, n, relay.SessionStatus{})
+	n.Relay.CertNotAfter = time.Now().Add(time.Hour)
+	if err = r.save(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	r.step(ctx, n.Name)
+	if err = r.Delete(ctx, n.Name); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		r.step(ctx, n.Name)
+	}
+	if b.deletes != 1 {
+		t.Fatal("relay deletion did not complete", b.deletes)
+	}
+	seen := map[string]bool{}
+	for _, e := range log.items {
+		if e.Actor != "system" || e.Namespace != n.Name || e.Cluster != "" || e.Resource != "namespaces" || e.Target != n.Name {
+			t.Fatal("registry lifecycle event lost system attribution", e)
+		}
+		seen[e.Reason] = true
+	}
+	for _, reason := range []string{"RelayEnrolled", "RelayDeploying", "RelayConnected", "RelayDisconnected", "RelayCertificateRenewed", "NamespaceDeleted"} {
+		if !seen[reason] {
+			t.Error("missing lifecycle event", reason)
+		}
 	}
 }

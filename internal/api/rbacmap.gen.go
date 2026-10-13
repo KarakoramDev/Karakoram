@@ -111,3 +111,8 @@ var OperationRBAC = map[string]RBACRule{
 	"validateNamespace":      {Resource: "namespaces", Action: "update", ObjectParam: "namespace", Public: false},
 	"verifyBackupStorage":    {Resource: "backup-storages", Action: "update", ObjectParam: "storage", Public: false},
 }
+
+// AdditionalRBAC declares per-result permissions beyond operation-level grants.
+var AdditionalRBAC = []RBACRule{
+	{Resource: "audit", Action: "read", ObjectParam: "*"},
+}

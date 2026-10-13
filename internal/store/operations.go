@@ -13,10 +13,13 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
-func prepareOperation(op *domain.Operation) error {
+func prepareOperation(ctx context.Context, op *domain.Operation) error {
 	op.Namespace = domain.NormalizedNamespace(op.Namespace)
 	if err := (domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}).Validate(); err != nil {
 		return err
+	}
+	if op.Actor == "" {
+		op.Actor = Actor(ctx)
 	}
 	if op.ID == "" {
 		id, err := secrets.RandomString(24)
@@ -38,10 +41,7 @@ func prepareOperation(op *domain.Operation) error {
 
 // EnqueueOperation durably queues operation.
 func (s *Store) EnqueueOperation(ctx context.Context, op *domain.Operation) error {
-	if err := (domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}).Validate(); err != nil {
-		return err
-	}
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	return put(ctx, s.writer, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), true)
@@ -220,7 +220,7 @@ func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 	if err := (domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}).Validate(); err != nil {
 		return err
 	}
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	if backup.CreatedAt.IsZero() {
@@ -248,7 +248,7 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 	if err := (domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}).Validate(); err != nil {
 		return err
 	}
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	if restore.CreatedAt.IsZero() {
@@ -276,7 +276,7 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 	if err := (domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}).Validate(); err != nil {
 		return err
 	}
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	tx, err := s.writer.BeginTx(ctx, nil)

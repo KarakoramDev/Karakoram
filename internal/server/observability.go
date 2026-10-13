@@ -20,14 +20,22 @@ import (
 )
 
 func (s *Server) eventAllowed(ctx context.Context, e domain.Event) bool {
-	namespace := domain.NormalizedNamespace(e.Namespace)
-	obj := clusterObject(namespace, e.Cluster)
-	if e.Cluster == "" {
-		// Namespace lifecycle events authorize events/read on the namespace itself.
+	obj := "*"
+	resource := "audit"
+	namespace := e.Namespace
+	if e.Cluster != "" {
+		namespace = domain.NormalizedNamespace(namespace)
+		obj = clusterObject(namespace, e.Cluster)
+		resource = "events"
+	} else if namespace != "" {
 		obj = namespace
 	}
+	permission := s.allowed(ctx, resource, "read", obj)
+	if resource == "events" {
+		permission = permission || s.allowed(ctx, "audit", "read", obj)
+	}
 	q := request(ctx).URL.Query()
-	return (q.Get("namespace") == "" || q.Get("namespace") == namespace) && s.allowed(ctx, "events", "read", obj) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation)
+	return permission && (q.Get("namespace") == "" || q.Get("namespace") == namespace) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation) && (q.Get("actor") == "" || q.Get("actor") == e.Actor) && (q.Get("resource") == "" || q.Get("resource") == e.Resource)
 }
 func (s *Server) observability(ctx context.Context, name string, in input) response {
 	q := request(ctx).URL.Query()
@@ -65,7 +73,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		}
 		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
 		for {
-			items, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: namespaceFilter(ctx), Cluster: q.Get("cluster"), Type: q.Get("type"), Limit: 1000, SinceID: since})
+			items, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: namespaceFilter(ctx), Cluster: q.Get("cluster"), Type: q.Get("type"), Actor: q.Get("actor"), Resource: q.Get("resource"), Limit: 1000, SinceID: since})
 			if err != nil {
 				return s.failure(err)
 			}

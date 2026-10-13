@@ -691,14 +691,23 @@ type Error struct {
 
 // Event defines model for Event.
 type Event struct {
-	Actor       *string        `json:"actor,omitempty"`
-	Cluster     *string        `json:"cluster,omitempty"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	Id          int64          `json:"id"`
-	Message     string         `json:"message"`
+	// Actor Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor.
+	Actor     *string   `json:"actor,omitempty"`
+	Cluster   *string   `json:"cluster,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	Id        int64     `json:"id"`
+	Message   string    `json:"message"`
+
+	// Namespace Namespace of cluster and namespace-level entries; absent for global audit entries.
 	Namespace   *NamespaceName `json:"namespace,omitempty"`
 	OperationId *string        `json:"operationId,omitempty"`
 	Reason      *string        `json:"reason,omitempty"`
+
+	// Resource Resource category for filtering, such as clusters, accounts, auth, rbac or backup-storages.
+	Resource *string `json:"resource,omitempty"`
+
+	// Target Non-secret resource identifier, such as a cluster name, account name or token ID.
+	Target *string `json:"target,omitempty"`
 
 	// Type Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim.
 	Type string `json:"type"`
@@ -895,6 +904,8 @@ type ObservedResources struct {
 
 // Operation defines model for Operation.
 type Operation struct {
+	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
+	Actor       *string        `json:"actor,omitempty"`
 	Cluster     string         `json:"cluster"`
 	CompletedAt *time.Time     `json:"completedAt,omitempty"`
 	CreatedAt   time.Time      `json:"createdAt"`
@@ -1869,6 +1880,12 @@ type ListEventsParams struct {
 	Type        *string `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
 
+	// Actor Exact actor identity, including token name and ID when applicable.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
+	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
@@ -1878,6 +1895,12 @@ type StreamEventsParams struct {
 	Cluster     *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Type        *string `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
+
+	// Actor Exact actor identity, including token name and ID when applicable.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
+
+	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
+	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
 
 	// Cursor Replay events after this durable event cursor.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -8463,6 +8486,38 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 
 		}
 
+		if params.Actor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "actor", runtime.ParamLocationQuery, *params.Actor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Resource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "resource", runtime.ParamLocationQuery, *params.Resource); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		if params.Namespace != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
@@ -8547,6 +8602,38 @@ func NewStreamEventsRequest(server string, params *StreamEventsParams) (*http.Re
 		if params.OperationId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "operationId", runtime.ParamLocationQuery, *params.OperationId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Actor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "actor", runtime.ParamLocationQuery, *params.Actor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Resource != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "resource", runtime.ParamLocationQuery, *params.Resource); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err

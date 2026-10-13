@@ -19,6 +19,16 @@ import (
 // A missing backup or secret is a provider error, not a reason to stop a worker.
 var errClusterGone = fmt.Errorf("cluster removed: %w", store.ErrNotFound)
 
+// Carry the invocation's identity to the worker without reloading mutable
+// desired state after an error (which could belong to a newer request).
+type attributedError struct {
+	error
+	actor     string
+	operation string
+}
+
+func (e *attributedError) Unwrap() error { return e.error }
+
 // Options configures serialized reconciliation and retry delays.
 type Options struct {
 	Store          *store.Store
@@ -184,7 +194,13 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 				return
 			}
 			m.opts.Context.Logger.Error("reconcile cluster", "cluster", name, "error", err)
-			if eventErr := m.record(ctx, domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Type: "Warning", Reason: "ReconcileError", Message: err.Error()}); eventErr != nil {
+			event := domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Type: "Warning", Reason: "ReconcileError", Message: err.Error(), Actor: "reconciler"}
+			var cause *attributedError
+			if errors.As(err, &cause) {
+				event.Actor = cause.actor
+				event.Operation = cause.operation
+			}
+			if eventErr := m.record(ctx, event); eventErr != nil {
 				m.opts.Context.Logger.Error("record reconcile error", "error", eventErr)
 			}
 			delay = backoff
@@ -209,10 +225,27 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	}
 }
 func (m *Manager) record(ctx context.Context, event domain.Event) error {
+	if event.Actor == "" {
+		event.Actor = store.Actor(ctx)
+	}
+	if event.Cluster != "" {
+		if event.Resource == "" {
+			event.Resource = "clusters"
+		}
+		if event.Target == "" {
+			event.Target = event.Cluster
+		}
+	}
 	if m.opts.Context.Events != nil {
 		return m.opts.Context.Events.Record(ctx, event)
 	}
 	return m.opts.Store.AppendEvent(ctx, &event)
+}
+
+// Record attributes provider lifecycle events to the current reconciliation or
+// operation before forwarding them to the durable recorder.
+func (m *Manager) Record(ctx context.Context, event domain.Event) error {
+	return m.record(ctx, event)
 }
 func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.Phase) error {
 	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
@@ -223,7 +256,14 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 	}
 	return nil
 }
-func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (time.Duration, error) {
+func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
+	actor := "reconciler"
+	operation := ""
+	defer func() {
+		if err != nil && !errors.Is(err, errClusterGone) {
+			err = &attributedError{error: err, actor: actor, operation: operation}
+		}
+	}()
 	c, err := m.opts.Store.GetCluster(ctx, ref)
 	if errors.Is(err, store.ErrNotFound) {
 		return 0, errClusterGone
@@ -231,12 +271,21 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (time.Du
 	if err != nil {
 		return 0, err
 	}
+	// Capture attribution before synchronization advances ObservedGeneration.
+	// A completed generation must not claim later automatic health changes.
+	if c.Deleting || c.Status.ObservedGeneration < c.Generation {
+		if c.RequestedBy != "" {
+			actor = c.RequestedBy
+		}
+	}
+	ctx = store.WithActor(ctx, actor)
 	p, err := m.opts.Registry.Get(c.Spec.Provider)
 	if err != nil {
 		return 0, err
 	}
 	rc := m.opts.Context
 	rc.Cluster = c
+	rc.Events = m
 	previous := c.Status.Phase
 	if c.Deleting {
 		c.Status.Phase = domain.PhaseDeleting
@@ -280,6 +329,10 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (time.Du
 	// database process stopped, making ordinary Sync/Status unsafe or impossible.
 	op, err := m.opts.Store.ClaimRunningOperation(ctx, ref)
 	if err == nil {
+		actor, operation = op.Actor, op.ID
+		if actor == "" {
+			actor = "reconciler"
+		}
 		return m.runOperation(ctx, p, &rc, op)
 	}
 	if !errors.Is(err, store.ErrNotFound) {
@@ -298,6 +351,10 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (time.Du
 	}
 	if err != nil {
 		return 0, err
+	}
+	actor, operation = op.Actor, op.ID
+	if actor == "" {
+		actor = "reconciler"
 	}
 	return m.runOperation(ctx, p, &rc, op)
 }
@@ -349,12 +406,16 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	if err := m.resolve(ctx, rc); err != nil {
 		return engine.Result{}, err
 	}
+	observedGeneration := rc.Cluster.Status.ObservedGeneration
 	result, syncErr := p.Sync(ctx, rc)
 	if err := m.resolve(ctx, rc); err != nil {
 		return result, errors.Join(syncErr, err)
 	}
 	status, statusErr := p.Status(ctx, rc)
 	if statusErr == nil {
+		// Observation is owned by reconciliation, not provider health snapshots.
+		// Automatic retries must not make an applied request appear pending again.
+		status.ObservedGeneration = observedGeneration
 		rc.Cluster.Status = status
 		if syncErr == nil && result.RequeueAfter <= 0 {
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
@@ -364,6 +425,11 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 }
 
 func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engine.Context, op *domain.Operation) (time.Duration, error) {
+	actor := op.Actor
+	if actor == "" {
+		actor = "reconciler"
+	}
+	ctx = store.WithActor(ctx, actor)
 	c := rc.Cluster
 	previous := c.Status.Phase
 	if err := m.resolve(ctx, rc); err != nil {
@@ -401,7 +467,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		return 0, err
 	}
 	if previous != c.Status.Phase {
-		if err := m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)}); err != nil {
+		if err := m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Operation: op.ID, Type: "Normal", Reason: "PhaseChanged", Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)}); err != nil {
 			return 0, err
 		}
 	}

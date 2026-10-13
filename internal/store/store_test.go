@@ -79,7 +79,7 @@ func TestClusterLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = s.GetCluster(ctx, domain.ParseClusterKey(c.Name))
-	if got.Generation != 3 || got.Status.Phase != domain.PhaseCreating {
+	if got.Generation != 4 || got.Status.Phase != domain.PhaseCreating {
 		t.Fatal("resume")
 	}
 	if err := s.DeleteCluster(ctx, domain.ParseClusterKey(c.Name)); err != nil {

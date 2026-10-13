@@ -39,8 +39,8 @@ Percona member resources require at least **0.5 GiB RAM** and **5 GiB data disk*
 | Restores | In-place recovery and restore into a new cluster, restore status/errors |
 | Users | Application users/custom roles and managed system-user rotation |
 | Monitoring | Per-member time series and status context |
-| Events | Cluster activity and diagnostic messages |
-| Operations | Durable asynchronous operation progress/failure |
+| Events | Cluster activity and diagnostic messages, including the actor |
+| Operations | Durable asynchronous operation progress/failure and initiating actor |
 | Delete | Destructive deletion or retained-volume/backups choices |
 
 Use operation and resource status together. Accepted mutations are not completed provisioning/upgrades/restores, and local TCP readiness does not prove replica-set health. Physical restore intentionally stops database processes; do not use UI restart buttons to undo a restore's maintenance holds.
@@ -50,7 +50,7 @@ recovery checks source `backups/export` as well as backup read and target
 mutation. Source storage is used during recovery; target backup settings must
 refer to target-local storage. See [cross-namespace recovery](backups-and-restore.md#cross-namespace-recovery).
 
-**Reveal credentials** is an explicit action requiring `cluster-credentials:read`. Its response is not stored in the query cache; treat displayed/copied URI/password/CA material according to [users/TLS/access](users-tls-access.md). Normal Overview data does not reveal application/system passwords. Use your own application account rather than the revealed administrative identity for workloads.
+**Reveal credentials** is an explicit, audited action requiring `cluster-credentials:read`. Its response is not stored in the query cache; treat displayed/copied URI/password/CA material according to [users/TLS/access](users-tls-access.md). Normal Overview data does not reveal application/system passwords. Use your own application account rather than the revealed administrative identity for workloads.
 
 When adding a database user under **Users**, leave the password empty to have the server generate one. The success dialog displays that generated password exactly once; copy it into a secret manager before closing. Alternatively, supply your own password of at least eight characters.
 
@@ -66,7 +66,13 @@ When adding a database user under **Users**, leave the password empty to have th
 - **SSO:** OIDC issuer/client/scopes/groups settings.
 - **Monitoring:** collection status and Prometheus integration guidance; the actual scrape URL is the installation-root `/metrics`.
 
-Global **Events** and **Operations** pages aggregate authorized activity across clusters. Group-based roles, complete CSV policy replacement and token ownership are explained in [RBAC/auth](rbac-and-auth.md). Settings pages do not grant access to Zerops project tokens or the operator master key.
+Global **Events** and **Operations** pages aggregate authorized activity across clusters and show **Actor**, as do their cluster-detail tabs. Actors identify local account names, OIDC account names with an `(oidc: issuerURL)` suffix, API-token owners with token name/ID, or system work such as `reconciler`, `scheduler`, `system:startup` and the orphan-volume janitor's `system`. Desired-state reconciliation preserves the actor recorded with the generation; asynchronous operations retain their initiating actor rather than attributing their results to whichever user last opened the page.
+
+With **`audit:read`** for the affected objects, the global **Events** page also includes authorized audit activity and **Resource**/**Target** columns. Use **Audit filters > Actor / Resource**, then **Apply filters**, to match exact, case-sensitive values; leave a field blank to include all values. These filters compose with the namespace switcher and apply to both the durable list and matching live updates. Resource examples include `accounts`, `rbac`, `settings`, `api-tokens`, `auth`, `backup-storages`, `namespaces`, `clusters` and `orphaned-volumes`. Noncluster audit records have no Cluster: namespace-level records require namespace-scoped audit access, while global installation records require global audit access. Cluster records keep their cluster name and require `events:read` or `audit:read` on that namespace-qualified cluster. Clearing both fields and applying restores the view for the selected namespace, not every namespace.
+
+Every successful mutation and credential reveal is audited without logging request/response bodies or secrets. Authentication records also cover login/OIDC success/failure and logout. Audit events use the same SQLite event history as cluster events, currently retained indefinitely without automatic age/count pruning; this is not a tamper-proof external archive. See [security](../security.md#audit-attribution-and-durability) for identity and durability limits.
+
+Group-based roles, complete CSV policy replacement and token ownership are explained in [RBAC/auth](rbac-and-auth.md). Settings pages do not grant access to Zerops project tokens or the operator master key.
 
 **Settings > Orphaned volumes** is a read-only inventory of Local Storage volumes that Zerops refused to delete after their member runtimes were removed. A warning banner links to it while visible orphan records remain. The inventory follows the original cluster's read permissions; administrators see all records, including those for deleted clusters. The control-plane janitor retries deletion automatically, but the volumes still consume disk and may be billed for until Zerops deletes them. See [operations](../operations.md#orphaned-platform-volumes) for retry timing, events and manual cleanup.
 

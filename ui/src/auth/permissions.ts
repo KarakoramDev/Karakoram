@@ -12,6 +12,7 @@ export type Resource =
   | 'backup-storages'
   | 'operations'
   | 'events'
+  | 'audit'
   | 'monitoring'
   | 'namespaces'
   | 'accounts'
@@ -75,19 +76,24 @@ export function globMatch(pattern: string, value: string): boolean {
   return new RegExp(`^${re}$`).test(value);
 }
 
-/** Resources whose RBAC object is a cluster or storage inside a namespace. */
-const NAMESPACED: Partial<Record<Resource, true>> = { clusters: true, 'cluster-credentials': true, 'database-users': true, backups: true, restores: true, 'backup-storages': true, operations: true, events: true, monitoring: true };
+/** Resources whose policy objects normalize to namespace-qualified patterns. */
+const NAMESPACED: Partial<Record<Resource, true>> = { clusters: true, 'cluster-credentials': true, 'database-users': true, backups: true, restores: true, 'backup-storages': true, operations: true, events: true, audit: true, monitoring: true };
 
 /**
  * Mirrors the server policy effect: allowed when at least one matching allow
  * rule exists and no matching deny rule exists.
  */
-export function evaluate(perms: Schemas['Permission'][], resource: Resource, action: Action, object = '*'): boolean {
+export function evaluate(perms: Schemas['Permission'][], resource: Resource, action: Action, object?: string): boolean {
+  const capability = object === undefined;
+  object ??= '*';
   let allowed = false;
   for (const p of perms) {
     if (!globMatch(p.resource, resource) || !globMatch(p.action, action)) continue;
     const obj = NAMESPACED[resource] ? normalizeObject(p.object) : p.object;
-    if (object !== '*' && !globMatch(obj, object)) continue;
+    // Omitted objects probe UI entry points; an explicit '*' checks global audit.
+    if ((object !== '*' || (resource === 'audit' && !capability)) && !globMatch(obj, object)) continue;
+    // Scoped denies filter records on the server, not the audit navigation entry.
+    if (capability && resource === 'audit' && p.effect === 'deny' && obj !== '*' && obj !== '**') continue;
     if (object === '*' && obj !== '*' && !obj.includes('*')) {
       // A rule scoped to a specific object does not grant the global capability,
       // but it does mean the caller can act on *something*; treat as allow so

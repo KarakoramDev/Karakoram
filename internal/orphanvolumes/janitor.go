@@ -103,7 +103,7 @@ func (j *Janitor) event(ctx context.Context, v *domain.OrphanedVolume, kind, rea
 	if j.Events == nil {
 		return nil
 	}
-	return j.Events.Record(ctx, domain.Event{Namespace: domain.NormalizedNamespace(v.Namespace), Cluster: v.Cluster, Type: kind, Reason: reason, Message: message, CreatedAt: j.Now()})
+	return j.Events.Record(ctx, domain.Event{Namespace: domain.NormalizedNamespace(v.Namespace), Cluster: v.Cluster, Resource: "orphaned-volumes", Target: v.Hostname, Actor: "system", Type: kind, Reason: reason, Message: message, CreatedAt: j.Now()})
 }
 
 func (j *Janitor) removed(ctx context.Context, v *domain.OrphanedVolume, replaced bool) error {
@@ -112,6 +112,9 @@ func (j *Janitor) removed(ctx context.Context, v *domain.OrphanedVolume, replace
 	if replaced {
 		message = fmt.Sprintf("orphaned volume %s was replaced by a different service; dropping record without deleting the replacement", v.Hostname)
 		j.Logger.Warn(message, "serviceId", v.ServiceID)
+		if err := j.event(ctx, v, kind, "OrphanedVolumeRecordRemoved", message); err != nil {
+			return err
+		}
 		return j.Store.DeleteOrphanedVolume(ctx, v.Namespace, v.Hostname)
 	}
 	if err := j.event(ctx, v, kind, "OrphanedVolumeDeleted", message); err != nil {

@@ -41,16 +41,19 @@ const (
 
 // Cluster holds desired state, observed state, and provider-owned durable state.
 type Cluster struct {
-	Namespace     string          `json:"namespace,omitempty"`
-	Name          string          `json:"name"`
-	Spec          ClusterSpec     `json:"spec"`
-	Status        ClusterStatus   `json:"status"`
-	Internal      json.RawMessage `json:"-"`
-	Generation    int64           `json:"generation"`
-	Deleting      bool            `json:"deleting"`
-	DeleteOptions DeleteOptions   `json:"deleteOptions,omitempty"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
+	Namespace  string          `json:"namespace,omitempty"`
+	Name       string          `json:"name"`
+	Spec       ClusterSpec     `json:"spec"`
+	Status     ClusterStatus   `json:"status"`
+	Internal   json.RawMessage `json:"-"`
+	Generation int64           `json:"generation"`
+	// RequestedBy belongs to Generation, not to observed-state updates.
+	// It remains empty for generations whose historical requester is unknown.
+	RequestedBy   string        `json:"-"`
+	Deleting      bool          `json:"deleting"`
+	DeleteOptions DeleteOptions `json:"deleteOptions,omitempty"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
 }
 
 // ClusterSpec declares the desired engine, topology, and operational configuration.
@@ -392,6 +395,8 @@ type Event struct {
 	Namespace string    `json:"namespace,omitempty"`
 	ID        int64     `json:"id"`
 	Cluster   string    `json:"cluster,omitempty"`
+	Resource  string    `json:"resource,omitempty"`
+	Target    string    `json:"target,omitempty"`
 	Operation string    `json:"operation,omitempty"`
 	Type      string    `json:"type"`
 	Reason    string    `json:"reason"`

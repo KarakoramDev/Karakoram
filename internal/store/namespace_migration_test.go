@@ -47,7 +47,7 @@ func TestNamespaceMigrationPreservesLegacyData(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "legacy.db")
-	fixture := seedNamespaceMigrationDatabase(t, path, sealer)
+	fixture := seedNamespaceMigrationDatabase(t, path, sealer, true)
 
 	s, err := Open(path, sealer)
 	if err != nil {
@@ -108,7 +108,22 @@ func TestNamespaceMigrationPreservesLegacyData(t *testing.T) {
 	})
 }
 
-func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.Sealer) namespaceMigrationFixture {
+func TestNamespaceMigrationFromPreActorSchema(t *testing.T) {
+	key, err := secrets.New(strings.Repeat("m", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	fixture := seedNamespaceMigrationDatabase(t, path, key, false)
+	s, err := Open(path, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	assertNamespaceMigrationFixture(t, s, fixture)
+}
+
+func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.Sealer, upstream bool) namespaceMigrationFixture {
 	t.Helper()
 	ctx := context.Background()
 	db, err := sql.Open("sqlite", path)
@@ -126,9 +141,13 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 		return result
 	}
 	exec("CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)")
-	// Match migrate's filename bookkeeping and transactional application, but
-	// deliberately exclude 003 so Open must perform the actual upgrade.
-	for _, name := range []string{"001.sql", "002.sql"} {
+	// Seed the published pre-namespace schema; the older schema also exercises
+	// sequential upgrades through both actor attribution and namespaces.
+	names := []string{"001.sql", "002.sql"}
+	if upstream {
+		names = append(names, "003.sql")
+	}
+	for _, name := range names {
 		script, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -148,7 +167,7 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 			t.Fatal(err)
 		}
 	}
-	assertNamespaceMigrationNames(t, db, []string{"001.sql", "002.sql"})
+	assertNamespaceMigrationNames(t, db, names)
 
 	at := time.Date(2026, time.January, 2, 3, 4, 5, 123456789, time.UTC)
 	f := namespaceMigrationFixture{
@@ -221,7 +240,12 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 	}
 	for i := range f.clusters {
 		c := &f.clusters[i]
-		exec("INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?)", c.Name, marshal(c.Spec), marshal(c.Status), []byte(c.Internal), c.Generation, c.Deleting, marshal(c.DeleteOptions), c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano())
+		if upstream {
+			c.RequestedBy = "user:alice"
+			exec("INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Name, marshal(c.Spec), marshal(c.Status), []byte(c.Internal), c.Generation, c.Deleting, marshal(c.DeleteOptions), c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy)
+		} else {
+			exec("INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?)", c.Name, marshal(c.Spec), marshal(c.Status), []byte(c.Internal), c.Generation, c.Deleting, marshal(c.DeleteOptions), c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano())
+		}
 		c.Namespace = domain.DefaultNamespace
 	}
 	for _, secret := range f.secrets {
@@ -249,7 +273,14 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 	}
 	for i := range f.events {
 		event := &f.events[i]
-		result := exec("INSERT INTO events(cluster,type,data,created) VALUES(?,?,?,?)", event.Cluster, event.Type, marshal(event), event.CreatedAt.UnixNano())
+		var result sql.Result
+		if upstream {
+			event.Resource, event.Target = "clusters", event.Cluster
+			result = exec("INSERT INTO events(cluster,type,actor,resource,data,created) VALUES(?,?,?,?,?,?)", event.Cluster, event.Type, event.Actor, event.Resource, marshal(event), event.CreatedAt.UnixNano())
+		} else {
+			result = exec("INSERT INTO events(cluster,type,data,created) VALUES(?,?,?,?)", event.Cluster, event.Type, marshal(event), event.CreatedAt.UnixNano())
+			event.Resource, event.Target = "clusters", event.Cluster
+		}
 		event.ID, err = result.LastInsertId()
 		if err != nil {
 			t.Fatal(err)
@@ -279,7 +310,7 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 func assertNamespaceMigrationFixture(t *testing.T, s *Store, f namespaceMigrationFixture) {
 	t.Helper()
 	ctx := context.Background()
-	assertNamespaceMigrationNames(t, s.reader, []string{"001.sql", "002.sql", "003.sql"})
+	assertNamespaceMigrationNames(t, s.reader, []string{"001.sql", "002.sql", "003.sql", "004.sql"})
 	clusters, err := s.ListClusters(ctx, domain.DefaultNamespace)
 	assertNamespaceMigrationValue(t, "default clusters", clusters, f.clusters, err)
 	for _, want := range f.clusters {

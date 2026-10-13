@@ -16,13 +16,28 @@ type EventFilter struct {
 	Namespace string
 	Cluster   string
 	Type      string
+	Actor     string
+	Resource  string
 	Limit     int
 	SinceID   int64
 }
 
 // AppendEvent appends an event and assigns its monotonic durable ID.
 func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
-	event.Namespace = domain.NormalizedNamespace(event.Namespace)
+	if event.Cluster != "" {
+		event.Namespace = domain.NormalizedNamespace(event.Namespace)
+	}
+	if event.Actor == "" {
+		event.Actor = Actor(ctx)
+	}
+	if event.Cluster != "" {
+		if event.Resource == "" {
+			event.Resource = "clusters"
+		}
+		if event.Target == "" {
+			event.Target = event.Cluster
+		}
+	}
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now().UTC()
 	}
@@ -30,7 +45,7 @@ func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
 	if err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,data,created) VALUES(?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, data, event.CreatedAt.UnixNano())
+	r, err := s.writer.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,actor,resource,data,created) VALUES(?,?,?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, event.Actor, event.Resource, data, event.CreatedAt.UnixNano())
 	if err != nil {
 		return err
 	}
@@ -40,7 +55,7 @@ func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
 
 // ListEvents returns ordered events.
 func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Event, error) {
-	q := "SELECT id,data FROM events WHERE id>?"
+	q := "SELECT id,namespace,data FROM events WHERE id>?"
 	args := []any{filter.SinceID}
 	if filter.Namespace != "" {
 		q += " AND namespace=?"
@@ -53,6 +68,14 @@ func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Ev
 	if filter.Type != "" {
 		q += " AND type=?"
 		args = append(args, filter.Type)
+	}
+	if filter.Actor != "" {
+		q += " AND actor=?"
+		args = append(args, filter.Actor)
+	}
+	if filter.Resource != "" {
+		q += " AND resource=?"
+		args = append(args, filter.Resource)
 	}
 	limit := filter.Limit
 	if limit <= 0 {
@@ -72,14 +95,16 @@ func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Ev
 	for rows.Next() {
 		var id int64
 		var data []byte
+		var namespace string
 		var v domain.Event
-		if err = rows.Scan(&id, &data); err != nil {
+		if err = rows.Scan(&id, &namespace, &data); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
 		v.ID = id
+		v.Namespace = namespace
 		out = append(out, v)
 	}
 	return out, rows.Err()

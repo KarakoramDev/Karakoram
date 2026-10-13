@@ -138,3 +138,28 @@ func TestRunPreservesGeneratedSourcesAndAnnotatesOnce(t *testing.T) {
 		t.Fatal("annotation modified source content or repeated the header")
 	}
 }
+
+func TestAdditionalAuditPermission(t *testing.T) {
+	spec := validSpec + `  /events:
+    get:
+      operationId: listEvents
+      x-karakoram-rbac: {resource: events, action: read, object: '*'}
+      x-karakoram-rbac-extra: {resource: audit, action: read, object: '*'}
+`
+	generated, err := generate([]byte(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(generated), `AdditionalRBAC = []RBACRule{`) || !strings.Contains(string(generated), `{Resource: "audit", Action: "read", ObjectParam: "*"},`) {
+		t.Fatal("additional audit permission omitted")
+	}
+	for _, invalid := range []string{
+		strings.Replace(spec, "resource: audit", "resource: unknown", 1),
+		strings.Replace(spec, "resource: audit, action: read", "resource: audit, action: reveal", 1),
+		strings.Replace(spec, "resource: audit, action: read, object: '*'", "resource: audit, action: read, object: cluster", 1),
+	} {
+		if _, err := generate([]byte(invalid)); err == nil {
+			t.Fatal("invalid additional permission accepted")
+		}
+	}
+}

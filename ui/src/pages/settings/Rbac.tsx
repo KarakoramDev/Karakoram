@@ -11,15 +11,16 @@ import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 
-const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'monitoring', 'namespaces', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
+const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'audit', 'monitoring', 'namespaces', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
 const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', 'export', '*'];
 const OBJECT_EXAMPLES: Array<[string, string]> = [
   ['**', 'everything in every namespace (a bare * is normalized to this)'],
-  ['dev/**', 'the dev namespace and every cluster or storage in it'],
+  ['dev', 'one namespace for the namespaces resource'],
+  ['dev/**', 'the dev namespace and every cluster, storage or audit object in it'],
   ['prod/**', 'the prod namespace and everything in it'],
   ['prod/orders', 'one cluster (or storage) in prod'],
   ['prod/*', 'every cluster in prod, but not the namespace object itself'],
-  ['orders', 'legacy form; normalized to default/orders'],
+  ['orders', 'legacy form; normalized to default/orders for cluster-scoped resources and audit'],
 ];
 
 /** Lightweight structural check so obvious typos never reach the server. */
@@ -98,7 +99,7 @@ export function RbacPage() {
           <div className="stack">
             <p className="small muted">
               Rules: <code>p, subject, resource, action, object, allow|deny</code> and role bindings <code>g, subject, role</code>. Subjects are <code>user:&lt;name&gt;</code>, <code>group:&lt;oidc-group&gt;</code> or <code>role:&lt;name&gt;</code>. Objects
-              are <code>&lt;namespace&gt;/&lt;cluster&gt;</code> globs for cluster-scoped resources and backup storages, <code>&lt;namespace&gt;</code> for the <code>namespaces</code> resource and <code>*</code> for global ones. Built-in roles{' '}
+              are <code>&lt;namespace&gt;/&lt;cluster&gt;</code> globs for cluster-scoped resources and backup storages, <code>&lt;namespace&gt;</code> for the <code>namespaces</code> resource and <code>*</code> for global ones. Audit reads use the affected namespace/cluster, namespace or global object; <code>audit, read, dev/**</code> grants dev audit visibility only. Built-in roles{' '}
               <code>role:admin</code>, <code>role:operator</code>, <code>role:viewer</code> remain installed. Deny overrides allow.
             </p>
             <details className="small muted">

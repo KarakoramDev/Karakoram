@@ -54,7 +54,7 @@ export function AppShell() {
             <Icon d={ICONS.clusters} />
             <span>Clusters</span>
           </NavLink>
-          {auth.can('events', 'read') ? (
+          {auth.can('events', 'read') || auth.can('audit', 'read') ? (
             <NavLink to="/events" className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Events">
               <Icon d={ICONS.events} />
               <span>Events</span>

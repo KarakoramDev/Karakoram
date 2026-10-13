@@ -24,6 +24,13 @@
 // Namespace read-modify-write paths read registration and enrollment state through
 // the writer connection before side effects, rather than a pooled reader snapshot.
 //
+// WithActor tags new desired generations and audit events with their requester.
+// Request attribution survives restart and observed-state updates; unchanged
+// desired writes retain the original requester. Automatic new events default to
+// reconciler, while historical events with unknown actors remain unknown.
+// Events include both cluster lifecycle and noncluster audit records, indexed
+// by actor and RBAC resource. Cluster deletion does not remove audit history.
+//
 // Credential-bearing structs never serialize hidden fields into public JSON.
 // Backup storage credentials, cluster KV values, and agent tokens are encrypted
 // with identity-bound AES-GCM. Password and refresh/API token hashes are stored

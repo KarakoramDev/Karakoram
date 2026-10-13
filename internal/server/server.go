@@ -70,9 +70,10 @@ func New(o Options) (*Server, error) {
 
 type requestKey struct{}
 type identityKey struct{}
+type triggerKey struct{}
 type input struct {
-	Body                                                                                                           any
-	Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
+	Body                                                                                                                      any
+	Namespace, Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
 }
 type response struct {
 	status  int
@@ -410,7 +411,11 @@ func (s *Server) providerContext(rc *engine.Context) *response {
 	rc.AgentURL = s.namespaces.AgentURL(rc.Namespace)
 	return nil
 }
-func (s *Server) trigger(ref domain.ClusterRef) {
+func (s *Server) trigger(ctx context.Context, ref domain.ClusterRef) {
+	if pending, ok := ctx.Value(triggerKey{}).(*domain.ClusterRef); ok {
+		*pending = ref
+		return
+	}
 	if s.Trigger != nil {
 		s.Trigger.Trigger(ref)
 	}
@@ -444,6 +449,22 @@ func (s *Server) usableNamespace(namespace string) *response {
 	return nil
 }
 func (s *Server) handle(ctx context.Context, name string, in input) response {
+	var pending domain.ClusterRef
+	ctx = context.WithValue(ctx, triggerKey{}, &pending)
+	if p := principal(ctx); p != nil {
+		ctx = store.WithActor(ctx, p.Actor())
+	}
+	result := s.dispatch(ctx, name, in)
+	if err := s.auditAction(ctx, name, in, result); err != nil {
+		return s.failure(err)
+	}
+	if pending.Name != "" && s.Trigger != nil {
+		s.Trigger.Trigger(pending)
+	}
+	return result
+}
+
+func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 	switch name {
 	case "GetHealth":
 		_, err := s.Store.ListClusters(ctx, "")
@@ -455,6 +476,8 @@ func (s *Server) handle(ctx context.Context, name string, in input) response {
 		return s.identity(ctx, name, in)
 	case "ListBackupStorages", "CreateBackupStorage", "GetBackupStorage", "ReplaceBackupStorage", "DeleteBackupStorage", "VerifyBackupStorage":
 		return s.storage(ctx, name, in)
+	case "CreateNamespace", "UpdateNamespace", "RotateNamespaceToken", "ValidateNamespace", "DeleteNamespace":
+		return s.namespaceMutation(ctx, name, in)
 	case "ListOrphanedVolumes":
 		return s.orphanedVolumes(ctx)
 	case "ListEvents", "StreamEvents", "ListOperations", "GetOperation", "GetPrometheusMetrics", "GetClusterMetrics":

@@ -13,7 +13,7 @@ You own the infrastructure, credentials, data and recovery procedures. Zerops is
 - S3-compatible PBM logical/physical backups, UTC schedules and count retention, PITR, in-place restore and clone.
 - CPU/RAM configuration, persistent disk growth, rolling binary upgrades/restarts and explicit FCV promotion.
 - Database users/roles, independently rotatable system accounts, keyfile authentication, generated or supplied TLS certificates and opt-in public TCP access.
-- Per-member monitoring, authenticated Prometheus output, events/logs, local accounts, OIDC, RBAC and owner-scoped API tokens.
+- Per-member monitoring, authenticated Prometheus output, actor-attributed events/audit activity and operations, logs, local accounts, OIDC, namespace-aware RBAC and owner-scoped API tokens.
 - Multi-project [namespaces](docs/user-guide/namespaces.md), project-scoped tokens, outbound authenticated relays and permission-gated cross-namespace restore/clone.
 
 **Read the [limitations](docs/limitations.md) before production use.** Zerops does not guarantee physical-host anti-affinity, Local Storage is single-host and the control plane has one replica. Healthy voters do not prove independent failure domains. Public replica-set routing does not automatically solve external member discovery. Configure backups and exercise recovery before loading important data.

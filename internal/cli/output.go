@@ -95,7 +95,7 @@ func (a *app) table(rows []any) error {
 		}
 	}
 	keys := sortedKeys(all)
-	preferred := []string{"namespace", "name", "id", "username", "cluster", "database", "type", "phase", "state", "version", "role", "health", "message"}
+	preferred := []string{"namespace", "name", "id", "username", "cluster", "resource", "target", "database", "type", "phase", "actor", "state", "version", "role", "health", "message"}
 	ordered := make([]string, 0, len(keys))
 	for _, p := range preferred {
 		if _, ok := all[p]; ok {

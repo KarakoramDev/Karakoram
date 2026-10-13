@@ -186,6 +186,11 @@ func TestCrossNamespaceRestoreAndCloneExportPermission(t *testing.T) {
 		if err != nil || len(events) != 2 {
 			t.Fatal(ns, events, err)
 		}
+		for _, e := range events {
+			if e.Actor == "" || !strings.Contains(e.Actor, "cloner (token: test [") || e.Resource != "restores" {
+				t.Fatal("cross-namespace event lost actor or resource", e)
+			}
+		}
 	}
 }
 
@@ -248,7 +253,7 @@ func TestNamespaceEventStreamFiltersPerEvent(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "event-reader"}, "event-reader-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+"\np, user:event-reader, events, read, dev/**, allow\n"); err != nil {
+	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+"\np, user:event-reader, events, read, dev/**, allow\np, user:event-reader, audit, read, dev/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
 	token, _, err := s.Auth.CreateToken(t.Context(), "event-reader", "test", nil)

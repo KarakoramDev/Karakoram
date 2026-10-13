@@ -110,8 +110,8 @@ restore works. Check the deployed version and logs without exposing secrets.
 
 ## Existing single-project installations
 
-Migration **003** runs automatically with the normal store migrations. Existing
-clusters, events and metrics become namespace `default`; legacy records and
+Migration **004** runs automatically after upstream actor/audit migration **003**.
+Existing clusters, events and metrics become namespace `default`; legacy records and
 cluster/storage secret identities retain their old encoding/AAD. **No re-sealing
 or master-key change is required.** The default project/token still comes from
 the existing service environment.

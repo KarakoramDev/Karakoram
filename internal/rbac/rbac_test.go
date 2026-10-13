@@ -516,3 +516,36 @@ func TestUnrestrictedAdministratorObjects(t *testing.T) {
 		t.Fatal("namespace-specific deny passed unrestricted-admin guard")
 	}
 }
+
+func TestAuditNamespacePolicyNormalizationAndRoles(t *testing.T) {
+	e, st := fixture(t)
+	policy := DefaultPolicy() + "p, user:legacy, audit, read, orders\np, user:auditor, audit, read, dev/**\np, user:auditor, audit, read, dev/private, deny\n"
+	if err := e.ReplacePolicy(t.Context(), policy); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(e.Policy(), "audit,read,default/orders") {
+		t.Fatal("legacy audit object was not normalized", e.Policy())
+	}
+	reloaded, err := New(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		subject, object string
+		want            bool
+	}{
+		{"user:legacy", "default/orders", true}, {"user:legacy", "dev/orders", false},
+		{"user:auditor", "dev", true}, {"user:auditor", "dev/orders", true},
+		{"user:auditor", "dev/private", false}, {"user:auditor", "prod/orders", false},
+		{"user:auditor", "*", false}, {"user:admin", "*", true},
+		{"user:admin", "dev", true}, {"user:admin", "dev/orders", true},
+		{"role:operator", "dev", false}, {"role:viewer", "dev", false},
+	} {
+		if got := reloaded.Can([]string{tc.subject}, "audit", "read", tc.object); got != tc.want {
+			t.Errorf("%+v: got %v", tc, got)
+		}
+	}
+	if reloaded.Policy() != e.Policy() {
+		t.Fatal("audit normalization changed on reload")
+	}
+}

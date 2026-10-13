@@ -101,9 +101,14 @@ func TestAdminRecoveryAppliesOnceAcrossRestarts(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(rules, afterRules) {
 		t.Fatal("recovery policy accumulates duplicate grants", err)
 	}
-	events, err := s.o.Store.ListEvents(ctx, store.EventFilter{})
+	events, err := s.o.Store.ListEvents(ctx, store.EventFilter{Resource: "accounts"})
 	if err != nil || len(events) != 2 {
 		t.Fatal("expected one durable audit event per applied value", len(events), err)
+	}
+	for _, event := range events {
+		if event.Resource != "accounts" || event.Target != "admin" || event.Actor != "system:startup" || event.Reason != "AdminAccessRecovered" || event.Cluster != "" {
+			t.Fatal("unexpected recovery attribution", event)
+		}
 	}
 	if strings.Count(logs.String(), "Local administrator access recovered") != 2 {
 		t.Fatal("expected one log per applied value")

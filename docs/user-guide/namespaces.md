@@ -69,6 +69,18 @@ Namespace detail shows:
 
 A relay's platform readiness command probes its local private listener only; it does **not** prove tunnel connectivity. Inspect namespace health instead. Reconnect counters are process-local hub observations, not a durable lifetime SLA. Lifecycle events include `NamespaceCreated`, `NamespaceValidated`, `NamespaceValidationFailed`, `NamespaceTokenRotated`, `RelayDeploying`, `RelayConnected`, `RelayDisconnected`, `RelayTargetRefused`, `NamespaceDeleting` and `NamespaceDeleted`.
 
+Namespace create/update/validation/token rotation/deletion and relay lifecycle
+events retain both the namespace and actor. User-triggered changes identify the
+initiating account or API token; controller lifecycle work uses system actors.
+Audit visibility is separate from namespace metadata: `audit, read, dev/**`
+allows audit records in dev, not global installation activity or other namespaces.
+Actor/resource filters intersect with the namespace on lists and streams:
+
+```sh
+karactl -n dev events list --actor alice --resource namespaces
+karactl -n dev events watch --resource namespaces
+```
+
 ## Backup storages and cross-namespace recovery
 
 Register storage in the cluster's namespace (`karactl -n dev storages create -f FILE`). Cluster backup settings and schedules refer to names in that same namespace. Identically named storages in different namespaces need not describe the same bucket or credentials. Member access to S3 is direct; control-plane storage verification runs from the control-plane network, not through the relay.
@@ -109,11 +121,14 @@ p, user:alice, cluster-credentials, read, prod/**, deny
 # Credential reveal and namespace metadata are separate grants.
 p, user:bob, cluster-credentials, read, prod/orders
 p, user:bob, namespaces, read, prod
+# Audit visibility is separate from namespace metadata.
+p, user:alice, audit, read, dev/**
+p, user:alice, namespaces, read, dev
 # Permit source export; backup read and target mutation still required.
 p, user:bob, backups, export, prod/**
 ```
 
-`dev/**` matches the namespace itself and its objects; `dev/*` does not span additional `/` separators. Existing object `*` normalizes to `**`, and legacy bare cluster patterns normalize to `default/<pattern>`. Bare `namespaces` objects remain namespace names. Namespace creation requires `namespaces/create` on global `*`, not merely `dev/**`. See [RBAC policy format](rbac-and-auth.md#policy-format).
+`dev/**` matches the namespace itself and its objects; `dev/*` does not span additional `/` separators. Audit uses `<namespace>/<cluster>` for cluster records, `<namespace>` for namespace-level records and global `*` for installation records. Existing object `*` normalizes to `**`, and legacy bare cluster and audit patterns normalize to `default/<pattern>`; use `dev/**` rather than bare `dev` for namespace-wide audit. Bare `namespaces` objects remain namespace names. Namespace creation requires `namespaces/create` on global `*`, not merely `dev/**`. See [RBAC policy format](rbac-and-auth.md#policy-format).
 
 On **fresh installations**, the built-in operator and viewer roles include `namespaces, read, **` for namespace metadata across all namespaces; neither grants namespace creation, updates or deletion. Upgraded installations keep their stored policy, and normalization does not add these grants. To let those roles see namespaces, add the following to the existing complete policy:
 

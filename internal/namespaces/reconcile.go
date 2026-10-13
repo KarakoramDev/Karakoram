@@ -303,6 +303,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 			return err
 		}
 		r.enroll(n)
+		r.event(ctx, n, "RelayCertificateRenewed", "Relay certificate renewed")
 		return nil
 	}
 	key, err := r.o.Store.GetNamespaceRelayKeyForUpdate(ctx, n.Name)

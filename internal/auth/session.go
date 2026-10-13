@@ -70,6 +70,13 @@ func (s *Service) issue(ctx context.Context, w http.ResponseWriter, a *domain.Ac
 	if err = s.o.Store.CreateSession(ctx, &sess); err != nil {
 		return nil, err
 	}
+	message := "Local login succeeded"
+	if via == "oidc" {
+		message = "OIDC login succeeded"
+	}
+	if err = s.auditAuthentication(ctx, Principal{Account: a.Name, Via: via, OIDCIssuer: a.OIDCIssuer}, "LoginSucceeded", message); err != nil {
+		return nil, err
+	}
 	return s.cookies(w, a, &sess, token)
 }
 func (s *Service) cookies(w http.ResponseWriter, a *domain.Account, se *domain.Session, refresh string) (*SessionInfo, error) {
@@ -92,6 +99,11 @@ func (s *Service) cookies(w http.ResponseWriter, a *domain.Account, se *domain.S
 // Login applies account+IP exponential backoff and issues the local session.
 // After five failures delay starts at one second and doubles to fifteen minutes.
 func (s *Service) Login(ctx context.Context, w http.ResponseWriter, user, password string) (*SessionInfo, error) {
+	// Only bounded modeled account names may reach hashing, backoff or auditing.
+	// Malformed input is rejected without persisting untrusted identity text.
+	if len(user) > 64 || domain.ValidateAccountName(user) != nil {
+		return nil, ErrUnauthenticated
+	}
 	// Bound memory-intensive hashing across all usernames without blocking the
 	// shared identity lock or queuing unbounded unauthenticated work.
 	select {
@@ -142,6 +154,9 @@ func (s *Service) Login(ctx context.Context, w http.ResponseWriter, user, passwo
 			v.Until = now.Add(delay)
 		}
 		s.attempts[key] = v
+		if auditErr := s.auditAuthentication(ctx, Principal{Account: user}, "LoginFailed", "Local login failed"); auditErr != nil {
+			return nil, errors.Join(ErrUnauthenticated, auditErr)
+		}
 		return nil, ErrUnauthenticated
 	}
 	delete(s.attempts, key)
@@ -171,7 +186,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 		if err = s.o.Store.TouchApiToken(ctx, t.ID, s.now()); err != nil {
 			return nil, err
 		}
-		return &Principal{Account: a.Name, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, MustChangePassword: a.MustChangePassword}, nil
+		return &Principal{Account: a.Name, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, TokenName: t.Name, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword}, nil
 	}
 	c, err := r.Cookie(AccessCookie)
 	if err != nil {
@@ -195,7 +210,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 			return nil, err
 		}
 	}
-	return &Principal{Account: a.Name, Subjects: subjects(a, se.Subjects), Via: se.Via, MustChangePassword: a.MustChangePassword, CSRFToken: se.CSRF}, nil
+	return &Principal{Account: a.Name, Subjects: subjects(a, se.Subjects), Via: se.Via, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword, CSRFToken: se.CSRF}, nil
 }
 func (s *Service) refreshSession(ctx context.Context, r *http.Request) (*domain.Session, string, error) {
 	c, err := r.Cookie(RefreshCookie)
@@ -256,6 +271,9 @@ func (s *Service) Refresh(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if err = s.o.Store.UpdateSession(ctx, se); err != nil {
 		return nil, err
 	}
+	if err = s.auditAuthentication(ctx, Principal{Account: a.Name, Via: se.Via, OIDCIssuer: a.OIDCIssuer}, "RefreshSessionSucceeded", "Session refreshed"); err != nil {
+		return nil, err
+	}
 	return s.cookies(w, a, se, token)
 }
 
@@ -271,10 +289,18 @@ func (s *Service) Logout(ctx context.Context, w http.ResponseWriter, r *http.Req
 		s.clear(w)
 		return nil
 	}
+	principal := Principal{Account: se.Owner, Via: se.Via}
+	if se.Via == "oidc" {
+		account, err := s.o.Store.GetAccount(ctx, se.Owner)
+		if err != nil {
+			return err
+		}
+		principal.OIDCIssuer = account.OIDCIssuer
+	}
 	se.Revoked = true
 	if err = s.o.Store.UpdateSession(ctx, se); err != nil {
 		return err
 	}
 	s.clear(w)
-	return nil
+	return s.auditAuthentication(ctx, principal, "LogoutSucceeded", "Logout succeeded")
 }

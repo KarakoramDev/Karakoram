@@ -63,7 +63,7 @@ flowchart LR
 
 The hub admits only enrolled relay certificate identities/serials and keeps one active session per namespace. Target policy is pushed on change/reconnect and refreshed every thirty seconds; the relay validates host/port and DNS answers before dialing. The namespace reconciler runs independent project workers, tracks token/relay health, renews client certificates and redeploys mismatched executable digests. Reconciliation, scheduling, orphan cleanup and monitoring use namespace-qualified identities and backends. A token/routing failure affects that namespace's clusters, not every project.
 
-SQLite migration 003 assigns existing clusters/events/metrics to `default`. Default cluster/storage secret identities retain their legacy encoding, so no secret re-sealing occurs. Public RBAC objects use `<namespace>/<cluster>` or `<namespace>/<storage>`; namespace registry objects use the namespace name. Cross-namespace recovery additionally checks source `backups/export` and uses the recorded source storage.
+SQLite migration 004 follows actor/audit migration 003 and assigns existing clusters/events/metrics to `default`. Default cluster/storage secret identities retain their legacy encoding, so no secret re-sealing occurs. Public RBAC objects use `<namespace>/<cluster>` or `<namespace>/<storage>`; namespace registry objects use the namespace name. Audit visibility uses `<namespace>/<cluster>`, `<namespace>` or global `*` according to the event scope. Cross-namespace recovery additionally checks source `backups/export` and uses the recorded source storage.
 
 
 ## Code boundaries

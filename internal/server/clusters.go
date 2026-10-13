@@ -74,15 +74,12 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	if err != nil {
 		return s.failure(err)
 	}
-	actor := ""
-	if p := principal(ctx); p != nil {
-		actor = p.Account
-	}
+	actor := principal(ctx).Actor()
 	op := domain.Operation{Namespace: ref.Namespace, Cluster: ref.Name, Kind: kind, Payload: data, Actor: actor}
 	if err = s.Store.EnqueueOperation(ctx, &op); err != nil {
 		return s.failure(err)
 	}
-	s.trigger(ref)
+	s.trigger(ctx, ref)
 	return response{status: 202, body: operationAPI(op)}
 }
 func (s *Server) cluster(ctx context.Context, name string, in input) response {
@@ -168,7 +165,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				return s.failure(err)
 			}
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 201, body: s.clusterAPI(c)}
 	}
 	if name == "ListBackups" || name == "GetBackup" || name == "DeleteBackup" {
@@ -259,7 +256,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return ok(s.clusterAPI(*updated))
 	case "DeleteCluster":
 		q := request(ctx).URL.Query()
@@ -267,7 +264,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = s.Store.MarkClusterDeleting(ctx, clusterRef(ctx, c.Name), opts); err != nil {
 			return s.failure(err)
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202}
 	case "ResumeCluster":
 		if err = s.Store.ResumeCluster(ctx, clusterRef(ctx, c.Name)); err != nil {
@@ -277,7 +274,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: s.clusterAPI(*updated)}
 	case "RestartCluster":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "restart", map[string]string{})
@@ -346,22 +343,22 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		v := domain.Backup{Namespace: c.Namespace, Name: b.Name, Cluster: c.Name, Storage: b.Storage, Type: string(b.Type), Trigger: "manual", Phase: domain.PhasePending}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup", Actor: principal(ctx).Account, Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
 		if err = s.Store.EnqueueBackup(ctx, &v, &op); err != nil {
 			return s.failure(err)
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: backupAPI(v)}
 	case "DeleteBackup":
 		b, err := s.Store.GetBackup(ctx, clusterRef(ctx, c.Name), in.Backup)
 		if err != nil {
 			return s.failure(err)
 		}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "delete-backup", Actor: principal(ctx).Account, Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "delete-backup", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
 		if err = s.Store.EnqueueBackupDeletion(ctx, b, &op); err != nil {
 			return s.failure(err)
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: operationAPI(op)}
 	case "ListRestores":
 		items, err := s.Store.ListRestores(ctx, clusterRef(ctx, c.Name))
@@ -398,7 +395,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 		}
 		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: b.Source.SourceCluster}, Phase: domain.PhasePending}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: principal(ctx).Account, Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
 		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
 			return s.failure(err)
 		}
@@ -407,7 +404,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				return s.failure(err)
 			}
 		}
-		s.trigger(clusterRef(ctx, c.Name))
+		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: restoreAPI(r)}
 	}
 	if failure := s.providerContext(rc); failure != nil {
@@ -535,13 +532,10 @@ func (s *Server) validateStorages(ctx context.Context, c *domain.Cluster) error 
 }
 
 func (s *Server) crossNamespaceRestoreEvents(ctx context.Context, target, source domain.ClusterRef, kind, operation string) error {
-	actor := ""
-	if p := principal(ctx); p != nil {
-		actor = p.Account
-	}
+	actor := principal(ctx).Actor()
 	message := "Cross-namespace " + kind + " from " + clusterObject(source.Namespace, source.Name) + " to " + clusterObject(target.Namespace, target.Name)
 	for _, ref := range []domain.ClusterRef{target, source} {
-		if err := s.Context.Events.Record(ctx, domain.Event{Namespace: ref.Namespace, Cluster: ref.Name, Type: "CrossNamespaceRestore", Message: message, Actor: actor, Operation: operation}); err != nil {
+		if err := s.recordAudit(ctx, domain.Event{Namespace: ref.Namespace, Cluster: ref.Name, Resource: "restores", Target: clusterObject(target.Namespace, target.Name), Type: "CrossNamespaceRestore", Message: message, Actor: actor, Operation: operation}); err != nil {
 			return err
 		}
 	}

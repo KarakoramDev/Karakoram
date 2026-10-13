@@ -23,6 +23,7 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 		return err
 	}
 	c.Generation = 1
+	c.RequestedBy = Actor(ctx)
 	c.CreatedAt = time.Now().UTC()
 	c.UpdatedAt = c.CreatedAt
 	if c.Status.Phase == "" {
@@ -52,7 +53,7 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	if err = namespaceForInsert(ctx, tx, c.Namespace); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano()); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy); err != nil {
 		return typed(err)
 	}
 	return tx.Commit()
@@ -64,7 +65,7 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	var c domain.Cluster
 	var spec, status, internal, opts []byte
 	var created, updated int64
-	err := row.Scan(&c.Namespace, &c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated)
+	err := row.Scan(&c.Namespace, &c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated, &c.RequestedBy)
 	if err != nil {
 		return nil, typed(err)
 	}
@@ -82,7 +83,7 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	return &c, nil
 }
 
-const clusterColumns = "namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated"
+const clusterColumns = "namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by"
 
 // GetCluster loads cluster.
 func (s *Store) GetCluster(ctx context.Context, ref domain.ClusterRef) (*domain.Cluster, error) {
@@ -125,7 +126,7 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 	if err != nil {
 		return err
 	}
-	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	return affected(result, err)
 }
 func affected(result sql.Result, err error) error {
@@ -174,7 +175,7 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, 
 	}
 	defer tx.Rollback()
 	data, _ := json.Marshal(opts)
-	r, err := tx.ExecContext(ctx, "UPDATE clusters SET deleting=1,delete_options=?,updated=? WHERE namespace=? AND name=?", data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	r, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN deleting=0 OR delete_options<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN deleting=0 OR delete_options<>? THEN ? ELSE requested_by END,deleting=1,delete_options=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(r, err); err != nil {
 		return err
 	}
@@ -217,7 +218,7 @@ func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error 
 	}
 	c.Status.Phase = domain.PhaseCreating
 	data, _ := json.Marshal(c.Status)
-	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,deleting=0,updated=? WHERE namespace=? AND name=?", data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,requested_by=?,deleting=0,updated=? WHERE namespace=? AND name=?", data, Actor(ctx), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err != nil {
 		return err
 	}
