@@ -2,6 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import type { WizardSectionProps } from '../types';
+import { versionSelectable } from '../index';
 import { Checkbox, ChoiceGroup, SelectField, Switch } from '@/components/ui/Field';
 import { Callout } from '@/components/ui/Primitives';
 import { buildEngineOptions, managementIsPublic, NODE_COUNTS, PLUGIN_GROUPS, quorumFailureTolerance, selectedPluginGroups } from './helpers';
@@ -16,7 +17,7 @@ export default function RabbitMQWizardSection({ provider, spec, onChange }: Wiza
       <div className="grid-2">
         <SelectField label="RabbitMQ version" value={spec.version} onChange={(event) => onChange({ ...spec, version: event.target.value })}>
           {provider.versions.map((version) => (
-            <option key={version.version} value={version.version} disabled={version.status === 'unavailable'}>
+            <option key={version.version} value={version.version} disabled={!versionSelectable(provider.name, version)}>
               {version.version}{version.default ? ' (default)' : ''}{version.status !== 'supported' ? ` — ${version.status}` : ''}
             </option>
           ))}
@@ -34,8 +35,8 @@ export default function RabbitMQWizardSection({ provider, spec, onChange }: Wiza
         { value: 'preferTLS', title: 'Prefer TLS', description: 'AMQP and AMQPS listeners; plaintext clients are still accepted.' },
         { value: 'disabled', title: 'Disabled', description: 'Unencrypted AMQP and management API. Use only on trusted private networks.' },
       ]} />
-      <Switch label="Publish the management UI over HTTPS" checked={publicManagement} onChange={(event) => onChange({ ...spec, engineOptions: { ...buildEngineOptions(selected, event.target.checked) } })} />
-      {publicManagement ? <Callout tone="warn">The management UI becomes publicly reachable through Zerops HTTPS routing and requires RabbitMQ credentials. The AMQP IP allowlist does not protect this separate HTTP endpoint.</Callout> : null}
+      <Switch label="Publish the management UI over HTTPS" checked={publicManagement} disabled={tls.mode === 'requireTLS' && !publicManagement} onChange={(event) => onChange({ ...spec, engineOptions: { ...buildEngineOptions(selected, event.target.checked) } })} />
+      {tls.mode === 'requireTLS' ? <Callout tone={publicManagement ? 'warn' : 'info'}>Public management is unavailable with requireTLS: Zerops HTTPS subdomains forward plaintext HTTP to brokers. Keep management private; secure public routing needs verified HTTPS backends or TLS TCP passthrough.</Callout> : publicManagement ? <Callout tone="warn">The management UI/API becomes publicly reachable through Zerops HTTPS routing, with a private plaintext HTTP hop, and requires RabbitMQ credentials. The AMQP IP allowlist does not protect this separate endpoint.</Callout> : null}
       <fieldset className="stack">
         <legend className="field-label">Optional plugins</legend>
         {PLUGIN_GROUPS.map((group) => <Checkbox key={group.id} label={group.label} description={`${group.description} Includes its management plugin.`} checked={selected.includes(group.id)} onChange={(event) => onChange({ ...spec, engineOptions: { ...buildEngineOptions(event.target.checked ? [...selected, group.id] : selected.filter((id) => id !== group.id), publicManagement) } })} />)}

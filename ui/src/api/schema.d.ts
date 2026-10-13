@@ -990,7 +990,10 @@ export type paths = {
         /** List RabbitMQ User */
         get: operations["listRabbitMQUsers"];
         put?: never;
-        /** Create RabbitMQ User */
+        /**
+         * Create RabbitMQ User
+         * @description Requires database-users/create on the cluster. Empty tags or management alone need no additional grant. Any administrator, policymaker, monitoring or impersonator tag also requires clusters/update on the same namespace/cluster. Protected system users cannot be created.
+         */
         post: operations["createRabbitMQUser"];
         delete?: never;
         options?: never;
@@ -1014,7 +1017,10 @@ export type paths = {
         };
         /** Get RabbitMQ User */
         get: operations["getRabbitMQUser"];
-        /** Replace RabbitMQ User */
+        /**
+         * Replace RabbitMQ User
+         * @description Requires database-users/update on the cluster. Empty tags or management alone need no additional grant. Any administrator, policymaker, monitoring or impersonator tag in the replacement also requires clusters/update on the same namespace/cluster, even if already present. Protected system users cannot be replaced.
+         */
         put: operations["replaceRabbitMQUser"];
         post?: never;
         /** Delete RabbitMQ User */

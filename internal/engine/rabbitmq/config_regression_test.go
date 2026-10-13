@@ -327,3 +327,50 @@ func TestMemberConfigDiscoveryExcludesUncreatedPeers(t *testing.T) {
 	s.Members[1].Removing = true
 	assertPeers("demom0", []string{"rabbit@demom0", "rabbit@demom2"})
 }
+
+func TestCatalogErlangPackageControlsAllBrokerVersions(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	s := state(t, rc)
+	m := s.add(rc.Cluster.Name)
+	original := catalog.ErlangVersion
+	catalog.ErlangVersion = "1:27.3.4.18-1"
+	t.Cleanup(func() { catalog.ErlangVersion = original })
+	for _, v := range catalog.Versions {
+		text, err := p.zeropsYAML(rc, m, v.Version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
+			if !strings.Contains(text, "erlang-"+pkg+"="+catalog.ErlangVersion) {
+				t.Fatalf("%s does not use catalog Erlang package for %s", v.Version, pkg)
+			}
+		}
+		if strings.Contains(text, original) {
+			t.Fatalf("%s retains the previous Erlang pin", v.Version)
+		}
+	}
+	if _, err := p.zeropsYAML(rc, m, "4.4.0"); !errors.Is(err, engine.ErrInvalid) {
+		t.Fatalf("deployment bypassed catalog: %v", err)
+	}
+}
+
+func TestRequireTLSRejectsPublicManagementCreateAndUpdate(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	ctx := context.Background()
+	for _, mode := range []string{"disabled", "preferTLS", "requireTLS"} {
+		old := cloneCluster(t, rc.Cluster)
+		old.Spec.TLS.Mode = mode
+		next := cloneCluster(t, old)
+		next.Spec.EngineOptions = json.RawMessage(`{"managementUI":{"public":true}}`)
+		for _, previous := range []*domain.Cluster{nil, old} {
+			err := p.Validate(ctx, previous, next)
+			if mode == "requireTLS" {
+				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "plaintext HTTP") {
+					t.Fatalf("requireTLS public management accepted: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("%s public management rejected: %v", mode, err)
+			}
+		}
+	}
+}

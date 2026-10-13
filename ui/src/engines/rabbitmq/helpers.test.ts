@@ -42,6 +42,13 @@ test('RabbitMQ validation rejects unknown options and malformed plugin or UI set
   for (const engineOptions of [{ unexpected: true }, { plugins: 'rabbitmq_shovel' }, { plugins: ['unknown'] }, { plugins: ['rabbitmq_shovel', 'rabbitmq_shovel'] }, { plugins: [42] }, { managementUI: [] }, { managementUI: { public: true, port: 80 } }, { managementUI: { public: 'true' } }]) assert.ok(validateRabbitMQSpec({ ...spec, engineOptions }).length > 0);
 });
 
+test('public management cannot add a plaintext hop under required or default TLS', () => {
+  const engineOptions = { ...buildEngineOptions([], true) };
+  for (const tls of [undefined, { mode: 'requireTLS' as const, ca: 'selfSigned' as const }]) assert.match(validateRabbitMQSpec({ ...spec, engineOptions, tls })[0]!, /Public management.*requireTLS/);
+  for (const mode of ['disabled', 'preferTLS'] as const) assert.deepEqual(validateRabbitMQSpec({ ...spec, engineOptions, tls: { mode, ca: 'selfSigned' } }), []);
+  assert.deepEqual(validateRabbitMQSpec({ ...spec, engineOptions: { ...buildEngineOptions([], false) } }), []);
+});
+
 test('rabbitmq.conf overrides allow comments and settings but reject managed keys', () => {
   assert.deepEqual(validateConfigOverrides('# comment\r\n\nconsumer_timeout = 1800000\ncluster_name = orders'), []);
   assert.match(validateConfigOverrides('consumer_timeout: 100')[0]!, /Line 1.*key = value/);

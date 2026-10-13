@@ -75,6 +75,7 @@ export function validateRabbitMQSpec(spec: Schemas['ClusterSpec']): string[] {
       if (typeof management !== 'object' || management === null || Array.isArray(management) || Object.keys(management).some((key) => key !== 'public') || typeof (management as Record<string, unknown>).public !== 'boolean') errors.push('Management UI exposure must be a public boolean.');
     }
   }
+  if ((spec.tls?.mode ?? 'requireTLS') === 'requireTLS' && managementIsPublic(options)) errors.push('Public management is unavailable with requireTLS: Zerops routing forwards plaintext HTTP.');
   errors.push(...validateConfigOverrides(spec.engineConfig ?? ''));
   return errors;
 }

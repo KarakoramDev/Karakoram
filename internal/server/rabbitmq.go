@@ -39,6 +39,20 @@ func rabbitMQPolicy(v api.RabbitMQPolicy) rabbitmq.Policy {
 	return rabbitmq.Policy{Vhost: v.Vhost, Name: v.Name, Pattern: v.Pattern, ApplyTo: string(v.ApplyTo), Priority: v.Priority, Definition: v.Definition}
 }
 
+// A user-manager grant may assign management only. All other tags need the
+// additional cluster-administration grant, including any future catalog tags.
+func (s *Server) rabbitMQUserTagsAllowed(ctx context.Context, name string, rc *engine.Context, tags []api.RabbitMQUserWriteTags) bool {
+	for _, tag := range tags {
+		if tag == "management" {
+			continue
+		}
+		rule, exists := api.OperationAdditionalRBAC[operationID(name)]
+		return exists && !rule.Public && rule.ObjectParam == "cluster" &&
+			s.allowed(ctx, rule.Resource, rule.Action, clusterObject(rc.Cluster.Namespace, rc.Cluster.Name))
+	}
+	return true
+}
+
 func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine.Context, p engine.Provider) response {
 	a, yes := p.(rabbitmq.Access)
 	if !yes {
@@ -94,6 +108,9 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		return ok(page[rabbitmq.User]{Items: nonNil(v)})
 	case "CreateRabbitMQUser":
 		b := in.Body.(*api.RabbitMQUserWrite)
+		if !s.rabbitMQUserTagsAllowed(ctx, name, rc, b.Tags) {
+			return fail(403, "forbidden", "RabbitMQ privileged user tags require clusters/update permission")
+		}
 		v := rabbitMQUser(*b)
 		password, e := a.CreateUser(ctx, rc, v)
 		if e != nil {
@@ -116,10 +133,13 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		return ok(v)
 	case "ReplaceRabbitMQUser":
 		b := in.Body.(*api.RabbitMQUserWrite)
-		v := rabbitMQUser(*b)
-		if v.Name != in.Name {
+		if b.Name != in.Name {
 			return invalid()
 		}
+		if !s.rabbitMQUserTagsAllowed(ctx, name, rc, b.Tags) {
+			return fail(403, "forbidden", "RabbitMQ privileged user tags require clusters/update permission")
+		}
+		v := rabbitMQUser(*b)
 		if e := a.UpdateUser(ctx, rc, v); e != nil {
 			return s.failure(e)
 		}

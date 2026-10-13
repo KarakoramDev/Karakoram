@@ -6,7 +6,7 @@ Karakoram manages RabbitMQ on your own Zerops runtimes; Zerops does not provide 
 
 ## Versions, topology and cost
 
-- RabbitMQ **4.3.5** and **4.3.6** are cataloged; 4.3.6 is the default. Both install exact Team RabbitMQ apt packages on Ubuntu 24.04 with **Erlang 27.3.4.17** (`1:27.3.4.17-1`). The only upgrade edge is **4.3.5 → 4.3.6**; downgrades and other series are rejected.
+- RabbitMQ **4.3.6** is the default and recommended new-cluster version. Deprecated **4.3.5** exists only as an upgrade source and is not selectable in the creation wizard; explicit API provisioning remains accepted with a deprecation warning in the response and event, naming stream authorization disclosures [GHSA-6jvc-jx8w-m757](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-6jvc-jx8w-m757) and [GHSA-342v-cj47-c9g8](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-342v-cj47-c9g8), fixed in 4.3.6. Both install exact Team RabbitMQ apt packages on Ubuntu 24.04 with **Erlang 27.3.4.17** (`1:27.3.4.17-1`), pinned once in the compatible broker catalog. The only upgrade edge is **4.3.5 → 4.3.6**; downgrades and other series are rejected.
 - Topology is `cluster`, with only the `engine` component and **1, 3, 5 or 7** nodes (default 3). There are no shards, routers or configurable arbiters. `dev` is one broker; `prod` is three, not a physical-placement guarantee.
 - Each node costs **one singleton runtime plus one Local Storage volume, at least 5 GB**. Runtime disk is separate from broker storage. Defaults per node are shared CPU, 1 core, 1 GB RAM and a 5 GB volume; validation permits RAM from 0.5 GB. Replacement temporarily adds another runtime/volume. Retained and orphaned volumes continue consuming storage and may incur charges.
 - Nodes keep stable `rabbit@<service hostname>` identities and persistent data across redeployment/restart. Member indexes are monotonic and not reused. Separate services/volumes do not guarantee separate hosts ([ADR 0016](../adr/0016-placement-anti-affinity.md)).
@@ -52,7 +52,7 @@ RabbitMQ access request objects reject undeclared fields with an `invalid_reques
 
 Each optional management extension requires its corresponding base plugin in the list: `rabbitmq_shovel_management` requires `rabbitmq_shovel`, `rabbitmq_federation_management` requires `rabbitmq_federation`, and `rabbitmq_stream_management` requires `rabbitmq_stream`.
 
-`managementUI.public` enables a public HTTPS management subdomain for each broker, independently of public AMQP exposure. Enabling a plugin is not an application topology, message migration or native stream-protocol public routing workflow.
+`managementUI.public` enables a public HTTPS management subdomain for each broker only in `preferTLS`/`disabled`, independently of public AMQP exposure; `requireTLS` rejects it because the infrastructure forwards plaintext HTTP to the broker. Enabling a plugin is not an application topology, message migration or native stream-protocol public routing workflow.
 
 `engineConfig` is additional `rabbitmq.conf` **`key = value`** lines; blank lines and `#` comments are accepted. It is not YAML, `advanced.config` or arbitrary environment/command input. These keys/prefixes are managed and rejected:
 
@@ -76,13 +76,15 @@ The corresponding bare keys are also protected. Other syntactically valid settin
 
 The Erlang transport is **fixed at creation**: `disabled ↔ preferTLS` can roll in place, but crossing the `requireTLS` boundary is rejected. Create a new cluster and restore definitions instead; move messages separately. `requireTLS` does not require AMQP client certificates: applications authenticate with passwords and should verify the broker CA/hostname. CA source (`selfSigned` or `userProvided`) is immutable. Supplied PKI requires a signing CA certificate/key and valid leaf coverage; see [user-provided PKI](users-tls-access.md#user-provided-pki).
 
+Until patched OTP 27.3.4.18 is packaged in the configured Team RabbitMQ noble repositories, generated Erlang distribution and CLI TLS clients plus Osiris stream replication client/server are restricted to **TLS 1.2** to mitigate [CVE-2026-89422 / GHSA-rgxr-4g4w-j875](https://github.com/erlang/otp/security/advisories/GHSA-rgxr-4g4w-j875) in OTP 27.3.4.17. Peer verification remains enabled; public AMQPS, stream and management TLS server versions are unchanged. User-supplied Shovel/Federation runtime parameters need their own safe outbound TLS settings.
+
 Connection status exposes password-free per-node `amqp`/`amqps` and `management` endpoints. Explicit credential reveal through the UI or `karactl clusters connection brokers --reveal` requires `cluster-credentials:read` and returns the customer `admin` password and CA when applicable. Use separate least-privilege application users, not `admin`, in workloads. Configure clients with multiple endpoints and connection recovery; Karakoram does not provide a shared AMQP load balancer.
 
 ### Public access
 
 `spec.exposure.public` requires a nonempty CIDR allowlist and project IPv6 or dedicated IPv4. Each broker gets a distinct project TCP port targeting **5671** for TLS modes, **5672** when disabled. Use the returned endpoints, not an assumed external port. Verify allowed and denied source access and CA/SAN coverage from an external client.
 
-`engineOptions.managementUI.public: true` exposes the native RabbitMQ UI **and HTTP API**, authenticated by RabbitMQ accounts, not Karakoram sessions/RBAC. Zerops terminates public HTTPS and forwards to private HTTP 15672. Even `requireTLS` enables that HTTP listener for this option. The AMQP CIDR allowlist does **not** protect the management subdomain. Keep management private unless this additional surface and project-private HTTP hop are acceptable; never publish cookie/distribution, Prometheus or node-control ports.
+`engineOptions.managementUI.public: true` exposes the native RabbitMQ UI **and HTTP API**, authenticated by RabbitMQ accounts, not Karakoram sessions/RBAC. It is accepted only with `preferTLS`/`disabled`: Zerops terminates public HTTPS and forwards to private HTTP 15672. `requireTLS` rejects the option and keeps management HTTPS 15671 private, because certificate-verified HTTPS backend routing is unavailable; a future TCP passthrough route would need separate routing/state and certificate/trust support. The AMQP CIDR allowlist does **not** protect the management subdomain. Keep management private unless this additional surface and project-private HTTP hop are acceptable; never publish cookie/distribution, Prometheus or node-control ports.
 
 ## Access API, CLI and UI
 

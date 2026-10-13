@@ -144,7 +144,17 @@ var OperationRBAC = map[string]RBACRule{
 	"verifyBackupStorage":            {Resource: "backup-storages", Action: "update", ObjectParam: "storage", Public: false},
 }
 
-// AdditionalRBAC declares per-result permissions beyond operation-level grants.
+// OperationAdditionalRBAC declares conditional permissions enforced by the
+// corresponding handler. A required missing entry must fail closed.
+var OperationAdditionalRBAC = map[string]RBACRule{
+	"createRabbitMQUser":  {Resource: "clusters", Action: "update", ObjectParam: "cluster"},
+	"listEvents":          {Resource: "audit", Action: "read", ObjectParam: "*"},
+	"replaceRabbitMQUser": {Resource: "clusters", Action: "update", ObjectParam: "cluster"},
+	"streamEvents":        {Resource: "audit", Action: "read", ObjectParam: "*"},
+}
+
+// AdditionalRBAC inventories permissions beyond operation-level grants.
 var AdditionalRBAC = []RBACRule{
 	{Resource: "audit", Action: "read", ObjectParam: "*"},
+	{Resource: "clusters", Action: "update", ObjectParam: "cluster"},
 }

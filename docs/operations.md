@@ -324,6 +324,41 @@ Use the [RabbitMQ guide](user-guide/rabbitmq.md) for configuration/access and [A
 
 RabbitMQ members report the `broker` role in the API and members table. Member RAM and CPU usage include the supervised `rabbitmq-server` wrapper and its live descendant processes, including `beam.smp`; the CPU counter also includes the wrapper's reaped-child CPU time. MongoDB process accounting is unchanged.
 
+### Delegating RabbitMQ user management
+
+`CreateRabbitMQUser` requires `database-users/create`; `ReplaceRabbitMQUser`
+requires `database-users/update`. Both grants are scoped to
+`<namespace>/<cluster>`. These permissions alone may assign empty tags or
+`management` only. Assigning **any** `administrator`, `policymaker`, `monitoring`
+or `impersonator` tag additionally requires `clusters/update` on the same
+object. The secondary permission is checked before any Management API write,
+including replacements that retain an already-present privileged tag. A grant
+on another namespace or cluster does not authorize it, and an explicit deny
+still wins. `clusters/update` does not substitute for the primary user grant.
+
+For example, a delegated manager for `default/brokers` needs:
+
+```csv
+p, role:user-manager, database-users, create, default/brokers, allow
+p, role:user-manager, database-users, update, default/brokers, allow
+```
+
+Only add `p, role:user-manager, clusters, update, default/brokers, allow` when
+the delegate is trusted with cluster administration as well as privileged
+RabbitMQ tags. This higher grant also authorizes ordinary cluster updates.
+The protected `admin`, `karakoram`, `monitor` and `guest` users remain
+unmodifiable through user-management endpoints regardless of RBAC grants;
+use supported system-user rotation operations instead. Native Management API
+access and definitions import are separate administrative surfaces, not a way
+to delegate only these API user-management permissions.
+
+New clusters default to RabbitMQ 4.3.6. Explicit API creation of deprecated
+4.3.5 remains available for controlled migration, but the creation response
+includes a `DeprecatedVersion` condition and a durable Warning event identifies
+stream authorization disclosures GHSA-6jvc-jx8w-m757 and GHSA-342v-cj47-c9g8,
+both fixed in 4.3.6. Choose 4.3.6 for new deployments and upgrade existing
+4.3.5 clusters before enabling stream access.
+
 ### Rolling changes and drain
 
 Karakoram checks online quorum plus one and quorum-critical status before taking a multi-node broker out of service. It drains traffic, persists a maintenance hold and stops the broker **before** disruptive platform actions: Zerops force-stops containers roughly five seconds after SIGTERM. Deployment/readiness can succeed while an intentional hold keeps the broker stopped; that is not messaging readiness. The changed member must acknowledge config, run/rejoin and revive before the next changes. Do not remove hold files or restart other nodes to bypass a blocked operation.
@@ -353,4 +388,4 @@ Resume of a suspended retained cluster starts all brokers before individual read
 | Management API unavailable | Private 15671/15672, cluster CA/hostname, `karakoram` credentials and namespace relay policy/session | Repair private administration; do not expose node-control/distribution ports or disable certificate verification. |
 | Definitions restore succeeded but messages absent | Backup type/provenance and source object; imported users/vhosts/policies | Expected: definitions merge configuration only. Verify target system credentials and design message replay separately. |
 
-Native management access can change accounts/policies outside Karakoram RBAC. Keep it private where possible; the public management subdomain is not protected by the AMQP CIDR allowlist. Review credentials and definitions storage as sensitive. On deletion choose `keepVolumes` and `keepBackups` independently, inspect retained inventory/orphan cleanup and account for continued volume charges.
+Native management access can change accounts/policies outside Karakoram RBAC. Keep it private. `requireTLS` exposes private HTTPS management on 15671 only; `engineOptions.managementUI.public=true` is rejected in this mode because the platform's public HTTPS forwarding uses a plaintext HTTP backend. Under explicitly selected `preferTLS` or `disabled`, public management is a separate HTTPS-to-HTTP forwarding surface and is not protected by the AMQP CIDR allowlist. Review credentials and definitions storage as sensitive. On deletion choose `keepVolumes` and `keepBackups` independently, inspect retained inventory/orphan cleanup and account for continued volume charges.

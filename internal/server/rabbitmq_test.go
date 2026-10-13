@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 )
@@ -308,6 +309,64 @@ func TestRabbitMQUnsupportedAndIdentity(t *testing.T) {
 		w = call(s, "GET", "/api/v1/clusters/prod/rabbitmq/"+path, "", "")
 		if w.Code != 401 {
 			t.Fatal(fmt.Sprint(path, w.Code))
+		}
+	}
+}
+
+func TestRabbitMQDeprecatedVersionCreateWarning(t *testing.T) {
+	s, _, token := testServer(t)
+	var err error
+	s.Registry, err = engine.NewRegistry(rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, version string
+		warning       bool
+	}{{"oldbroker", "4.3.5", true}, {"newbroker", "4.3.6", false}} {
+		body := fmt.Sprintf(`{"name":%q,"spec":{"provider":"rabbitmq","version":%q,"topology":{"type":"cluster"},"components":{"engine":{"replicas":1,"resources":{"cpuMode":"SHARED","minCpu":1,"maxCpu":1,"minRam":1,"maxRam":1,"minDisk":5,"maxDisk":5}}}}}`, tc.name, tc.version)
+		w := call(s, "POST", "/api/v1/clusters", body, token)
+		if w.Code != 201 {
+			t.Fatal(tc.version, w.Code, w.Body.String())
+		}
+		var created api.Cluster
+		if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		warned := false
+		for _, condition := range created.Status.Conditions {
+			if condition.Type == "DeprecatedVersion" {
+				warned = true
+				if condition.Status != "True" || !strings.Contains(condition.Message, "GHSA-6jvc-jx8w-m757") ||
+					!strings.Contains(condition.Message, "GHSA-342v-cj47-c9g8") || !strings.Contains(condition.Message, "4.3.6") {
+					t.Fatal("incomplete creation security warning")
+				}
+			}
+		}
+		if warned != tc.warning {
+			t.Fatal("unexpected creation warning", tc.version)
+		}
+		events := call(s, "GET", "/api/v1/events?cluster="+tc.name, "", token)
+		if events.Code != 200 {
+			t.Fatal(events.Code)
+		}
+		var page struct {
+			Items []api.Event `json:"items"`
+		}
+		if err := json.Unmarshal(events.Body.Bytes(), &page); err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, event := range page.Items {
+			if value(event.Reason) == "DeprecatedVersion" {
+				count++
+				if event.Type != "Warning" || event.Message != rabbitMQ435Warning {
+					t.Fatal("incorrect durable security warning")
+				}
+			}
+		}
+		if tc.warning && count != 1 || !tc.warning && count != 0 {
+			t.Fatal("unexpected durable warning count", tc.version, count)
 		}
 	}
 }

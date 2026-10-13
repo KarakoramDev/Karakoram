@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -43,7 +44,18 @@ func New(o Options) *Provider {
 func (*Provider) Name() string { return "rabbitmq" }
 
 var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}$`)
-var catalog = []domain.VersionInfo{{Version: "4.3.5", Major: "4.3", Status: "supported"}, {Version: "4.3.6", Major: "4.3", Status: "supported", Default: true}}
+
+// The curated broker versions share one compatible, exactly pinned Erlang package.
+var catalog = struct {
+	ErlangVersion string
+	Versions      []domain.VersionInfo
+}{
+	ErlangVersion: "1:27.3.4.17-1",
+	Versions: []domain.VersionInfo{
+		{Version: "4.3.5", Major: "4.3", Status: "deprecated"},
+		{Version: "4.3.6", Major: "4.3", Status: "supported", Default: true},
+	},
+}
 
 func defaultResources() domain.Resources {
 	return domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
@@ -53,7 +65,7 @@ func invalid(format string, args ...any) error { return engine.Invalid(format, a
 func (*Provider) Describe() domain.ProviderInfo {
 	r := defaultResources()
 	ci := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 3, Resources: r}, MinReplicas: 1, MaxReplicas: 7, AllowedReplicas: []int{1, 3, 5, 7}}
-	return domain.ProviderInfo{Name: "rabbitmq", DisplayName: "RabbitMQ", Versions: append([]domain.VersionInfo(nil), catalog...), UpgradePaths: []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}}, Topologies: []domain.TopologyInfo{{Type: "cluster", Components: map[string]domain.ComponentInfo{"engine": ci}}}, Presets: []domain.Preset{{Name: "dev", Description: "Single broker; no queue redundancy", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}}}, {Name: "prod", Description: "Three brokers; placement separation is not guaranteed", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: ci.Defaults}}}, Capabilities: []string{"systemUsers", "backups", "restores", "publicExposure", "tls", "monitoring", "engineConfig", "rabbitmqAccess"}, Operations: []string{domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, domain.OperationRestart, domain.OperationReplaceMember, domain.OperationRotateSystemUser, domain.OperationRotateTLS}, Processes: []string{"rabbitmq-server"}, BackupTypes: []string{"definitions"}}
+	return domain.ProviderInfo{Name: "rabbitmq", DisplayName: "RabbitMQ", Versions: append([]domain.VersionInfo(nil), catalog.Versions...), UpgradePaths: []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}}, Topologies: []domain.TopologyInfo{{Type: "cluster", Components: map[string]domain.ComponentInfo{"engine": ci}}}, Presets: []domain.Preset{{Name: "dev", Description: "Single broker; no queue redundancy", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}}}, {Name: "prod", Description: "Three brokers; placement separation is not guaranteed", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: ci.Defaults}}}, Capabilities: []string{"systemUsers", "backups", "restores", "publicExposure", "tls", "monitoring", "engineConfig", "rabbitmqAccess"}, Operations: []string{"backup", "delete-backup", "restore", "restart", "replace-member", "rotate-system-user", "rotate-tls"}, Processes: []string{"rabbitmq-server"}, BackupTypes: []string{"definitions"}}
 }
 func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Provider == "" {
@@ -177,7 +189,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.Provider != "rabbitmq" {
 		return invalid("provider must be rabbitmq")
 	}
-	if s.Version != "4.3.5" && s.Version != "4.3.6" {
+	if !slices.ContainsFunc(catalog.Versions, func(v domain.VersionInfo) bool { return v.Version == s.Version }) {
 		return invalid("unsupported engine version %q", s.Version)
 	}
 	if s.Topology.Type != "cluster" || s.Topology.Shards != 0 {
@@ -222,8 +234,12 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			return invalid("invalid allowlist CIDR %q", cidr)
 		}
 	}
-	if _, err := parseOptions(s.EngineOptions); err != nil {
+	options, err := parseOptions(s.EngineOptions)
+	if err != nil {
 		return err
+	}
+	if s.TLS.Mode == "requireTLS" && options.ManagementUI.Public {
+		return invalid("managementUI.public is unavailable with requireTLS: public management requires certificate-verified HTTPS backend routing or TLS TCP passthrough; Zerops subdomains forward plaintext HTTP")
 	}
 	if err := validateEngineConfig(s.EngineConfig); err != nil {
 		return err

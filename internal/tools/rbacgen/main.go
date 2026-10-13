@@ -92,6 +92,7 @@ func generate(input []byte) ([]byte, error) {
 	}
 	rules := make(map[string]rule)
 	extraRules := make(map[string]rule)
+	operationExtras := make(map[string]rule)
 	for path, item := range document.Paths {
 		for method, node := range item {
 			if !methods[method] {
@@ -148,10 +149,20 @@ func generate(input []byte) ([]byte, error) {
 			}
 			rules[operation.ID] = entry
 			if extra := operation.Extra; extra != nil {
-				if !resources[extra.Resource] || !actions[extra.Action] || extra.Object != "*" {
+				if entry.Public || !resources[extra.Resource] || !actions[extra.Action] {
 					return nil, fmt.Errorf("%s: invalid additional RBAC resource/action/object", operation.ID)
 				}
-				extraRules[extra.Resource+":"+extra.Action] = *extra
+				switch extra.Object {
+				case "*":
+				case "cluster", "namespace", "storage":
+					if extra.Object != entry.Object || !strings.Contains(path, "{"+extra.Object+"}") {
+						return nil, fmt.Errorf("%s: additional RBAC object must match its bound operation object", operation.ID)
+					}
+				default:
+					return nil, fmt.Errorf("%s: invalid additional RBAC resource/action/object", operation.ID)
+				}
+				operationExtras[operation.ID] = *extra
+				extraRules[extra.Resource+":"+extra.Action+":"+extra.Object] = *extra
 			}
 		}
 	}
@@ -173,12 +184,19 @@ func generate(input []byte) ([]byte, error) {
 		fmt.Fprintf(&output, "%q: {Resource: %q, Action: %q, ObjectParam: %q, Public: %t},\n", id, entry.Resource, entry.Action, entry.Object, entry.Public)
 	}
 	output.WriteString("}\n")
+	output.WriteString("\n// OperationAdditionalRBAC declares conditional permissions enforced by the\n// corresponding handler. A required missing entry must fail closed.\nvar OperationAdditionalRBAC = map[string]RBACRule{\n")
+	for _, id := range ids {
+		if entry, exists := operationExtras[id]; exists {
+			fmt.Fprintf(&output, "%q: {Resource: %q, Action: %q, ObjectParam: %q},\n", id, entry.Resource, entry.Action, entry.Object)
+		}
+	}
+	output.WriteString("}\n")
 	extraIDs := make([]string, 0, len(extraRules))
 	for id := range extraRules {
 		extraIDs = append(extraIDs, id)
 	}
 	sort.Strings(extraIDs)
-	output.WriteString("\n// AdditionalRBAC declares per-result permissions beyond operation-level grants.\nvar AdditionalRBAC = []RBACRule{\n")
+	output.WriteString("\n// AdditionalRBAC inventories permissions beyond operation-level grants.\nvar AdditionalRBAC = []RBACRule{\n")
 	for _, id := range extraIDs {
 		entry := extraRules[id]
 		fmt.Fprintf(&output, "{Resource: %q, Action: %q, ObjectParam: %q},\n", entry.Resource, entry.Action, entry.Object)

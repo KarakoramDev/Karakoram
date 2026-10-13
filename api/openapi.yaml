@@ -2816,9 +2816,18 @@ paths:
       operationId: createRabbitMQUser
       tags: [DatabaseUsers]
       summary: Create RabbitMQ User
+      description: >
+        Requires database-users/create on the cluster. Empty tags or management
+        alone need no additional grant. Any administrator, policymaker,
+        monitoring or impersonator tag also requires clusters/update on the
+        same namespace/cluster. Protected system users cannot be created.
       x-karakoram-rbac:
         resource: database-users
         action: create
+        object: cluster
+      x-karakoram-rbac-extra:
+        resource: clusters
+        action: update
         object: cluster
       responses:
         '400':
@@ -2888,8 +2897,18 @@ paths:
       operationId: replaceRabbitMQUser
       tags: [DatabaseUsers]
       summary: Replace RabbitMQ User
+      description: >
+        Requires database-users/update on the cluster. Empty tags or management
+        alone need no additional grant. Any administrator, policymaker,
+        monitoring or impersonator tag in the replacement also requires
+        clusters/update on the same namespace/cluster, even if already present.
+        Protected system users cannot be replaced.
       x-karakoram-rbac:
         resource: database-users
+        action: update
+        object: cluster
+      x-karakoram-rbac-extra:
+        resource: clusters
         action: update
         object: cluster
       responses:

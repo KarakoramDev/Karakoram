@@ -28,9 +28,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const erlangVersion = "1:27.3.4.17-1"
-
 func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (string, error) {
+	if !slices.ContainsFunc(catalog.Versions, func(v domain.VersionInfo) bool { return v.Version == version }) {
+		return "", invalid("unsupported engine version %q", version)
+	}
 	agentURL := rc.AgentURL
 	if agentURL == "" {
 		agentURL = p.options.ControlPlaneURL
@@ -45,7 +46,7 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 	prepare = append(prepare, "printf '%s\\n' '"+strings.Join(sources, "' '")+"' | sudo tee /etc/apt/sources.list.d/rabbitmq.list", "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d && sudo chmod 755 /usr/sbin/policy-rc.d", "sudo apt-get update")
 	packages := []string{"rabbitmq-server=" + version + "-1"}
 	for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
-		packages = append(packages, "erlang-"+pkg+"="+erlangVersion)
+		packages = append(packages, "erlang-"+pkg+"="+catalog.ErlangVersion)
 	}
 	prepare = append(prepare, "sudo apt-get install -y --no-install-recommends "+strings.Join(packages, " "))
 	options, err := parseOptions(m.EngineOptions)
@@ -55,7 +56,7 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 	ports := []map[string]any{}
 	for _, port := range []int{5672, 5671, 15672, 15671, 15692, 4369, 25672} {
 		v := map[string]any{"port": port, "protocol": "tcp"}
-		if port == 15672 && options.ManagementUI.Public {
+		if port == 15672 && options.ManagementUI.Public && (m.TLSMode == "disabled" || m.TLSMode == "preferTLS") {
 			v["httpSupport"] = true
 		}
 		ports = append(ports, v)
@@ -290,9 +291,6 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	default:
 		spec.AMQPSPort = 5671
 		spec.ManagementTLSPort = 15671
-		if options.ManagementUI.Public {
-			spec.ManagementPort = 15672
-		}
 	}
 	if slices.Contains(options.Plugins, "rabbitmq_stream") {
 		switch m.TLSMode {

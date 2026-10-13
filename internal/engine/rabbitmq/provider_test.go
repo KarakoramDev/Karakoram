@@ -29,7 +29,7 @@ func TestCatalogAndValidation(t *testing.T) {
 	p, rc, _, _ := setup(t)
 	ctx := context.Background()
 	info := p.Describe()
-	if info.Name != "rabbitmq" || info.DisplayName != "RabbitMQ" || len(info.Versions) != 2 || info.Versions[0].Version != "4.3.5" || info.Versions[1].Version != "4.3.6" || !info.Versions[1].Default {
+	if info.Name != "rabbitmq" || info.DisplayName != "RabbitMQ" || len(info.Versions) != 2 || info.Versions[0].Version != "4.3.5" || info.Versions[0].Status != "deprecated" || info.Versions[1].Version != "4.3.6" || info.Versions[1].Status != "supported" || !info.Versions[1].Default {
 		t.Fatalf("catalog: %+v", info)
 	}
 	if len(info.UpgradePaths) != 1 || info.UpgradePaths[0].From != "4.3.5" || info.UpgradePaths[0].To != "4.3.6" {
@@ -149,6 +149,7 @@ func TestEngineOptionsAndManagedConfigValidation(t *testing.T) {
 	c := cloneCluster(t, rc.Cluster)
 	c.Spec.EngineConfig = "# customer settings\ncluster_name = customers\nconsumer_timeout = 600000\n"
 	c.Spec.EngineOptions = json.RawMessage(`{"plugins":["rabbitmq_shovel","rabbitmq_shovel_management","rabbitmq_federation","rabbitmq_federation_management","rabbitmq_stream","rabbitmq_stream_management"],"managementUI":{"public":true}}`)
+	c.Spec.TLS.Mode = "preferTLS"
 	if err := p.Validate(ctx, nil, c); err != nil {
 		t.Fatal(err)
 	}
@@ -215,6 +216,13 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 				p, rc, _, _ := setup(t)
 				rc.Cluster.Spec.TLS.Mode = mode
 				rc.Cluster.Spec.EngineOptions = json.RawMessage(fmt.Sprintf(`{"plugins":["rabbitmq_stream"],"managementUI":{"public":%v}}`, publicUI))
+				if mode == "requireTLS" && publicUI {
+					if err := p.Validate(context.Background(), nil, rc.Cluster); !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "certificate-verified HTTPS") {
+						t.Fatalf("insecure public management accepted: %v", err)
+					}
+				} else if err := p.Validate(context.Background(), nil, rc.Cluster); err != nil {
+					t.Fatal(err)
+				}
 				rc.Cluster.Spec.EngineConfig = "consumer_timeout = 600000\n"
 				s := state(t, rc)
 				s.UID = "config"
@@ -250,7 +258,7 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 				for _, entry := range run["ports"].([]any) {
 					port := entry.(map[string]any)
 					httpSupport, _ := port["httpSupport"].(bool)
-					if httpSupport != (port["port"] == 15672 && publicUI) {
+					if httpSupport != (port["port"] == 15672 && publicUI && mode != "requireTLS") {
 						t.Fatalf("httpSupport mismatch: %+v", port)
 					}
 				}
@@ -304,9 +312,7 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 				}
 				if mode == "requireTLS" {
 					amqp = 0
-					if !publicUI {
-						mgmt = 0
-					}
+					mgmt = 0
 				}
 				if spec.AMQPPort != amqp || spec.AMQPSPort != amqps || spec.ManagementPort != mgmt || spec.ManagementTLSPort != mgmts || spec.InterNodeTLS != (mode == "requireTLS") {
 					t.Fatalf("TLS listeners: %+v", spec)
@@ -336,6 +342,7 @@ func TestExposurePortAllocationRelayAndMetrics(t *testing.T) {
 	f.publicPorts = []infra.PublicPortRoute{{Hostname: "foreign", PublicPort: infra.PublicPort{Port: 5671, IPType: "IPV6"}}}
 	rc.Cluster.Spec.Exposure.Public = true
 	rc.Cluster.Spec.Exposure.Allowlist = []string{"2001:db8::/32"}
+	rc.Cluster.Spec.TLS.Mode = "preferTLS"
 	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"managementUI":{"public":true}}`)
 	ready(t, p, rc)
 	s := state(t, rc)

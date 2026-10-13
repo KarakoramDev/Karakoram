@@ -127,6 +127,9 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	if c.TLS.Mode != "disabled" && c.TLS.Mode != "preferTLS" && c.TLS.Mode != "requireTLS" {
 		return s, errors.New("invalid TLS mode")
 	}
+	if c.TLS.Mode == "requireTLS" && (s.AMQPPort != 0 || s.ManagementPort != 0) {
+		return s, errors.New("plaintext AMQP and management listeners are forbidden with requireTLS")
+	}
 	if slices.Contains(s.Plugins, "rabbitmq_stream") {
 		switch c.TLS.Mode {
 		case "disabled":
@@ -231,10 +234,12 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	if s.InterNodeTLS {
 		// Erlang terms use quoted strings; JSON escaping is compatible for managed paths.
 		quote := func(p string) string { v, _ := json.Marshal(path(p)); return string(v) }
-		opts := "[{server, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true}]},\n{client, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer}]}].\n"
+		// OTP 27.3.4.17 is affected by CVE-2026-89422 / GHSA-rgxr-4g4w-j875.
+		// Restrict generated TLS clients to TLS 1.2 until a patched OTP is packaged.
+		opts := "[{server, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true}]},\n{client, [{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{versions, ['tlsv1.2']}]}].\n"
 		files = append(files, renderedFile{"inter_node_tls.config", opts, 0600})
-		serverOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true}]"
-		clientOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer}]"
+		serverOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true},{versions, ['tlsv1.2']}]"
+		clientOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{versions, ['tlsv1.2']}]"
 		advanced = "[{osiris,[{replication_transport,ssl},{replication_server_ssl_options," + serverOptions + "},{replication_client_ssl_options," + clientOptions + "}]}].\n"
 		dist = "-proto_dist inet6_tls -ssl_dist_optfile " + path("inter_node_tls.config")
 	}
