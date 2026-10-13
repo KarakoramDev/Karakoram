@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,15 @@ func TestElasticLifecycle(t *testing.T) {
 	s.ctx = ctx
 	storage := s.storage()
 	f := &elasticFixture{root: s, name: s.name(), storage: storage}
+	if existing := os.Getenv("KARAKORAM_E2E_ELASTIC_CLUSTER"); existing != "" {
+		// Resume later phases against a cluster an earlier (kept) run created
+		// and seeded; the suite never deletes an adopted cluster implicitly.
+		c := s.cluster(existing)
+		if c.Spec.Provider != "elasticsearch" || c.Spec.Backup == nil || c.Spec.Backup.Storage == nil {
+			t.Fatal("adopted cluster is not an Elasticsearch cluster with backup storage")
+		}
+		f.name, f.storage, f.created, f.seeded = existing, *c.Spec.Backup.Storage, true, true
+	}
 	phases := []struct {
 		name string
 		run  func()
@@ -282,7 +292,8 @@ func (f *elasticFixture) kibanaChecks() {
 	if err != nil {
 		f.s.t.Fatal("encoding Kibana login failed")
 	}
-	e.request(http.MethodPost, "/internal/security/login", body, "application/json", map[string]string{"kbn-xsrf": "true"}, nil, 200)
+	// Kibana 9 serves internal routes only to its own UI origin.
+	e.request(http.MethodPost, "/internal/security/login", body, "application/json", map[string]string{"kbn-xsrf": "true", "x-elastic-internal-origin": "Kibana"}, nil, 200)
 	f.s.snapshot("kibana-login", map[string]interface{}{"publicLogin": true})
 }
 

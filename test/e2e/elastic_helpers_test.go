@@ -268,7 +268,23 @@ func (e *elasticHTTP) request(method, path string, data []byte, contentType stri
 		}
 	}
 	if !ok {
-		e.s.t.Fatalf("%s data-plane HTTP %d, expected %v", method, r.StatusCode, codes)
+		// Report only the service's error classification, never the raw body.
+		var failure struct {
+			Error   json.RawMessage `json:"error"`
+			Message string          `json:"message"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&failure)
+		reason := failure.Message
+		var es struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(failure.Error, &es) == nil && es.Type != "" {
+			reason = es.Type
+		}
+		if len(reason) > 160 {
+			reason = reason[:160]
+		}
+		e.s.t.Fatalf("%s data-plane HTTP %d, expected %v: %s", method, r.StatusCode, codes, reason)
 	}
 	if out != nil {
 		if err := json.NewDecoder(io.LimitReader(r.Body, 8<<20)).Decode(out); err != nil {

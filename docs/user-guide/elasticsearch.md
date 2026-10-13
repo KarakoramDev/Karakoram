@@ -402,6 +402,8 @@ karactl clusters members search
 
 Added nodes receive new, never-reused indices and join through hot-reloaded discovery seeds. Scale-down drains nodes serially via allocation exclusions and voting exclusions where needed. Remaining data nodes must support the maximum index replica count plus a primary; `ShardDrainBlocked` means adjust capacity or intentional index replica policy, not force deletion. Dedicated masters change only 3↔5, one master at a time. Names can have gaps after removal/replacement.
 
+Removal never advances to voting exclusion or runtime/volume deletion while any primary shard is unassigned (red health), including for a node that disappeared mid-drain and for retried platform deletions. Auto-expanded replica settings are evaluated for the topology after removal. Restarts, replacements, backups, restores and credential/TLS rotations submitted before the cluster first forms fail immediately instead of waiting behind provisioning.
+
 RAM/heap or restart-relevant Elasticsearch settings use rolling maintenance. CPU/disk-only resource changes use nondisruptive resource updates, subject to platform constraints. Optional component replica changes adjust container count; zero deletes that component service and its ephemeral disk/queue contents.
 
 Supported upgrade paths in the advertised catalog are:
