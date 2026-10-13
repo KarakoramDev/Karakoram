@@ -219,7 +219,9 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	line("total_memory_available_override_value", s.TotalMemoryBytes)
 	line("disk_free_limit.absolute", s.DiskFreeLimitBytes)
 	line("default_queue_type", s.DefaultQueueType)
-	line("quorum_queue.initial_cluster_size", min(3, len(s.Peers)))
+	// Discovery starts with the seed alone; RabbitMQ caps this stable default
+	// to the available cluster size when each quorum queue is declared.
+	line("quorum_queue.initial_cluster_size", 3)
 	if s.ConfigOverrides != "" {
 		b.WriteString("\n# Customer overrides\n")
 		b.WriteString(s.ConfigOverrides)

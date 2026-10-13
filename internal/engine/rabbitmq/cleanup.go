@@ -89,6 +89,15 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, e
 		}
 		if runtime != nil {
+			if e = verifyServiceOwnership(ctx, rc, m, runtime, false); e != nil {
+				return false, e
+			}
+			switch runtime.Status {
+			case "STOPPED", "FAILED", "READY_TO_DEPLOY":
+				// The owned platform runtime cannot serve agent RPCs in these
+				// states. Its observation is sufficient to skip broker shutdown.
+				m.RemoveStep = "cleanup-stopped"
+			}
 			if m.Stage == "deployed" || m.Stage == "ready" || m.Stage == "joined" {
 				if m.RemoveStep != "cleanup-stopped" {
 					st, e := p.agentStatus(ctx, rc, m.Name)

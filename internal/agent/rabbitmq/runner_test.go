@@ -60,7 +60,7 @@ func TestRendering(t *testing.T) {
 			if config != strings.TrimPrefix(string(golden), "# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n") {
 				t.Fatalf("rendered config differs from golden:\n%s", config)
 			}
-			for _, line := range []string{"log.console = true\n", "log.file = false\n", "cluster_formation.classic_config.nodes.1 = rabbit@rmqone\n", "quorum_queue.initial_cluster_size = 1\n", "default_queue_type = quorum\n", "vm_memory_high_watermark.absolute = 536870912\n", "total_memory_available_override_value = 1073741824\n", "disk_free_limit.absolute = 1073741824\n"} {
+			for _, line := range []string{"log.console = true\n", "log.file = false\n", "cluster_formation.classic_config.nodes.1 = rabbit@rmqone\n", "quorum_queue.initial_cluster_size = 3\n", "default_queue_type = quorum\n", "vm_memory_high_watermark.absolute = 536870912\n", "total_memory_available_override_value = 1073741824\n", "disk_free_limit.absolute = 1073741824\n"} {
 				if !strings.Contains(config, line) {
 					t.Fatalf("missing %q in %s", line, config)
 				}
@@ -108,6 +108,26 @@ func TestRendering(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestQuorumDefaultIsIndependentOfDiscovery(t *testing.T) {
+	s := testSpec()
+	first := restartFingerprint("/data", s, memberConfig(s))
+	for _, peers := range [][]string{
+		{"rabbit@rmqone"},
+		{"rabbit@rmqone", "rabbit@rmqtwo", "rabbit@rmqthree"},
+		{"rabbit@rmqone", "rabbit@rmqtwo", "rabbit@rmqthree", "rabbit@rmqfour", "rabbit@rmqfive"},
+	} {
+		s.Peers = peers
+		c := memberConfig(s)
+		files, _ := render("/data", s, c)
+		if !strings.Contains(files[0].content, "quorum_queue.initial_cluster_size = 3\n") {
+			t.Fatalf("discovery peers %v changed the stable quorum default", peers)
+		}
+		if restartFingerprint("/data", s, c) != first {
+			t.Fatalf("discovery peers %v restart the broker", peers)
+		}
 	}
 }
 func TestRestartDecision(t *testing.T) {

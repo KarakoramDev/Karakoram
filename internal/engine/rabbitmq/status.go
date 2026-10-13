@@ -103,8 +103,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			}
 			for _, name := range names {
 				if !slices.Contains(b.RunningNodes, name) {
-					partition = true
-					ms.Health = false
+					// A stopped peer degrades the cluster, not this broker or
+					// the partition condition without actual partition evidence.
+					allHealthy = false
 				}
 			}
 		} else {
