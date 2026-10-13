@@ -31,7 +31,7 @@ authenticated agent protocol. Default namespace traffic remains direct.
 | --- | --- |
 | L7 termination/HTTP forwarding exposes tunnel plaintext | Outer verified HTTPS plus **inner mTLS 1.3**; dedicated relay CA, pinned hub server name and enrolled namespace certificate serial binding |
 | An unrelated relay claims a namespace | CA verification, namespace URI identity and enrolled serial check; previous renewal serial accepted only until its expiry/current-certificate transition; absent/default/deleting namespaces rejected at authorization |
-| Relay becomes a general cross-project dial proxy | Relay-enforced complete target policy, only member/router 27017/9443, bare hostnames, no `core` or self; all resolved addresses checked and checked numeric IP dialed to prevent DNS rebinding |
+| Relay becomes a general cross-project dial proxy | Relay-enforced complete target policy, only provider-published member/router targets on a fixed engine port set (never cluster-internal ports), bare hostnames, no `core` or self; all resolved addresses checked and checked numeric IP dialed to prevent DNS rebinding |
 | Carrier/relay reads agent configuration | Agent config pulls preserve **end-to-end TLS** to the internal listener, pinned internal CA/relay hostname SAN and member-specific bearer authentication |
 | Public unauthenticated connections exhaust admission | At most thirty-two pending handshakes; ten-second TLS/introduction deadline and a separately bounded policy-acknowledgment interval, not a ten-second total slot lifetime; bounded protocol/control frames and policies |
 | State copy discloses enrolled project authority | Per-namespace token/client-key sealing and sealed installation relay PKI; no tokens, fingerprints, client keys or serials in public health responses |
@@ -203,6 +203,18 @@ sealed value and live Backend token, without restarting its relay. Default-token
 rotation is environment-managed and requires service restart. Removing a
 namespace does not remove policy grants; review stale authority before reusing
 a name. See [namespace lifecycle](user-guide/namespaces.md).
+
+## RabbitMQ security
+
+RabbitMQ has separate trust paths: per-member authenticated node control, broker Management API credentials, AMQP application credentials and shared Erlang distribution authentication. One random cluster cookie is sealed in SecretStore and rendered 0400; it grants node/CLI authority, not application login. Do not export it, put it in command arguments or expose distribution/epmd ports publicly.
+
+Bootstrap creates `karakoram` for control-plane Management API administration and `admin` for customer administration, each with administrator tags and all grants on `/`, and removes `guest`. `monitor` is reserved with a stored credential but not bootstrap-created; Prometheus collection uses a loopback listener rather than this account. Access routes protect those reserved usernames and grants. Only `karakoram`/`admin` have exposed system-password rotation operations. Ordinary application reads never return passwords/hashes; generated passwords are returned once. Use distinct application users and least-privilege vhost/topic grants. RabbitMQ tags grant management authority and are not messaging permissions.
+
+`requireTLS` (default) enables AMQPS, HTTPS private administration and peer-verified IPv6 Erlang distribution TLS. AMQP clients may authenticate with passwords without client certificates; they must verify the broker certificate/CA. `preferTLS` also permits plaintext clients/management and leaves distribution plaintext; `disabled` leaves broker traffic plaintext. The inter-node transport and CA source are creation-time choices: disabled/preferTLS can roll between each other, but crossing requireTLS requires a new cluster. Broker leaf rotation does not rotate the Erlang cookie, CA or control-plane master key.
+
+Public AMQP routes require explicit CIDR allowlists and project IPv6/dedicated IPv4, targeting AMQPS except when TLS is disabled. Public native management is a separate opt-in HTTPS subdomain forwarding to HTTP 15672 in the private project; even requireTLS enables that plaintext management listener when public UI is selected. It exposes native UI **and API**, uses RabbitMQ authentication rather than Karakoram sessions/RBAC, and is not covered by the AMQP allowlist. Treat native management administrators and project-private/platform access as trusted infrastructure authority. Never expose 9443, Prometheus, epmd or distribution publicly.
+
+Definitions backups contain user **password hashes** and potentially sensitive runtime parameters, despite containing no messages. Gzip is not encryption. Restrict S3 credentials/bucket access, use appropriate storage encryption and never publish exports in issues/logs. Restore filters `karakoram`, `admin`, `monitor`, `guest` and their vhost/topic grants to preserve target authority, but other definitions remain trusted administrative input and merge into existing state. Retained objects require the original state/key and storage configuration; retained volumes also preserve broker secrets. See [ADR 0022](adr/0022-rabbitmq-access-tls-backups.md) and the [RabbitMQ guide](user-guide/rabbitmq.md).
 
 ## Reporting vulnerabilities
 

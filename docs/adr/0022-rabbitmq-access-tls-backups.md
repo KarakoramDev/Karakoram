@@ -1,0 +1,50 @@
+# 0022 — RabbitMQ access uses the Management API; backups preserve definitions, not messages
+
+Status: Accepted
+
+## Context
+
+RabbitMQ's access model is virtual hosts, users/tags, regex permissions, topic permissions and policies, not MongoDB databases/roles. Its Management API supplies these controls and cluster-wide definitions export/import. Definitions include user password hashes and runtime parameters but no message payloads. Persistent replicated queues protect against some node failures; replication is not a backup against deletion or majority loss.
+
+### Research basis
+
+The implementation takes operational patterns, not code or availability promises, from these references:
+
+| Studied option | Relevant model and boundary |
+| --- | --- |
+| [RabbitMQ Cluster Operator and Messaging Topology Operator](https://www.rabbitmq.com/kubernetes/operator/operator-overview) | Separate cluster lifecycle and declarative messaging topology. Karakoram keeps engine-specific access routes but does not implement Kubernetes resources or continuous topology reconciliation. |
+| [Bitnami RabbitMQ chart](https://github.com/bitnami/charts/tree/main/bitnami/rabbitmq) | Persistent deployment, cookie/auth/TLS configuration, optional definitions loading and Prometheus integration. A chart is deployment packaging, not a managed recovery service. |
+| [CloudAMQP](https://www.cloudamqp.com/docs/cloudamqp-definitions/) | Managed definitions export/restore; its documented definitions backups explicitly exclude messages. This is the portable recovery boundary adopted here, not its retention policy or hosting guarantees. |
+| [Amazon MQ](https://docs.aws.amazon.com/amazon-mq/latest/developer-guide/rabbitmq-broker-architecture.html) | Managed single-instance/three-node multi-AZ deployment and TLS client access. [Migration](https://docs.aws.amazon.com/amazon-mq/latest/migration-guide/rabbitmq-migration-guide.html) separates definitions from message movement through Shovel/Federation; AWS network/storage guarantees do not apply to Zerops. |
+| [Northflank](https://northflank.com/dbaas/managed-rabbitmq), [StackHero](https://www.stackhero.io/en-US/services/RabbitMQ/documentations/Getting-started), [Elestio](https://elest.io/open-source/rabbitmq/resources/managed-service-features) | Hosted RabbitMQ offerings with client access/TLS and managed-service controls. Public-facing TLS documentation alone is not evidence of Erlang distribution TLS or recoverable message backups. |
+| [Railway](https://docs.railway.com/guides/rabbitmq-producers-consumers), [Render](https://render.com/docs/deploy-rabbitmq) | Template/container deployment approaches with private networking and management access. They illustrate deployable workloads, not a substitute for broker-aware membership and recovery orchestration. |
+| [Zerops service catalog](https://docs.zerops.io/references/import-yaml/type-list) | No native managed RabbitMQ service. Karakoram operates Ubuntu runtimes and Local Storage, with the host-placement limits in ADR 0016. |
+
+Primary RabbitMQ references: [Management plugin/API](https://www.rabbitmq.com/docs/management), [access control](https://www.rabbitmq.com/docs/access-control), [virtual hosts](https://www.rabbitmq.com/docs/vhosts), [TLS](https://www.rabbitmq.com/docs/ssl), [Erlang distribution TLS](https://www.rabbitmq.com/docs/clustering-ssl), [definitions](https://www.rabbitmq.com/docs/definitions), [backup boundaries](https://www.rabbitmq.com/docs/backup) and [Prometheus](https://www.rabbitmq.com/docs/prometheus). These distinguish client encryption, node authentication, replicated state and independently restorable backups.
+
+## Decision
+
+- Implement engine-owned `/clusters/{cluster}/rabbitmq/` API routes, the `karactl rabbitmq` command groups and a UI Access tab for vhosts, users, permissions, topic permissions, policies and operator policies. Apply them directly through a responding broker's Management API with `database-users` RBAC on the cluster. Do not reinterpret MongoDB users/roles APIs or promise declarative messaging-topology reconciliation.
+- Generate distinct `karakoram` and customer `admin` passwords in sealed cluster secrets. Bootstrap both as administrators with all permissions on `/`, remove `guest`, and reserve `karakoram`, `admin`, `monitor`, `guest` plus their grants against ordinary access mutations. `monitor` has a reserved stored credential but is not bootstrap-created or needed for loopback Prometheus collection. Rotate `karakoram`/`admin` through durable operations. Generate omitted application passwords once; strip passwords/hashes from ordinary reads. Encourage separate application users with explicit vhost/topic grants.
+- Generate one random shared Erlang cookie per cluster, store it sealed and render it owner-only (0400). It authenticates node/CLI distribution, not AMQP clients. Keep node-control TLS/member tokens separate from broker TLS and the public UI session.
+- Default to `requireTLS`: AMQPS and HTTPS Management API plus peer-verified IPv6 Erlang distribution TLS. `preferTLS` permits both encrypted/plaintext client and management listeners but plaintext distribution; `disabled` is plaintext broker traffic. Inter-node transport and CA source are fixed at creation ([ADR 0021](0021-rabbitmq-cluster-lifecycle.md)). AMQP TLS permits password authentication without a client certificate; control-plane HTTPS administration verifies the cluster CA and hostname.
+- Keep public access opt-in. AMQP exposure needs a CIDR allowlist and project IPv6/dedicated IPv4; publish per-node routes to 5671, or 5672 when disabled. Optional public management uses Zerops HTTPS subdomains forwarding to HTTP 15672, including in `requireTLS`. This exposes native management UI/API with RabbitMQ authentication, not Karakoram RBAC, and is not protected by the AMQP allowlist.
+- Support only gzip-compressed **definitions** backups in S3-compatible storage, UTC schedules and successful-backup count retention. Record provider/source version/topology and authoritative object location. Restore merges definitions through the Management API; filter reserved users and their vhost/topic grants so source hashes cannot replace target system credentials. Bound uncompressed imports to 64 MiB. Creation-time clones import after the target cluster is ready. No messages, physical broker snapshots or PITR are included.
+- Preserve definitions objects/records when `keepBackups` is selected, independently of `keepVolumes`. Retained broker volumes preserve secrets for suspend/resume; full cleanup removes owned broker infrastructure/secrets, with verified orphan-volume tracking on refused deletion. Exported definitions remain sensitive even though ordinary access reads hide hashes.
+- Always enable management and Prometheus plugins. Scrape loopback-only Prometheus and expose a fixed aggregate metric vocabulary through authenticated Karakoram monitoring. Optional plugins and config overrides are allowlisted/validated; managed listeners, auth, discovery, limits, logs and definitions loading cannot be overridden.
+
+## Consequences
+
+Applications receive a familiar RabbitMQ access model, with least-privilege users separate from orchestration authority. Direct native management access can bypass Karakoram audit/RBAC and modify managed accounts; project administrators and management credentials remain trusted. `preferTLS`/`disabled` do not encrypt all broker traffic. Public management adds a project-private plaintext hop even when AMQP/distribution require TLS.
+
+Definitions recovery is portable and small but restores **configuration, not queued data**. It merges rather than rewinds target state; unrelated objects and existing messages are not removed. Password hashes and runtime parameters can expose credentials, so object storage needs restricted access, appropriate encryption and safe export handling. Preserved backups depend on state, the original master key and registered storage credentials. Operators must design message replay/migration and disaster recovery separately.
+
+The access surface intentionally excludes queue/exchange/binding CRUD, arbitrary CLI/eval and a topology-controller abstraction. Applications or native RabbitMQ tools declare messaging topology. Monitoring `up` proves a scrape, not queue quorum or end-to-end delivery; use health conditions and messaging probes as well.
+
+## Alternatives considered
+
+- **Reuse generic database users/roles:** loses RabbitMQ vhost/tag/topic/policy semantics and applies MongoDB defaults to another engine.
+- **Topology-operator-style durable objects:** useful on Kubernetes, but adds another reconciliation/state model; current scope is direct access administration.
+- **Physical/message backups and PITR:** require broker/storage-consistent procedures and identity-aware recovery, not an HTTP export. Do not call replication, retained volumes or definitions a message backup.
+- **Client TLS only under requireTLS:** leaves replication/CLI traffic unencrypted; secure Erlang distribution too and make its creation-time choice explicit.
+- **Always-public management:** easy onboarding, but unnecessarily exposes administrative UI/API and bypasses Karakoram authorization. Keep it opt-in.

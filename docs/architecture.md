@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Architecture
 
-Karakoram is a self-hosted control plane for PSMDB/PBM on Zerops, managing its own project and additional projects as namespaces. It does not run Kubernetes or reuse OpenEverest's Kubernetes provider runtime. The [ADRs](adr/README.md) record the design rationale; current implementation details and explicit limitations are summarized here.
+Karakoram is a self-hosted control plane for PSMDB/PBM and RabbitMQ on Zerops, managing its own project and additional projects as namespaces. It does not run Kubernetes or reuse OpenEverest's Kubernetes provider runtime. The [ADRs](adr/README.md) record the design rationale; current implementation details and explicit limitations are summarized here.
 
 ## Deployment and trust boundaries
 
@@ -84,8 +84,11 @@ SQLite migration 004 follows actor/audit migration 003 and assigns existing clus
 | `internal/scheduler`, `internal/events` | UTC backup schedules/count retention, durable events/SSE delivery |
 | `internal/monitoring` | Agent scrapes, SQLite sample history, UI series and Prometheus exposition |
 | `internal/cli`, `ui/`, `internal/ui` | Generated-client CLI, typed React SPA and embedded serving |
+| `internal/engine/rabbitmq`, `internal/engine/rabbitmq/mgmt` | Broker catalog/lifecycle, Management API access, exposure, definitions backup/restore and retention |
+| `internal/agent/rabbitmq`, `internal/engine/rabbitmq/rmqspec` | Broker rendering/supervision, bounded lifecycle commands, metrics and shared node protocol |
+| `internal/server/rabbitmq.go`, `internal/cli/rabbitmq.go`, `ui/src/engines/rabbitmq` | Engine-owned access API/CLI, creation controls, Access tab and monitoring panels |
 
-Only the `psmdb` provider and `zerops` backend are implemented. The seams isolate present responsibilities; they are not dynamically installable plugins or promises of compatibility with another project's providers.
+The `psmdb` and `rabbitmq` providers and `zerops` backend are implemented. The seams isolate present responsibilities; they are not dynamically installable plugins or promises of compatibility with another project's providers.
 
 ## Multi-engine extension
 
@@ -134,3 +137,11 @@ Agents export member metrics. The collector defaults to 30-second scrapes and 24
 ## Failure domains
 
 There is **no control-plane HA**, guaranteed member anti-affinity, or rack/zone guarantee. Local Storage pins a member to a single machine, and separate services/volumes can be co-located. Best-effort placement fingerprints report uncertainty, not certification. Public TCP requires project IPv6 or dedicated IPv4 and does not implement automatic replica-set external split horizons. Review [limitations](limitations.md), [state recovery](operations.md#control-plane-state-backup-and-recovery) and [public access](user-guide/users-tls-access.md#public-exposure-and-discovery) before relying on availability or external failover.
+
+## RabbitMQ
+
+RabbitMQ uses the same provider, namespace, secret, operation and node-control boundaries, not MongoDB/PBM semantics. The catalog pins RabbitMQ 4.3.5/4.3.6 and Erlang 27.3.4.17 from Team RabbitMQ apt repositories. Each 1/3/5/7-node cluster has one singleton Ubuntu runtime and one ≥5 GB Local Storage volume per broker, stable node identity and Khepri metadata. Classic-config discovery is supplemented by observed explicit joins. Quorum queues are the managed default; classic messages are not replicated.
+
+Rolling changes gate on quorum, drain client traffic and stop the broker before disruptive platform actions because Zerops's roughly five-second SIGTERM deadline is insufficient. Durable maintenance holds prevent premature restart; configuration acknowledgement, running membership and revive gate the next node. Scale-down grows quorum replicas/migrates streams before shrink/forget/deletion. Feature flags are enabled after all binary upgrades finish; only 4.3.5 → 4.3.6 is cataloged. Erlang distribution TLS is fixed at creation.
+
+Engine-owned Management API routes administer vhosts/users/grants/policies through namespace-aware dialing; they are direct changes, not a second declarative topology controller. Definitions backups are gzip JSON in S3, preserve sensitive hashes and restore by merging while filtering reserved users/grants. They contain no messages and no PITR. Native management exposure is opt-in HTTPS at Zerops L7 with a private HTTP hop, separate from allowlisted per-node AMQPS routes. Built-in monitoring scrapes loopback Prometheus and exports a fixed RabbitMQ vocabulary. See the [RabbitMQ guide](user-guide/rabbitmq.md) and [ADRs 0020–0022](adr/README.md).

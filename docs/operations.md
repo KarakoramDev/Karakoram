@@ -317,3 +317,38 @@ The offline command needs the existing DB and master key, not a fresh bootstrap.
 | Events watch/UI live updates arrive in batches, but ordinary requests work | Compare durable `/events` and operation/status reads; inspect SSE proxy buffering and padded heartbeat delivery | Approximately 16-KiB random-base64 initial/heartbeat comments reduce buffering; small events may still wait for the fifteen-second heartbeat. Account for ~1.1 KiB/s padding per stream plus startup. Keep no-cache/no-transform/X-Accel-Buffering:no and configure a nonbuffering proxy path where possible. Preserve cursors and refresh/read durable state rather than resubmitting work. |
 
 For destructive repairs or ambiguous restore recovery, preserve redacted evidence and involve a maintainer/operator who can inspect the original state and PBM metadata. Never silently mark an uncertain operation successful or remove safety files to suppress its error.
+
+## RabbitMQ operations
+
+Use the [RabbitMQ guide](user-guide/rabbitmq.md) for configuration/access and [ADR 0021](adr/0021-rabbitmq-cluster-lifecycle.md) for lifecycle ordering. Operate through cluster specs and durable restart/replacement/rotation operations, not parallel manual Zerops deployments.
+
+### Rolling changes and drain
+
+Karakoram checks online quorum plus one and quorum-critical status before taking a multi-node broker out of service. It drains traffic, persists a maintenance hold and stops the broker **before** disruptive platform actions: Zerops force-stops containers roughly five seconds after SIGTERM. Deployment/readiness can succeed while an intentional hold keeps the broker stopped; that is not messaging readiness. The changed member must acknowledge config, run/rejoin and revive before the next changes. Do not remove hold files or restart other nodes to bypass a blocked operation.
+
+RabbitMQ drain suspends client listeners, closes connections and transfers quorum leadership/responsibilities. It **does not** consume, purge, back up or guarantee migration of all messages. Clients must reconnect to other brokers; a singleton goes offline. Ensure survivor capacity and avoid maintenance during alarms or replica catch-up. After a complete binary upgrade, Karakoram enables feature flags and rebalances queue/stream leaders. Only 4.3.5 → 4.3.6 is supported; transport/CA changes are not ordinary rolling upgrades.
+
+RAM can change live in Zerops, but RabbitMQ's rendered total-memory override and 60% watermark follow minimum RAM only after the gated rolling restart. Disk-free limit is max(0.5 GB, minimum RAM). Compare desired spec, platform configuration/allocation and current metric limits before assuming a resize is effective. CPU-mode cooldowns retain their retry deadline; inspect `PlatformCooldown`/events rather than resubmitting changes.
+
+### Scaling and replacing lost nodes
+
+Scale-up provisions and joins brokers, then rebalances leaders; it does not automatically grow all existing queue groups. Scale-down handles highest indexes first, requires healthy survivors, grows quorum replicas and migrates stream queues independently of the optional stream-protocol plugin before shrinking the leaving node. The reachable node's application is drained/stopped while its Erlang VM remains a Khepri voter; a survivor forgets it before full process shutdown and deletion. Durable classic queues hosted on the node block both scale-down and replacement with `MemberRemovalBlocked` and queue names. Explicitly migrate/delete them before retrying; no classic message-store migration is automatic.
+
+For a lost node/volume, preserve control-plane state, original key, surviving volumes and redacted events. Check that surviving Khepri and queue/stream majorities exist, clear alarms and repair private DNS/networking before requesting `replace-member` with the recorded member name. Replacement creates a fresh, monotonic node identity, joins it and grows/migrates replicas before forgetting/removing the old identity; an unreachable departing node skips local drain/stop and is forgotten through a survivor only with a Khepri voter majority among survivors. Do not recreate a blank volume under an old identity, reset survivors, or manually forget several nodes to unblock work.
+
+Replacement does not recover data whose last surviving replica is gone, and losing a majority is not automatic disaster recovery. If a majority cannot be recovered, assess restoring definitions to a new cluster and replaying/migrating messages from an independent source. Definitions contain no messages. Retained volumes are for coordinated suspend/resume, not a portable message-backup archive.
+
+Resume of a suspended retained cluster starts all brokers before individual readiness/revive waits, allowing the retained metadata majority to recover. Do not require the first retained broker to become individually ready before the others start.
+
+### Alarms and diagnostics
+
+| Observation | Inspect | Safe response |
+| --- | --- | --- |
+| Memory/disk alarm, publishing blocked | `Alarms` condition, memory/disk alarm metrics, resident memory/watermark, free disk/limit, queue backlog and unacknowledged messages | Reduce backlog/load or grow resources; allow the rolling limit update to complete. Do not disable managed alarms or restart several nodes together. |
+| Partition/missing running member | `Partition`/`Healthy`, each member's view, private DNS/network, node identity/cookie/certificates and runtime state | Restore connectivity and quorum. Preserve surviving data; do not treat a healthy scrape as healthy cluster membership. |
+| Rolling change stalled | Operation step, config acknowledgement, quorum-critical checks, maintenance state and pending platform Process | Recover missing replicas/alarms first, observe platform terminal status and let the durable workflow continue. |
+| `MemberRemovalBlocked` | Reported durable classic queue names and owning node | Explicitly migrate or delete the queues before retrying scale-down/replacement. A lost classic store cannot be recovered from definitions. |
+| Management API unavailable | Private 15671/15672, cluster CA/hostname, `karakoram` credentials and namespace relay policy/session | Repair private administration; do not expose node-control/distribution ports or disable certificate verification. |
+| Definitions restore succeeded but messages absent | Backup type/provenance and source object; imported users/vhosts/policies | Expected: definitions merge configuration only. Verify target system credentials and design message replay separately. |
+
+Native management access can change accounts/policies outside Karakoram RBAC. Keep it private where possible; the public management subdomain is not protected by the AMQP CIDR allowlist. Review credentials and definitions storage as sensitive. On deletion choose `keepVolumes` and `keepBackups` independently, inspect retained inventory/orphan cleanup and account for continued volume charges.

@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM orchestration across existing Zerops projects through namespaces, without Kubernetes. The control plane remains in its own project; remote projects use outbound relays. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM and RabbitMQ orchestration across existing Zerops projects through namespaces, without Kubernetes. The control plane remains in its own project; remote projects use outbound relays. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -27,6 +27,9 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0017](0017-public-tcp-exposure.md) | Optional public TCP, IP/allowlist policy and discovery-safe endpoints |
 | [0018](0018-multi-project-namespaces-relay.md) | Multi-project namespaces; outbound WebSocket/inner mTLS/smux relays |
 | [0019](0019-multi-engine-seams.md) | Additive multi-engine seams: provider metadata, optional interfaces, agent runners |
+| [0020](0020-rabbitmq-node-persistence.md) | RabbitMQ runtime + Local Storage per node; stable identity and pre-platform shutdown |
+| [0021](0021-rabbitmq-cluster-lifecycle.md) | RabbitMQ Khepri-only 4.3 catalog, observed joins and quorum-gated rolling lifecycle |
+| [0022](0022-rabbitmq-access-tls-backups.md) | RabbitMQ Management API access, system users, TLS and definitions-only backups |
 
 ## References and verification
 
