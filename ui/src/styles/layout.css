@@ -42,6 +42,7 @@
 
 .brand svg {
   flex: none;
+  --logo-cap: #5fd0d8;
 }
 
 .brand-text {
