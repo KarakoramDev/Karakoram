@@ -74,6 +74,18 @@ func TestCatalog(t *testing.T) {
 	}
 }
 
+func TestCatalogProvidesAPMAssets(t *testing.T) {
+	// Since 8.15, Elasticsearch's apm-data plugin installs APM index templates,
+	// ILM policies and ingest pipelines itself; standalone APM needs no Fleet
+	// package installation, including when Kibana is disabled.
+	for _, entry := range catalog {
+		version, ok := parseVersion(entry.Version)
+		if !ok || version[0] < 8 || version[0] == 8 && version[1] < 15 {
+			t.Fatalf("catalog version %q does not provide APM assets", entry.Version)
+		}
+	}
+}
+
 func TestArtifacts(t *testing.T) {
 	for _, component := range []string{"elasticsearch", "kibana", "logstash", "apm-server"} {
 		for _, v := range catalog {

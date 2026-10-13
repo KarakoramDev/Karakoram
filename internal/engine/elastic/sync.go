@@ -584,7 +584,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if changed, e := p.expose(ctx, rc, s); changed || e != nil {
 		return result, e
 	}
-	ok, e := p.healthy(ctx, c)
+	ok, e := p.healthy(ctx, c, rc.Cluster.Spec.Components.Engine.Replicas)
 	if e != nil {
 		return result, e
 	}

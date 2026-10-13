@@ -172,15 +172,15 @@ func (p *Provider) ensureSecurity(ctx context.Context, rc *engine.Context, s *st
 	s.SecurityHash = hash
 	return nil
 }
-func (p *Provider) healthy(ctx context.Context, c *esapi.Client) (bool, error) {
+func (p *Provider) healthy(ctx context.Context, c *esapi.Client, intendedDataNodes int) (bool, error) {
 	h, err := c.Health(ctx, esapi.HealthOptions{})
 	if err != nil {
 		return false, err
 	}
-	return healthAcceptable(ctx, c, h)
+	return healthAcceptable(ctx, c, h, intendedDataNodes)
 }
 
-func healthAcceptable(ctx context.Context, c *esapi.Client, h esapi.Health) (bool, error) {
+func healthAcceptable(ctx context.Context, c *esapi.Client, h esapi.Health, intendedDataNodes int) (bool, error) {
 	if h.RelocatingShards != 0 || h.InitializingShards != 0 {
 		return false, nil
 	}
@@ -190,15 +190,5 @@ func healthAcceptable(ctx context.Context, c *esapi.Client, h esapi.Health) (boo
 	if h.Status != "yellow" {
 		return false, nil
 	}
-	if h.NumberOfDataNodes < 1 {
-		return false, nil
-	}
-	if h.NumberOfDataNodes > 1 {
-		replicas, err := c.MaxIndexReplicas(ctx)
-		if err != nil || h.NumberOfDataNodes > replicas {
-			return false, err
-		}
-	}
-	primaries, err := c.UnassignedPrimaries(ctx)
-	return err == nil && !primaries, err
+	return c.UnassignedReplicasUnplaceable(ctx, max(h.NumberOfDataNodes, intendedDataNodes))
 }

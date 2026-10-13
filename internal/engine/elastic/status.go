@@ -159,7 +159,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		defer c.Close()
 		h, e := c.Health(ctx, esapi.HealthOptions{})
 		if e == nil {
-			healthy, e = healthAcceptable(ctx, c, h)
+			healthy, e = healthAcceptable(ctx, c, h, rc.Cluster.Spec.Components.Engine.Replicas)
 			condition("ClusterHealth", healthy && e == nil, h.Status, "Elasticsearch shard health: "+h.Status)
 		} else {
 			condition("ClusterHealth", false, "Unreachable", "Elasticsearch is unreachable")

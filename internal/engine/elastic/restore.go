@@ -199,7 +199,7 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		if recovering {
 			return operationResult(cp, false), nil
 		}
-		healthy, e := p.healthy(ctx, client)
+		healthy, e := p.healthy(ctx, client, rc.Cluster.Spec.Components.Engine.Replicas)
 		if e != nil {
 			return operationResult(cp, false), e
 		}

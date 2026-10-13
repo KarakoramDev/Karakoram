@@ -212,6 +212,8 @@ type coreES struct {
 	snapshots                []string
 	unassignedPrimary        bool
 	relocating, initializing int
+	voters                   []string
+	shardRows                []map[string]string
 }
 
 func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -233,6 +235,14 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.infra.mu.Unlock()
 		reply(map[string]any{"nodes": nodes})
+	case r.URL.Path == "/_cluster/state/metadata":
+		voters := f.voters
+		if voters == nil {
+			for name := range f.infra.nodes {
+				voters = append(voters, name)
+			}
+		}
+		reply(map[string]any{"metadata": map[string]any{"cluster_coordination": map[string]any{"last_committed_config": voters}}})
 	case r.URL.Path == "/_cat/master":
 		reply([]map[string]string{{"node": f.master}})
 	case r.URL.Path == "/_cluster/health":
@@ -244,11 +254,31 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(rows)
 	case r.URL.Path == "/_cat/shards":
-		if f.unassignedPrimary {
-			reply([]map[string]string{{"state": "UNASSIGNED", "prirep": "p"}})
-		} else {
-			reply([]map[string]string{})
+		rows := f.shardRows
+		if rows == nil {
+			names := []string{}
+			for name := range f.infra.nodes {
+				if strings.HasPrefix(name, "demon") {
+					names = append(names, name)
+				}
+			}
+			slices.Sort(names)
+			for i := 0; i <= f.replicas; i++ {
+				row := map[string]string{"index": "logs", "shard": "0", "state": "UNASSIGNED", "prirep": "r"}
+				if i == 0 {
+					row["prirep"] = "p"
+				}
+				if i < len(names) && !(i == 0 && f.unassignedPrimary) {
+					row["state"], row["node"] = "STARTED", names[i]
+				}
+				rows = append(rows, row)
+			}
+			// Existing yellow fixtures represent at least one missing replica.
+			if f.health == "yellow" && f.replicas == 0 && !f.unassignedPrimary {
+				rows = append(rows, map[string]string{"index": "logs", "shard": "0", "state": "UNASSIGNED", "prirep": "r"})
+			}
 		}
+		reply(rows)
 	case r.URL.Path == "/_all/_settings":
 		reply(map[string]any{"logs": map[string]any{"settings": map[string]string{"index.number_of_replicas": strconv.Itoa(f.replicas)}}})
 	case r.URL.Path == "/_cluster/settings":

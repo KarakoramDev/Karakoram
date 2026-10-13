@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,6 +97,19 @@ func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 	return nodes, nil
 }
 
+// CommittedVoters returns node IDs in the last committed voting configuration.
+func (c *Client) CommittedVoters(ctx context.Context) ([]string, error) {
+	var v struct {
+		Metadata struct {
+			Coordination struct {
+				Voters []string `json:"last_committed_config"`
+			} `json:"cluster_coordination"`
+		} `json:"metadata"`
+	}
+	err := c.do(ctx, "GET", "/_cluster/state/metadata", url.Values{"filter_path": {"metadata.cluster_coordination.last_committed_config"}}, nil, &v)
+	return v.Metadata.Coordination.Voters, err
+}
+
 // MasterNode returns the elected master's node name, or empty when none is elected.
 func (c *Client) MasterNode(ctx context.Context) (string, error) {
 	var v []struct {
@@ -161,28 +175,27 @@ func (c *Client) SetAllocationEnable(ctx context.Context, value *string) error {
 	return c.PutClusterSettings(ctx, map[string]any{"cluster.routing.allocation.enable": v}, nil)
 }
 
-// AllocationExcludeNames returns effective exclusion names (transient overrides persistent).
+// AllocationExcludeNames merges both explicit layers so migration preserves
+// operator exclusions hidden by a transient override.
 func (c *Client) AllocationExcludeNames(ctx context.Context) ([]string, error) {
 	v, err := c.ClusterSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
 	key := "cluster.routing.allocation.exclude._name"
-	x := v.Persistent[key]
-	if t, ok := v.Transient[key]; ok {
-		x = t
-	}
-	if x == nil {
-		return nil, nil
-	}
-	s, ok := x.(string)
-	if !ok {
-		return nil, errors.New("invalid Elasticsearch allocation exclusion")
-	}
 	var names []string
-	for _, n := range strings.Split(s, ",") {
-		if n = strings.TrimSpace(n); n != "" {
-			names = append(names, n)
+	for _, x := range []any{v.Persistent[key], v.Transient[key]} {
+		if x == nil {
+			continue
+		}
+		s, ok := x.(string)
+		if !ok {
+			return nil, errors.New("invalid Elasticsearch allocation exclusion")
+		}
+		for _, n := range strings.Split(s, ",") {
+			if n = strings.TrimSpace(n); n != "" && !slices.Contains(names, n) {
+				names = append(names, n)
+			}
 		}
 	}
 	return names, nil
@@ -299,19 +312,47 @@ func (c *Client) MaxIndexReplicas(ctx context.Context) (int, error) {
 	return maximum, nil
 }
 
-// UnassignedPrimaries reports whether any primary shard is unassigned.
-func (c *Client) UnassignedPrimaries(ctx context.Context) (bool, error) {
+// UnassignedReplicasUnplaceable proves that every unassigned copy is a replica
+// whose shard already has a started copy on every intended data node. A large
+// replica count on a different index or shard is not evidence of safety.
+func (c *Client) UnassignedReplicasUnplaceable(ctx context.Context, dataNodes int) (bool, error) {
 	var shards []struct {
+		Index   string `json:"index"`
+		Shard   string `json:"shard"`
 		State   string `json:"state"`
 		Primary string `json:"prirep"`
+		Node    string `json:"node"`
 	}
-	if err := c.do(ctx, "GET", "/_cat/shards", url.Values{"format": {"json"}, "h": {"state,prirep"}}, nil, &shards); err != nil {
+	if err := c.do(ctx, "GET", "/_cat/shards", url.Values{"format": {"json"}, "h": {"index,shard,state,prirep,node"}}, nil, &shards); err != nil {
 		return false, err
 	}
+	type key struct{ index, shard string }
+	started := map[key]map[string]bool{}
+	var unassigned []key
 	for _, shard := range shards {
-		if shard.Primary == "p" && shard.State == "UNASSIGNED" {
-			return true, nil
+		k := key{shard.Index, shard.Shard}
+		switch shard.State {
+		case "UNASSIGNED":
+			if shard.Primary != "r" || shard.Index == "" || shard.Shard == "" {
+				return false, nil
+			}
+			unassigned = append(unassigned, k)
+		case "STARTED":
+			if shard.Node != "" {
+				if started[k] == nil {
+					started[k] = map[string]bool{}
+				}
+				started[k][shard.Node] = true
+			}
 		}
 	}
-	return false, nil
+	if dataNodes < 1 || len(unassigned) == 0 {
+		return false, nil
+	}
+	for _, k := range unassigned {
+		if len(started[k]) < dataNodes {
+			return false, nil
+		}
+	}
+	return true, nil
 }

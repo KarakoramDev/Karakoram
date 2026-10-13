@@ -93,7 +93,7 @@ func TestRESTMethods(t *testing.T) {
 		{name: "reset-allocation", method: "PUT", path: "/_cluster/settings", body: `{"persistent":{"cluster.routing.allocation.enable":null}}`, call: func(c *Client) error { return c.SetAllocationEnable(ctx, nil) }},
 		{name: "exclude-get", method: "GET", path: "/_cluster/settings", q: url.Values{"flat_settings": {"true"}}, response: `{"persistent":{"cluster.routing.allocation.exclude._name":"n1"},"transient":{"cluster.routing.allocation.exclude._name":"n2, n3"}}`, call: func(c *Client) error {
 			v, e := c.AllocationExcludeNames(ctx)
-			if !reflect.DeepEqual(v, []string{"n2", "n3"}) {
+			if !reflect.DeepEqual(v, []string{"n1", "n2", "n3"}) {
 				t.Error(v)
 			}
 			return e
@@ -540,14 +540,14 @@ func TestAllocationExclusionsMigrateTransient(t *testing.T) {
 		t.Fatal(err)
 	}
 	names, err = c.AllocationExcludeNames(ctx)
-	if err != nil || !reflect.DeepEqual(names, []string{"operator", "draining"}) {
+	if err != nil || !reflect.DeepEqual(names, []string{"old", "operator", "draining"}) {
 		t.Fatalf("effective exclusion: %v %v", names, err)
 	}
-	if err = c.SetAllocationExcludeNames(ctx, []string{"operator"}); err != nil {
+	if err = c.SetAllocationExcludeNames(ctx, []string{"old", "operator"}); err != nil {
 		t.Fatal(err)
 	}
 	names, err = c.AllocationExcludeNames(ctx)
-	if err != nil || !reflect.DeepEqual(names, []string{"operator"}) {
+	if err != nil || !reflect.DeepEqual(names, []string{"old", "operator"}) {
 		t.Fatalf("operator exclusion lost: %v %v", names, err)
 	}
 }

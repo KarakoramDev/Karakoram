@@ -172,7 +172,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		if err := rollingMasterReady(ctx, rc, s, m, c); err != nil {
 			return false, "waiting for all master-eligible nodes to join", err
 		}
-		ok, err := p.healthy(ctx, c)
+		ok, err := p.healthy(ctx, c, rc.Cluster.Spec.Components.Engine.Replicas)
 		if err != nil || !ok {
 			return false, "waiting for shard health", err
 		}
@@ -230,7 +230,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		r.Step = "recover"
 		return false, "allocation restored", nil
 	case "recover":
-		ok, err := p.healthy(ctx, c)
+		ok, err := p.healthy(ctx, c, rc.Cluster.Spec.Components.Engine.Replicas)
 		if err != nil || !ok {
 			return false, "waiting for shard recovery", err
 		}
@@ -250,13 +250,37 @@ func rollingMasterReady(ctx context.Context, rc *engine.Context, s *state, m *me
 	if err != nil {
 		return err
 	}
+	masterCount := 0
 	for _, planned := range s.esNodes() {
 		if !masterEligible(rc.Cluster.Spec, planned) {
 			continue
 		}
+		masterCount++
 		if !slices.ContainsFunc(nodes, func(n esapi.Node) bool { return n.Name == planned.Name }) {
 			return fmt.Errorf("%w: master-eligible node %s has not joined", errWaiting, planned.Name)
 		}
+	}
+	voters, err := c.CommittedVoters(ctx)
+	if err != nil {
+		return err
+	}
+	if len(voters) == 0 {
+		return fmt.Errorf("%w: committed voting configuration unavailable", errWaiting)
+	}
+	remaining := 0
+	for _, id := range voters {
+		if slices.ContainsFunc(nodes, func(n esapi.Node) bool { return n.ID == id && n.Name != m.Name }) {
+			remaining++
+		}
+	}
+	// One- and two-master topologies have no restart fault tolerance. With
+	// every planned master present their temporary coordination outage is
+	// unavoidable; never extend that exception to a larger committed config.
+	if masterCount <= 2 && len(voters) <= 2 {
+		return nil
+	}
+	if remaining < len(voters)/2+1 {
+		return fmt.Errorf("%w: restarting %s would lose the committed voting quorum", errWaiting, m.Name)
 	}
 	return nil
 }
