@@ -1,0 +1,3588 @@
+{
+  "project": {
+    "id": "ExampleID0000000000077",
+    "clientId": "ExampleID0000000000036",
+    "name": "example-project",
+    "mode": "LIGHT",
+    "description": "",
+    "tagList": [],
+    "status": "ACTIVE",
+    "created": "2024-01-05T07:50:07Z",
+    "lastUpdate": "2024-01-05T07:50:37Z",
+    "recipeSource": null,
+    "recipeSourceUrl": null,
+    "userRoles": [
+      {
+        "id": "ExampleID0000000000001",
+        "clientUserId": "ExampleID0000000000003",
+        "roleCode": "ADMIN"
+      }
+    ],
+    "publicIpV4": null,
+    "publicIpV4Shared": false,
+    "publicIpV6": "2001:db8::1",
+    "publicZone": "example.zerops.zone",
+    "zeropsSubdomainHost": "example",
+    "logForwardingType": null,
+    "autoStartup": true,
+    "primaryInstanceLocation": {
+      "id": "eu-central",
+      "name": "EU Central (prg1)",
+      "pingUrl": "https://proxy.app-prg1.zerops.io/api/rest/ping"
+    }
+  },
+  "list": {
+    "count": 7,
+    "total": 7,
+    "limit": 20,
+    "offset": 0,
+    "list": [
+      {
+        "id": "ExampleID0000000000014",
+        "status": "ACTIVE",
+        "name": "membervolume",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Local Storage",
+          "serviceStackTypeCategory": "LOCAL_STORAGE",
+          "serviceStackTypeVersionName": "local-storage:single@1"
+        },
+        "serviceStackTypeId": "local_storage",
+        "serviceStackTypeVersionId": "local_storage_v1_single",
+        "base": "local-storage:single@1",
+        "isSystem": false,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 8,
+              "memoryGBytes": 48,
+              "diskGBytes": 5
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.125,
+              "diskGBytes": 5
+            },
+            "minFreeResource": {
+              "cpuCoreCount": 0.10000000149011612,
+              "cpuCorePercent": 0,
+              "memoryGBytes": 0.125,
+              "memoryPercent": 0
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": 2,
+            "swapEnabled": true
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": null,
+            "minContainerCount": null
+          }
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": null,
+              "memoryGBytes": null,
+              "diskGBytes": 5
+            },
+            "minResource": {
+              "cpuCoreCount": null,
+              "memoryGBytes": null,
+              "diskGBytes": 5
+            },
+            "minFreeResource": {
+              "cpuCoreCount": null,
+              "cpuCorePercent": null,
+              "memoryGBytes": null,
+              "memoryPercent": null
+            },
+            "cpuMode": null,
+            "startCpuCoreCount": null,
+            "swapEnabled": null
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": null,
+            "minContainerCount": null
+          }
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:06:13Z",
+        "mode": "NON_HA",
+        "customPortsEnabled": false,
+        "subdomainAccess": false,
+        "reloadAvailable": false,
+        "versionNumber": "v1",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000023",
+            "created": "2024-01-05T11:06:00Z",
+            "lastUpdate": "2024-01-05T11:06:00Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000014",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "membervolume"
+          },
+          {
+            "id": "ExampleID0000000000080",
+            "created": "2024-01-05T11:06:00Z",
+            "lastUpdate": "2024-01-05T11:06:00Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000014",
+            "key": "hostname",
+            "content": "membervolume",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "membervolume"
+          },
+          {
+            "id": "ExampleID0000000000051",
+            "created": "2024-01-05T11:06:00Z",
+            "lastUpdate": "2024-01-05T11:06:00Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000014",
+            "key": "BACKUP_PERIOD",
+            "content": "38 0 * * *",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": true,
+            "internal": false,
+            "serviceStackName": "membervolume"
+          },
+          {
+            "id": "ExampleID0000000000053",
+            "created": "2024-01-05T11:06:00Z",
+            "lastUpdate": "2024-01-05T11:06:00Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000014",
+            "key": "serviceId",
+            "content": "ExampleID0000000000014",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "membervolume"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      },
+      {
+        "id": "ExampleID0000000000069",
+        "status": "READY_TO_DEPLOY",
+        "name": "member",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "base": "ubuntu@24.04",
+        "isSystem": false,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.5,
+              "diskGBytes": 2
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.25,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": 0.10000000149011612,
+              "cpuCorePercent": 0,
+              "memoryGBytes": 0.0625,
+              "memoryPercent": 0
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": 1,
+            "swapEnabled": true
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": 1,
+            "minContainerCount": 1
+          }
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.5,
+              "diskGBytes": 2
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.25,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": null,
+              "cpuCorePercent": null,
+              "memoryGBytes": null,
+              "memoryPercent": null
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": null,
+            "swapEnabled": null
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": 1,
+            "minContainerCount": 1
+          }
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:08:18Z",
+        "mode": null,
+        "customPortsEnabled": true,
+        "subdomainAccess": false,
+        "reloadAvailable": true,
+        "versionNumber": "v24.04",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000007",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "appVersionId",
+            "content": "ExampleID0000000000020",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000029",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "appVersionName",
+            "content": "",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000086",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "hostname",
+            "content": "member",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000068",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "PATH",
+            "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin:/var/www/node_modules/.bin:/usr/local/go/bin:/home/zerops/.cargo/bin",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": true,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000048",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000073",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "serviceId",
+            "content": "ExampleID0000000000069",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000024",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "zeropsSubdomain",
+            "content": "https://member.example.zerops.app",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000034",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "ZEROPS_DEBUG_BUILD",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          },
+          {
+            "id": "ExampleID0000000000031",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "member"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      },
+      {
+        "id": "ExampleID0000000000040",
+        "status": "ACTIVE",
+        "name": "controlvolume",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Local Storage",
+          "serviceStackTypeCategory": "LOCAL_STORAGE",
+          "serviceStackTypeVersionName": "local-storage:single@1"
+        },
+        "serviceStackTypeId": "local_storage",
+        "serviceStackTypeVersionId": "local_storage_v1_single",
+        "base": "local-storage:single@1",
+        "isSystem": false,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 8,
+              "memoryGBytes": 48,
+              "diskGBytes": 5
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.125,
+              "diskGBytes": 5
+            },
+            "minFreeResource": {
+              "cpuCoreCount": 0.10000000149011612,
+              "cpuCorePercent": 0,
+              "memoryGBytes": 0.125,
+              "memoryPercent": 0
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": 2,
+            "swapEnabled": true
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": null,
+            "minContainerCount": null
+          }
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": null,
+              "memoryGBytes": null,
+              "diskGBytes": 5
+            },
+            "minResource": {
+              "cpuCoreCount": null,
+              "memoryGBytes": null,
+              "diskGBytes": 5
+            },
+            "minFreeResource": {
+              "cpuCoreCount": null,
+              "cpuCorePercent": null,
+              "memoryGBytes": null,
+              "memoryPercent": null
+            },
+            "cpuMode": null,
+            "startCpuCoreCount": null,
+            "swapEnabled": null
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": null,
+            "minContainerCount": null
+          }
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:06:11Z",
+        "mode": "NON_HA",
+        "customPortsEnabled": false,
+        "subdomainAccess": false,
+        "reloadAvailable": false,
+        "versionNumber": "v1",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000009",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000040",
+            "key": "BACKUP_PERIOD",
+            "content": "38 0 * * *",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": true,
+            "internal": false,
+            "serviceStackName": "controlvolume"
+          },
+          {
+            "id": "ExampleID0000000000075",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000040",
+            "key": "hostname",
+            "content": "controlvolume",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlvolume"
+          },
+          {
+            "id": "ExampleID0000000000076",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000040",
+            "key": "serviceId",
+            "content": "ExampleID0000000000040",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlvolume"
+          },
+          {
+            "id": "ExampleID0000000000032",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000040",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlvolume"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      },
+      {
+        "id": "ExampleID0000000000043",
+        "status": "READY_TO_DEPLOY",
+        "name": "k111111111111111111111111",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "base": "ubuntu@24.04",
+        "isSystem": false,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.5,
+              "diskGBytes": 2
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.25,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": 0.10000000149011612,
+              "cpuCorePercent": 0,
+              "memoryGBytes": 0.0625,
+              "memoryPercent": 0
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": 1,
+            "swapEnabled": true
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": 10,
+            "minContainerCount": 1
+          }
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.5,
+              "diskGBytes": 2
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.25,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": null,
+              "cpuCorePercent": null,
+              "memoryGBytes": null,
+              "memoryPercent": null
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": null,
+            "swapEnabled": null
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": null,
+            "minContainerCount": null
+          }
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "mode": null,
+        "customPortsEnabled": true,
+        "subdomainAccess": false,
+        "reloadAvailable": true,
+        "versionNumber": "v24.04",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000012",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "key": "ZEROPS_DEBUG_BUILD",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "k111111111111111111111111"
+          },
+          {
+            "id": "ExampleID0000000000067",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "key": "serviceId",
+            "content": "ExampleID0000000000043",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "k111111111111111111111111"
+          },
+          {
+            "id": "ExampleID0000000000070",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "k111111111111111111111111"
+          },
+          {
+            "id": "ExampleID0000000000072",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "key": "hostname",
+            "content": "k111111111111111111111111",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "k111111111111111111111111"
+          },
+          {
+            "id": "ExampleID0000000000035",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "key": "PATH",
+            "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": true,
+            "internal": false,
+            "serviceStackName": "k111111111111111111111111"
+          },
+          {
+            "id": "ExampleID0000000000049",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "k111111111111111111111111"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      },
+      {
+        "id": "ExampleID0000000000045",
+        "status": "READY_TO_DEPLOY",
+        "name": "controlplane",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "base": "ubuntu@24.04",
+        "isSystem": false,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.5,
+              "diskGBytes": 2
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.25,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": 0.10000000149011612,
+              "cpuCorePercent": 0,
+              "memoryGBytes": 0.0625,
+              "memoryPercent": 0
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": 1,
+            "swapEnabled": true
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": 1,
+            "minContainerCount": 1
+          }
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.5,
+              "diskGBytes": 2
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.25,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": null,
+              "cpuCorePercent": null,
+              "memoryGBytes": null,
+              "memoryPercent": null
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": null,
+            "swapEnabled": null
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": 1,
+            "minContainerCount": 1
+          }
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:08:10Z",
+        "mode": null,
+        "customPortsEnabled": true,
+        "subdomainAccess": false,
+        "reloadAvailable": true,
+        "versionNumber": "v24.04",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000079",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "appVersionId",
+            "content": "ExampleID0000000000041",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000004",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "appVersionName",
+            "content": "",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000021",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "hostname",
+            "content": "controlplane",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000030",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "PATH",
+            "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin:/var/www/node_modules/.bin:/usr/local/go/bin:/home/zerops/.cargo/bin",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": true,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000013",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000044",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "serviceId",
+            "content": "ExampleID0000000000045",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000010",
+            "created": "2024-01-05T11:05:59Z",
+            "lastUpdate": "2024-01-05T11:05:59Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "zeropsSubdomain",
+            "content": "https://controlplane.example.zerops.app",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000018",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "ZEROPS_DEBUG_BUILD",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          },
+          {
+            "id": "ExampleID0000000000015",
+            "created": "2024-01-05T11:05:58Z",
+            "lastUpdate": "2024-01-05T11:05:58Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "controlplane"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      },
+      {
+        "id": "ExampleID0000000000057",
+        "status": "READY_TO_DEPLOY",
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "base": "ubuntu@24.04",
+        "isSystem": false,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": {
+            "maxResource": {
+              "cpuCoreCount": 8,
+              "memoryGBytes": 48,
+              "diskGBytes": 250
+            },
+            "minResource": {
+              "cpuCoreCount": 1,
+              "memoryGBytes": 0.125,
+              "diskGBytes": 1
+            },
+            "minFreeResource": {
+              "cpuCoreCount": 0.10000000149011612,
+              "cpuCorePercent": 0,
+              "memoryGBytes": 0.0625,
+              "memoryPercent": 0
+            },
+            "cpuMode": "SHARED",
+            "startCpuCoreCount": 2,
+            "swapEnabled": true
+          },
+          "horizontalAutoscaling": {
+            "maxContainerCount": 10,
+            "minContainerCount": 1
+          }
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": null,
+          "horizontalAutoscaling": {
+            "maxContainerCount": null,
+            "minContainerCount": null
+          }
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T11:04:23Z",
+        "lastUpdate": "2024-01-05T11:04:23Z",
+        "mode": null,
+        "customPortsEnabled": true,
+        "subdomainAccess": false,
+        "reloadAvailable": true,
+        "versionNumber": "v24.04",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000002",
+            "created": "2024-01-05T11:04:23Z",
+            "lastUpdate": "2024-01-05T11:04:23Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000057",
+            "key": "PATH",
+            "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": true,
+            "internal": false,
+            "serviceStackName": "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "id": "ExampleID0000000000058",
+            "created": "2024-01-05T11:04:23Z",
+            "lastUpdate": "2024-01-05T11:04:23Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000057",
+            "key": "hostname",
+            "content": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "id": "ExampleID0000000000062",
+            "created": "2024-01-05T11:04:23Z",
+            "lastUpdate": "2024-01-05T11:04:23Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000057",
+            "key": "ZEROPS_DEBUG_BUILD",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "id": "ExampleID0000000000061",
+            "created": "2024-01-05T11:04:23Z",
+            "lastUpdate": "2024-01-05T11:04:23Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000057",
+            "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+            "content": "NONE",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "id": "ExampleID0000000000033",
+            "created": "2024-01-05T11:04:23Z",
+            "lastUpdate": "2024-01-05T11:04:23Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000057",
+            "key": "serviceId",
+            "content": "ExampleID0000000000057",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "id": "ExampleID0000000000081",
+            "created": "2024-01-05T11:04:23Z",
+            "lastUpdate": "2024-01-05T11:04:23Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000057",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      },
+      {
+        "id": "ExampleID0000000000060",
+        "status": "ACTIVE",
+        "name": "core",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Core",
+          "serviceStackTypeCategory": "CORE",
+          "serviceStackTypeVersionName": "core:single@2"
+        },
+        "serviceStackTypeId": "core",
+        "serviceStackTypeVersionId": "core_v2_single",
+        "base": "core:single@2",
+        "isSystem": true,
+        "startOnProjectStart": true,
+        "githubIntegration": null,
+        "gitlabIntegration": null,
+        "autoscalingProfileId": null,
+        "currentAutoscaling": {
+          "verticalAutoscaling": null,
+          "horizontalAutoscaling": null
+        },
+        "customAutoscaling": {
+          "verticalAutoscaling": null,
+          "horizontalAutoscaling": null
+        },
+        "buildCache": null,
+        "cdnEnabled": false,
+        "nestId": "prg1",
+        "recipeSource": null,
+        "recipeSourceUrl": null,
+        "ports": [],
+        "requestedPorts": {
+          "isActive": false,
+          "requestedPorts": []
+        },
+        "created": "2024-01-05T07:50:07Z",
+        "lastUpdate": "2024-01-05T07:50:36Z",
+        "mode": "single",
+        "customPortsEnabled": false,
+        "subdomainAccess": false,
+        "reloadAvailable": false,
+        "versionNumber": "",
+        "projectId": "ExampleID0000000000077",
+        "project": {
+          "id": "ExampleID0000000000077",
+          "clientId": "ExampleID0000000000036",
+          "name": "example-project",
+          "mode": "LIGHT",
+          "description": "",
+          "tagList": [],
+          "status": "ACTIVE",
+          "created": "2024-01-05T07:50:07Z",
+          "lastUpdate": "2024-01-05T07:50:37Z",
+          "recipeSource": null,
+          "recipeSourceUrl": null,
+          "userRoles": [
+            {
+              "id": "ExampleID0000000000001",
+              "clientUserId": "ExampleID0000000000003",
+              "roleCode": "ADMIN"
+            }
+          ]
+        },
+        "userData": [
+          {
+            "id": "ExampleID0000000000083",
+            "created": "2024-01-05T07:50:15Z",
+            "lastUpdate": "2024-01-05T07:50:15Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000060",
+            "key": "hostname",
+            "content": "core",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "core"
+          },
+          {
+            "id": "ExampleID0000000000017",
+            "created": "2024-01-05T07:50:15Z",
+            "lastUpdate": "2024-01-05T07:50:15Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000060",
+            "key": "projectId",
+            "content": "ExampleID0000000000077",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "core"
+          },
+          {
+            "id": "ExampleID0000000000055",
+            "created": "2024-01-05T07:50:15Z",
+            "lastUpdate": "2024-01-05T07:50:15Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000060",
+            "key": "serviceId",
+            "content": "ExampleID0000000000060",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "core"
+          },
+          {
+            "id": "ExampleID0000000000006",
+            "created": "2024-01-05T07:50:15Z",
+            "lastUpdate": "2024-01-05T07:50:15Z",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000060",
+            "key": "ZEROPS_PROMETHEUS_CUSTOM_SD",
+            "content": "[]",
+            "type": "SYSTEM",
+            "sensitive": false,
+            "editable": false,
+            "internal": false,
+            "serviceStackName": "core"
+          }
+        ],
+        "activeAppVersion": null,
+        "coreService": {
+          "id": "ExampleID0000000000060",
+          "status": "ACTIVE",
+          "name": "core",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Core",
+            "serviceStackTypeCategory": "CORE",
+            "serviceStackTypeVersionName": "core:single@2"
+          },
+          "serviceStackTypeId": "core",
+          "serviceStackTypeVersionId": "core_v2_single",
+          "base": "core:single@2",
+          "isSystem": true,
+          "startOnProjectStart": true,
+          "githubIntegration": null,
+          "gitlabIntegration": null,
+          "autoscalingProfileId": null,
+          "currentAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "customAutoscaling": {
+            "verticalAutoscaling": null,
+            "horizontalAutoscaling": null
+          },
+          "buildCache": null,
+          "cdnEnabled": false,
+          "nestId": "prg1",
+          "recipeSource": null,
+          "recipeSourceUrl": null
+        },
+        "autoscalingProfileOverrides": null
+      }
+    ]
+  },
+  "import": {
+    "projectId": "ExampleID0000000000077",
+    "projectName": "example-project",
+    "serviceStacks": [
+      {
+        "id": "ExampleID0000000000043",
+        "name": "k111111111111111111111111",
+        "processes": [
+          {
+            "id": "ExampleID0000000000047",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000043",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000043",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "ubuntu",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "driverId": "runtime",
+                "name": "k111111111111111111111111",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Ubuntu",
+                  "serviceStackTypeCategory": "USER",
+                  "serviceStackTypeVersionName": "ubuntu@24.04"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 1,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.create",
+            "created": "2024-01-05T11:05:58.106Z",
+            "lastUpdate": "2024-01-05T11:05:58.106Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": null,
+            "publicMeta": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ExampleID0000000000045",
+        "name": "controlplane",
+        "processes": [
+          {
+            "id": "ExampleID0000000000052",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000045",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "ubuntu",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "driverId": "runtime",
+                "name": "controlplane",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Ubuntu",
+                  "serviceStackTypeCategory": "USER",
+                  "serviceStackTypeVersionName": "ubuntu@24.04"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 1,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.create",
+            "created": "2024-01-05T11:05:58.141Z",
+            "lastUpdate": "2024-01-05T11:05:58.141Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": null,
+            "publicMeta": null,
+            "error": null
+          },
+          {
+            "id": "ExampleID0000000000019",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000045",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "ubuntu",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "driverId": "runtime",
+                "name": "controlplane",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Ubuntu",
+                  "serviceStackTypeCategory": "USER",
+                  "serviceStackTypeVersionName": "ubuntu@24.04"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 2,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.build",
+            "created": "2024-01-05T11:05:58.164Z",
+            "lastUpdate": "2024-01-05T11:05:58.164Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": {
+              "id": "ExampleID0000000000041",
+              "serviceStackId": "ExampleID0000000000045",
+              "projectId": "ExampleID0000000000077",
+              "status": "WAITING_TO_BUILD",
+              "source": "GIT",
+              "os": null,
+              "base": null,
+              "sequence": 1,
+              "name": null,
+              "created": "2024-01-05T11:05:58Z",
+              "build": {
+                "serviceStackId": null,
+                "serviceStackName": "ubuntu@24.04",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "serviceStackTypeVersionName": null,
+                "pipelineStart": null,
+                "pipelineFinish": null,
+                "pipelineFailed": null,
+                "ExampleID0000000000059": null,
+                "startDate": null,
+                "endDate": null,
+                "cacheSnapshotId": null
+              },
+              "prepareCustomRuntime": null,
+              "githubIntegration": null,
+              "gitlabIntegration": null,
+              "createdByUser": {
+                "type": "USER",
+                "id": "ExampleID0000000000064",
+                "email": "test-user@example.com",
+                "firstName": "Example",
+                "fullName": "Example User",
+                "avatar": null
+              },
+              "activationDate": null,
+              "publicGitSource": null,
+              "configContent": null,
+              "zeropsYamlJson": null
+            },
+            "publicMeta": null,
+            "error": null
+          },
+          {
+            "id": "ExampleID0000000000008",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000045",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000045",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "ubuntu",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "driverId": "runtime",
+                "name": "controlplane",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Ubuntu",
+                  "serviceStackTypeCategory": "USER",
+                  "serviceStackTypeVersionName": "ubuntu@24.04"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 3,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.enableSubdomainAccess",
+            "created": "2024-01-05T11:05:58.18Z",
+            "lastUpdate": "2024-01-05T11:05:58.18Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": null,
+            "publicMeta": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ExampleID0000000000040",
+        "name": "controlvolume",
+        "processes": [
+          {
+            "id": "ExampleID0000000000038",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000040",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000040",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "local_storage",
+                "serviceStackTypeVersionId": "local_storage_v1_single",
+                "driverId": "local_storage_1",
+                "name": "controlvolume",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Local Storage",
+                  "serviceStackTypeCategory": "LOCAL_STORAGE",
+                  "serviceStackTypeVersionName": "local-storage:single@1"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 1,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.create",
+            "created": "2024-01-05T11:05:58.219Z",
+            "lastUpdate": "2024-01-05T11:05:58.219Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": null,
+            "publicMeta": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ExampleID0000000000069",
+        "name": "member",
+        "processes": [
+          {
+            "id": "ExampleID0000000000046",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000069",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "ubuntu",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "driverId": "runtime",
+                "name": "member",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Ubuntu",
+                  "serviceStackTypeCategory": "USER",
+                  "serviceStackTypeVersionName": "ubuntu@24.04"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 1,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.create",
+            "created": "2024-01-05T11:05:58.263Z",
+            "lastUpdate": "2024-01-05T11:05:58.263Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": null,
+            "publicMeta": null,
+            "error": null
+          },
+          {
+            "id": "ExampleID0000000000026",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000069",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000069",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "ubuntu",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "driverId": "runtime",
+                "name": "member",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Ubuntu",
+                  "serviceStackTypeCategory": "USER",
+                  "serviceStackTypeVersionName": "ubuntu@24.04"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 2,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.build",
+            "created": "2024-01-05T11:05:58.285Z",
+            "lastUpdate": "2024-01-05T11:05:58.285Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": {
+              "id": "ExampleID0000000000020",
+              "serviceStackId": "ExampleID0000000000069",
+              "projectId": "ExampleID0000000000077",
+              "status": "WAITING_TO_BUILD",
+              "source": "GIT",
+              "os": null,
+              "base": null,
+              "sequence": 1,
+              "name": null,
+              "created": "2024-01-05T11:05:58Z",
+              "build": {
+                "serviceStackId": null,
+                "serviceStackName": "ubuntu@24.04",
+                "serviceStackTypeVersionId": "ubuntu_v24",
+                "serviceStackTypeVersionName": null,
+                "pipelineStart": null,
+                "pipelineFinish": null,
+                "pipelineFailed": null,
+                "ExampleID0000000000059": null,
+                "startDate": null,
+                "endDate": null,
+                "cacheSnapshotId": null
+              },
+              "prepareCustomRuntime": null,
+              "githubIntegration": null,
+              "gitlabIntegration": null,
+              "createdByUser": {
+                "type": "USER",
+                "id": "ExampleID0000000000064",
+                "email": "test-user@example.com",
+                "firstName": "Example",
+                "fullName": "Example User",
+                "avatar": null
+              },
+              "activationDate": null,
+              "publicGitSource": null,
+              "configContent": null,
+              "zeropsYamlJson": null
+            },
+            "publicMeta": null,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ExampleID0000000000014",
+        "name": "membervolume",
+        "processes": [
+          {
+            "id": "ExampleID0000000000054",
+            "clientId": "ExampleID0000000000036",
+            "projectId": "ExampleID0000000000077",
+            "serviceStackId": "ExampleID0000000000014",
+            "project": {
+              "id": "ExampleID0000000000077",
+              "clientId": "ExampleID0000000000036",
+              "name": "example-project",
+              "description": "",
+              "tagList": [],
+              "status": "ACTIVE",
+              "created": "2024-01-05T07:50:07Z",
+              "lastUpdate": "2024-01-05T07:50:37Z",
+              "recipeSource": null,
+              "recipeSourceUrl": null
+            },
+            "serviceStacks": [
+              {
+                "id": "ExampleID0000000000014",
+                "created": "2024-01-05T11:05:58Z",
+                "lastUpdate": "2024-01-05T11:05:58Z",
+                "projectId": "ExampleID0000000000077",
+                "serviceStackTypeId": "local_storage",
+                "serviceStackTypeVersionId": "local_storage_v1_single",
+                "driverId": "local_storage_1",
+                "name": "membervolume",
+                "serviceStackTypeInfo": {
+                  "serviceStackTypeName": "Local Storage",
+                  "serviceStackTypeCategory": "LOCAL_STORAGE",
+                  "serviceStackTypeVersionName": "local-storage:single@1"
+                },
+                "ports": []
+              }
+            ],
+            "status": "PENDING",
+            "sequence": 1,
+            "createdByUser": {
+              "type": "USER",
+              "id": "ExampleID0000000000064",
+              "email": "test-user@example.com",
+              "firstName": "Example",
+              "fullName": "Example User",
+              "avatar": null
+            },
+            "canceledByUser": null,
+            "actionName": "stack.create",
+            "created": "2024-01-05T11:05:58.315Z",
+            "lastUpdate": "2024-01-05T11:05:58.315Z",
+            "started": null,
+            "finished": null,
+            "createdBySystem": false,
+            "appVersion": null,
+            "publicMeta": null,
+            "error": null
+          }
+        ]
+      }
+    ]
+  },
+  "service": {
+    "id": "ExampleID0000000000045",
+    "status": "ACTIVE",
+    "name": "controlplane",
+    "serviceStackTypeInfo": {
+      "serviceStackTypeName": "Ubuntu",
+      "serviceStackTypeCategory": "USER",
+      "serviceStackTypeVersionName": "ubuntu@24.04"
+    },
+    "serviceStackTypeId": "ubuntu",
+    "serviceStackTypeVersionId": "ubuntu_v24",
+    "base": "ubuntu@24.04",
+    "isSystem": false,
+    "startOnProjectStart": true,
+    "githubIntegration": null,
+    "gitlabIntegration": null,
+    "autoscalingProfileId": null,
+    "currentAutoscaling": {
+      "verticalAutoscaling": {
+        "maxResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.5,
+          "diskGBytes": 2
+        },
+        "minResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.25,
+          "diskGBytes": 1
+        },
+        "minFreeResource": {
+          "cpuCoreCount": 0.10000000149011612,
+          "cpuCorePercent": 0,
+          "memoryGBytes": 0.0625,
+          "memoryPercent": 0
+        },
+        "cpuMode": "SHARED",
+        "startCpuCoreCount": 1,
+        "swapEnabled": true
+      },
+      "horizontalAutoscaling": {
+        "maxContainerCount": 1,
+        "minContainerCount": 1
+      }
+    },
+    "customAutoscaling": {
+      "verticalAutoscaling": {
+        "maxResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.5,
+          "diskGBytes": 2
+        },
+        "minResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.25,
+          "diskGBytes": 1
+        },
+        "minFreeResource": {
+          "cpuCoreCount": null,
+          "cpuCorePercent": null,
+          "memoryGBytes": null,
+          "memoryPercent": null
+        },
+        "cpuMode": "SHARED",
+        "startCpuCoreCount": null,
+        "swapEnabled": null
+      },
+      "horizontalAutoscaling": {
+        "maxContainerCount": 1,
+        "minContainerCount": 1
+      }
+    },
+    "buildCache": null,
+    "cdnEnabled": false,
+    "nestId": "prg1",
+    "recipeSource": null,
+    "recipeSourceUrl": null,
+    "ports": [
+      {
+        "protocol": "tcp",
+        "port": 8080,
+        "description": "",
+        "scheme": "http"
+      }
+    ],
+    "requestedPorts": {
+      "isActive": false,
+      "requestedPorts": []
+    },
+    "created": "2024-01-05T11:05:58Z",
+    "lastUpdate": "2024-01-05T11:14:33Z",
+    "mode": null,
+    "customPortsEnabled": true,
+    "subdomainAccess": false,
+    "reloadAvailable": true,
+    "versionNumber": "v24.04",
+    "projectId": "ExampleID0000000000077",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "mode": "LIGHT",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null,
+      "userRoles": [
+        {
+          "id": "ExampleID0000000000001",
+          "clientUserId": "ExampleID0000000000003",
+          "roleCode": "ADMIN"
+        }
+      ]
+    },
+    "userData": [
+      {
+        "id": "ExampleID0000000000079",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "appVersionId",
+        "content": "ExampleID0000000000037",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000004",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "appVersionName",
+        "content": "example-prebuilt",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000021",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "hostname",
+        "content": "controlplane",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000030",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:59Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "PATH",
+        "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin:/var/www/node_modules/.bin:/usr/local/go/bin:/home/zerops/.cargo/bin",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": true,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000013",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "projectId",
+        "content": "ExampleID0000000000077",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000044",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "serviceId",
+        "content": "ExampleID0000000000045",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000010",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "zeropsSubdomain",
+        "content": "https://controlplane.example.zerops.app",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000018",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "ZEROPS_DEBUG_BUILD",
+        "content": "NONE",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      },
+      {
+        "id": "ExampleID0000000000015",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000045",
+        "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+        "content": "NONE",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "controlplane"
+      }
+    ],
+    "activeAppVersion": {
+      "id": "ExampleID0000000000037",
+      "clientId": "ExampleID0000000000036",
+      "projectId": "ExampleID0000000000077",
+      "serviceStackId": "ExampleID0000000000045",
+      "build": null,
+      "source": "CLI",
+      "sequence": 3,
+      "status": "ACTIVE",
+      "userDataList": [
+        {
+          "key": "EXAMPLE_OVERRIDE",
+          "content": "yaml-wins",
+          "type": "USER",
+          "sensitive": false,
+          "internal": false,
+          "editable": false
+        },
+        {
+          "key": "EXAMPLE_VOLUME",
+          "content": "/mnt/controlvolume",
+          "type": "USER",
+          "sensitive": false,
+          "internal": false,
+          "editable": false
+        },
+        {
+          "key": "EXAMPLE_CP",
+          "content": "yes",
+          "type": "USER",
+          "sensitive": false,
+          "internal": false,
+          "editable": false
+        }
+      ],
+      "created": "2024-01-05T11:13:29Z",
+      "lastUpdate": "2024-01-05T11:14:32Z",
+      "githubIntegration": null,
+      "gitlabIntegration": null,
+      "createdByUser": {
+        "type": "USER",
+        "id": "ExampleID0000000000064",
+        "email": "test-user@example.com",
+        "firstName": "Example",
+        "fullName": "Example User",
+        "avatar": null
+      },
+      "activationDate": "2024-01-05T11:14:32Z",
+      "publicGitSource": null
+    },
+    "coreService": {
+      "id": "ExampleID0000000000060",
+      "status": "ACTIVE",
+      "name": "core",
+      "serviceStackTypeInfo": {
+        "serviceStackTypeName": "Core",
+        "serviceStackTypeCategory": "CORE",
+        "serviceStackTypeVersionName": "core:single@2"
+      },
+      "serviceStackTypeId": "core",
+      "serviceStackTypeVersionId": "core_v2_single",
+      "base": "core:single@2",
+      "isSystem": true,
+      "startOnProjectStart": true,
+      "githubIntegration": null,
+      "gitlabIntegration": null,
+      "autoscalingProfileId": null,
+      "currentAutoscaling": {
+        "verticalAutoscaling": null,
+        "horizontalAutoscaling": null
+      },
+      "customAutoscaling": {
+        "verticalAutoscaling": null,
+        "horizontalAutoscaling": null
+      },
+      "buildCache": null,
+      "cdnEnabled": false,
+      "nestId": "prg1",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "autoscalingProfileOverrides": null
+  },
+  "member": {
+    "id": "ExampleID0000000000069",
+    "status": "ACTIVE",
+    "name": "member",
+    "serviceStackTypeInfo": {
+      "serviceStackTypeName": "Ubuntu",
+      "serviceStackTypeCategory": "USER",
+      "serviceStackTypeVersionName": "ubuntu@24.04"
+    },
+    "serviceStackTypeId": "ubuntu",
+    "serviceStackTypeVersionId": "ubuntu_v24",
+    "base": "ubuntu@24.04",
+    "isSystem": false,
+    "startOnProjectStart": true,
+    "githubIntegration": null,
+    "gitlabIntegration": null,
+    "autoscalingProfileId": null,
+    "currentAutoscaling": {
+      "verticalAutoscaling": {
+        "maxResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.5,
+          "diskGBytes": 2
+        },
+        "minResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.25,
+          "diskGBytes": 1
+        },
+        "minFreeResource": {
+          "cpuCoreCount": 0.10000000149011612,
+          "cpuCorePercent": 0,
+          "memoryGBytes": 0.0625,
+          "memoryPercent": 0
+        },
+        "cpuMode": "SHARED",
+        "startCpuCoreCount": 1,
+        "swapEnabled": true
+      },
+      "horizontalAutoscaling": {
+        "maxContainerCount": 1,
+        "minContainerCount": 1
+      }
+    },
+    "customAutoscaling": {
+      "verticalAutoscaling": {
+        "maxResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.5,
+          "diskGBytes": 2
+        },
+        "minResource": {
+          "cpuCoreCount": 1,
+          "memoryGBytes": 0.25,
+          "diskGBytes": 1
+        },
+        "minFreeResource": {
+          "cpuCoreCount": null,
+          "cpuCorePercent": null,
+          "memoryGBytes": null,
+          "memoryPercent": null
+        },
+        "cpuMode": "SHARED",
+        "startCpuCoreCount": null,
+        "swapEnabled": null
+      },
+      "horizontalAutoscaling": {
+        "maxContainerCount": 1,
+        "minContainerCount": 1
+      }
+    },
+    "buildCache": null,
+    "cdnEnabled": false,
+    "nestId": "prg1",
+    "recipeSource": null,
+    "recipeSourceUrl": null,
+    "ports": [],
+    "requestedPorts": {
+      "isActive": false,
+      "requestedPorts": []
+    },
+    "created": "2024-01-05T11:05:58Z",
+    "lastUpdate": "2024-01-05T11:14:41Z",
+    "mode": null,
+    "customPortsEnabled": true,
+    "subdomainAccess": false,
+    "reloadAvailable": true,
+    "versionNumber": "v24.04",
+    "projectId": "ExampleID0000000000077",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "mode": "LIGHT",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null,
+      "userRoles": [
+        {
+          "id": "ExampleID0000000000001",
+          "clientUserId": "ExampleID0000000000003",
+          "roleCode": "ADMIN"
+        }
+      ]
+    },
+    "userData": [
+      {
+        "id": "ExampleID0000000000007",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "appVersionId",
+        "content": "ExampleID0000000000066",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000029",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "appVersionName",
+        "content": "example-prebuilt",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000086",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "hostname",
+        "content": "member",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000068",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:59Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "PATH",
+        "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin:/var/www/node_modules/.bin:/usr/local/go/bin:/home/zerops/.cargo/bin",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": true,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000048",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "projectId",
+        "content": "ExampleID0000000000077",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000073",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "serviceId",
+        "content": "ExampleID0000000000069",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000024",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "zeropsSubdomain",
+        "content": "https://member.example.zerops.app",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000034",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "ZEROPS_DEBUG_BUILD",
+        "content": "NONE",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      },
+      {
+        "id": "ExampleID0000000000031",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+        "content": "NONE",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "editable": false,
+        "internal": false,
+        "serviceStackName": "member"
+      }
+    ],
+    "activeAppVersion": {
+      "id": "ExampleID0000000000066",
+      "clientId": "ExampleID0000000000036",
+      "projectId": "ExampleID0000000000077",
+      "serviceStackId": "ExampleID0000000000069",
+      "build": null,
+      "source": "CLI",
+      "sequence": 3,
+      "status": "ACTIVE",
+      "userDataList": [
+        {
+          "key": "EXAMPLE_CP",
+          "content": "no",
+          "type": "USER",
+          "sensitive": false,
+          "internal": false,
+          "editable": false
+        },
+        {
+          "key": "EXAMPLE_OVERRIDE",
+          "content": "yaml-wins",
+          "type": "USER",
+          "sensitive": false,
+          "internal": false,
+          "editable": false
+        },
+        {
+          "key": "EXAMPLE_VOLUME",
+          "content": "/mnt/membervolume",
+          "type": "USER",
+          "sensitive": false,
+          "internal": false,
+          "editable": false
+        }
+      ],
+      "created": "2024-01-05T11:13:29Z",
+      "lastUpdate": "2024-01-05T11:14:41Z",
+      "githubIntegration": null,
+      "gitlabIntegration": null,
+      "createdByUser": {
+        "type": "USER",
+        "id": "ExampleID0000000000064",
+        "email": "test-user@example.com",
+        "firstName": "Example",
+        "fullName": "Example User",
+        "avatar": null
+      },
+      "activationDate": "2024-01-05T11:14:41Z",
+      "publicGitSource": null
+    },
+    "coreService": {
+      "id": "ExampleID0000000000060",
+      "status": "ACTIVE",
+      "name": "core",
+      "serviceStackTypeInfo": {
+        "serviceStackTypeName": "Core",
+        "serviceStackTypeCategory": "CORE",
+        "serviceStackTypeVersionName": "core:single@2"
+      },
+      "serviceStackTypeId": "core",
+      "serviceStackTypeVersionId": "core_v2_single",
+      "base": "core:single@2",
+      "isSystem": true,
+      "startOnProjectStart": true,
+      "githubIntegration": null,
+      "gitlabIntegration": null,
+      "autoscalingProfileId": null,
+      "currentAutoscaling": {
+        "verticalAutoscaling": null,
+        "horizontalAutoscaling": null
+      },
+      "customAutoscaling": {
+        "verticalAutoscaling": null,
+        "horizontalAutoscaling": null
+      },
+      "buildCache": null,
+      "cdnEnabled": false,
+      "nestId": "prg1",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "autoscalingProfileOverrides": null
+  },
+  "env": {
+    "items": [
+      {
+        "id": "ExampleID0000000000007",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "appVersionId",
+        "content": "ExampleID0000000000066",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z"
+      },
+      {
+        "id": "ExampleID0000000000029",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "appVersionName",
+        "content": "example-prebuilt",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z"
+      },
+      {
+        "id": "ExampleID0000000000086",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "hostname",
+        "content": "member",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      },
+      {
+        "id": "ExampleID0000000000068",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "PATH",
+        "content": "/home/zerops/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zerops/bin:/var/www/node_modules/.bin:/usr/local/go/bin:/home/zerops/.cargo/bin",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:59Z"
+      },
+      {
+        "id": "ExampleID0000000000048",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "projectId",
+        "content": "ExampleID0000000000077",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      },
+      {
+        "id": "ExampleID0000000000073",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "serviceId",
+        "content": "ExampleID0000000000069",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      },
+      {
+        "id": "ExampleID0000000000028",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "EXAMPLE_CP",
+        "content": "no",
+        "type": "USER",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:05:59Z"
+      },
+      {
+        "id": "ExampleID0000000000071",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "EXAMPLE_GENERATED",
+        "content": "[REDACTED]",
+        "type": "USER",
+        "sensitive": true,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      },
+      {
+        "id": "ExampleID0000000000025",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "EXAMPLE_OVERRIDE",
+        "content": "yaml-wins",
+        "type": "USER",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:59Z"
+      },
+      {
+        "id": "ExampleID0000000000050",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "EXAMPLE_VALUE",
+        "content": "[REDACTED]",
+        "type": "USER",
+        "sensitive": true,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      },
+      {
+        "id": "ExampleID0000000000022",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "EXAMPLE_VOLUME",
+        "content": "/mnt/membervolume",
+        "type": "USER",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:05:59Z"
+      },
+      {
+        "id": "ExampleID0000000000024",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "zeropsSubdomain",
+        "content": "https://member.example.zerops.app",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:13:31Z"
+      },
+      {
+        "id": "ExampleID0000000000034",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "ZEROPS_DEBUG_BUILD",
+        "content": "NONE",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      },
+      {
+        "id": "ExampleID0000000000031",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "key": "ZEROPS_DEBUG_RUNTIME_PREPARE",
+        "content": "NONE",
+        "type": "SYSTEM",
+        "sensitive": false,
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z"
+      }
+    ]
+  },
+  "error": {
+    "error": {
+      "code": "serviceStackNameInvalid",
+      "message": "Service stack name is invalid.",
+      "meta": [
+        {
+          "error": "Service stack name is invalid.",
+          "code": "serviceStackNameInvalid",
+          "metadata": null
+        }
+      ]
+    }
+  },
+  "autoscaling": {
+    "process": {
+      "id": "ExampleID0000000000082",
+      "clientId": "ExampleID0000000000036",
+      "projectId": "ExampleID0000000000077",
+      "serviceStackId": "ExampleID0000000000045",
+      "project": {
+        "id": "ExampleID0000000000077",
+        "clientId": "ExampleID0000000000036",
+        "name": "example-project",
+        "description": "",
+        "tagList": [],
+        "status": "ACTIVE",
+        "created": "2024-01-05T07:50:07Z",
+        "lastUpdate": "2024-01-05T07:50:37Z",
+        "recipeSource": null,
+        "recipeSourceUrl": null
+      },
+      "serviceStacks": [
+        {
+          "id": "ExampleID0000000000045",
+          "created": "2024-01-05T11:05:58Z",
+          "lastUpdate": "2024-01-05T11:15:38Z",
+          "projectId": "ExampleID0000000000077",
+          "serviceStackTypeId": "ubuntu",
+          "serviceStackTypeVersionId": "ubuntu_v24",
+          "driverId": "runtime",
+          "name": "controlplane",
+          "serviceStackTypeInfo": {
+            "serviceStackTypeName": "Ubuntu",
+            "serviceStackTypeCategory": "USER",
+            "serviceStackTypeVersionName": "ubuntu@24.04"
+          },
+          "ports": [
+            {
+              "protocol": "tcp",
+              "port": 8080,
+              "description": "",
+              "scheme": "http"
+            }
+          ]
+        }
+      ],
+      "status": "PENDING",
+      "sequence": 10,
+      "createdByUser": {
+        "type": "USER",
+        "id": "ExampleID0000000000064",
+        "email": "test-user@example.com",
+        "firstName": "Example",
+        "fullName": "Example User",
+        "avatar": null
+      },
+      "canceledByUser": null,
+      "actionName": "stack.updateAutoscaling",
+      "created": "2024-01-05T11:15:58.768Z",
+      "lastUpdate": "2024-01-05T11:15:58.768Z",
+      "started": null,
+      "finished": null,
+      "createdBySystem": false,
+      "appVersion": null,
+      "publicMeta": null,
+      "error": null
+    }
+  },
+  "deploy": {
+    "id": "ExampleID0000000000039",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000069",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "serviceStacks": [
+      {
+        "id": "ExampleID0000000000069",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:11:05Z",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "driverId": "runtime",
+        "name": "member",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "ports": []
+      }
+    ],
+    "status": "PENDING",
+    "sequence": 4,
+    "createdByUser": {
+      "type": "USER",
+      "id": "ExampleID0000000000064",
+      "email": "test-user@example.com",
+      "firstName": "Example",
+      "fullName": "Example User",
+      "avatar": null
+    },
+    "canceledByUser": null,
+    "actionName": "stack.deploy",
+    "created": "2024-01-05T11:13:31.435Z",
+    "lastUpdate": "2024-01-05T11:13:31.435Z",
+    "started": null,
+    "finished": null,
+    "createdBySystem": false,
+    "appVersion": {
+      "id": "ExampleID0000000000066",
+      "serviceStackId": "ExampleID0000000000069",
+      "projectId": "ExampleID0000000000077",
+      "status": "WAITING_TO_DEPLOY",
+      "source": "CLI",
+      "os": null,
+      "base": "ubuntu@24.04",
+      "sequence": 3,
+      "name": "example-prebuilt",
+      "created": "2024-01-05T11:13:29Z",
+      "build": null,
+      "prepareCustomRuntime": null,
+      "githubIntegration": null,
+      "gitlabIntegration": null,
+      "createdByUser": {
+        "type": "USER",
+        "id": "ExampleID0000000000064",
+        "email": "test-user@example.com",
+        "firstName": "Example",
+        "fullName": "Example User",
+        "avatar": null
+      },
+      "activationDate": null,
+      "publicGitSource": null,
+      "configContent": "build:\n    base: ubuntu@24.04\n    deployFiles: ./\ndeploy:\n    readinessCheck:\n        exec:\n            command: /var/www/sim check\n        failureTimeout: 1m0s\n        retryPeriod: 10s\n    temporaryShutdown: true\nrun:\n    prepareCommands:\n        - sudo apt-get update && sudo apt-get install -y jq\n        - echo revision1 | sudo tee /opt/example-prepare\n    base: ubuntu@24.04\n    start: ./sim\n    volume:\n        hostname: membervolume\n        mountPath: /mnt/membervolume\n        readOnly: false\n    envVariables:\n        EXAMPLE_CP: \"no\"\n        EXAMPLE_OVERRIDE: yaml-wins\n        EXAMPLE_VOLUME: /mnt/membervolume\n",
+      "zeropsYamlJson": "{\n\t\t\"build\": {\n\t\t\t\"base\": [\n\t\t\t\t\"ubuntu@24.04\"\n\t\t\t],\n\t\t\t\"deployFiles\": [\n\t\t\t\t\"./\"\n\t\t\t],\n\t\t\t\"cache\": null\n\t\t},\n\t\t\"deploy\": {\n\t\t\t\"readinessCheck\": {\n\t\t\t\t\"exec\": {\n\t\t\t\t\t\"command\": \"/var/www/sim check\"\n\t\t\t\t},\n\t\t\t\t\"FailureTimeout\": 60000000000,\n\t\t\t\t\"RetryPeriod\": 10000000000\n\t\t\t},\n\t\t\t\"temporaryShutdown\": true\n\t\t},\n\t\t\"run\": {\n\t\t\t\"prepareCommands\": [\n\t\t\t\t\"sudo apt-get update \\u0026\\u0026 sudo apt-get install -y jq\",\n\t\t\t\t\"echo revision1 | sudo tee /opt/example-prepare\"\n\t\t\t],\n\t\t\t\"base\": \"ubuntu@24.04\",\n\t\t\t\"start\": \"./sim\",\n\t\t\t\"volume\": {\n\t\t\t\t\"hostname\": \"membervolume\",\n\t\t\t\t\"mountPath\": \"/mnt/membervolume\",\n\t\t\t\t\"readOnly\": false\n\t\t\t},\n\t\t\t\"envVariables\": {\n\t\t\t\t\"EXAMPLE_CP\": \"no\",\n\t\t\t\t\"EXAMPLE_OVERRIDE\": \"yaml-wins\",\n\t\t\t\t\"EXAMPLE_VOLUME\": \"/mnt/membervolume\"\n\t\t\t}\n\t\t}\n\t}"
+    },
+    "publicMeta": null,
+    "error": null
+  },
+  "upload": {
+    "success": true
+  },
+  "route": {
+    "id": "ExampleID0000000000056",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000069",
+    "publicIpType": "IP_V6",
+    "publicPort": 19443,
+    "internalPort": 9443,
+    "internalProtocol": "tcp",
+    "firewallPolicy": "WHITELIST",
+    "firewallIpRanges": [
+      "2001:db8:1::/64"
+    ],
+    "firewallAllowMyIp": false,
+    "created": "2024-01-05T11:17:32Z",
+    "lastUpdate": "2024-01-05T11:17:32Z",
+    "isSynced": false,
+    "deleteOnSync": false
+  },
+  "deleteRoute": {
+    "deleted": false,
+    "publicPortRouting": {
+      "id": "ExampleID0000000000056",
+      "clientId": "ExampleID0000000000036",
+      "projectId": "ExampleID0000000000077",
+      "serviceStackId": "ExampleID0000000000069",
+      "publicIpType": "IP_V6",
+      "publicPort": 19443,
+      "internalPort": 9443,
+      "internalProtocol": "tcp",
+      "firewallPolicy": "WHITELIST",
+      "firewallIpRanges": [
+        "2001:db8:1::/64"
+      ],
+      "firewallAllowMyIp": false,
+      "created": "2024-01-05T11:17:32Z",
+      "lastUpdate": "2024-01-05T11:20:19Z",
+      "isSynced": false,
+      "deleteOnSync": true
+    }
+  },
+  "createSecret": {
+    "id": "ExampleID0000000000005",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000045",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "serviceStacks": [
+      {
+        "id": "ExampleID0000000000045",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:15:02Z",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "driverId": "runtime",
+        "name": "controlplane",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "ports": [
+          {
+            "protocol": "tcp",
+            "port": 8080,
+            "description": "",
+            "scheme": "http"
+          }
+        ]
+      }
+    ],
+    "status": "PENDING",
+    "sequence": 7,
+    "createdByUser": {
+      "type": "USER",
+      "id": "ExampleID0000000000064",
+      "email": "test-user@example.com",
+      "firstName": "Example",
+      "fullName": "Example User",
+      "avatar": null
+    },
+    "canceledByUser": null,
+    "actionName": "stack.updateUserData",
+    "created": "2024-01-05T11:15:27.121Z",
+    "lastUpdate": "2024-01-05T11:15:27.121Z",
+    "started": null,
+    "finished": null,
+    "createdBySystem": false,
+    "appVersion": null,
+    "publicMeta": null,
+    "error": null
+  },
+  "updateSecret": {
+    "id": "ExampleID0000000000027",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000045",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "serviceStacks": [
+      {
+        "id": "ExampleID0000000000045",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:15:27Z",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "driverId": "runtime",
+        "name": "controlplane",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "ports": [
+          {
+            "protocol": "tcp",
+            "port": 8080,
+            "description": "",
+            "scheme": "http"
+          }
+        ]
+      }
+    ],
+    "status": "PENDING",
+    "sequence": 8,
+    "createdByUser": {
+      "type": "USER",
+      "id": "ExampleID0000000000064",
+      "email": "test-user@example.com",
+      "firstName": "Example",
+      "fullName": "Example User",
+      "avatar": null
+    },
+    "canceledByUser": null,
+    "actionName": "stack.updateUserData",
+    "created": "2024-01-05T11:15:32.627Z",
+    "lastUpdate": "2024-01-05T11:15:32.627Z",
+    "started": null,
+    "finished": null,
+    "createdBySystem": false,
+    "appVersion": null,
+    "publicMeta": null,
+    "error": null
+  },
+  "containers": {
+    "count": 1,
+    "total": 1,
+    "limit": 20,
+    "offset": 0,
+    "list": [
+      {
+        "id": "ExampleID0000000000078",
+        "clientId": "ExampleID0000000000036",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackId": "ExampleID0000000000069",
+        "serviceId": "ExampleID0000000000085",
+        "number": 1,
+        "name": "member-runtime-1-13b",
+        "hostname": "node-id-1.runtime.member.zerops",
+        "status": "ACTIVE",
+        "currentHardwareResource": {
+          "cpuCoreCount": 1,
+          "memoryMBytes": 256,
+          "diskGBytes": 1
+        },
+        "created": "2024-01-05T11:14:11Z",
+        "lastUpdate": "2024-01-05T11:14:11Z"
+      }
+    ]
+  },
+  "failed": {
+    "id": "ExampleID0000000000019",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000045",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "serviceStacks": [
+      {
+        "id": "ExampleID0000000000045",
+        "created": "2024-01-05T11:05:58Z",
+        "lastUpdate": "2024-01-05T11:05:58Z",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "driverId": "runtime",
+        "name": "controlplane",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "ports": []
+      },
+      {
+        "id": "ExampleID0000000000074",
+        "created": "2024-01-05T11:05:59Z",
+        "lastUpdate": "2024-01-05T11:05:59Z",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackTypeId": "build_runtime",
+        "serviceStackTypeVersionId": "ubuntu_build_runtime",
+        "driverId": "runtime",
+        "name": "buildcontrolvolume1704452759",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "build runtime",
+          "serviceStackTypeCategory": "BUILD",
+          "serviceStackTypeVersionName": "ubuntu/build_runtime"
+        },
+        "ports": []
+      }
+    ],
+    "status": "FAILED",
+    "sequence": 2,
+    "createdByUser": {
+      "type": "USER",
+      "id": "ExampleID0000000000064",
+      "email": "test-user@example.com",
+      "firstName": "Example",
+      "fullName": "Example User",
+      "avatar": null
+    },
+    "canceledByUser": null,
+    "actionName": "stack.build",
+    "created": "2024-01-05T11:05:58.164Z",
+    "lastUpdate": "2024-01-05T11:08:11.142Z",
+    "started": "2024-01-05T11:05:58.934Z",
+    "finished": "2024-01-05T11:08:10.791Z",
+    "createdBySystem": false,
+    "appVersion": {
+      "id": "ExampleID0000000000041",
+      "serviceStackId": "ExampleID0000000000045",
+      "projectId": "ExampleID0000000000077",
+      "status": "DEPLOY_FAILED",
+      "source": "GIT",
+      "os": null,
+      "base": null,
+      "sequence": 1,
+      "name": null,
+      "created": "2024-01-05T11:05:58Z",
+      "build": {
+        "serviceStackId": "ExampleID0000000000074",
+        "serviceStackName": "buildcontrolvolume1704452759",
+        "serviceStackTypeVersionId": "ubuntu_build_runtime",
+        "serviceStackTypeVersionName": null,
+        "pipelineStart": "2024-01-05T11:05:59.555884044Z",
+        "pipelineFinish": null,
+        "pipelineFailed": "2024-01-05T11:08:10.751158325Z",
+        "ExampleID0000000000059": "2024-01-05T11:06:02.33039894Z",
+        "startDate": "2024-01-05T11:06:10.006278639Z",
+        "endDate": "2024-01-05T11:06:10.195091592Z",
+        "cacheSnapshotId": null
+      },
+      "prepareCustomRuntime": {
+        "ExampleID0000000000059": "2024-01-05T11:06:19.455176201Z",
+        "startDate": "2024-01-05T11:06:35.925461474Z",
+        "endDate": "2024-01-05T11:06:49.78387949Z",
+        "serviceStackId": "ExampleID0000000000011",
+        "serviceStackName": "preparecontrolvolume11704452778",
+        "reason": "No prepare runtime image cache available."
+      },
+      "githubIntegration": null,
+      "gitlabIntegration": null,
+      "createdByUser": {
+        "type": "USER",
+        "id": "ExampleID0000000000064",
+        "email": "test-user@example.com",
+        "firstName": "Example",
+        "fullName": "Example User",
+        "avatar": null
+      },
+      "activationDate": null,
+      "publicGitSource": null,
+      "configContent": null,
+      "zeropsYamlJson": null
+    },
+    "publicMeta": null,
+    "error": {
+      "code": "containerAction",
+      "message": "command exec failed with code: 127, err: [commandExec] exit status 127",
+      "meta": [
+        {
+          "error": "command exec failed with code: 127, err: [commandExec] exit status 127",
+          "code": "containerAction",
+          "metadata": {
+            "containerId": [
+              "ExampleID0000000000063"
+            ],
+            "containerName": [
+              "controlplane-runtime-1-13b"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "finished": {
+    "id": "ExampleID0000000000042",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000016",
+    "project": {
+      "id": "ExampleID0000000000077",
+      "clientId": "ExampleID0000000000036",
+      "name": "example-project",
+      "description": "",
+      "tagList": [],
+      "status": "ACTIVE",
+      "created": "2024-01-05T07:50:07Z",
+      "lastUpdate": "2024-01-05T07:50:37Z",
+      "recipeSource": null,
+      "recipeSourceUrl": null
+    },
+    "serviceStacks": [
+      {
+        "id": "ExampleID0000000000016",
+        "created": "2024-01-05T08:46:16Z",
+        "lastUpdate": "2024-01-05T08:48:24Z",
+        "projectId": "ExampleID0000000000077",
+        "serviceStackTypeId": "ubuntu",
+        "serviceStackTypeVersionId": "ubuntu_v24",
+        "driverId": "runtime",
+        "name": "mongodb",
+        "serviceStackTypeInfo": {
+          "serviceStackTypeName": "Ubuntu",
+          "serviceStackTypeCategory": "USER",
+          "serviceStackTypeVersionName": "ubuntu@24.04"
+        },
+        "ports": [
+          {
+            "protocol": "tcp",
+            "port": 27017,
+            "description": "",
+            "scheme": "tcp"
+          }
+        ]
+      }
+    ],
+    "status": "FINISHED",
+    "sequence": 3,
+    "createdByUser": {
+      "type": "USER",
+      "id": "ExampleID0000000000064",
+      "email": "test-user@example.com",
+      "firstName": "Example",
+      "fullName": "Example User",
+      "avatar": null
+    },
+    "canceledByUser": null,
+    "actionName": "stack.delete",
+    "created": "2024-01-05T11:03:57.925Z",
+    "lastUpdate": "2024-01-05T11:04:08.087Z",
+    "started": "2024-01-05T11:03:57.949Z",
+    "finished": "2024-01-05T11:04:08.069Z",
+    "createdBySystem": false,
+    "appVersion": null,
+    "publicMeta": null,
+    "error": null
+  },
+  "appVersion": {
+    "id": "ExampleID0000000000084",
+    "clientId": "ExampleID0000000000036",
+    "projectId": "ExampleID0000000000077",
+    "serviceStackId": "ExampleID0000000000069",
+    "build": null,
+    "sequence": 2,
+    "status": "UPLOADING",
+    "userDataList": [],
+    "created": "2024-01-05T11:09:09Z",
+    "lastUpdate": "2024-01-05T11:09:09Z",
+    "uploadUrl": "[REDACTED]"
+  }
+}

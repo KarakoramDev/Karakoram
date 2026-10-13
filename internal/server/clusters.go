@@ -1,0 +1,453 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package server
+
+import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"errors"
+	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
+	"github.com/KarakoramDev/Karakoram/internal/store"
+	"strconv"
+)
+
+func mergePatch(target, patch any) any {
+	p, yes := patch.(map[string]any)
+	if !yes {
+		return patch
+	}
+	t, yes := target.(map[string]any)
+	if !yes {
+		t = map[string]any{}
+	}
+	for k, v := range p {
+		if v == nil {
+			delete(t, k)
+		} else {
+			t[k] = mergePatch(t[k], v)
+		}
+	}
+	return t
+}
+func tlsValues(t *api.TLS) (map[string][]byte, error) {
+	if t == nil {
+		return nil, nil
+	}
+	var values map[string][]byte
+	for _, v := range []struct {
+		key   string
+		value *string
+	}{{"tls/ca.crt", t.CaCertificate}, {"tls/ca.key", t.CaPrivateKey}, {"tls/user.crt", t.Certificate}, {"tls/user.key", t.PrivateKey}} {
+		if v.value != nil {
+			if values == nil {
+				values = make(map[string][]byte, 4)
+			}
+			values[v.key] = []byte(*v.value)
+		}
+	}
+	if t.CaCertificate != nil || t.CaPrivateKey != nil {
+		if t.CaCertificate == nil || t.CaPrivateKey == nil {
+			return nil, engine.ErrInvalid
+		}
+		if _, err := pki.LoadCA(values["tls/ca.crt"], values["tls/ca.key"]); err != nil {
+			return nil, engine.ErrInvalid
+		}
+	}
+	if t.Certificate != nil || t.PrivateKey != nil {
+		if t.Certificate == nil || t.PrivateKey == nil {
+			return nil, engine.ErrInvalid
+		}
+		if _, err := tls.X509KeyPair(values["tls/user.crt"], values["tls/user.key"]); err != nil {
+			return nil, engine.ErrInvalid
+		}
+	}
+	return values, nil
+}
+func (s *Server) enqueue(ctx context.Context, cluster, kind string, payload any) response {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return s.failure(err)
+	}
+	actor := ""
+	if p := principal(ctx); p != nil {
+		actor = p.Account
+	}
+	op := domain.Operation{Cluster: cluster, Kind: kind, Payload: data, Actor: actor}
+	if err = s.Store.EnqueueOperation(ctx, &op); err != nil {
+		return s.failure(err)
+	}
+	s.trigger(cluster)
+	return response{status: 202, body: operationAPI(op)}
+}
+func (s *Server) cluster(ctx context.Context, name string, in input) response {
+	switch name {
+	case "ListProviders":
+		out := []api.Provider{}
+		for _, d := range s.Registry.List() {
+			p, err := s.Registry.Get(d.Name)
+			if err != nil {
+				return s.failure(err)
+			}
+			out = append(out, providerAPI(p))
+		}
+		return ok(page[api.Provider]{Items: out})
+	case "GetProvider":
+		p, err := s.Registry.Get(in.Provider)
+		if err != nil {
+			return fail(404, "not_found", "Provider not found")
+		}
+		return ok(providerAPI(p))
+	case "ListClusters":
+		items, err := s.Store.ListClusters(ctx)
+		out := make([]api.Cluster, 0, len(items))
+		for _, c := range items {
+			if s.allowed(ctx, "clusters", "read", c.Name) {
+				out = append(out, s.clusterAPI(c))
+			}
+		}
+		return listResponse(s, ctx, out, err)
+	case "CreateCluster":
+		b := in.Body.(*api.CreateClusterRequest)
+		if _, err := s.Store.GetCluster(ctx, b.Name); err == nil {
+			return fail(409, "conflict", "Cluster already exists")
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return s.failure(err)
+		}
+		c := domain.Cluster{Name: b.Name, Spec: specDomain(b.Spec)}
+		if c.Spec.DataSource != nil && !s.allowed(ctx, "backups", "read", c.Spec.DataSource.Cluster) {
+			return fail(403, "forbidden", "Permission denied")
+		}
+		if d := c.Spec.DataSource; d != nil && d.Backup != "" {
+			if failure := s.retainedRestoreSource(ctx, d.Cluster, d.Backup); failure != nil {
+				return *failure
+			}
+		}
+		p, err := s.Registry.Get(c.Spec.Provider)
+		if err != nil {
+			return invalid()
+		}
+		p.ApplyDefaults(&c.Spec)
+		if err = p.Validate(ctx, nil, &c); err != nil {
+			return s.failure(err)
+		}
+		values, err := tlsValues(b.Spec.Tls)
+		if err != nil {
+			return s.failure(err)
+		}
+		if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return response{status: 201, body: s.clusterAPI(c)}
+	}
+	if name == "ListBackups" || name == "GetBackup" || name == "DeleteBackup" {
+		if _, err := s.Store.GetCluster(ctx, in.Cluster); errors.Is(err, store.ErrNotFound) {
+			return s.retainedBackup(ctx, name, in)
+		} else if err != nil {
+			return s.failure(err)
+		}
+	}
+	rc, p, err := s.context(ctx, in.Cluster)
+	if err != nil {
+		return s.failure(err)
+	}
+	c := rc.Cluster
+	switch name {
+	case "GetCluster":
+		return ok(s.clusterAPI(*c))
+	case "GetClusterStatus":
+		return ok(s.statusAPI(c.Name, c.Status))
+	case "ReplaceCluster", "PatchCluster":
+		var spec api.ClusterSpec
+		if name == "ReplaceCluster" {
+			spec = in.Body.(*api.ReplaceClusterRequest).Spec
+		} else {
+			patch := map[string]any(*in.Body.(*api.ClusterMergePatch))
+			if len(patch) != 1 {
+				return invalid()
+			}
+			v, exists := patch["spec"]
+			if !exists || v == nil {
+				return invalid()
+			}
+			if _, yes := v.(map[string]any); !yes {
+				return invalid()
+			}
+			data, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+			if err != nil {
+				return s.failure(err)
+			}
+			var target any
+			if err = json.Unmarshal(data, &target); err != nil {
+				return s.failure(err)
+			}
+			merged := mergePatch(target, patch)
+			data, err = json.Marshal(merged)
+			if err != nil {
+				return invalid()
+			}
+			var envelope api.ReplaceClusterRequest
+			if err = json.Unmarshal(data, &envelope); err != nil {
+				return invalid()
+			}
+			spec = envelope.Spec
+		}
+		next := *c
+		next.Spec = specDomain(spec)
+		p.ApplyDefaults(&next.Spec)
+		if err = p.Validate(ctx, c, &next); err != nil {
+			return s.failure(err)
+		}
+		values, err := tlsValues(spec.Tls)
+		if err != nil {
+			return s.failure(err)
+		}
+		// Existing clusters retain their active trust root. Leaf rotation does not
+		// implement a CA trust-overlap rollout, so CA replacement must fail closed.
+		for _, key := range []string{"tls/ca.crt", "tls/ca.key"} {
+			if proposed, supplied := values[key]; supplied {
+				active, readErr := s.Store.GetClusterSecret(ctx, c.Name, key)
+				if readErr != nil && !errors.Is(readErr, store.ErrNotFound) {
+					return s.failure(readErr)
+				}
+				if readErr != nil || !bytes.Equal(active, proposed) {
+					return fail(409, "conflict", "Existing cluster CA changes require a coordinated CA rotation flow")
+				}
+			}
+		}
+		if err = s.Store.UpdateClusterSpecWithSecrets(ctx, c.Name, next.Spec, values); err != nil {
+			return s.failure(err)
+		}
+		updated, err := s.Store.GetCluster(ctx, c.Name)
+		if err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return ok(s.clusterAPI(*updated))
+	case "DeleteCluster":
+		q := request(ctx).URL.Query()
+		opts := domain.DeleteOptions{KeepVolumes: q.Get("keepVolumes") == "true", KeepBackups: q.Get("keepBackups") == "true"}
+		if err = s.Store.MarkClusterDeleting(ctx, c.Name, opts); err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return response{status: 202}
+	case "ResumeCluster":
+		if err = s.Store.ResumeCluster(ctx, c.Name); err != nil {
+			return s.failure(err)
+		}
+		updated, err := s.Store.GetCluster(ctx, c.Name)
+		if err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return response{status: 202, body: s.clusterAPI(*updated)}
+	case "RestartCluster":
+		return s.enqueue(ctx, c.Name, "restart", map[string]string{})
+	case "RotateClusterTLS":
+		return s.enqueue(ctx, c.Name, "rotate-tls", map[string]string{})
+	case "RaiseClusterFCV":
+		b := in.Body.(*api.RaiseFCVRequest)
+		if b.Version == "" {
+			return invalid()
+		}
+		return s.enqueue(ctx, c.Name, "raise-fcv", map[string]string{"version": b.Version})
+	case "ReplaceClusterMember":
+		found := false
+		for _, m := range c.Status.Members {
+			if m.Name == in.Member {
+				found = true
+			}
+		}
+		if !found {
+			return fail(404, "not_found", "Member not found")
+		}
+		return s.enqueue(ctx, c.Name, "replace-member", map[string]string{"member": in.Member})
+	case "RotateSystemUser":
+		return s.enqueue(ctx, c.Name, "rotate-system-user", map[string]string{"user": in.User})
+	case "ListClusterMembers":
+		out := make([]api.Member, 0, len(c.Status.Members))
+		for _, m := range c.Status.Members {
+			out = append(out, s.memberAPI(c.Name, m))
+		}
+		return ok(page[api.Member]{Items: out})
+	case "GetClusterMember":
+		for _, m := range c.Status.Members {
+			if m.Name == in.Member {
+				return ok(s.memberAPI(c.Name, m))
+			}
+		}
+		return fail(404, "not_found", "Member not found")
+	case "ListClusterOperations":
+		items, err := s.Store.ListOperations(ctx, c.Name)
+		out := make([]api.Operation, 0, len(items))
+		for _, o := range items {
+			if phase := request(ctx).URL.Query().Get("phase"); phase == "" || phase == string(o.Phase) {
+				out = append(out, operationAPI(o))
+			}
+		}
+		return listResponse(s, ctx, out, err)
+	case "ListBackups":
+		items, err := s.Store.ListBackups(ctx, c.Name)
+		out := make([]api.Backup, 0, len(items))
+		for _, b := range items {
+			out = append(out, backupAPI(b))
+		}
+		return listResponse(s, ctx, out, err)
+	case "GetBackup":
+		b, err := s.Store.GetBackup(ctx, c.Name, in.Backup)
+		if err != nil {
+			return s.failure(err)
+		}
+		return ok(backupAPI(*b))
+	case "CreateBackup":
+		b := in.Body.(*api.CreateBackupRequest)
+		if b.Name == "" || (b.Type != "logical" && b.Type != "physical") {
+			return invalid()
+		}
+		if _, err = s.Store.GetBackupStorage(ctx, b.Storage); err != nil {
+			return s.failure(err)
+		}
+		v := domain.Backup{Name: b.Name, Cluster: c.Name, Storage: b.Storage, Type: string(b.Type), Trigger: "manual", Phase: domain.PhasePending}
+		op := domain.Operation{Cluster: c.Name, Kind: "backup", Actor: principal(ctx).Account, Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		if err = s.Store.EnqueueBackup(ctx, &v, &op); err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return response{status: 202, body: backupAPI(v)}
+	case "DeleteBackup":
+		b, err := s.Store.GetBackup(ctx, c.Name, in.Backup)
+		if err != nil {
+			return s.failure(err)
+		}
+		op := domain.Operation{Cluster: c.Name, Kind: "delete-backup", Actor: principal(ctx).Account, Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		if err = s.Store.EnqueueBackupDeletion(ctx, b, &op); err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return response{status: 202, body: operationAPI(op)}
+	case "ListRestores":
+		items, err := s.Store.ListRestores(ctx, c.Name)
+		out := make([]api.Restore, 0, len(items))
+		for _, r := range items {
+			out = append(out, restoreAPI(r))
+		}
+		return listResponse(s, ctx, out, err)
+	case "GetRestore":
+		r, err := s.Store.GetRestore(ctx, c.Name, in.Restore)
+		if err != nil {
+			return s.failure(err)
+		}
+		return ok(restoreAPI(*r))
+	case "CreateRestore":
+		b := in.Body.(*api.CreateRestoreRequest)
+		source := b.Source.SourceCluster
+		if source == "" {
+			source = c.Name
+		}
+		if !s.allowed(ctx, "backups", "read", source) {
+			return fail(403, "forbidden", "Permission denied")
+		}
+		if b.Name == "" || (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
+			return invalid()
+		}
+		if b.Source.Backup != nil {
+			if failure := s.retainedRestoreSource(ctx, source, *b.Source.Backup); failure != nil {
+				return *failure
+			}
+			if _, err = s.Store.GetBackup(ctx, source, *b.Source.Backup); err != nil {
+				return s.failure(err)
+			}
+		}
+		r := domain.Restore{Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: b.Source.SourceCluster}, Phase: domain.PhasePending}
+		op := domain.Operation{Cluster: c.Name, Kind: "restore", Actor: principal(ctx).Account, Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
+		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
+			return s.failure(err)
+		}
+		s.trigger(c.Name)
+		return response{status: 202, body: restoreAPI(r)}
+	}
+	dp, yes := p.(engine.DataPlane)
+	if !yes {
+		return s.failure(engine.ErrNotSupported)
+	}
+	switch name {
+	case "GetClusterConnection":
+		v, err := dp.Connection(ctx, rc)
+		if err != nil {
+			return s.failure(err)
+		}
+		a := api.Connection{Connection: connectionAPI(v.Connection), CaCertificate: &v.CACertificate, Credentials: []api.ConnectionCredential{}}
+		for _, cr := range v.Credentials {
+			a.Credentials = append(a.Credentials, api.ConnectionCredential{Username: cr.Username, Database: cr.Database, Password: ptr(cr.Password), Uri: ptr(cr.URI)})
+		}
+		return response{status: 200, body: a, noStore: true}
+	case "GetClusterBalancer":
+		b, err := dp.Balancer(ctx, rc)
+		if err != nil {
+			return s.failure(err)
+		}
+		return ok(api.Balancer{Enabled: b.Enabled, Running: &b.Running, Mode: &b.Mode})
+	case "ReplaceClusterBalancer":
+		b := in.Body.(*api.Balancer)
+		if err = dp.SetBalancer(ctx, rc, b.Enabled); err != nil {
+			return s.failure(err)
+		}
+		v, err := dp.Balancer(ctx, rc)
+		if err != nil {
+			return s.failure(err)
+		}
+		return ok(api.Balancer{Enabled: v.Enabled, Running: &v.Running, Mode: &v.Mode})
+	case "GetPITRWindow":
+		windows, err := dp.PITRWindow(ctx, rc)
+		if err != nil {
+			return s.failure(err)
+		}
+		if len(windows) == 0 {
+			return ok(api.PITRWindow{Available: false})
+		}
+		latest := windows[0]
+		for _, w := range windows[1:] {
+			if w.End.After(latest.End) {
+				latest = w
+			}
+		}
+		return ok(api.PITRWindow{Available: true, Start: &latest.Start, End: &latest.End})
+	case "GetClusterPlacement":
+		v, err := dp.Placement(ctx, rc)
+		if err != nil {
+			return s.failure(err)
+		}
+		return ok(placementAPI(v))
+	case "GetMemberLogs":
+		q := request(ctx).URL.Query()
+		lines := 100
+		if v := q.Get("lines"); v != "" {
+			lines, err = strconv.Atoi(v)
+			if err != nil || lines < 1 || lines > 10000 {
+				return invalid()
+			}
+		}
+		proc := q.Get("process")
+		if proc == "" {
+			proc = "mongod"
+		}
+		logs, err := dp.MemberLogs(ctx, rc, in.Member, proc, lines)
+		if err != nil {
+			return s.failure(err)
+		}
+		a := api.MemberLogs{Member: in.Member, Lines: []api.LogLine{}}
+		for _, l := range logs {
+			a.Lines = append(a.Lines, api.LogLine{Timestamp: l.Timestamp, Process: l.Process, Message: l.Message})
+		}
+		return response{status: 200, body: a, noStore: true}
+	default:
+		return s.database(ctx, name, in, rc, dp)
+	}
+}

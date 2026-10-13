@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package server
+
+import (
+	"context"
+	"errors"
+
+	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/store"
+)
+
+// Existing backup endpoints retain their cluster-name RBAC object even after
+// cluster deletion. All other cluster endpoints still require a live resource.
+func (s *Server) retainedBackup(ctx context.Context, name string, in input) response {
+	if name == "ListBackups" {
+		items, err := s.Store.ListBackups(ctx, in.Cluster)
+		if err != nil {
+			return s.failure(err)
+		}
+		if len(items) == 0 {
+			return fail(404, "not_found", "Cluster has no retained backups")
+		}
+		out := make([]api.Backup, 0, len(items))
+		for _, b := range items {
+			out = append(out, backupAPI(b))
+		}
+		return listResponse(s, ctx, out, nil)
+	}
+	b, err := s.Store.GetBackup(ctx, in.Cluster, in.Backup)
+	if errors.Is(err, store.ErrNotFound) && name == "DeleteBackup" {
+		return response{status: 204}
+	}
+	if err != nil {
+		return s.failure(err)
+	}
+	if name == "GetBackup" {
+		return ok(backupAPI(*b))
+	}
+	storage, err := s.Store.GetBackupStorage(ctx, b.Storage)
+	if err != nil {
+		return s.failure(err)
+	}
+	if _, _, err := backupstorage.SnapshotKeys(*storage, *b); err != nil {
+		return fail(409, "conflict", "Retained backup lacks a safe recorded snapshot namespace; preserve its record and repair its storage/provenance before deletion")
+	}
+	if err := s.Store.MarkRetainedBackupDeleting(ctx, b); err != nil {
+		return s.failure(err)
+	}
+	if err := backupstorage.DeleteSnapshot(ctx, *storage, *b); err != nil {
+		// Keep Deleting inventory and recovery credentials for a retry after
+		// cancellation, partial S3 failure, or a control-plane restart.
+		return s.failure(err)
+	}
+	if b.RecoveryIdentity != "" {
+		if err := s.Context.Secrets.DeleteClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin"); err != nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, engine.ErrNotFound) {
+			return s.failure(err)
+		}
+	}
+	if err := s.Store.DeleteBackup(ctx, b.Cluster, b.Name); err != nil && !errors.Is(err, store.ErrNotFound) {
+		return s.failure(err)
+	}
+	return response{status: 204}
+}
+
+// Reject legacy/unrecoverable retained snapshots before provisioning a clone
+// or enqueueing destructive restore work. Modern records are self-contained:
+// physical recovery uses a separately protected snapshot userAdmin identity.
+func (s *Server) retainedRestoreSource(ctx context.Context, cluster, backup string) *response {
+	_, err := s.Store.GetCluster(ctx, cluster)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		r := s.failure(err)
+		return &r
+	}
+	b, err := s.Store.GetBackup(ctx, cluster, backup)
+	if err != nil {
+		r := s.failure(err)
+		return &r
+	}
+	message := ""
+	if b.Phase != domain.PhaseSucceeded {
+		message = "Retained backup must be succeeded and not deleting"
+	} else if b.PBMPrefix == "" || b.PBMName == "" || b.SourceTopology.Type == "" || b.SourceVersion == "" {
+		message = "Retained backup lacks snapshot/topology/version provenance and its source cluster no longer exists"
+	} else if b.Type == "physical" {
+		if b.RecoveryIdentity == "" {
+			message = "Retained physical backup has no protected recovery identity and its source credentials no longer exist"
+		} else {
+			pw, err := s.Context.Secrets.GetClusterSecret(ctx, b.RecoveryIdentity, "users/userAdmin")
+			if errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound) || (err == nil && len(pw) == 0) {
+				message = "Retained physical backup's protected recovery credential is unavailable"
+			} else if err != nil {
+				r := s.failure(err)
+				return &r
+			}
+		}
+	}
+	if message != "" {
+		r := fail(409, "conflict", message)
+		return &r
+	}
+	return nil
+}

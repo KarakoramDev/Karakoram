@@ -1,0 +1,301 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package server
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/store"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func (s *Server) eventAllowed(ctx context.Context, e domain.Event) bool {
+	obj := e.Cluster
+	if obj == "" {
+		obj = "*"
+	}
+	q := request(ctx).URL.Query()
+	return s.allowed(ctx, "events", "read", obj) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation)
+}
+func (s *Server) observability(ctx context.Context, name string, in input) response {
+	q := request(ctx).URL.Query()
+	switch name {
+	case "ListOperations":
+		scope := q.Get("cluster")
+		if scope == "" {
+			scope = "*"
+		}
+		items, err := s.Store.ListOperations(ctx, scope)
+		out := make([]api.Operation, 0, len(items))
+		for _, o := range items {
+			if s.allowed(ctx, "operations", "read", o.Cluster) && (q.Get("phase") == "" || q.Get("phase") == string(o.Phase)) {
+				out = append(out, operationAPI(o))
+			}
+		}
+		return listResponse(s, ctx, out, err)
+	case "GetOperation":
+		o, err := s.Store.GetOperation(ctx, in.Operation)
+		if err != nil {
+			return s.failure(err)
+		}
+		if !s.allowed(ctx, "operations", "read", o.Cluster) {
+			return fail(403, "forbidden", "Permission denied")
+		}
+		return ok(operationAPI(*o))
+	case "ListEvents":
+		limit := 100
+		if raw := q.Get("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 || n > 500 {
+				return invalid()
+			}
+			limit = n
+		}
+		since, err := eventCursor(q.Get("cursor"))
+		if err != nil {
+			return invalid()
+		}
+		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
+		for {
+			items, err := s.Store.ListEvents(ctx, store.EventFilter{Cluster: q.Get("cluster"), Type: q.Get("type"), Limit: 1000, SinceID: since})
+			if err != nil {
+				return s.failure(err)
+			}
+			for _, e := range items {
+				since = e.ID
+				if !s.eventAllowed(ctx, e) {
+					continue
+				}
+				if len(out.Items) == limit {
+					cursor := base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(out.Items[len(out.Items)-1].Id, 10)))
+					out.NextCursor = &cursor
+					return ok(out)
+				}
+				out.Items = append(out.Items, eventAPI(e))
+			}
+			if len(items) < 1000 {
+				return ok(out)
+			}
+		}
+	case "StreamEvents":
+		return s.stream(ctx)
+	case "GetPrometheusMetrics":
+		if s.Monitoring == nil {
+			return fail(503, "unavailable", "Monitoring unavailable")
+		}
+		return response{noStore: true, serve: func(w http.ResponseWriter) error {
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+			return s.Monitoring.WritePrometheus(ctx, w, func(cluster string) bool { return s.allowed(ctx, "monitoring", "read", cluster) })
+		}}
+	case "GetClusterMetrics":
+		if !s.allowed(ctx, "monitoring", "read", in.Cluster) {
+			return fail(403, "forbidden", "Permission denied")
+		}
+		if _, err := s.Store.GetCluster(ctx, in.Cluster); err != nil {
+			return s.failure(err)
+		}
+		if s.Monitoring == nil {
+			return fail(503, "unavailable", "Monitoring unavailable")
+		}
+		lookback := time.Hour
+		step := 30 * time.Second
+		var err error
+		if v := q.Get("range"); v != "" {
+			lookback, err = time.ParseDuration(v)
+			if err != nil || lookback <= 0 || lookback > 24*time.Hour {
+				return invalid()
+			}
+		}
+		if v := q.Get("step"); v != "" {
+			step, err = time.ParseDuration(v)
+			if err != nil || step <= 0 || step > lookback {
+				return invalid()
+			}
+		}
+		end := time.Now().UTC()
+		start := end.Add(-lookback)
+		metrics := []string{}
+		if v := q.Get("metric"); v != "" {
+			metrics = strings.Split(v, ",")
+		}
+		series, err := s.Monitoring.Series(ctx, in.Cluster, metrics, start, end, step)
+		if err != nil {
+			return s.failure(err)
+		}
+		a := api.ClusterMetrics{Start: start, End: end, Step: step.String(), Series: []api.MetricSeries{}}
+		for _, v := range series {
+			m := api.MetricSeries{Name: v.Name, Member: v.Member, Unit: v.Unit, Labels: &v.Labels, Points: make([]api.MetricPoint, 0, len(v.Points))}
+			for _, p := range v.Points {
+				m.Points = append(m.Points, api.MetricPoint{Timestamp: p.Timestamp, Value: float32(p.Value)})
+			}
+			a.Series = append(a.Series, m)
+		}
+		return ok(a)
+	}
+	return fail(500, "internal_error", "Unknown observability operation")
+}
+func eventCursor(cursor string) (int64, error) {
+	if cursor == "" {
+		return 0, nil
+	}
+	n, err := strconv.ParseInt(cursor, 10, 64)
+	if err != nil {
+		raw, decodeErr := base64.RawURLEncoding.DecodeString(cursor)
+		if decodeErr != nil {
+			return 0, decodeErr
+		}
+		n, err = strconv.ParseInt(string(raw), 10, 64)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("negative event cursor")
+	}
+	return n, err
+}
+
+// A large, incompressible comment encourages public proxies to flush even before
+// the first event. Generated once, it carries no ID or durable replay cursor.
+var sseConnectedComment = paddedSSEComment("connected")
+
+// Cycling three distinct comments exceeds gzip's 32 KiB history without allocating
+// fresh padding on every heartbeat. Padding never advances the event cursor.
+var sseHeartbeatComments = [3]string{
+	paddedSSEComment("heartbeat"),
+	paddedSSEComment("heartbeat"),
+	paddedSSEComment("heartbeat"),
+}
+
+func paddedSSEComment(name string) string {
+	var padding [12 << 10]byte
+	if _, err := rand.Read(padding[:]); err != nil {
+		panic("generate SSE transport padding: " + err.Error())
+	}
+	return ": " + name + " " + base64.StdEncoding.EncodeToString(padding[:]) + "\n\n"
+}
+
+func (s *Server) stream(ctx context.Context) response {
+	q := request(ctx).URL.Query()
+	cursor := q.Get("cursor")
+	if cursor == "" {
+		cursor = request(ctx).Header.Get("Last-Event-ID")
+	}
+	since, err := eventCursor(cursor)
+	if err != nil {
+		return invalid()
+	}
+	if c := q.Get("cluster"); c != "" && !s.allowed(ctx, "events", "read", c) {
+		return fail(403, "forbidden", "Permission denied")
+	}
+	return response{noStore: true, serve: func(w http.ResponseWriter) error {
+		ch, cancel := s.Hub.Subscribe(q.Get("cluster"))
+		defer cancel()
+		controller := http.NewResponseController(w)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("X-Accel-Buffering", "no")
+		w.Header().Set("Cache-Control", "no-cache, no-transform")
+		if _, err := fmt.Fprint(w, sseConnectedComment); err != nil {
+			return err
+		}
+		if err := controller.Flush(); err != nil {
+			return err
+		}
+		revalidate := func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			p, err := s.Auth.Authenticate(request(ctx))
+			if err != nil {
+				if canceled := ctx.Err(); canceled != nil {
+					return canceled
+				}
+				return err
+			}
+			if p.MustChangePassword {
+				return auth.ErrPasswordChangeRequired
+			}
+			ctx = context.WithValue(ctx, identityKey{}, p)
+			return nil
+		}
+		send := func(e domain.Event) error {
+			if err := revalidate(); err != nil {
+				return err
+			}
+			if e.ID <= since {
+				return nil
+			}
+			since = e.ID
+			if !s.eventAllowed(ctx, e) {
+				return nil
+			}
+			data, err := json.Marshal(eventAPI(e))
+			if err != nil {
+				return err
+			}
+			typ := strings.NewReplacer("\n", "", "\r", "").Replace(e.Type)
+			if _, err = fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", e.ID, typ, data); err != nil {
+				return err
+			}
+			return controller.Flush()
+		}
+		// Hub notifications are only wakeups: durable IDs, not publication order,
+		// define the cursor. Heartbeats also drain events dropped by a full hub.
+		drain := func() error {
+			if err := revalidate(); err != nil {
+				return err
+			}
+			for {
+				items, err := s.Store.ListEvents(ctx, store.EventFilter{SinceID: since, Limit: 1000})
+				if err != nil {
+					return err
+				}
+				for _, e := range items {
+					if err = send(e); err != nil {
+						return err
+					}
+				}
+				if len(items) < 1000 {
+					return nil
+				}
+			}
+		}
+		if err := drain(); err != nil {
+			return err
+		}
+		tick := time.NewTicker(15 * time.Second)
+		defer tick.Stop()
+		heartbeat := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case _, open := <-ch:
+				if !open {
+					return nil
+				}
+				if err := drain(); err != nil {
+					return err
+				}
+			case <-tick.C:
+				if err := drain(); err != nil {
+					return err
+				}
+				if _, err := fmt.Fprint(w, sseHeartbeatComments[heartbeat]); err != nil {
+					return err
+				}
+				heartbeat = (heartbeat + 1) % len(sseHeartbeatComments)
+				if err := controller.Flush(); err != nil {
+					return err
+				}
+			}
+		}
+	}}
+}

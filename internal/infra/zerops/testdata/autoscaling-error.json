@@ -1,0 +1,1 @@
+{"error":{"code":"invalidCustomAutoscalingValue","message":"Invalid custom autoscaling value.","meta":[{"error":"Invalid custom autoscaling value.","code":"invalidCustomAutoscalingValue","metadata":{"minFreeResource.memoryGBytes":["Value must have no more than 3 decimal places"]}}]}}

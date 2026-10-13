@@ -1,0 +1,25 @@
+Karakoram
+Copyright 2026 The Karakoram Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Thank you to Percona for Percona Server for MongoDB and Percona Backup for
+MongoDB, installed from its official repositories at https://repo.percona.com/.
+The database engine, replication, backups and point-in-time recovery come from
+Percona's open-source work.
+
+OpenEverest (https://openeverest.io), an Apache-2.0 CNCF Sandbox project
+originally known as Percona Everest, inspired Karakoram's self-hosted,
+provider-based database orchestration: Provider/Instance concepts, version
+bundles, topology schemas, backup storages, PITR/restore flows and RBAC.
+Karakoram brings that model to Zerops instead of Kubernetes as an independent
+implementation; no OpenEverest code or UI is copied into this repository.
+
+The name is an homage: Everest is the highest peak, while Karakoram is the range
+that holds K2 and other giants—a nod to OpenEverest and to growing beyond a
+single peak, with room for future engines and backends.
+
+Percona Server for MongoDB and Percona Backup for MongoDB are Percona products
+and trademarks; OpenEverest, MongoDB and Zerops names and marks belong to their
+respective owners, and Karakoram is independent and is not affiliated with or
+endorsed by any of them.

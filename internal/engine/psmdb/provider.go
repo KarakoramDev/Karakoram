@@ -1,0 +1,384 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+// Package psmdb reconciles Percona Server for MongoDB on singleton Zerops services.
+package psmdb
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"math"
+	"net/netip"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/robfig/cron/v3"
+)
+
+// Options configures the provider's control-plane endpoint and validation lookups.
+type Options struct {
+	ControlPlaneURL string
+	InternalCAPEM   string
+	Logger          *slog.Logger
+	Store           engine.ClusterStore
+}
+
+// Provider owns the PSMDB reconciliation and data-plane implementations.
+type Provider struct {
+	options          Options
+	portMu           sync.Mutex
+	portReservations map[int]string
+}
+
+// New constructs a PSMDB provider.
+func New(o Options) *Provider {
+	if o.Logger == nil {
+		o.Logger = slog.Default()
+	}
+	if o.ControlPlaneURL == "" {
+		o.ControlPlaneURL = "https://karakoram:9443"
+	}
+	return &Provider{options: o, portReservations: make(map[int]string)}
+}
+
+// Name returns the stable engine identifier.
+func (*Provider) Name() string { return "psmdb" }
+
+var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}$`)
+
+// Catalog pins noble packages published by repo.percona.com.
+// 8.3 is deliberately excluded: repository presence alone does not establish a supported major-upgrade path.
+var catalog = []domain.VersionInfo{{Version: "6.0.29-23", Major: "6.0", Status: "deprecated"}, {Version: "7.0.40-22", Major: "7.0", Status: "supported"}, {Version: "7.0.43-23", Major: "7.0", Status: "supported"}, {Version: "8.0.29-13", Major: "8.0", Status: "supported"}, {Version: "8.0.32-14", Major: "8.0", Default: true, Status: "supported"}}
+
+func defaultResources() domain.Resources {
+	return domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
+}
+func major(v string) string {
+	parts := strings.Split(v, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[0] + "." + parts[1]
+}
+func numericVersion(v string) []int {
+	v = strings.TrimSuffix(v, ".noble")
+	s := strings.FieldsFunc(v, func(r rune) bool { return r == '.' || r == '-' })
+	n := make([]int, len(s))
+	for i, x := range s {
+		n[i], _ = strconv.Atoi(x)
+	}
+	return n
+}
+func newer(a, b string) bool {
+	aa, bb := numericVersion(a), numericVersion(b)
+	for i := range min(len(aa), len(bb)) {
+		if aa[i] != bb[i] {
+			return aa[i] > bb[i]
+		}
+	}
+	return false
+}
+func upgrade(from, to string) bool {
+	if from == to {
+		return true
+	}
+	if major(from) == major(to) {
+		return newer(to, from)
+	}
+	a, _ := strconv.Atoi(strings.Split(from, ".")[0])
+	b, _ := strconv.Atoi(strings.Split(to, ".")[0])
+	return b == a+1
+}
+
+// Describe exposes supported versions, adjacent-major upgrades and topology constraints.
+func (*Provider) Describe() domain.ProviderInfo {
+	r := defaultResources()
+	ci := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 3, Resources: r}, MinReplicas: 1, MaxReplicas: 7, AllowedReplicas: []int{1, 3, 5, 7}}
+	router := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 1, Resources: r}, MinReplicas: 1, MaxReplicas: 32}
+	v := domain.ProviderInfo{Name: "psmdb", DisplayName: "Percona Server for MongoDB", Versions: append([]domain.VersionInfo(nil), catalog...), BackupTypes: []string{"logical", "physical"}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": ci}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": ci, "configServer": ci, "router": router}, Schema: json.RawMessage(`{"type":"object","properties":{"shards":{"type":"integer","minimum":1,"maximum":128,"default":1}}}`)}}}
+	for i := range v.Versions {
+		v.Versions[i].PBMVersion = "2.16.0-1"
+	}
+	for _, a := range catalog {
+		for _, b := range catalog {
+			if a.Version != b.Version && upgrade(a.Version, b.Version) {
+				path := domain.UpgradePath{From: a.Version, To: b.Version}
+				if a.Major != b.Major {
+					path.RequiresFCV = a.Major
+				}
+				v.UpgradePaths = append(v.UpgradePaths, path)
+			}
+		}
+	}
+	v.Presets = []domain.Preset{
+		{
+			Name:        "dev",
+			Description: "Single member, 1 GB RAM; no database redundancy",
+			Topology:    domain.Topology{Type: "replicaSet"},
+			Components:  domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}},
+		},
+		{
+			Name:        "prod",
+			Description: "Three voting members; Zerops does not guarantee host separation",
+			Topology:    domain.Topology{Type: "replicaSet"},
+			Components:  domain.Components{Engine: domain.ComponentSpec{Replicas: 3, Resources: r}},
+		},
+		{
+			Name:        "sharded",
+			Description: "Two three-member shards, three config servers and one router",
+			Topology:    domain.Topology{Type: "sharded", Shards: 2},
+			Components:  domain.Components{Engine: ci.Defaults, ConfigServer: ci.Defaults, Router: router.Defaults},
+		},
+	}
+	return v
+}
+
+// ApplyDefaults fills only omitted fields.
+func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
+	if s.Provider == "" {
+		s.Provider = "psmdb"
+	}
+	if s.Version == "" {
+		s.Version = "8.0.32-14"
+	}
+	if s.Topology.Type == "" {
+		s.Topology.Type = "replicaSet"
+	}
+	if s.Topology.Type == "sharded" && s.Topology.Shards == 0 {
+		s.Topology.Shards = 1
+	}
+	comps := []*domain.ComponentSpec{&s.Components.Engine}
+	if s.Topology.Type == "sharded" {
+		comps = append(comps, &s.Components.ConfigServer, &s.Components.Router)
+	}
+	for _, c := range comps {
+		if c.Replicas == 0 {
+			c.Replicas = 3
+			if c == &s.Components.Router {
+				c.Replicas = 1
+			}
+		}
+		r := &c.Resources
+		if r.CPUMode == "" {
+			r.CPUMode = "SHARED"
+		}
+		if r.MinCPU == 0 {
+			r.MinCPU = 1
+		}
+		if r.MaxCPU == 0 {
+			r.MaxCPU = r.MinCPU
+		}
+		if r.MinRAM == 0 {
+			r.MinRAM = 1
+		}
+		if r.MaxRAM == 0 {
+			r.MaxRAM = r.MinRAM
+		}
+		if r.MinDisk == 0 {
+			r.MinDisk = 5
+		}
+		if r.MaxDisk == 0 {
+			r.MaxDisk = r.MinDisk
+		}
+	}
+	if s.TLS.Mode == "" {
+		s.TLS.Mode = "requireTLS"
+	}
+	if s.TLS.CA == "" {
+		s.TLS.CA = "selfSigned"
+	}
+	if s.Exposure.IPType == "" {
+		s.Exposure.IPType = "IPV6"
+	}
+	if s.Backup.PITR.OplogSpanMinutes == 0 {
+		s.Backup.PITR.OplogSpanMinutes = 10
+	}
+}
+func invalid(format string, args ...any) error { return engine.Invalid(format, args...) }
+
+// Validate checks both intrinsic constraints and unsafe changes against the prior spec.
+func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
+	if n == nil {
+		return invalid("cluster is nil")
+	}
+	s := n.Spec
+	if !clusterName.MatchString(n.Name) {
+		return invalid("cluster name must match %s", clusterName)
+	}
+	if s.Provider != "psmdb" {
+		return invalid("provider must be psmdb")
+	}
+	known := false
+	for _, v := range catalog {
+		known = known || v.Version == s.Version
+	}
+	if !known {
+		return invalid("unsupported engine version %q", s.Version)
+	}
+	if s.Topology.Type != "replicaSet" && s.Topology.Type != "sharded" {
+		return invalid("unsupported topology")
+	}
+	if s.Topology.Type == "sharded" && (s.Topology.Shards < 1 || s.Topology.Shards > 128) {
+		return invalid("shards must be 1..128")
+	}
+	cs := []domain.ComponentSpec{s.Components.Engine}
+	if s.Topology.Type == "sharded" {
+		cs = append(cs, s.Components.ConfigServer, s.Components.Router)
+	}
+	for i, c := range cs {
+		if i < 2 && (c.Replicas < 1 || c.Replicas > 7 || c.Replicas%2 == 0) {
+			return invalid("replica sets require 1, 3, 5 or 7 members")
+		}
+		if i == 2 && (c.Replicas < 1 || c.Replicas > 32) {
+			return invalid("routers must be 1..32")
+		}
+		r := c.Resources
+		if r.CPUMode != "SHARED" && r.CPUMode != "DEDICATED" {
+			return invalid("cpuMode must be SHARED or DEDICATED")
+		}
+		if r.MinCPU <= 0 || r.MaxCPU < r.MinCPU || r.MinRAM < 0.5 || r.MaxRAM < r.MinRAM || r.MinDisk < 5 || r.MaxDisk < r.MinDisk {
+			return invalid("invalid resource bounds (RAM >=0.5 GB, disk >=5 GB)")
+		}
+		// Zerops allocates whole CPU cores and rejects fractional autoscaling bounds.
+		if r.MinCPU != math.Trunc(r.MinCPU) || r.MaxCPU != math.Trunc(r.MaxCPU) || (r.StartCPU != nil && *r.StartCPU != math.Trunc(*r.StartCPU)) {
+			return invalid("CPU bounds must be whole cores (>= 1)")
+		}
+		if r.StartCPU != nil && (*r.StartCPU < r.MinCPU || *r.StartCPU > r.MaxCPU) {
+			return invalid("startCpu outside CPU bounds")
+		}
+	}
+	if s.TLS.Mode != "disabled" && s.TLS.Mode != "preferTLS" && s.TLS.Mode != "requireTLS" {
+		return invalid("invalid TLS mode")
+	}
+	if s.TLS.CA != "selfSigned" && s.TLS.CA != "userProvided" {
+		return invalid("invalid TLS CA source")
+	}
+	if s.Exposure.Public && len(s.Exposure.Allowlist) == 0 {
+		return invalid("public exposure requires an IP allowlist")
+	}
+	if s.Exposure.IPType != "IPV6" && s.Exposure.IPType != "IPV4" {
+		return invalid("invalid exposure IP type")
+	}
+	for _, cidr := range s.Exposure.Allowlist {
+		if _, e := netip.ParsePrefix(cidr); e != nil {
+			return invalid("invalid allowlist CIDR %q", cidr)
+		}
+	}
+	if s.Backup.PITR.Enabled && s.Backup.Storage == "" {
+		return invalid("PITR requires backup storage")
+	}
+	if s.Backup.PITR.OplogSpanMinutes < 1 {
+		return invalid("PITR oplog span must be positive")
+	}
+	storages := map[string]bool{}
+	if s.Backup.Storage != "" {
+		storages[s.Backup.Storage] = true
+	}
+	for _, b := range s.Backup.Schedules {
+		if _, e := cron.ParseStandard(b.Cron); e != nil {
+			return invalid("invalid backup schedule %q", b.Name)
+		}
+		if b.Type != "logical" && b.Type != "physical" {
+			return invalid("invalid backup type")
+		}
+		if b.RetainCount < 1 {
+			return invalid("retainCount must be positive")
+		}
+		storage := b.Storage
+		if storage == "" {
+			storage = s.Backup.Storage
+		}
+		if storage == "" {
+			return invalid("backup schedule requires storage")
+		}
+		storages[storage] = true
+	}
+	if len(storages) > 0 && p.options.Store == nil {
+		return invalid("backup storage validation requires configured store")
+	}
+	for storage := range storages {
+		if _, e := p.options.Store.GetBackupStorage(ctx, storage); e != nil {
+			return invalid("backup storage %q: %v", storage, e)
+		}
+	}
+	if _, err := agentapi.ParseEngineConfig(s.EngineConfig); err != nil {
+		return invalid("%v", err)
+	}
+	if old != nil {
+		if old.Name != n.Name {
+			return invalid("cluster name is immutable")
+		}
+		if old.Spec.Topology.Type != s.Topology.Type {
+			return invalid("topology type is immutable")
+		}
+		if s.Topology.Shards < old.Spec.Topology.Shards {
+			return invalid("shard removal is not supported")
+		}
+		if !upgrade(old.Spec.Version, s.Version) {
+			return invalid("upgrade must be newer within a major or to the next major")
+		}
+		if major(old.Spec.Version) != major(s.Version) && old.Status.FCV != major(old.Spec.Version) {
+			return invalid("major upgrade requires observed FCV %s; raise FCV first", major(old.Spec.Version))
+		}
+		olds := []domain.ComponentSpec{old.Spec.Components.Engine, old.Spec.Components.ConfigServer, old.Spec.Components.Router}
+		for i, c := range cs {
+			if c.Resources.MinDisk < olds[i].Resources.MinDisk || c.Resources.MaxDisk < olds[i].Resources.MaxDisk {
+				return invalid("disk shrinking is not supported")
+			}
+		}
+		if old.Spec.TLS.CA != s.TLS.CA {
+			return invalid("CA source is immutable; rotate leaf certificates instead")
+		}
+		a, _ := json.Marshal(old.Spec.DataSource)
+		b, _ := json.Marshal(s.DataSource)
+		if string(a) != string(b) {
+			return invalid("dataSource is immutable")
+		}
+	}
+	if d := s.DataSource; d != nil {
+		if d.Cluster == "" || d.Cluster == n.Name || (d.Backup == "") == (d.PITRTime == nil) {
+			return invalid("dataSource requires another cluster and exactly one of backup or pitrTime")
+		}
+		if p.options.Store == nil {
+			return invalid("dataSource validation requires store")
+		}
+		var source *domain.Cluster
+		if d.Backup != "" {
+			b, e := p.options.Store.GetBackup(ctx, d.Cluster, d.Backup)
+			if e != nil || b.Phase != domain.PhaseSucceeded {
+				return invalid("source backup must exist and be succeeded")
+			}
+			topology, version := b.SourceTopology, b.SourceVersion
+			if topology.Type == "" || version == "" {
+				source, e = p.options.Store.GetCluster(ctx, d.Cluster)
+				if e != nil {
+					return invalid("backup lacks retained topology/version provenance: %v", e)
+				}
+				topology, version = source.Spec.Topology, source.Spec.Version
+			}
+			if topology.Type != s.Topology.Type || major(version) != major(s.Version) {
+				return invalid("restore source must match topology and engine major")
+			}
+		} else {
+			var e error
+			source, e = p.options.Store.GetCluster(ctx, d.Cluster)
+			if e != nil {
+				return invalid("source cluster: %v", e)
+			}
+			if source.Spec.Topology.Type != s.Topology.Type || major(source.Spec.Version) != major(s.Version) {
+				return invalid("restore source must match topology and engine major")
+			}
+			window := source.Status.Backup.PITRWindow
+			if d.PITRTime.IsZero() || window == nil || d.PITRTime.Before(window.Start) || d.PITRTime.After(window.End) {
+				return invalid("dataSource PITR time must be in the source cluster's observed recoverable window")
+			}
+		}
+	}
+	return nil
+}

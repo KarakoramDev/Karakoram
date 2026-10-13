@@ -1,0 +1,27 @@
+# 0012 — Encrypted secrets, split system users and TLS defaults
+
+Status: Accepted
+
+## Context
+
+Karakoram stores database passwords, S3 credentials, agent tokens and CA/private-key material. Database system privileges should not be collapsed into a root credential used for every operation. Internal authentication, TLS and state-store encryption protect different boundaries.
+
+## Decision
+
+Encrypt secret values at rest with AES-256-GCM envelope encryption rooted in a strong operator-held `KARAKORAM_MASTER_KEY` supplied through secret environment, never stored in SQLite. Use HKDF domain separation for derived keys, fresh nonces and authenticated context binding. Store password/API-token verifier hashes where recovery is unnecessary; the agent token also needs an encrypted copy for control-plane-to-agent calls. Preserve the master key separately for recovery (ADR 0003).
+
+Generate distinct fixed system users: `clusterAdmin`, `userAdmin`, `clusterMonitor`, `backup` and `databaseAdmin`, with purpose-specific Percona-compatible roles. Use these only for corresponding management, monitoring and PBM work; application users/roles are separate. Rotate system credentials as durable operations and supply agents only locally required credentials.
+
+Generate a random cluster keyfile for member authentication. Default database TLS to `requireTLS` with a self-generated cluster CA and hostname-valid member certificates, allowing password-authenticated clients without client certificates. Support user-provided material and explicit `preferTLS`/`disabled` modes. `preferTLS` permits plaintext client connections: it is not equivalent to mandatory TLS. Keep the control-plane/agent internal CA trust boundary distinct (ADR 0008). Manage renewal/rotation explicitly, without assuming cert-manager exists.
+
+Never return secret values in ordinary status, URIs, events, logs or browser state. Only explicit credential reveal can return authorized connection credentials under `read` on `cluster-credentials`; default URIs contain no password. Zerops tokens stay server-side. Render secret files/config caches with restrictive permissions.
+
+## Consequences
+
+A copied state database does not expose plaintext secrets, but encryption does not protect against control-plane compromise or a leaked master key. Master-key loss prevents recovery. Least-privilege separation limits routine credential exposure; coordinated rotation and restore authentication preservation remain required. Database data-file encryption is a separate PSMDB capability, not a claim implied by state-store encryption.
+
+## Alternatives considered
+
+- **Plaintext secrets/base64:** no protection for copied state/backups.
+- **One root system account:** simpler bootstrap, unnecessarily broad routine authority.
+- **preferTLS by default:** accepts plaintext clients for compatibility, but does not enforce transport encryption.

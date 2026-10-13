@@ -1,0 +1,4275 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+openapi: 3.0.3
+info:
+  title: Karakoram API
+  version: 1.0.0
+  description: Self-hosted Zerops-native PSMDB and PBM orchestration. REST contracts
+    for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie
+    sessions are alternatives. Cookie-authenticated unsafe requests require X-Karakoram-CSRF.
+    Secret inputs are write-only; explicit one-time token creation, generated application
+    passwords returned once on user creation, and cluster-credentials reads are the only
+    secret-bearing JSON responses. RBAC uses resource/action/object
+    with explicit deny overriding allow; database roles share database-users authorization.
+    Self-service auth/permissions endpoints require an authenticated identity but
+    do not require administrative account/RBAC permissions. Global collections are
+    filtered by each item’s cluster object rather than requiring a wildcard grant.
+    Root /healthz and /metrics use explicit operation-level server overrides.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+- url: /api/v1
+  description: Versioned control-plane REST API.
+security:
+- bearerAuth: []
+- cookieSession: []
+tags:
+- name: Auth
+  description: Local and OIDC sessions; self-service identity and password operations.
+- name: General
+  description: Public build and health information.
+- name: Settings
+  description: OIDC configuration and secret-safe settings.
+- name: RBAC
+  description: Casbin policies, resolved permissions and authorization checks.
+- name: Accounts
+  description: Local account administration.
+- name: APITokens
+  description: Owner-scoped API tokens; token values are returned only once.
+- name: Providers
+  description: Engine catalogs, topology schemas, presets and upgrade paths.
+- name: Clusters
+  description: Desired state, observed health, credentials and sharded balancing.
+- name: ClusterActions
+  description: Durable disruptive cluster and system-user operations.
+- name: DatabaseUsers
+  description: Application database users, separate from control-plane accounts.
+- name: DatabaseRoles
+  description: Application role privileges and inheritance.
+- name: Backups
+  description: PBM inventory, backups and PITR window.
+- name: Restores
+  description: In-place restores; new-cluster restores use cluster dataSource.
+- name: BackupStorages
+  description: S3-compatible backup destinations and credential-safe verification.
+- name: Operations
+  description: Durable asynchronous operation tracking.
+- name: Events
+  description: Durable events and server-sent event replay.
+- name: Monitoring
+  description: JSON time series, member logs and Prometheus scraping.
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      tags:
+      - Auth
+      summary: Create a local-account cookie session
+      x-karakoram-rbac: public
+      responses:
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '404': &id004
+          $ref: '#/components/responses/NotFound'
+        '409': &id005
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          headers:
+            Set-Cookie:
+              description: Secure HttpOnly SameSite=Strict access and rotating refresh
+                cookies, emitted as separate Set-Cookie headers.
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+  /auth/logout:
+    post:
+      operationId: logout
+      tags:
+      - Auth
+      summary: Revoke the current session and clear its cookies
+      x-karakoram-rbac:
+        resource: accounts
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: 'Self-service: authenticated subjects may revoke their own session
+        regardless of administrative accounts policy.'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /auth/refresh:
+    post:
+      operationId: refreshSession
+      tags:
+      - Auth
+      summary: Rotate refresh credentials and renew the session
+      x-karakoram-rbac:
+        resource: accounts
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          headers:
+            Set-Cookie:
+              description: Secure HttpOnly SameSite=Strict access and rotating refresh
+                cookies, emitted as separate Set-Cookie headers.
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Accepts the HttpOnly karakoram_refresh cookie even after the access
+        cookie expires; rotates it atomically. Cookie requests require X-Karakoram-CSRF.
+        This is a self-service account operation.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags:
+      - Auth
+      summary: Read the authenticated identity
+      x-karakoram-rbac:
+        resource: accounts
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: 'Self-service: returns only the caller, independent of administrative
+        accounts read policy.'
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags:
+      - Auth
+      summary: Change the local caller password
+      x-karakoram-rbac:
+        resource: accounts
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Self-service for local accounts; verifies currentPassword and invalidates
+        existing sessions and tokens according to account policy. OIDC identities
+        cannot change IdP passwords here.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+  /auth/oidc/login:
+    get:
+      operationId: oidcLogin
+      tags:
+      - Auth
+      summary: Begin OIDC authorization code login with PKCE
+      x-karakoram-rbac: public
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '302':
+          description: Successful response.
+          headers:
+            Location:
+              description: Authorization endpoint with state, nonce and PKCE challenge.
+              schema:
+                type: string
+                format: uri
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+      parameters:
+      - name: returnTo
+        in: query
+        schema:
+          type: string
+        description: Same-origin relative UI path after login; external URLs are rejected.
+  /auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      tags:
+      - Auth
+      summary: Exchange OIDC authorization code and establish a cookie session
+      x-karakoram-rbac: public
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '302':
+          description: Successful response.
+          headers:
+            Location:
+              description: Validated same-origin post-login UI path.
+              schema:
+                type: string
+            Set-Cookie:
+              description: Session and rotating refresh cookies.
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Validates the state cookie, nonce, issuer and PKCE verifier before
+        setting session cookies.
+      security: []
+      parameters:
+      - name: code
+        in: query
+        schema:
+          type: string
+        required: true
+      - name: state
+        in: query
+        schema:
+          type: string
+        required: true
+  /version:
+    get:
+      operationId: getVersion
+      tags:
+      - General
+      summary: Read server build and API version
+      x-karakoram-rbac: public
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+  /healthz:
+    get:
+      operationId: getHealth
+      tags:
+      - General
+      summary: Read control-plane health
+      x-karakoram-rbac: public
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security: []
+      servers:
+      - url: /
+        description: Root-level control-plane endpoint, outside /api/v1.
+  /settings:
+    get:
+      operationId: getSettings
+      tags:
+      - Settings
+      summary: Read OIDC configuration without client secrets
+      x-karakoram-rbac:
+        resource: settings
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceSettings
+      tags:
+      - Settings
+      summary: Replace OIDC configuration
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Settings'
+  /permissions:
+    get:
+      operationId: getPermissions
+      tags:
+      - RBAC
+      summary: Resolve caller permissions and role inheritance
+      x-karakoram-rbac:
+        resource: rbac
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permissions'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: 'Self-service: returns permissions for the current subject and
+        its OIDC groups. Lists elsewhere are filtered per object.'
+  /rbac/policy:
+    get:
+      operationId: getRBACPolicy
+      tags:
+      - RBAC
+      summary: Read Casbin policy
+      x-karakoram-rbac:
+        resource: rbac
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RBACPolicy'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceRBACPolicy
+      tags:
+      - RBAC
+      summary: Validate and atomically replace Casbin policy
+      x-karakoram-rbac:
+        resource: rbac
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RBACPolicy'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RBACPolicy'
+  /rbac/can:
+    post:
+      operationId: checkPermission
+      tags:
+      - RBAC
+      summary: Evaluate an authorization tuple
+      x-karakoram-rbac:
+        resource: rbac
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: A caller can inspect its own permissions. Evaluating another subject
+        requires administrative rbac read authorization.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanRequest'
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags:
+      - Accounts
+      summary: List local accounts
+      x-karakoram-rbac:
+        resource: accounts
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createAccount
+      tags:
+      - Accounts
+      summary: Create a local account
+      x-karakoram-rbac:
+        resource: accounts
+        action: create
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+  /accounts/{account}:
+    parameters:
+    - name: account
+      in: path
+      schema: &id006
+        type: string
+        minLength: 1
+        maxLength: 128
+      required: true
+    get:
+      operationId: getAccount
+      tags:
+      - Accounts
+      summary: Read a local account
+      x-karakoram-rbac:
+        resource: accounts
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceAccount
+      tags:
+      - Accounts
+      summary: Replace account administrative flags
+      x-karakoram-rbac:
+        resource: accounts
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+    delete:
+      operationId: deleteAccount
+      tags:
+      - Accounts
+      summary: Delete an account and revoke sessions and tokens
+      x-karakoram-rbac:
+        resource: accounts
+        action: delete
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /accounts/{account}/reset-password:
+    parameters:
+    - name: account
+      in: path
+      schema: *id006
+      required: true
+    post:
+      operationId: resetAccountPassword
+      tags:
+      - Accounts
+      summary: Reset an account password
+      x-karakoram-rbac:
+        resource: accounts
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+  /api-tokens:
+    get:
+      operationId: listAPITokens
+      tags:
+      - APITokens
+      summary: List API token metadata
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APITokenList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createAPIToken
+      tags:
+      - APITokens
+      summary: Create an API token and return its secret once
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: create
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedAPIToken'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAPITokenRequest'
+  /api-tokens/{token}:
+    parameters:
+    - name: token
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getAPIToken
+      tags:
+      - APITokens
+      summary: Read API token metadata
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIToken'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceAPIToken
+      tags:
+      - APITokens
+      summary: Replace API token name and expiry
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIToken'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAPITokenRequest'
+    delete:
+      operationId: deleteAPIToken
+      tags:
+      - APITokens
+      summary: Revoke an API token
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: delete
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /providers:
+    get:
+      operationId: listProviders
+      tags:
+      - Providers
+      summary: List engine providers and their catalogs
+      x-karakoram-rbac:
+        resource: providers
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /providers/{provider}:
+    parameters:
+    - name: provider
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getProvider
+      tags:
+      - Providers
+      summary: Read versions, topologies, presets and upgrade paths
+      x-karakoram-rbac:
+        resource: providers
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters:
+    get:
+      operationId: listClusters
+      tags:
+      - Clusters
+      summary: List readable clusters
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Filters each cluster by clusters read on its name; a global * check
+        must not prevent scoped users from listing permitted clusters.
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createCluster
+      tags:
+      - Clusters
+      summary: Create and reconcile a cluster
+      x-karakoram-rbac:
+        resource: clusters
+        action: create
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Also authorize clusters create against the submitted name. Returns
+        desired state immediately; status tracks asynchronous reconciliation.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClusterRequest'
+  /clusters/{cluster}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getCluster
+      tags:
+      - Clusters
+      summary: Read cluster desired and observed state
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceCluster
+      tags:
+      - Clusters
+      summary: Replace the full cluster desired spec
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceClusterRequest'
+    patch:
+      operationId: patchCluster
+      tags:
+      - Clusters
+      summary: Apply an RFC 7396 cluster merge patch
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/ClusterMergePatch'
+    delete:
+      operationId: deleteCluster
+      tags:
+      - Clusters
+      summary: Delete cluster or suspend while retaining volumes
+      x-karakoram-rbac:
+        resource: clusters
+        action: delete
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: With keepVolumes=true, delete runtimes while preserving volumes,
+        cluster secrets and metadata in Suspended phase for resume. Otherwise deletion
+        is asynchronous until resources are gone.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - name: keepVolumes
+        in: query
+        schema:
+          type: boolean
+          default: false
+      - name: keepBackups
+        in: query
+        schema:
+          type: boolean
+          default: false
+  /clusters/{cluster}/resume:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    post:
+      operationId: resumeCluster
+      tags:
+      - ClusterActions
+      summary: Recreate runtimes on retained volumes
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/restart:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    post:
+      operationId: restartCluster
+      tags:
+      - ClusterActions
+      summary: Start a quorum-safe rolling restart
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/raise-fcv:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    post:
+      operationId: raiseClusterFCV
+      tags:
+      - ClusterActions
+      summary: Explicitly raise feature compatibility version
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RaiseFCVRequest'
+  /clusters/{cluster}/members/{member}/replace:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: member
+      in: path
+      schema: *id006
+      required: true
+    post:
+      operationId: replaceClusterMember
+      tags:
+      - ClusterActions
+      summary: Replace a member with a new monotonic index
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/rotate-tls:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    post:
+      operationId: rotateClusterTLS
+      tags:
+      - ClusterActions
+      summary: Roll cluster TLS material
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: For user-provided TLS, supply replacement PEM inputs in the cluster
+        spec before invoking rotation; no certificate private keys are returned.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/system-users:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listSystemUsers
+      tags:
+      - ClusterActions
+      summary: List system-user metadata without passwords
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemUserList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/system-users/{user}/rotate:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: user
+      in: path
+      schema: *id006
+      required: true
+    post:
+      operationId: rotateSystemUser
+      tags:
+      - ClusterActions
+      summary: Rotate a generated system-user password
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/members:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listClusterMembers
+      tags:
+      - Clusters
+      summary: Read member health, role and replica lag
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/members/{member}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: member
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getClusterMember
+      tags:
+      - Clusters
+      summary: Read one member status
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/status:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getClusterStatus
+      tags:
+      - Clusters
+      summary: Read observed cluster status
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterStatus'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/connection:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getClusterConnection
+      tags:
+      - Clusters
+      summary: Reveal connection credentials with separate authorization
+      x-karakoram-rbac:
+        resource: cluster-credentials
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+              description: Credentials must not be cached.
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/placement:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getClusterPlacement
+      tags:
+      - Clusters
+      summary: Read detected member co-location and placement warnings
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Placement'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/balancer:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getClusterBalancer
+      tags:
+      - Clusters
+      summary: Read sharded-cluster balancer status
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balancer'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceClusterBalancer
+      tags:
+      - Clusters
+      summary: Enable or disable sharded-cluster balancing
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balancer'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Balancer'
+  /clusters/{cluster}/database-users:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listDatabaseUsers
+      tags:
+      - DatabaseUsers
+      summary: List application database users without passwords
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseUserList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createDatabaseUser
+      tags:
+      - DatabaseUsers
+      summary: Create an application database user
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '201':
+          description: Successful response.
+          headers:
+            Cache-Control:
+              description: Generated credentials must not be cached.
+              schema:
+                type: string
+                enum:
+                - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedDatabaseUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDatabaseUserRequest'
+  /clusters/{cluster}/database-users/{database}/{username}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: database
+      in: path
+      schema: *id006
+      required: true
+    - name: username
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getDatabaseUser
+      tags:
+      - DatabaseUsers
+      summary: Read an application database user
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceDatabaseUser
+      tags:
+      - DatabaseUsers
+      summary: Replace application user roles and optionally password
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDatabaseUserRequest'
+    delete:
+      operationId: deleteDatabaseUser
+      tags:
+      - DatabaseUsers
+      summary: Delete an application database user
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/database-roles:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listDatabaseRoles
+      tags:
+      - DatabaseRoles
+      summary: List custom database roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseRoleList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Role administration uses the database-users RBAC resource.
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createDatabaseRole
+      tags:
+      - DatabaseRoles
+      summary: Create a custom database role
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatabaseRole'
+  /clusters/{cluster}/database-roles/{database}/{role}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: database
+      in: path
+      schema: *id006
+      required: true
+    - name: role
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getDatabaseRole
+      tags:
+      - DatabaseRoles
+      summary: Read a custom database role
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceDatabaseRole
+      tags:
+      - DatabaseRoles
+      summary: Replace role privileges and inherited roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDatabaseRoleRequest'
+    delete:
+      operationId: deleteDatabaseRole
+      tags:
+      - DatabaseRoles
+      summary: Delete a custom database role
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /orphaned-volumes:
+    get:
+      operationId: listOrphanedVolumes
+      tags:
+      - Settings
+      summary: List orphaned platform volumes
+      description: Volumes whose owning runtime is absent and whose deletion requests to Zerops have failed. Records survive cluster deletion; the background janitor keeps retrying with backoff until deletion succeeds. Authenticated users see only records for clusters they may read.
+      x-karakoram-rbac:
+        resource: clusters
+        action: read
+        object: '*'
+      responses:
+        '401': *id002
+        '200':
+          description: Orphaned volumes, including an empty items array when none are visible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrphanedVolumeList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/backups:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listBackups
+      tags:
+      - Backups
+      summary: List backup inventory
+      description: Retained records remain accessible under the deleted source cluster name. Authorization still uses that cluster name; an absent cluster with no retained records returns 404.
+      x-karakoram-rbac:
+        resource: backups
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createBackup
+      tags:
+      - Backups
+      summary: Queue an on-demand PBM backup
+      x-karakoram-rbac:
+        resource: backups
+        action: create
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBackupRequest'
+  /clusters/{cluster}/backups/{backup}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: backup
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getBackup
+      tags:
+      - Backups
+      summary: Read backup metadata and status
+      description: Also reads retained backups after source cluster deletion, with the same cluster-name authorization.
+      x-karakoram-rbac:
+        resource: backups
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteBackup
+      tags:
+      - Backups
+      summary: Delete PBM backup data and metadata
+      description: Live clusters queue PBM deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded S3 directory and sibling .pbm.json metadata, then its protected recovery credential and inventory record (204). Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
+      x-karakoram-rbac:
+        resource: backups
+        action: delete
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '204':
+          description: Retained snapshot objects and record removed, or already absent.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/pitr:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getPITRWindow
+      tags:
+      - Backups
+      summary: Read the continuous restorable PITR window
+      x-karakoram-rbac:
+        resource: backups
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PITRWindow'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /clusters/{cluster}/restores:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listRestores
+      tags:
+      - Restores
+      summary: List restore history
+      x-karakoram-rbac:
+        resource: restores
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestoreList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createRestore
+      tags:
+      - Restores
+      summary: Queue in-place backup or point-in-time restore
+      x-karakoram-rbac:
+        resource: restores
+        action: create
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '202':
+          description: Accepted; track the returned operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restore'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Requires a compatible succeeded source backup or an available PITR
+        window. Creating a new cluster from a source uses cluster spec.dataSource
+        instead.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRestoreRequest'
+  /clusters/{cluster}/restores/{restore}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: restore
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getRestore
+      tags:
+      - Restores
+      summary: Read restore progress and result
+      x-karakoram-rbac:
+        resource: restores
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restore'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /backup-storages:
+    get:
+      operationId: listBackupStorages
+      tags:
+      - BackupStorages
+      summary: List S3 storage configuration without credentials
+      x-karakoram-rbac:
+        resource: backup-storages
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStorageList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createBackupStorage
+      tags:
+      - BackupStorages
+      summary: Create an S3-compatible backup storage
+      x-karakoram-rbac:
+        resource: backup-storages
+        action: create
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStorage'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBackupStorageRequest'
+  /backup-storages/{storage}:
+    parameters:
+    - name: storage
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getBackupStorage
+      tags:
+      - BackupStorages
+      summary: Read backup storage configuration
+      x-karakoram-rbac:
+        resource: backup-storages
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStorage'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceBackupStorage
+      tags:
+      - BackupStorages
+      summary: Replace backup storage configuration
+      x-karakoram-rbac:
+        resource: backup-storages
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStorage'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBackupStorageRequest'
+    delete:
+      operationId: deleteBackupStorage
+      tags:
+      - BackupStorages
+      summary: Delete an unused backup storage
+      x-karakoram-rbac:
+        resource: backup-storages
+        action: delete
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Returns 409 while referenced by active clusters, backups or restores.
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /backup-storages/{storage}/verify:
+    parameters:
+    - name: storage
+      in: path
+      schema: *id006
+      required: true
+    post:
+      operationId: verifyBackupStorage
+      tags:
+      - BackupStorages
+      summary: Verify S3 read/write/delete access
+      x-karakoram-rbac:
+        resource: backup-storages
+        action: update
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageVerification'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+  /operations:
+    get:
+      operationId: listOperations
+      tags:
+      - Operations
+      summary: List readable durable operations
+      x-karakoram-rbac:
+        resource: operations
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Filters every operation by its cluster RBAC object, including the
+        global collection.
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - name: cluster
+        in: query
+        schema: &id007
+          type: string
+          pattern: ^[a-z][a-z0-9]{1,11}$
+          minLength: 2
+          maxLength: 12
+      - name: phase
+        in: query
+        schema:
+          type: string
+  /clusters/{cluster}/operations:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: listClusterOperations
+      tags:
+      - Operations
+      summary: List cluster operations
+      x-karakoram-rbac:
+        resource: operations
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - name: phase
+        in: query
+        schema:
+          type: string
+  /operations/{operation}:
+    parameters:
+    - name: operation
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getOperation
+      tags:
+      - Operations
+      summary: Read a durable operation
+      x-karakoram-rbac:
+        resource: operations
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Resolve the operation first, then authorize operations read against
+        its persisted cluster name. The global route has no cluster path parameter.
+  /events:
+    get:
+      operationId: listEvents
+      tags:
+      - Events
+      summary: List the durable authorization-filtered event log
+      x-karakoram-rbac:
+        resource: events
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - &id008
+        name: cluster
+        in: query
+        schema: *id007
+      - &id009
+        name: type
+        in: query
+        schema:
+          type: string
+      - &id010
+        name: operationId
+        in: query
+        schema:
+          type: string
+  /events/stream:
+    get:
+      operationId: streamEvents
+      tags:
+      - Events
+      summary: Stream authorization-filtered events with durable replay
+      x-karakoram-rbac:
+        resource: events
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: 'SSE frames: id is the durable event ID, event is the event type,
+        data is a JSON Event. Replays after the requested cursor then streams live
+        events. Heartbeat comment frames keep the connection alive. Authorization
+        filtering applies to every event cluster. An unavailable cursor returns 409;
+        never skip lost history silently.'
+      parameters:
+      - *id008
+      - *id009
+      - *id010
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: Replay events after this durable event cursor.
+      - name: Last-Event-ID
+        in: header
+        schema:
+          type: string
+        description: SSE reconnection cursor; used when cursor is absent.
+  /clusters/{cluster}/metrics:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    get:
+      operationId: getClusterMetrics
+      tags:
+      - Monitoring
+      summary: Read aggregated per-member metric time series
+      x-karakoram-rbac:
+        resource: monitoring
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterMetrics'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - name: range
+        in: query
+        schema:
+          type: string
+          default: 1h
+          pattern: ^[1-9][0-9]*(s|m|h|d)$
+        description: Lookback from now.
+      - name: step
+        in: query
+        schema:
+          type: string
+          default: 30s
+          pattern: ^[1-9][0-9]*(s|m|h)$
+        description: Aggregation interval.
+  /clusters/{cluster}/members/{member}/logs:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - name: member
+      in: path
+      schema: *id006
+      required: true
+    get:
+      operationId: getMemberLogs
+      tags:
+      - Monitoring
+      summary: Read logs for a member process
+      x-karakoram-rbac:
+        resource: monitoring
+        action: read
+        object: cluster
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberLogs'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - name: process
+        in: query
+        schema:
+          type: string
+          enum:
+          - mongod
+          - mongos
+          - pbm-agent
+          - agent
+      - name: lines
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          default: 100
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - name: since
+        in: query
+        schema: &id011
+          type: string
+          format: date-time
+  /metrics:
+    get:
+      operationId: getPrometheusMetrics
+      tags:
+      - Monitoring
+      summary: Scrape Prometheus-compatible cluster metrics
+      x-karakoram-rbac:
+        resource: monitoring
+        action: read
+        object: '*'
+      responses:
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '200':
+          description: Successful response.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+      description: Root endpoint requires a bearer API token and monitoring read authorization;
+        cookie sessions are not accepted by scrapers. Only authorized clusters are
+        included.
+      servers:
+      - url: /
+        description: Root-level control-plane endpoint, outside /api/v1.
+      security:
+      - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Karakoram API token (kk_ prefix)
+      description: API tokens act as their owner and do not require CSRF headers.
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: karakoram_access
+      description: HttpOnly Secure SameSite=Strict EdDSA access JWT. Renew via the
+        rotating HttpOnly karakoram_refresh cookie at /auth/refresh. X-Karakoram-CSRF
+        is required on unsafe methods.
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Maximum results per page. Results are authorization-filtered before
+        pagination.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor returned by the preceding page.
+      schema:
+        type: string
+    CSRF:
+      name: X-Karakoram-CSRF
+      in: header
+      description: Required on unsafe methods using session cookies, including refresh/logout
+        and password changes. Must match the session CSRF token returned by login/refresh.
+        Not required for bearer API tokens or pre-authentication login.
+      schema:
+        type: string
+    ClusterPath:
+      name: cluster
+      in: path
+      required: true
+      description: Managed cluster name. RBAC object is this name.
+      schema: *id007
+  responses:
+    BadRequest:
+      description: Invalid request, query, cursor, or resource configuration.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing, expired or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated caller lacks permission or the CSRF check failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested resource does not exist or is not visible to the
+        caller.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflicting resource state, unsafe topology change, unsupported
+        action, or unavailable replay cursor.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error; response does not contain secret material.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+          description: Structured validation or conflict details; never contains secrets.
+          nullable: true
+      required:
+      - code
+      - message
+    Version:
+      type: object
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        buildDate:
+          type: string
+        apiVersion:
+          type: string
+        oidcEnabled:
+          type: boolean
+          readOnly: true
+          description: Public discovery flag for the login UI; no issuer or client secret is exposed.
+      required:
+      - version
+      - apiVersion
+      - oidcEnabled
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+        database:
+          type: boolean
+      required:
+      - status
+      - database
+    LoginRequest:
+      type: object
+      properties:
+        username: *id006
+        password: &id012
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+      required:
+      - username
+      - password
+    Session:
+      type: object
+      properties:
+        account:
+          $ref: '#/components/schemas/CurrentUser'
+        csrfToken:
+          type: string
+          readOnly: true
+        expiresAt: *id011
+      description: Sets HttpOnly Secure SameSite=Strict karakoram_session and rotating
+        karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON.
+      required:
+      - account
+      - csrfToken
+      - expiresAt
+    CurrentUser:
+      type: object
+      properties:
+        name: *id006
+        subject:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+        mustChangePassword:
+          type: boolean
+        csrfToken:
+          type: string
+          readOnly: true
+          description: Present for cookie sessions, including OIDC sessions. Safe authenticated GET discovery allows the UI to authorize subsequent unsafe requests. Absent for bearer API-token authentication.
+      required:
+      - name
+      - subject
+      - groups
+      - mustChangePassword
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword: *id012
+        newPassword: *id012
+      required:
+      - currentPassword
+      - newPassword
+    ResetPasswordRequest:
+      type: object
+      properties:
+        password: *id012
+        mustChangePassword:
+          type: boolean
+          default: true
+      required:
+      - password
+    OIDCConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        issuerURL:
+          type: string
+          format: uri
+        clientId:
+          type: string
+        clientSecret: *id012
+        scopes:
+          type: array
+          items:
+            type: string
+        groupsClaim:
+          type: string
+          default: groups
+        redirectURL:
+          type: string
+          format: uri
+      description: Client secret is write-only; omission on update retains the stored
+        secret.
+      required:
+      - enabled
+    Settings:
+      type: object
+      properties:
+        oidc:
+          $ref: '#/components/schemas/OIDCConfig'
+      required:
+      - oidc
+    Permission:
+      type: object
+      properties:
+        resource:
+          type: string
+        action:
+          type: string
+        object:
+          type: string
+        effect:
+          type: string
+          enum:
+          - allow
+          - deny
+      required:
+      - resource
+      - action
+      - object
+      - effect
+    Permissions:
+      type: object
+      properties:
+        subject:
+          type: string
+        groups:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+      required:
+      - subject
+      - groups
+      - permissions
+    RBACPolicy:
+      type: object
+      properties:
+        policy:
+          type: string
+          description: 'Casbin CSV: p, subject, resource, action, object, allow|deny;
+            g, subject, role. Built-in roles remain installed.'
+      required:
+      - policy
+    CanRequest:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: Optional subject; checking another subject requires rbac read
+            permission.
+        resource:
+          type: string
+        action:
+          type: string
+          enum:
+          - create
+          - read
+          - update
+          - delete
+          - '*'
+        object:
+          type: string
+      required:
+      - resource
+      - action
+      - object
+    CanResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+      required:
+      - allowed
+    Account:
+      type: object
+      properties:
+        name: *id006
+        enabled:
+          type: boolean
+        mustChangePassword:
+          type: boolean
+        createdAt: *id011
+        updatedAt: *id011
+      required:
+      - name
+      - enabled
+      - mustChangePassword
+      - createdAt
+      - updatedAt
+    CreateAccountRequest:
+      type: object
+      properties:
+        name: *id006
+        password: *id012
+        enabled:
+          type: boolean
+          default: true
+        mustChangePassword:
+          type: boolean
+          default: true
+      required:
+      - name
+      - password
+    UpdateAccountRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        mustChangePassword:
+          type: boolean
+      required:
+      - enabled
+      - mustChangePassword
+    APIToken:
+      type: object
+      properties:
+        id: *id006
+        name: *id006
+        owner: *id006
+        prefix:
+          type: string
+        createdAt: *id011
+        expiresAt: *id011
+        lastUsedAt: *id011
+      description: Only metadata and a non-sensitive identifying prefix; the token
+        value is never returned here.
+      required:
+      - id
+      - name
+      - owner
+      - prefix
+      - createdAt
+    CreateAPITokenRequest:
+      type: object
+      properties:
+        name: *id006
+        expiresAt: *id011
+      required:
+      - name
+    UpdateAPITokenRequest:
+      type: object
+      properties:
+        name: *id006
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - name
+    CreatedAPIToken:
+      type: object
+      properties:
+        token:
+          $ref: '#/components/schemas/APIToken'
+        secret:
+          type: string
+          readOnly: true
+          description: kk_ prefixed bearer token, returned exactly once by creation.
+            Store securely; later GETs cannot recover it.
+      required:
+      - token
+      - secret
+    Resources:
+      type: object
+      properties:
+        cpuMode:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+        minCpu:
+          type: number
+          minimum: 0
+        maxCpu:
+          type: number
+          minimum: 0
+        minRam:
+          type: number
+          minimum: 0
+          description: GiB
+        maxRam:
+          type: number
+          minimum: 0
+          description: GiB
+        minDisk:
+          type: number
+          minimum: 0
+          description: GiB
+        maxDisk:
+          type: number
+          minimum: 0
+          description: GiB
+        startCpu:
+          type: number
+          minimum: 0
+      required:
+      - cpuMode
+      - minCpu
+      - maxCpu
+      - minRam
+      - maxRam
+      - minDisk
+      - maxDisk
+    Component:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 1
+        resources:
+          $ref: '#/components/schemas/Resources'
+      required:
+      - replicas
+      - resources
+    Components:
+      type: object
+      properties:
+        engine:
+          $ref: '#/components/schemas/Component'
+        configServer:
+          $ref: '#/components/schemas/Component'
+        router:
+          $ref: '#/components/schemas/Component'
+      required:
+      - engine
+    Topology:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - replicaSet
+          - sharded
+        shards:
+          type: integer
+          minimum: 1
+      required:
+      - type
+    ProviderVersion:
+      type: object
+      properties:
+        version:
+          type: string
+        major:
+          type: string
+        default:
+          type: boolean
+        status:
+          type: string
+          enum:
+          - supported
+          - deprecated
+          - unavailable
+        pbmVersion:
+          type: string
+      required:
+      - version
+      - major
+      - default
+      - status
+    UpgradePath:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        requiresFCV:
+          type: string
+        requiresBackup:
+          type: boolean
+      required:
+      - from
+      - to
+    ProviderTopology:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - replicaSet
+          - sharded
+        displayName:
+          type: string
+        defaults:
+          $ref: '#/components/schemas/ClusterSpec'
+        componentSchemas:
+          type: object
+          properties: {}
+          additionalProperties: true
+        limits:
+          type: object
+          properties: {}
+          additionalProperties: true
+        uiSchema:
+          type: object
+          properties: {}
+          additionalProperties: true
+      required:
+      - type
+      - displayName
+      - defaults
+      - componentSchemas
+      - limits
+    Preset:
+      type: object
+      properties:
+        name: *id006
+        displayName:
+          type: string
+        description:
+          type: string
+        spec:
+          $ref: '#/components/schemas/ClusterSpec'
+      required:
+      - name
+      - displayName
+      - spec
+    Provider:
+      type: object
+      properties:
+        name: *id006
+        displayName:
+          type: string
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderVersion'
+        upgradePaths:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpgradePath'
+        topologies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderTopology'
+        presets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Preset'
+        backupTypes:
+          type: array
+          items:
+            type: string
+            enum:
+            - logical
+            - physical
+      required:
+      - name
+      - displayName
+      - versions
+      - upgradePaths
+      - topologies
+      - presets
+      - backupTypes
+    BackupSchedule:
+      type: object
+      properties:
+        name: *id006
+        cron:
+          type: string
+          description: Five-field cron expression, evaluated in UTC.
+        type:
+          type: string
+          enum:
+          - logical
+          - physical
+        storage: *id006
+        retainCount:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+          default: true
+      required:
+      - name
+      - cron
+      - type
+      - storage
+      - retainCount
+      - enabled
+    PITRSpec:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        oplogSpanMinutes:
+          type: integer
+          minimum: 1
+          default: 10
+      required:
+      - enabled
+    BackupSpec:
+      type: object
+      properties:
+        storage: *id006
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupSchedule'
+        pitr:
+          $ref: '#/components/schemas/PITRSpec'
+    TLS:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - preferTLS
+          - requireTLS
+          - disabled
+          default: requireTLS
+        ca:
+          type: string
+          enum:
+          - selfSigned
+          - userProvided
+          default: selfSigned
+        certificate:
+          type: string
+          writeOnly: true
+          description: User-provided PEM certificate chain.
+        privateKey: *id012
+        caCertificate:
+          type: string
+          writeOnly: true
+        caPrivateKey: *id012
+      description: PEM inputs are write-only; stored secret material is never included
+        in cluster reads. User-provided CAs require RSA keys of at least 2048 bits
+        or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot
+        be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation
+        is not supported. The rotate-tls operation renews leaf certificates only.
+      required:
+      - mode
+      - ca
+    Exposure:
+      type: object
+      properties:
+        public:
+          type: boolean
+          default: false
+        ipType:
+          type: string
+          enum:
+          - IPV6
+          - IPV4
+          default: IPV6
+        allowlist:
+          type: array
+          items:
+            type: string
+            description: IPv4 or IPv6 CIDR.
+      required:
+      - public
+    MonitoringSpec:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+      required:
+      - enabled
+    DataSource:
+      type: object
+      properties:
+        cluster: *id007
+        backup: *id006
+        pitrTime: *id011
+      description: Exactly one of backup and pitrTime is required. Seeds a new cluster
+        from a consistent backup or point in time.
+      required:
+      - cluster
+    ClusterSpec:
+      type: object
+      properties:
+        provider:
+          type: string
+          default: psmdb
+        version:
+          type: string
+        topology:
+          $ref: '#/components/schemas/Topology'
+        components:
+          $ref: '#/components/schemas/Components'
+        engineConfig:
+          type: string
+          description: Validated YAML mongod/mongos overrides.
+        backup:
+          $ref: '#/components/schemas/BackupSpec'
+        tls:
+          $ref: '#/components/schemas/TLS'
+        exposure:
+          $ref: '#/components/schemas/Exposure'
+        monitoring:
+          $ref: '#/components/schemas/MonitoringSpec'
+        dataSource:
+          $ref: '#/components/schemas/DataSource'
+      required:
+      - provider
+      - version
+      - topology
+      - components
+    Condition:
+      type: object
+      properties:
+        type:
+          type: string
+        status:
+          type: string
+          enum:
+          - 'True'
+          - 'False'
+          - Unknown
+        reason:
+          type: string
+        message:
+          type: string
+        lastTransitionTime: *id011
+      required:
+      - type
+      - status
+      - reason
+      - message
+      - lastTransitionTime
+    AgentStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        configVersion:
+          type: integer
+          format: int64
+        lastSeenAt: *id011
+        version:
+          type: string
+      required:
+      - connected
+    Member:
+      type: object
+      properties:
+        name: *id006
+        set:
+          type: string
+        role:
+          type: string
+          enum:
+          - primary
+          - secondary
+          - arbiter
+          - config-primary
+          - config-secondary
+          - router
+          - unknown
+        state:
+          type: string
+        health:
+          type: boolean
+        version:
+          type: string
+        lagSeconds:
+          type: number
+        optime: *id011
+        uptime:
+          type: integer
+          format: int64
+        cpuUsage:
+          type: number
+        ramUsageBytes:
+          type: integer
+          format: int64
+        diskUsageBytes:
+          type: integer
+          format: int64
+        diskTotalBytes:
+          type: integer
+          format: int64
+        agent:
+          $ref: '#/components/schemas/AgentStatus'
+        placementGroup:
+          type: string
+        publicHost:
+          type: string
+          readOnly: true
+          description: Member public host:port when public exposure is enabled.
+        resources:
+          readOnly: true
+          description: Infrastructure resources currently allocated to the member container.
+          allOf:
+          - $ref: '#/components/schemas/ObservedResources'
+        autoscaling:
+          readOnly: true
+          description: Effective runtime vertical autoscaling configuration read from the platform, distinct from desired spec and current allocation. Disk bounds refer to the disposable runtime root disk, not the persistent database volume.
+          allOf:
+          - $ref: '#/components/schemas/Resources'
+      required:
+      - name
+      - set
+      - role
+      - state
+      - health
+    ObservedResources:
+      type: object
+      readOnly: true
+      description: Current infrastructure allocation, distinct from desired autoscaling limits.
+      properties:
+        cpuCores:
+          type: number
+          description: Allocated CPU cores.
+        memoryGB:
+          type: number
+          description: Allocated memory in GB.
+        diskGB:
+          type: number
+          description: Allocated disk capacity in GB.
+      required:
+      - cpuCores
+      - memoryGB
+      - diskGB
+    ConnectionSummary:
+      type: object
+      properties:
+        hosts:
+          type: array
+          items:
+            type: string
+        replicaSet:
+          type: string
+        uri:
+          type: string
+          description: Connection URI without a password.
+        publicHosts:
+          type: array
+          items:
+            type: string
+      required:
+      - hosts
+      - uri
+    ConnectionCredential:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          readOnly: true
+          description: Revealed only with cluster-credentials read permission.
+        database:
+          type: string
+        uri:
+          type: string
+          readOnly: true
+          description: Credential-bearing URI; never logged or cached.
+      required:
+      - username
+      - password
+      - database
+      - uri
+    Connection:
+      type: object
+      properties:
+        connection:
+          $ref: '#/components/schemas/ConnectionSummary'
+        credentials:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConnectionCredential'
+        caCertificate:
+          type: string
+      description: 'Sensitive response. Requires cluster-credentials read separately
+        from clusters read. Server sends Cache-Control: no-store.'
+      required:
+      - connection
+      - credentials
+    PlacementGroup:
+      type: object
+      properties:
+        name:
+          type: string
+        members:
+          type: array
+          items:
+            type: string
+      required:
+      - name
+      - members
+    Placement:
+      type: object
+      properties:
+        warning:
+          type: string
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlacementGroup'
+        guaranteedAntiAffinity:
+          type: boolean
+          enum:
+          - false
+      description: Best-effort detected co-location only. Zerops provides no host
+        anti-affinity guarantee.
+      required:
+      - warning
+      - groups
+      - guaranteedAntiAffinity
+    PITRWindow:
+      type: object
+      properties:
+        start: *id011
+        end: *id011
+        available:
+          type: boolean
+        message:
+          type: string
+      description: Only a continuous PBM-verified restorable interval is reported.
+      required:
+      - available
+    ClusterBackupStatus:
+      type: object
+      properties:
+        pitrWindow:
+          $ref: '#/components/schemas/PITRWindow'
+        lastBackup: *id006
+    ClusterStatus:
+      type: object
+      properties:
+        phase:
+          type: string
+          enum:
+          - Creating
+          - Initializing
+          - Ready
+          - Updating
+          - Scaling
+          - Upgrading
+          - Restoring
+          - Degraded
+          - Error
+          - Deleting
+          - Suspended
+        message:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        observedGeneration:
+          type: integer
+          format: int64
+        version:
+          type: string
+        fcv:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        connection:
+          $ref: '#/components/schemas/ConnectionSummary'
+        backup:
+          $ref: '#/components/schemas/ClusterBackupStatus'
+        placement:
+          $ref: '#/components/schemas/Placement'
+      required:
+      - phase
+      - observedGeneration
+      - conditions
+      - members
+    Cluster:
+      type: object
+      properties:
+        name: *id007
+        generation:
+          type: integer
+          format: int64
+        spec:
+          $ref: '#/components/schemas/ClusterSpec'
+        status:
+          $ref: '#/components/schemas/ClusterStatus'
+        createdAt: *id011
+        updatedAt: *id011
+      required:
+      - name
+      - generation
+      - spec
+      - status
+      - createdAt
+      - updatedAt
+    CreateClusterRequest:
+      type: object
+      properties:
+        name: *id007
+        spec:
+          $ref: '#/components/schemas/ClusterSpec'
+      required:
+      - name
+      - spec
+    ReplaceClusterRequest:
+      type: object
+      properties:
+        spec:
+          $ref: '#/components/schemas/ClusterSpec'
+      description: Replaces the full desired spec; server-owned name, generation,
+        status and timestamps cannot be replaced.
+      required:
+      - spec
+    ClusterMergePatch:
+      type: object
+      additionalProperties: true
+      description: 'RFC 7396 merge patch of the cluster desired spec envelope: {spec:
+        {...}}. null removes optional fields; arrays replace in full. Server-owned
+        name/status/generation/timestamps are rejected. Secret inputs follow TLS write-only
+        fields.'
+    RaiseFCVRequest:
+      type: object
+      properties:
+        version:
+          type: string
+      required:
+      - version
+    Balancer:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        running:
+          type: boolean
+          readOnly: true
+        mode:
+          type: string
+          readOnly: true
+      description: Sharded clusters only; replica-set requests fail with 409.
+      required:
+      - enabled
+    SystemUser:
+      type: object
+      properties:
+        name:
+          type: string
+          enum:
+          - clusterAdmin
+          - userAdmin
+          - clusterMonitor
+          - backup
+          - databaseAdmin
+        username:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+        lastRotatedAt: *id011
+      required:
+      - name
+      - username
+      - roles
+    RoleReference:
+      type: object
+      properties:
+        role:
+          type: string
+        db:
+          type: string
+      required:
+      - role
+      - db
+    DatabaseUser:
+      type: object
+      properties:
+        username: *id006
+        database: *id006
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+      required:
+      - username
+      - database
+      - roles
+    CreatedDatabaseUser:
+      type: object
+      description: Application user creation result. Any generated password is returned exactly once and never included in subsequent reads.
+      properties:
+        username: *id006
+        database: *id006
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+        generatedPassword:
+          type: string
+          readOnly: true
+          description: Present only when password was omitted from the creation request and generated by the server. Display or store securely once; it cannot be retrieved again.
+      required:
+      - username
+      - database
+      - roles
+    CreateDatabaseUserRequest:
+      type: object
+      description: Omit password to have the server generate one and return it once in generatedPassword.
+      properties:
+        username: *id006
+        database: *id006
+        password: *id012
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+      required:
+      - username
+      - database
+      - roles
+    UpdateDatabaseUserRequest:
+      type: object
+      properties:
+        password: *id012
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+      required:
+      - roles
+    PrivilegeResource:
+      type: object
+      properties:
+        db:
+          type: string
+        collection:
+          type: string
+        cluster:
+          type: boolean
+        anyResource:
+          type: boolean
+      description: MongoDB privilege resource document; cluster/anyResource are mutually
+        exclusive with db/collection.
+    Privilege:
+      type: object
+      properties:
+        resource:
+          $ref: '#/components/schemas/PrivilegeResource'
+        actions:
+          type: array
+          items:
+            type: string
+      required:
+      - resource
+      - actions
+    DatabaseRole:
+      type: object
+      properties:
+        name: *id006
+        database: *id006
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+        privileges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Privilege'
+      required:
+      - name
+      - database
+      - roles
+      - privileges
+    UpdateDatabaseRoleRequest:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleReference'
+        privileges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Privilege'
+      required:
+      - roles
+      - privileges
+    Backup:
+      type: object
+      properties:
+        name: *id006
+        cluster: *id007
+        storage: *id006
+        type:
+          type: string
+          enum:
+          - logical
+          - physical
+        trigger:
+          type: string
+          enum:
+          - manual
+          - schedule
+        schedule: *id006
+        phase:
+          type: string
+          enum:
+          - Pending
+          - Running
+          - Succeeded
+          - Failed
+          - Deleting
+        pbmName:
+          type: string
+        startedAt: *id011
+        completedAt: *id011
+        lastWriteTime: *id011
+        size:
+          type: integer
+          format: int64
+          minimum: 0
+        error:
+          type: string
+      required:
+      - name
+      - cluster
+      - storage
+      - type
+      - trigger
+      - phase
+    CreateBackupRequest:
+      type: object
+      properties:
+        name: *id006
+        storage: *id006
+        type:
+          type: string
+          enum:
+          - logical
+          - physical
+      required:
+      - name
+      - storage
+      - type
+    RestoreSource:
+      type: object
+      properties:
+        backup: *id006
+        pitrTime: *id011
+        sourceCluster: *id007
+      description: Exactly one of backup and pitrTime is required.
+      required:
+      - sourceCluster
+    Restore:
+      type: object
+      properties:
+        name: *id006
+        cluster: *id007
+        source:
+          $ref: '#/components/schemas/RestoreSource'
+        phase:
+          type: string
+          enum:
+          - Pending
+          - Running
+          - Succeeded
+          - Failed
+        startedAt: *id011
+        completedAt: *id011
+        error:
+          type: string
+      required:
+      - name
+      - cluster
+      - source
+      - phase
+    CreateRestoreRequest:
+      type: object
+      properties:
+        name: *id006
+        source:
+          $ref: '#/components/schemas/RestoreSource'
+      required:
+      - name
+      - source
+    S3Credentials:
+      type: object
+      properties:
+        accessKeyId:
+          type: string
+          writeOnly: true
+          minLength: 1
+        secretAccessKey: *id012
+      description: Write-only; never returned by backup-storage reads.
+      required:
+      - accessKeyId
+      - secretAccessKey
+    BackupStorage:
+      type: object
+      properties:
+        name: *id006
+        type: &id013
+          type: string
+          enum:
+          - s3
+        endpointURL: &id014
+          type: string
+          format: uri
+        region: &id015
+          type: string
+        bucket: &id016
+          type: string
+          minLength: 1
+        prefix: &id017
+          type: string
+        forcePathStyle: &id018
+          type: boolean
+          default: true
+        verifyTLS: &id019
+          type: boolean
+          default: true
+        description: &id020
+          type: string
+        credentialsConfigured:
+          type: boolean
+          readOnly: true
+        createdAt: *id011
+        updatedAt: *id011
+      required:
+      - name
+      - type
+      - endpointURL
+      - region
+      - bucket
+      - forcePathStyle
+      - verifyTLS
+      - credentialsConfigured
+    CreateBackupStorageRequest:
+      type: object
+      properties:
+        name: *id006
+        type: *id013
+        endpointURL: *id014
+        region: *id015
+        bucket: *id016
+        prefix: *id017
+        forcePathStyle: *id018
+        verifyTLS: *id019
+        description: *id020
+        credentials:
+          $ref: '#/components/schemas/S3Credentials'
+      required:
+      - name
+      - type
+      - endpointURL
+      - region
+      - bucket
+      - credentials
+    UpdateBackupStorageRequest:
+      type: object
+      properties:
+        type: *id013
+        endpointURL: *id014
+        region: *id015
+        bucket: *id016
+        prefix: *id017
+        forcePathStyle: *id018
+        verifyTLS: *id019
+        description: *id020
+        credentials:
+          $ref: '#/components/schemas/S3Credentials'
+      description: Replaces storage configuration. Omitted credentials retain the
+        existing encrypted credentials.
+      required:
+      - type
+      - endpointURL
+      - region
+      - bucket
+      - forcePathStyle
+      - verifyTLS
+    StorageVerification:
+      type: object
+      properties:
+        verified:
+          type: boolean
+        checkedAt: *id011
+        message:
+          type: string
+      description: Checks S3 read/write/delete access and TLS without exposing credentials.
+      required:
+      - verified
+      - checkedAt
+      - message
+    Operation:
+      type: object
+      properties:
+        id: *id006
+        cluster: *id007
+        type:
+          type: string
+          enum:
+          - backup
+          - delete-backup
+          - restore
+          - raise-fcv
+          - restart
+          - replace-member
+          - rotate-system-user
+          - rotate-tls
+        phase:
+          type: string
+          enum:
+          - Pending
+          - Running
+          - Succeeded
+          - Failed
+        message:
+          type: string
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        createdAt: *id011
+        startedAt: *id011
+        completedAt: *id011
+        error:
+          $ref: '#/components/schemas/Error'
+      required:
+      - id
+      - cluster
+      - type
+      - phase
+      - createdAt
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        cluster: *id007
+        type:
+          type: string
+          description: "Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim."
+        reason:
+          type: string
+        message:
+          type: string
+        actor:
+          type: string
+        operationId:
+          type: string
+        createdAt: *id011
+      required:
+      - id
+      - type
+      - message
+      - createdAt
+    MetricPoint:
+      type: object
+      properties:
+        timestamp: *id011
+        value:
+          type: number
+      required:
+      - timestamp
+      - value
+    MetricSeries:
+      type: object
+      properties:
+        name:
+          type: string
+          description: "Canonical series: opcounters.total (operations/second, aggregated counter rate), connections.current (count), repl.lagSeconds (seconds), cache.usedBytes and cache.maxBytes (bytes), cpu.percent (percent, 0-100), ram.usedBytes and ram.totalBytes (bytes), disk.usedBytes and disk.totalBytes (bytes). Providers may add names; clients must tolerate unknown series."
+        member:
+          type: string
+        unit:
+          type: string
+          description: "Canonical units are operations/second, count, seconds, bytes and percent."
+        labels:
+          type: object
+          properties: {}
+          additionalProperties:
+            type: string
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricPoint'
+      required:
+      - name
+      - member
+      - unit
+      - points
+    ClusterMetrics:
+      type: object
+      properties:
+        start: *id011
+        end: *id011
+        step:
+          type: string
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricSeries'
+      required:
+      - start
+      - end
+      - step
+      - series
+    LogLine:
+      type: object
+      properties:
+        timestamp: *id011
+        process:
+          type: string
+        message:
+          type: string
+      required:
+      - timestamp
+      - process
+      - message
+    MemberLogs:
+      type: object
+      properties:
+        member: *id006
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogLine'
+        nextCursor:
+          type: string
+      required:
+      - member
+      - lines
+    AccountList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    APITokenList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/APIToken'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    ProviderList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Provider'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    ClusterList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Cluster'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    MemberList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    SystemUserList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemUser'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    DatabaseUserList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatabaseUser'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    DatabaseRoleList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatabaseRole'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    OrphanedVolume:
+      type: object
+      properties:
+        hostname:
+          type: string
+        serviceId:
+          type: string
+        cluster:
+          type: string
+        member:
+          type: string
+        firstError:
+          type: string
+        lastError:
+          type: string
+        firstFailedAt:
+          type: string
+          format: date-time
+        orphanedAt:
+          type: string
+          format: date-time
+        lastAttemptAt:
+          type: string
+          format: date-time
+        nextAttemptAt:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+        lastProcessId:
+          type: string
+      required:
+      - hostname
+      - serviceId
+      - cluster
+      - member
+      - firstError
+      - lastError
+      - firstFailedAt
+      - orphanedAt
+      - lastAttemptAt
+      - nextAttemptAt
+      - attempts
+      - lastProcessId
+    OrphanedVolumeList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrphanedVolume'
+      required:
+      - items
+    BackupList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backup'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    RestoreList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Restore'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    BackupStorageList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupStorage'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    OperationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Operation'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
+    EventList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        nextCursor:
+          type: string
+          description: Opaque continuation cursor; absent at the end.
+      required:
+      - items
