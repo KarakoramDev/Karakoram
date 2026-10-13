@@ -3,7 +3,7 @@
 
 # Karakoram end-to-end suite
 
-These tests operate a **deployed Karakoram in your own Zerops project**, not an in-process server. Requests use the generated REST client over verified HTTPS. Database checks use the MongoDB driver over public TCP IPv6 and verify the cluster CA returned by the connection API. The test host does not need a Zerops token, zcli login or private-network DNS access.
+These tests operate a **deployed Karakoram in your own Zerops project**, not an in-process server. Requests use the generated REST client over verified HTTPS. MongoDB checks use the MongoDB driver over public TCP IPv6; RabbitMQ checks use AMQP 0-9-1 over public AMQPS IPv6. Both verify the cluster CA returned by the connection API. The test host does not need a Zerops token, zcli login or private-network DNS access.
 
 Use a disposable deployment and bucket: tests create paid services, delete resources, restore database contents and temporarily change global authorization/SSO settings. API/CLI tests do not exercise the rendered web UI; see the [verification matrix and browser checklist](../../docs/verification.md).
 
@@ -15,7 +15,7 @@ Install Karakoram using the [installation guide](../../docs/install.md), complet
 | --- | --- |
 | `KARAKORAM_E2E_URL` | Your deployment's public HTTPS origin; trailing `/api/v1` is accepted. Control-plane certificate verification remains enabled. |
 | `KARAKORAM_E2E_TOKEN` | Existing admin API token, supplied securely through the environment. |
-| `KARAKORAM_E2E_ALLOW_CIDR` | Authorized IPv6 source CIDR (`/128` or network `/64`) of the test host. Required for public MongoDB checks; the suite requests `IPV6` exposure with this allowlist. |
+| `KARAKORAM_E2E_ALLOW_CIDR` | Authorized IPv6 source CIDR (`/128` or network `/64`) of the test host. Required for public MongoDB checks and RabbitMQ data-path checks; the suite requests `IPV6` exposure with this allowlist. RabbitMQ API phases still run without it, with explicit skipped data-path subtests. |
 | `KARAKORAM_E2E_ALLOWLIST_OBSERVATION_ONLY` | Optional observation-only mode: `1` logs the deny-only TLS probe in `TestSecurity/TLSExposure` rather than asserting source rejection. Unset by default. Route/spec checks and exposure deletion remain strict. A run using this option does not verify allowlist enforcement. |
 | `KARAKORAM_E2E_STORAGE_NAME` | Existing HTTPS S3 backup-storage object with `forcePathStyle=true`, `verifyTLS=true`. Takes precedence over creation variables except in `TestDeletionChoices` and `TestMultiNamespace`. Existing objects are verified, not edited/deleted. |
 | `KARAKORAM_E2E_STORAGE_ENDPOINT` | HTTPS S3 endpoint when creating test storage; TLS certificate verification is required. |
@@ -97,8 +97,40 @@ Use the exact `Test/Scenario` names below with the command above, for example `-
 | `TestRBAC/OIDC` | Issuer code/PKCE/signed ID-token callback, HttpOnly session, identity/groups, viewer mapping, administrative denial and logout. |
 | `TestAPICLI/Workflow` | Cluster, backup/restore, database-user/role, storage, account/token, policy/permissions, operations and events commands against the deployed server. |
 | `TestMultiNamespace` | Second-project registration and relay readiness, three-member health, credential isolation, database user creation, namespace-local backup, cross-namespace clone with restored marker data, namespace RBAC/export denial, non-disruptive token rotation and deletion guard/teardown. |
+| `TestRabbitMQCluster/Create` | Three healthy brokers, observed version, member/detail/status agreement, private AMQPS/management endpoints, public AMQPS endpoints when enabled, CA and credential URI consistency; confirmed persistent quorum publish/consume through every broker. |
+| `TestRabbitMQCluster/Restart` | Restart operation success, stable membership, per-broker uptime resets and unchanged persistent quorum message. |
+| `TestRabbitMQCluster/ReplaceMember` | Member replacement operation, old member absence, healthy three-member convergence and unchanged persistent quorum message. |
+| `TestRabbitMQCluster/Access` | Vhost/user/permission/policy create, list, get, update and delete; generated-password login and changed-password login over AMQPS using the created user's vhost permissions. |
+| `TestRabbitMQCluster/Definitions` | Verified S3 storage, definitions backup inventory, vhost deletion and definitions restore recovering vhost metadata. No message-data recovery claim. |
+| `TestRabbitMQCluster/Upgrade` | Observed rolling 4.3.5→4.3.6 transition, healthy majority, final per-broker version and unchanged persistent quorum message. |
+| `TestRabbitMQCluster/Scaling` | 3→5→3 healthy membership with the original persistent quorum message readable through every current broker after each scale. |
+| `TestRabbitMQCluster/Metrics` | Fresh RabbitMQ JSON series for every broker and labelled Prometheus output. |
+| `TestRabbitMQCluster/Delete` | Explicit complete cluster deletion, cluster/member/connection API absence, inventory removal and orphaned-volume evidence. |
 
 Independent scenario processes may share a disposable deployment because resource names and S3 prefixes are randomized; the suite does not use `t.Parallel`. **Serialize `TestRBAC/Accounts`, `TestRBAC/OIDC` and `TestMultiNamespace` with each other and with any administrative policy/settings mutation.** These scenarios save/replace/restore global policy; OIDC also temporarily replaces settings and uses the fixed `oidctest` identity. Do not make unrelated administrative changes while these scenarios run.
+
+## RabbitMQ live tests and a project-local runner
+
+Each `TestRabbitMQCluster/<phase>` is independent: it creates a randomized prefix-named three-broker cluster, waits for `Ready` and observed-generation convergence, and cleans up its own cluster. Selecting only `Upgrade`, for example, still provisions the required 4.3.5 source cluster. The full selection creates these clusters sequentially; scaling needs capacity for five brokers, and replacement temporarily adds a fourth. No existing PSMDB scenario is changed.
+
+Set URL/token for all phases. `Definitions` additionally needs `KARAKORAM_E2E_STORAGE_NAME` or all five S3 creation variables listed above. Storage is verified before provisioning its cluster. To exercise message persistence and created-user authentication, set `KARAKORAM_E2E_ALLOW_CIDR` to the runner's actual IPv6 source CIDR and ensure it can reach the project's public TCP endpoints. Without it, only the AMQPS subtests skip, explicitly; control-plane restart, replacement, access CRUD, upgrade, scaling, metrics and deletion still run. An invalid configured CIDR or failed advertised AMQPS endpoint is a failure, not a skip.
+
+For a runner **inside the same disposable Zerops project**, create a separate Go service (for example `e2erunner`) with terminal access, outbound HTTPS access to Go toolchain/module registries and public IPv6 connectivity. Check out the intended Karakoram source revision there. Use Go 1.24+ or automatic toolchain selection (`GOTOOLCHAIN=auto`); Zerops `go@1` may initially provide an older Go version. Supply the variables above through secure service environment settings, including the runner's source CIDR rather than your workstation's. Open the runner service's terminal and execute from the repository root:
+
+```sh
+go vet -tags e2e ./test/e2e/...
+go test -tags e2e -count=1 -v -timeout 24h ./test/e2e \
+  -run '^TestRabbitMQCluster$'
+
+# Independently runnable phase; setup and cleanup remain included.
+go test -tags e2e -count=1 -v -timeout 6h ./test/e2e \
+  -run '^TestRabbitMQCluster$/Upgrade$'
+```
+
+Even in a project-local runner, these tests intentionally use **public AMQPS**, not private broker DNS. Certificate verification is always enabled. Publisher confirmations prove a persistent message was accepted by a durable quorum queue; passive declarations ensure persistence checks cannot silently recreate a missing queue. The same message is read and requeued through every current broker after the disruptive action. These are before/after persistence checks, not continuous-availability or throughput measurements. The rolling-upgrade phase requires an observed mixed-version transition and fails if evidence is inconclusive.
+
+Optional evidence uses the existing private snapshot directory and records statuses, members, operations, vhost/permission/policy metadata, backups/restores, metrics and message-proof summaries. It never records connection credentials or generated/changed passwords. `KEEP=1` retains final test-owned clusters/storage except the explicit `Delete` phase; access-object deletions still run. Cleanup verifies API removal and captures orphaned-volume records, but cannot independently enumerate every platform service or prove all retained platform volumes were physically deleted; inspect the project and orphan inventory as well.
+
 
 ## Capability audit and assertion boundaries
 
