@@ -134,6 +134,11 @@ func parseOptions(raw json.RawMessage) (engineOptions, error) {
 		}
 		seen[plugin] = true
 	}
+	for _, base := range []string{"rabbitmq_stream", "rabbitmq_shovel", "rabbitmq_federation"} {
+		if seen[base+"_management"] && !seen[base] {
+			return o, invalid("plugin %q requires %q", base+"_management", base)
+		}
+	}
 	return o, nil
 }
 

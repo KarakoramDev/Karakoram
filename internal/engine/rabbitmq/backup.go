@@ -204,6 +204,11 @@ func (p *Provider) backupOp(ctx context.Context, rc *engine.Context, op *domain.
 				cp.Step, cp.Failure = "failed", "management API returned invalid definitions JSON"
 				return definitionsResult(cp), nil
 			}
+			data, e = targetDefinitions(data)
+			if e != nil {
+				cp.Step, cp.Failure = "failed", "management API returned invalid definitions entries"
+				return definitionsResult(cp), nil
+			}
 			var compressed bytes.Buffer
 			writer := gzip.NewWriter(&compressed)
 			if _, e = writer.Write(data); e != nil {

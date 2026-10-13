@@ -102,7 +102,7 @@ func TestAccessValidation(t *testing.T) {
 	if e := userValidation(UserWrite{Name: "app", Password: &pw, PasswordHash: &hash}); !errors.Is(e, engine.ErrInvalid) {
 		t.Fatal(e)
 	}
-	for _, pattern := range []string{"", strings.Repeat("x", 4097)} {
+	for _, pattern := range []string{strings.Repeat("x", 4097)} {
 		if e := permissionValidation(Permission{Vhost: "/", User: "app", Configure: pattern, Write: ".*", Read: ".*"}); !errors.Is(e, engine.ErrInvalid) {
 			t.Fatal(e)
 		}

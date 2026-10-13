@@ -109,7 +109,7 @@ When a user creation omits its password, `generatedPassword` is returned **once*
 
 Permission bodies contain `vhost`, `user`, and the `configure`, `write`, and `read` regular expressions. Topic permission bodies instead contain `exchange`, `write`, and `read`. Topic `get` and `delete` identify a `vhost`/`user` pair: **delete removes all topic permissions for that pair**, not only one exchange. Policy bodies contain `vhost`, `name`, `pattern`, `applyTo`, a nonnegative `priority`, and a JSON-object `definition`. Both regular and operator policy commands use this shape.
 
-Patterns use RabbitMQ's PCRE syntax, including lookarounds and backreferences. Karakoram requires nonempty patterns of at most 4096 bytes and forwards them unchanged; RabbitMQ validates their syntax.
+Patterns use RabbitMQ's PCRE syntax, including lookarounds and backreferences. Karakoram permits patterns of at most 4096 bytes and forwards them unchanged; RabbitMQ validates their syntax. Empty vhost/topic permission patterns deny access. Regular and operator policy patterns must remain nonempty.
 
 ## Generated command tree
 

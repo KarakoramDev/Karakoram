@@ -99,6 +99,18 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 						return false, err
 					}
 				}
+				routes, err := rc.Backend.ListPublicPorts(ctx)
+				if err != nil {
+					return false, err
+				}
+				for _, route := range routes {
+					if route.Hostname == m.Name && route.Port == m.PublicPort && route.TargetPort != target {
+						if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
+							return false, err
+						}
+						break
+					}
+				}
 				if err := rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: m.PublicPort, TargetPort: target, Protocol: "tcp", IPType: rc.Cluster.Spec.Exposure.IPType, Allowlist: rc.Cluster.Spec.Exposure.Allowlist}); err != nil {
 					return false, err
 				}

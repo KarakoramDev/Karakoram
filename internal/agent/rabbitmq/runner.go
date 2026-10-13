@@ -119,6 +119,11 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	if !slices.Contains(s.Plugins, "rabbitmq_management") || !slices.Contains(s.Plugins, "rabbitmq_prometheus") {
 		return s, errors.New("required plugin missing")
 	}
+	for _, base := range []string{"rabbitmq_stream", "rabbitmq_shovel", "rabbitmq_federation"} {
+		if slices.Contains(s.Plugins, base+"_management") && !slices.Contains(s.Plugins, base) {
+			return s, fmt.Errorf("plugin %q requires %q", base+"_management", base)
+		}
+	}
 	if c.TLS.Mode != "disabled" && c.TLS.Mode != "preferTLS" && c.TLS.Mode != "requireTLS" {
 		return s, errors.New("invalid TLS mode")
 	}
@@ -257,6 +262,14 @@ func restartFingerprint(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfi
 	copy(result[:], h.Sum(nil))
 	return result
 }
+func prepareDataDir(dir string) error {
+	path := filepath.Join(dir, "rabbitmq")
+	if err := os.MkdirAll(path, 0700); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0700)
+}
+
 func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -273,6 +286,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		names = append(names, f.name)
 	}
 	if err := os.MkdirAll(filepath.Join(n.DataDir(), "karakoram", "logs"), 0700); err != nil {
+		return nil, err
+	}
+	if err := prepareDataDir(n.DataDir()); err != nil {
 		return nil, err
 	}
 	if err := n.Configure(process, agent.ProcessSpec{Binary: binary(process), Env: env, Dir: n.DataDir()}); err != nil {

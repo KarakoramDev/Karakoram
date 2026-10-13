@@ -311,8 +311,12 @@ func TestDefinitionsBackupSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader.Close()
-	if string(data) != definitionsFixture {
-		t.Fatal("definitions changed during backup")
+	expected, err := targetDefinitions([]byte(definitionsFixture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, expected) {
+		t.Fatal("backup does not contain filtered definitions")
 	}
 	if f.exports != 1 || f.s3.puts != 1 {
 		t.Fatalf("exports=%d uploads=%d", f.exports, f.s3.puts)

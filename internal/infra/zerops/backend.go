@@ -654,7 +654,7 @@ func routeEqual(a, b PublicPortRouting) bool {
 	x, y := slices.Clone(a.FirewallIPRanges), slices.Clone(b.FirewallIPRanges)
 	sort.Strings(x)
 	sort.Strings(y)
-	return a.PublicIPType == b.PublicIPType && a.PublicPort == b.PublicPort && a.InternalProtocol == b.InternalProtocol && a.FirewallPolicy == b.FirewallPolicy && a.FirewallAllowMyIP == b.FirewallAllowMyIP && slices.Equal(x, y)
+	return a.InternalPort == b.InternalPort && a.PublicIPType == b.PublicIPType && a.PublicPort == b.PublicPort && a.InternalProtocol == b.InternalProtocol && a.FirewallPolicy == b.FirewallPolicy && a.FirewallAllowMyIP == b.FirewallAllowMyIP && slices.Equal(x, y)
 }
 func (b *Backend) syncRoutes(ctx context.Context) error {
 	p, err := b.client.SyncPublicPorts(ctx)
@@ -684,8 +684,8 @@ func (b *Backend) ListPublicPorts(ctx context.Context) ([]infra.PublicPortRoute,
 	return out, nil
 }
 
-// EnsurePublicPort matches by internal port, replaces changed rules, synchronizes
-// routing and returns only after the desired rule reports isSynced.
+// EnsurePublicPort matches owned service routes by public or internal port,
+// replaces changed rules and waits until the desired rule reports isSynced.
 func (b *Backend) EnsurePublicPort(ctx context.Context, name string, p infra.PublicPort) error {
 	ctx, cancel := context.WithTimeout(ctx, b.waitTimeout)
 	defer cancel()
@@ -722,7 +722,7 @@ func (b *Backend) EnsurePublicPort(ctx context.Context, name string, p infra.Pub
 	}
 	found, needsSync := false, false
 	for _, r := range routes {
-		if r.InternalPort != p.TargetPort {
+		if r.InternalPort != p.TargetPort && r.PublicPort != p.Port {
 			continue
 		}
 		if !r.DeleteOnSync && routeEqual(r, wanted) && !found {
