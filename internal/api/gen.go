@@ -142,6 +142,7 @@ const (
 // Defines values for MemberRole.
 const (
 	MemberRoleArbiter         MemberRole = "arbiter"
+	MemberRoleBroker          MemberRole = "broker"
 	MemberRoleConfigPrimary   MemberRole = "config-primary"
 	MemberRoleConfigSecondary MemberRole = "config-secondary"
 	MemberRolePrimary         MemberRole = "primary"
@@ -1208,14 +1209,16 @@ type Member struct {
 
 	// Resources Infrastructure resources currently allocated to the member container.
 	Resources *ObservedResources `json:"resources,omitempty"`
-	Role      MemberRole         `json:"role"`
-	Set       string             `json:"set"`
-	State     string             `json:"state"`
-	Uptime    *int64             `json:"uptime,omitempty"`
-	Version   *string            `json:"version,omitempty"`
+
+	// Role Member role; broker identifies a RabbitMQ broker.
+	Role    MemberRole `json:"role"`
+	Set     string     `json:"set"`
+	State   string     `json:"state"`
+	Uptime  *int64     `json:"uptime,omitempty"`
+	Version *string    `json:"version,omitempty"`
 }
 
-// MemberRole defines model for Member.Role.
+// MemberRole Member role; broker identifies a RabbitMQ broker.
 type MemberRole string
 
 // MemberList defines model for MemberList.

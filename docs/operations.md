@@ -322,6 +322,8 @@ For destructive repairs or ambiguous restore recovery, preserve redacted evidenc
 
 Use the [RabbitMQ guide](user-guide/rabbitmq.md) for configuration/access and [ADR 0021](adr/0021-rabbitmq-cluster-lifecycle.md) for lifecycle ordering. Operate through cluster specs and durable restart/replacement/rotation operations, not parallel manual Zerops deployments.
 
+RabbitMQ members report the `broker` role in the API and members table. Member RAM and CPU usage include the supervised `rabbitmq-server` wrapper and its live descendant processes, including `beam.smp`; the CPU counter also includes the wrapper's reaped-child CPU time. MongoDB process accounting is unchanged.
+
 ### Rolling changes and drain
 
 Karakoram checks online quorum plus one and quorum-critical status before taking a multi-node broker out of service. It drains traffic, persists a maintenance hold and stops the broker **before** disruptive platform actions: Zerops force-stops containers roughly five seconds after SIGTERM. Deployment/readiness can succeed while an intentional hold keeps the broker stopped; that is not messaging readiness. The changed member must acknowledge config, run/rejoin and revive before the next changes. Do not remove hold files or restart other nodes to bypass a blocked operation.

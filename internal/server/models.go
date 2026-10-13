@@ -181,6 +181,9 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 }
 
 func memberRole(m domain.MemberStatus) api.MemberRole {
+	if m.Role == "broker" {
+		return api.MemberRole("broker")
+	}
 	if m.Role == "mongos" || m.Role == "router" {
 		return api.MemberRole("router")
 	}

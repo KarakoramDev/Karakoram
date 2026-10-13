@@ -2338,8 +2338,11 @@ export type components = {
             ramUsageBytes?: number;
             /** @description Infrastructure resources currently allocated to the member container. */
             readonly resources?: components["schemas"]["ObservedResources"];
-            /** @enum {string} */
-            role: "primary" | "secondary" | "arbiter" | "config-primary" | "config-secondary" | "router" | "unknown";
+            /**
+             * @description Member role; broker identifies a RabbitMQ broker.
+             * @enum {string}
+             */
+            role: "primary" | "secondary" | "arbiter" | "config-primary" | "config-secondary" | "router" | "broker" | "unknown";
             set: string;
             state: string;
             /** Format: int64 */

@@ -378,6 +378,7 @@ func TestShardedPresetPreservesTopology(t *testing.T) {
 
 func TestMemberRolesMapToPublicEnum(t *testing.T) {
 	for _, tc := range []struct{ role, set, state, want string }{
+		{"broker", "", "running", "broker"}, {"broker", "", "stopped", "broker"},
 		{"mongos", "", "", "router"}, {"mongod-rs", "rs0", "PRIMARY", "primary"},
 		{"secondary", "rs0", "SECONDARY", "secondary"}, {"primary", "cfg", "PRIMARY", "config-primary"},
 		{"secondary", "cfg", "SECONDARY", "config-secondary"}, {"mongod-cfg", "", "PRIMARY", "config-primary"},
