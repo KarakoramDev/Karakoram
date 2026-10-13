@@ -34,6 +34,10 @@ func TestRestoreAndCloneRequireMatchingBackupProvider(t *testing.T) {
 					t.Fatal(err)
 				}
 				backup := domain.Backup{Name: "saved", Cluster: c.Name, Provider: source, Type: "snapshot", Phase: domain.PhaseSucceeded}
+				if source == "rabbitmq" {
+					backup.Type = "definitions"
+					backup.Location = "saved.json.gz"
+				}
 				if err = s.Store.CreateBackup(t.Context(), &backup); err != nil {
 					t.Fatal(err)
 				}

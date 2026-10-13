@@ -298,7 +298,7 @@ func TestRetainedBackupProviderDispatch(t *testing.T) {
 	}
 }
 
-func TestRestoreSourceAdmissionIsRabbitMQLocal(t *testing.T) {
+func TestRestoreSourceAdmissionChecksProviderAndRabbitMQFormat(t *testing.T) {
 	for _, provider := range []string{"rabbitmq", "psmdb"} {
 		for _, source := range []string{"valid", "PITR", "foreign provider", "incompatible type", "pending backup", "missing location"} {
 			t.Run(provider+"/"+source, func(t *testing.T) {
@@ -341,7 +341,7 @@ func TestRestoreSourceAdmissionIsRabbitMQLocal(t *testing.T) {
 					body = `{"name":"recover","source":{"sourceCluster":"broker","pitrTime":"2026-10-12T12:00:00Z"}}`
 				}
 				want := 202
-				if provider == "rabbitmq" && source != "valid" {
+				if source == "foreign provider" || provider == "rabbitmq" && source != "valid" {
 					want = 400
 				}
 				if provider == "psmdb" && source == "PITR" {
