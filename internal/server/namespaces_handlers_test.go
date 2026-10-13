@@ -163,7 +163,7 @@ func TestCrossNamespaceRestoreAndCloneExportPermission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	backup := domain.Backup{Namespace: "default", Cluster: "prod", Name: "saved", Type: "logical", Phase: domain.PhaseSucceeded}
+	backup := domain.Backup{Namespace: "default", Cluster: "prod", Name: "saved", Provider: "fake", Type: "logical", Phase: domain.PhaseSucceeded}
 	if err = s.Store.CreateBackup(ctx, &backup); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestNamespaceCreateAndSourceDefaults(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	backup := domain.Backup{Namespace: "dev", Cluster: "prod", Name: "saved", Type: "logical", Phase: domain.PhaseSucceeded}
+	backup := domain.Backup{Namespace: "dev", Cluster: "prod", Name: "saved", Provider: "fake", Type: "logical", Phase: domain.PhaseSucceeded}
 	if err := s.Store.CreateBackup(t.Context(), &backup); err != nil {
 		t.Fatal(err)
 	}

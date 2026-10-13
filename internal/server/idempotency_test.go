@@ -602,7 +602,7 @@ func TestIdempotentBackupsRestoresAndGeneratedPassword(t *testing.T) {
 		t.Fatal("backup retry queued another operation", len(ops), err)
 	}
 	// Supply a completed source without running an external database operation.
-	source := domain.Backup{Name: "sourcebackup", Cluster: "dev", Storage: "archive", Type: "logical", Phase: domain.PhaseSucceeded, SourceVersion: "8.0", SourceTopology: domain.Topology{Type: "replicaSet"}}
+	source := domain.Backup{Name: "sourcebackup", Cluster: "dev", Provider: "fake", Storage: "archive", Type: "logical", Phase: domain.PhaseSucceeded, SourceVersion: "8.0", SourceTopology: domain.Topology{Type: "replicaSet"}}
 	if err := s.Store.CreateBackup(t.Context(), &source); err != nil {
 		t.Fatal(err)
 	}

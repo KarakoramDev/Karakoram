@@ -328,9 +328,12 @@ func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 	}
 	m, s := newTestManager(t, p)
 	createOperationCluster(t, s)
+	if err := s.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: "demo"}); err != nil {
+		t.Fatal(err)
+	}
 	for _, op := range []domain.Operation{
 		{ID: "pending", Cluster: "demo", Kind: "restart"},
-		{ID: "restore", Cluster: "demo", Kind: "restore", Phase: domain.PhaseRunning},
+		{ID: "restore", Cluster: "demo", Kind: "restore", Phase: domain.PhaseRunning, Payload: json.RawMessage(`{"restore":"restore"}`)},
 	} {
 		if err := s.EnqueueOperation(ctx, &op); err != nil {
 			t.Fatal(err)
@@ -484,7 +487,10 @@ func TestNonterminalErrorsPersistCheckpointAndAttempts(t *testing.T) {
 	}
 	m, s := newTestManager(t, p)
 	createOperationCluster(t, s)
-	op := domain.Operation{ID: "retry", Cluster: "demo", Kind: "restore", Phase: domain.PhaseRunning}
+	if err := s.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	op := domain.Operation{ID: "retry", Cluster: "demo", Kind: "restore", Phase: domain.PhaseRunning, Payload: json.RawMessage(`{"restore":"restore"}`)}
 	if err := s.EnqueueOperation(ctx, &op); err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +552,10 @@ func TestOperationWorkerUsesBoundedBackoff(t *testing.T) {
 	createOperationCluster(t, s)
 	m.opts.BackoffMin = 20 * time.Millisecond
 	m.opts.BackoffMax = 40 * time.Millisecond
-	op := domain.Operation{ID: "retry", Cluster: "demo", Kind: "restore", Phase: domain.PhaseRunning}
+	if err := s.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	op := domain.Operation{ID: "retry", Cluster: "demo", Kind: "restore", Phase: domain.PhaseRunning, Payload: json.RawMessage(`{"restore":"restore"}`)}
 	if err := s.EnqueueOperation(ctx, &op); err != nil {
 		t.Fatal(err)
 	}

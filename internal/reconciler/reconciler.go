@@ -5,6 +5,7 @@ package reconciler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -565,8 +566,12 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			opErr = errors.New("Provider no longer supports cancellation of this operation")
 		}
 	} else {
-		opResult, opErr = p.RunOperation(callCtx, rc, op)
+		opResult, opErr = m.validateRestoreProvider(callCtx, rc, op)
+		if opErr == nil {
+			opResult, opErr = p.RunOperation(callCtx, rc, op)
+		}
 	}
+
 	if opResult.Checkpoint != nil {
 		op.Checkpoint = opResult.Checkpoint
 	}
@@ -688,6 +693,48 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		delay = result.RequeueAfter
 	}
 	return delay, nil
+}
+
+// Reject incompatible sources before any engine can mutate the target. This
+// also covers restores queued before admission checked backup provenance.
+func (m *Manager) validateRestoreProvider(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if op.Kind != domain.OperationRestore {
+		return engine.OpResult{}, nil
+	}
+	var payload struct {
+		Restore string `json:"restore"`
+	}
+	if err := json.Unmarshal(op.Payload, &payload); err != nil {
+		return engine.OpResult{}, err
+	}
+	restore, err := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), payload.Restore)
+	if err != nil {
+		return engine.OpResult{}, err
+	}
+	if restore.Source.Backup == "" {
+		return engine.OpResult{}, nil
+	}
+	source := domain.ClusterRef{Namespace: restore.SourceNamespace, Name: restore.Source.SourceCluster}
+	if source.Namespace == "" {
+		source.Namespace = rc.Cluster.Namespace
+	}
+	if source.Name == "" {
+		source.Name = rc.Cluster.Name
+	}
+	backup, err := rc.Store.GetBackup(ctx, source, restore.Source.Backup)
+	if err != nil {
+		return engine.OpResult{}, err
+	}
+	if backup.ProviderMatches(rc.Cluster.Spec.Provider) {
+		return engine.OpResult{}, nil
+	}
+	err = engine.InvalidField("source.backup", domain.ReasonConflict, "backup provider does not match target provider")
+	now := rc.Clock.Now()
+	restore.Phase, restore.Error, restore.CompletedAt = domain.PhaseFailed, err.Error(), &now
+	if updateErr := rc.Store.UpdateRestore(ctx, restore); updateErr != nil {
+		return engine.OpResult{}, updateErr
+	}
+	return engine.OpResult{Done: true}, err
 }
 
 // scheduledPlatformWait recognizes only error trees whose leaves are scheduled

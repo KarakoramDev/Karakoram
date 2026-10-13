@@ -398,6 +398,19 @@ type Backup struct {
 	CreatedAt        time.Time  `json:"createdAt"`
 }
 
+// ProviderMatches reports whether a backup can be consumed by the target engine.
+// Backups written before provider metadata existed belong to PSMDB.
+func (b Backup) ProviderMatches(target string) bool {
+	source := b.Provider
+	if source == "" {
+		source = "psmdb"
+	}
+	if target == "" {
+		target = "psmdb"
+	}
+	return source == target
+}
+
 // Restore tracks a restore into its target cluster.
 type Restore struct {
 	Namespace       string        `json:"namespace,omitempty"`

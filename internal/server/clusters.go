@@ -144,8 +144,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				if failure := s.retainedRestoreSource(ctx, source, d.Backup); failure != nil {
 					return *failure
 				}
-				if _, err := s.Store.GetBackup(ctx, source, d.Backup); err != nil {
+				backup, err := s.Store.GetBackup(ctx, source, d.Backup)
+				if err != nil {
 					return s.backupDependencyFailure(err, source, d.Backup)
+				}
+				if !backup.ProviderMatches(c.Spec.Provider) {
+					return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 				}
 			}
 		}
@@ -473,8 +477,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
 				return *failure
 			}
-			if _, err = s.Store.GetBackup(ctx, sourceRef, *b.Source.Backup); err != nil {
+			backup, err := s.Store.GetBackup(ctx, sourceRef, *b.Source.Backup)
+			if err != nil {
 				return s.backupDependencyFailure(err, sourceRef, *b.Source.Backup)
+			}
+			if !backup.ProviderMatches(c.Spec.Provider) {
+				return s.failure(engine.InvalidField("source.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 			}
 		}
 		if b.Source.PitrTime != nil {
