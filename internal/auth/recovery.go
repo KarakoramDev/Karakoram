@@ -128,7 +128,7 @@ func (s *Service) RecoverAdmin(ctx context.Context, name, password, masterKey st
 	if err = s.recoverAdminPolicy(ctx, name); err != nil {
 		return false, err
 	}
-	event := domain.Event{Type: "Warning", Reason: "AdminAccessRecovered", Actor: "system:startup", Message: "Local administrator access recovered for " + name + "; password change required", CreatedAt: s.now()}
+	event := domain.Event{Resource: "accounts", Target: name, Type: "Warning", Reason: "AdminAccessRecovered", Actor: "system:startup", Message: "Local administrator access recovered for " + name + "; password change required", CreatedAt: s.now()}
 	if err = s.o.Store.AppendEvent(ctx, &event); err != nil {
 		return false, err
 	}

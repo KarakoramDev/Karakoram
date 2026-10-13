@@ -58,6 +58,9 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 	case "Logout":
 		return response{noStore: true, serve: func(w http.ResponseWriter) error {
 			if p != nil && p.Via == "token" {
+				if err := s.recordAudit(ctx, domain.Event{Resource: "auth", Target: p.Account, Type: "Normal", Reason: "LogoutSucceeded", Message: "API token client logged out (token remains valid)", Actor: p.Actor()}); err != nil {
+					return s.failure(err).write(w)
+				}
 				w.WriteHeader(204)
 				return nil
 			}

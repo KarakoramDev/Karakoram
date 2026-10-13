@@ -6,16 +6,36 @@ import { useQuery } from '@tanstack/react-query';
 import { api, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
-import { Badge, Card, ErrorBlock, Loading, PageHeader, Segmented } from '@/components/ui/Primitives';
+import { Button } from '@/components/ui/Button';
+import { TextField } from '@/components/ui/Field';
+import { Badge, Callout, Card, ErrorBlock, Loading, PageHeader, Segmented } from '@/components/ui/Primitives';
 import { EventTable, useLiveEvents } from './clusters/detail/EventsTab';
 import { OperationsTable } from './clusters/detail/OperationsTab';
 
 export function EventsPage() {
   const auth = useAuth();
-  const events = useLiveEvents(undefined, auth.can('events', 'read'));
+  const canAudit = auth.can('audit', 'read');
+  const canEvents = auth.can('events', 'read') || canAudit;
+  const [actor, setActor] = useState('');
+  const [resource, setResource] = useState('');
+  const [filters, setFilters] = useState<{ actor?: string; resource?: string }>({});
+  const events = useLiveEvents(undefined, canEvents, canAudit ? filters : {});
   return (
     <div className="page">
-      <PageHeader title="Events" description="Durable activity log across every cluster you can see, updated live." />
+      <PageHeader title="Events" description={canAudit ? 'Durable cluster and installation audit activity, updated live.' : 'Durable activity log across every cluster you can see, updated live.'} />
+      {canAudit ? (
+        <Card title="Audit filters">
+          <form className="row wrap" style={{ alignItems: 'flex-end', gap: 12 }} onSubmit={(e) => {
+            e.preventDefault();
+            setFilters({ actor: actor || undefined, resource: resource || undefined });
+          }}>
+            <TextField label="Actor" value={actor} onChange={(e) => setActor(e.target.value)} placeholder="Exact actor identity" className="grow" />
+            <TextField label="Resource" value={resource} onChange={(e) => setResource(e.target.value)} placeholder="e.g. accounts, clusters, auth" className="grow" />
+            <Button type="submit">Apply filters</Button>
+          </form>
+          <p className="small muted">Exact, case-sensitive matches; blank fields include all values. Noncluster audit records require audit:read. Cluster permissions still apply.</p>
+        </Card>
+      ) : null}
       <Card
         flush
         title="Recent events"
@@ -25,7 +45,7 @@ export function EventsPage() {
           </Badge>
         }
       >
-        {events.list.isPending ? <Loading /> : events.list.error ? <div className="card-body"><ErrorBlock error={events.list.error} retry={() => events.list.refetch()} /></div> : <EventTable items={events.items} showCluster />}
+        {!canEvents ? <div className="card-body"><Callout tone="info">You do not have permission to view events.</Callout></div> : events.list.isPending ? <Loading /> : events.list.error ? <div className="card-body"><ErrorBlock error={events.list.error} retry={() => events.list.refetch()} /></div> : <EventTable items={events.items} showCluster showResource={canAudit} />}
       </Card>
     </div>
   );

@@ -171,7 +171,7 @@ func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
 	return api.Cluster{Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(c.Name, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
 }
 func operationAPI(o domain.Operation) api.Operation {
-	return api.Operation{Id: o.ID, Cluster: o.Cluster, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
+	return api.Operation{Id: o.ID, Cluster: o.Cluster, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, Actor: &o.Actor, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
 }
 func backupAPI(b domain.Backup) api.Backup {
 	return api.Backup{Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: &b.Schedule, Phase: api.BackupPhase(b.Phase), PbmName: &b.PBMName, StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: &b.Error}
@@ -180,7 +180,7 @@ func restoreAPI(r domain.Restore) api.Restore {
 	return api.Restore{Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: &r.Source.Backup, PitrTime: r.Source.PITRTime, SourceCluster: r.Source.SourceCluster}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: &r.Error}
 }
 func eventAPI(e domain.Event) api.Event {
-	return api.Event{Id: e.ID, Cluster: &e.Cluster, OperationId: &e.Operation, Type: e.Type, Reason: &e.Reason, Message: e.Message, Actor: &e.Actor, CreatedAt: e.CreatedAt}
+	return api.Event{Id: e.ID, Cluster: &e.Cluster, OperationId: &e.Operation, Type: e.Type, Reason: &e.Reason, Message: e.Message, Actor: &e.Actor, Resource: &e.Resource, Target: &e.Target, CreatedAt: e.CreatedAt}
 }
 func rolesDomain(a []api.RoleReference) []domain.RoleRef {
 	out := make([]domain.RoleRef, 0, len(a))

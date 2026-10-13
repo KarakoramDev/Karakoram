@@ -15,7 +15,7 @@ import { useClusterContext } from './ClusterDetail';
 type KEvent = Schemas['Event'];
 type Process = NonNullable<NonNullable<operations['getMemberLogs']['parameters']['query']>['process']>;
 
-export function EventTable({ items, showCluster }: { items: KEvent[]; showCluster?: boolean }) {
+export function EventTable({ items, showCluster, showResource }: { items: KEvent[]; showCluster?: boolean; showResource?: boolean }) {
   return (
     <div className="table-wrap">
       <table className="table">
@@ -23,6 +23,7 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
           <tr>
             <th>Time</th>
             {showCluster ? <th>Cluster</th> : null}
+            {showResource ? <><th>Resource</th><th>Target</th></> : null}
             <th>Type</th>
             <th>Message</th>
             <th>Actor</th>
@@ -33,7 +34,8 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
           {items.map((e) => (
             <tr key={e.id}>
               <td className="small nowrap">{formatTime(e.createdAt)}</td>
-              {showCluster ? <td className="mono small">{e.cluster ?? '—'}</td> : null}
+              {showCluster ? <td className="mono small">{e.cluster || '—'}</td> : null}
+              {showResource ? <><td className="mono small">{e.resource || '—'}</td><td className="mono small">{e.target || '—'}</td></> : null}
               <td>
                 <Badge plain tone={e.type.includes('fail') || e.type.includes('error') ? 'danger' : e.type.includes('warn') ? 'warn' : 'neutral'}>
                   {e.type}
@@ -43,13 +45,13 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
                 {e.message}
                 {e.reason ? <span className="faint"> ({e.reason})</span> : null}
               </td>
-              <td className="small mono">{e.actor ?? ''}</td>
+              <td className="small mono">{e.actor || '—'}</td>
               <td className="small mono">{e.operationId ?? ''}</td>
             </tr>
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={showCluster ? 6 : 5} className="table-empty">
+              <td colSpan={5 + (showCluster ? 1 : 0) + (showResource ? 2 : 0)} className="table-empty">
                 No events.
               </td>
             </tr>
@@ -60,11 +62,12 @@ export function EventTable({ items, showCluster }: { items: KEvent[]; showCluste
   );
 }
 
-/** Merges the durable event list with live frames filtered to one cluster. */
-export function useLiveEvents(cluster: string | undefined, enabled: boolean) {
+/** Merges the durable event list with live frames using the same exact filters. */
+export function useLiveEvents(cluster: string | undefined, enabled: boolean, filters: { actor?: string; resource?: string } = {}) {
+  const { actor, resource } = filters;
   const list = useQuery({
-    queryKey: cluster ? keys.clusterSub(cluster, 'events') : keys.events,
-    queryFn: () => unwrap(api.GET('/events', { params: { query: { ...(cluster ? { cluster } : {}), limit: 200 } } })),
+    queryKey: [...(cluster ? keys.clusterSub(cluster, 'events') : keys.events), actor ?? '', resource ?? ''],
+    queryFn: () => unwrap(api.GET('/events', { params: { query: { ...(cluster ? { cluster } : {}), ...(actor ? { actor } : {}), ...(resource ? { resource } : {}), limit: 200 } } })),
     enabled,
   });
   const [live, setLive] = useState<KEvent[]>([]);
@@ -72,22 +75,30 @@ export function useLiveEvents(cluster: string | undefined, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     setLive([]);
-    const url = `${API_BASE}/events/stream${cluster ? `?cluster=${encodeURIComponent(cluster)}` : ''}`;
+    const query = new URLSearchParams();
+    if (cluster) query.set('cluster', cluster);
+    if (actor) query.set('actor', actor);
+    if (resource) query.set('resource', resource);
+    const url = `${API_BASE}/events/stream${query.size ? `?${query}` : ''}`;
     return subscribeSSE(
       url,
       (f) => {
         try {
           const ev = JSON.parse(f.data) as KEvent;
-          setLive((xs) => (xs.some((x) => x.id === ev.id) ? xs : [ev, ...xs].slice(0, 500)));
+          if ((!cluster || ev.cluster === cluster) && (!actor || ev.actor === actor) && (!resource || ev.resource === resource)) {
+            setLive((xs) => (xs.some((x) => x.id === ev.id) ? xs : [ev, ...xs].slice(0, 500)));
+          }
         } catch {
           /* ignore malformed frame */
         }
       },
       setConnected,
     );
-  }, [cluster, enabled]);
+  }, [cluster, enabled, actor, resource]);
   const ids = new Set(live.map((e) => e.id));
-  const merged = [...live, ...(list.data?.items ?? []).filter((e) => !ids.has(e.id))].sort((a, b) => b.id - a.id);
+  const merged = [...live, ...(list.data?.items ?? []).filter((e) => !ids.has(e.id))]
+    .filter((e) => (!cluster || e.cluster === cluster) && (!actor || e.actor === actor) && (!resource || e.resource === resource))
+    .sort((a, b) => b.id - a.id);
   return { list, items: merged, connected };
 }
 

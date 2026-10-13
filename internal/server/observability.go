@@ -20,12 +20,12 @@ import (
 )
 
 func (s *Server) eventAllowed(ctx context.Context, e domain.Event) bool {
-	obj := e.Cluster
-	if obj == "" {
-		obj = "*"
+	permission := s.allowed(ctx, "events", "read", e.Cluster)
+	if e.Cluster == "" {
+		permission = s.allowed(ctx, "audit", "read", "*")
 	}
 	q := request(ctx).URL.Query()
-	return s.allowed(ctx, "events", "read", obj) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation)
+	return permission && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation) && (q.Get("actor") == "" || q.Get("actor") == e.Actor) && (q.Get("resource") == "" || q.Get("resource") == e.Resource)
 }
 func (s *Server) observability(ctx context.Context, name string, in input) response {
 	q := request(ctx).URL.Query()
@@ -67,7 +67,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		}
 		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
 		for {
-			items, err := s.Store.ListEvents(ctx, store.EventFilter{Cluster: q.Get("cluster"), Type: q.Get("type"), Limit: 1000, SinceID: since})
+			items, err := s.Store.ListEvents(ctx, store.EventFilter{Cluster: q.Get("cluster"), Type: q.Get("type"), Actor: q.Get("actor"), Resource: q.Get("resource"), Limit: 1000, SinceID: since})
 			if err != nil {
 				return s.failure(err)
 			}

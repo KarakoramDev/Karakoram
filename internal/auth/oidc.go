@@ -178,7 +178,16 @@ func (s *Service) OIDCLoginHandler(w http.ResponseWriter, r *http.Request) {
 // adopted by an OIDC issuer, even if their username matches.
 func (s *Service) OIDCCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: oidcCookie, Path: "/api/v1/auth/oidc", HttpOnly: true, Secure: s.o.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1})
-	fail := func() { http.Error(w, "OIDC authentication failed", http.StatusUnauthorized) }
+	auditPrincipal := Principal{}
+	fail := func() {
+		if auditPrincipal.Account != "" {
+			if err := s.auditAuthentication(r.Context(), auditPrincipal, "LoginFailed", "OIDC login failed"); err != nil {
+				http.Error(w, "authentication unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		http.Error(w, "OIDC authentication failed", http.StatusUnauthorized)
+	}
 	c, err := r.Cookie(oidcCookie)
 	if err != nil {
 		fail()
@@ -220,6 +229,14 @@ func (s *Service) OIDCCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, err := s.o.Store.GetAccount(r.Context(), username)
+	// Only a verified provider identity matching a persisted OIDC account can
+	// attribute a failed callback; a local-name collision is not that account.
+	if err == nil && a.OIDC && a.OIDCIssuer == cfg.IssuerURL && a.OIDCSubject == id.Subject {
+		auditPrincipal = Principal{Account: a.Name, Via: "oidc", OIDCIssuer: a.OIDCIssuer}
+	}
 	var groups []string
 	if raw, ok := claims[cfg.GroupsClaim]; ok {
 		if json.Unmarshal(raw, &groups) != nil {
@@ -244,9 +261,6 @@ func (s *Service) OIDCCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	a, err := s.o.Store.GetAccount(r.Context(), username)
 	if errors.Is(err, store.ErrNotFound) && cfg.AutoCreate {
 		a = &domain.Account{Name: username, DisplayName: username, OIDC: true, OIDCIssuer: cfg.IssuerURL, OIDCSubject: id.Subject, CreatedAt: s.now()}
 		err = s.o.Store.CreateAccount(r.Context(), a)
@@ -255,6 +269,7 @@ func (s *Service) OIDCCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
+	auditPrincipal = Principal{Account: a.Name, Via: "oidc", OIDCIssuer: a.OIDCIssuer}
 	if _, err = s.issue(r.Context(), w, a, extra, "oidc"); err != nil {
 		fail()
 		return

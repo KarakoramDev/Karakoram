@@ -68,6 +68,21 @@ Credential reveal requires **read on cluster-credentials**, separate from cluste
 
 Admin role manages policy/accounts/settings and broad orchestration. Operator can disrupt workloads, restore data and manage application identities, despite not receiving cluster-credentials read by default; this is operational trust, not a read-only boundary. Full-policy replacement can lock out administrators. [RBAC/auth](user-guide/rbac-and-auth.md) lists exact defaults/resources and safe policy examples.
 
+## Audit attribution and durability
+
+Every successful management mutation and credential reveal appends a durable event. Login/OIDC success and failure and logout are recorded by the authentication flow. Records contain actor, action/reason, safe message and affected resource/target; **request and response bodies, passwords, API/session/refresh tokens, storage secrets and private keys are not logged**. Do not put secrets into user-controlled resource or token names: those names are public metadata.
+
+- **Local sessions:** the persisted account name, for example `admin`, not a transient cookie/session ID.
+- **OIDC sessions:** the persisted Karakoram account name plus its verified issuer, for example `sso-user (oidc: https://idp.example.com)`, not a mutable display name or group list. The account is pinned to issuer/subject; the issuer suffix prevents confusing this actor with a plain local username. OIDC and local account identities cannot silently adopt each other.
+- **API tokens:** owner plus public token metadata, for example `admin (token: deploy [TOKEN_ID])`. The ID distinguishes tokens even if renamed or given identical names; events preserve the metadata at action time, never the bearer secret.
+- **System work:** `reconciler` for uninitiated reconciliation, `scheduler` for scheduled backups/retention, `system:startup` for startup actions and `system` for automatic orphan-volume janitor work. User-triggered asynchronous work retains its initiating actor. Desired-state writes store the actor with the generation so later reconciliation does not lose attribution.
+
+Cluster-management events retain `cluster`, with resource `clusters` and target equal to the cluster name, and continue to use per-cluster event authorization. Orphan-volume janitor events retain the original cluster scope but use resource `orphaned-volumes` and target equal to the volume hostname. Installation audit events leave `cluster` empty and require **`audit:read` on `*`** for both list and stream access. Administrative wildcard grants include audit access; built-in viewer/operator event access does not expose noncluster account, RBAC, settings, token or authentication activity. Optional actor/resource list and stream filters are exact, case-sensitive intersections, not authorization bypasses.
+
+Audit records are append-only through the event API, stored in the same SQLite WAL history and retained **indefinitely** like existing cluster events; there is no separate audit retention interval or automatic age/count pruning. This provides restart durability, not cryptographic integrity, external immutability or a complete forensic archive against control-plane/root compromise. Protect and consistently back up the state database, and monitor its growth.
+
+A remote mutation and its local event append cannot be one atomic transaction. A crash or persistence failure after a remote action can leave an action without its audit record; an audit failure must not be read as proof that no remote change occurred. SQLite durability also depends on the storage and consistent backups. Use operation/resource status and external evidence to resolve ambiguous outcomes; do not retry a destructive mutation merely because an event is absent.
+
 ## Sessions, cookies and CSRF
 
 The auth package contract currently lives in `internal/auth/auth.go` and `session.go` (there is no separate `doc.go`). It specifies:

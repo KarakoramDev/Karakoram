@@ -61,6 +61,7 @@ func New(o Options) (*Server, error) {
 
 type requestKey struct{}
 type identityKey struct{}
+type triggerKey struct{}
 type input struct {
 	Body                                                                                                           any
 	Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
@@ -347,7 +348,11 @@ func (s *Server) context(ctx context.Context, name string) (*engine.Context, eng
 	rc.Cluster = c
 	return &rc, p, nil
 }
-func (s *Server) trigger(name string) {
+func (s *Server) trigger(ctx context.Context, name string) {
+	if pending, ok := ctx.Value(triggerKey{}).(*string); ok {
+		*pending = name
+		return
+	}
 	if s.Trigger != nil {
 		s.Trigger.Trigger(name)
 	}
@@ -362,6 +367,22 @@ func value[T any](p *T) T {
 	return zero
 }
 func (s *Server) handle(ctx context.Context, name string, in input) response {
+	var pending string
+	ctx = context.WithValue(ctx, triggerKey{}, &pending)
+	if p := principal(ctx); p != nil {
+		ctx = store.WithActor(ctx, p.Actor())
+	}
+	result := s.dispatch(ctx, name, in)
+	if err := s.auditAction(ctx, name, in, result); err != nil {
+		return s.failure(err)
+	}
+	if pending != "" && s.Trigger != nil {
+		s.Trigger.Trigger(pending)
+	}
+	return result
+}
+
+func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 	switch name {
 	case "GetHealth":
 		_, err := s.Store.ListClusters(ctx)

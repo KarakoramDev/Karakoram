@@ -891,7 +891,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List the durable authorization-filtered event log */
+        /**
+         * List the durable authorization-filtered event log
+         * @description Cluster events require events:read for the cluster. Events without a cluster require audit:read for '*', regardless of events:read grants. Actor and resource filters are exact matches.
+         */
         get: operations["listEvents"];
         put?: never;
         post?: never;
@@ -910,7 +913,7 @@ export type paths = {
         };
         /**
          * Stream authorization-filtered events with durable replay
-         * @description SSE frames: id is the durable event ID, event is the event type, data is a JSON Event. Replays after the requested cursor then streams live events. Heartbeat comment frames keep the connection alive. Authorization filtering applies to every event cluster. An unavailable cursor returns 409; never skip lost history silently.
+         * @description SSE frames: id is the durable event ID, event is the event type, data is a JSON Event. Replays after the requested cursor then streams live events. Heartbeat comment frames keep the connection alive. Authorization filtering applies to every event cluster; non-cluster audit events require audit:read for "*". Actor and resource filters are exact matches.
          */
         get: operations["streamEvents"];
         put?: never;
@@ -1493,6 +1496,7 @@ export type components = {
             message: string;
         };
         Event: {
+            /** @description Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor. */
             actor?: string;
             cluster?: string;
             /** Format: date-time */
@@ -1502,6 +1506,10 @@ export type components = {
             message: string;
             operationId?: string;
             reason?: string;
+            /** @description Resource category for filtering, such as clusters, accounts, auth, rbac or backup-storages. */
+            resource?: string;
+            /** @description Non-secret resource identifier, such as a cluster name, account name or token ID. */
+            target?: string;
             /** @description Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim. */
             type: string;
         };
@@ -1619,6 +1627,8 @@ export type components = {
             scopes?: string[];
         };
         Operation: {
+            /** @description Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor. */
+            actor?: string;
             cluster: string;
             /** Format: date-time */
             completedAt?: string;
@@ -4094,12 +4104,16 @@ export interface operations {
     listEvents: {
         parameters: {
             query?: {
+                /** @description Exact actor identity, including token name and ID when applicable. */
+                actor?: string;
                 cluster?: string;
                 /** @description Opaque cursor returned by the preceding page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
                 operationId?: string;
+                /** @description Exact resource category, such as clusters, accounts, auth or rbac. */
+                resource?: string;
                 type?: string;
             };
             header?: never;
@@ -4128,10 +4142,14 @@ export interface operations {
     streamEvents: {
         parameters: {
             query?: {
+                /** @description Exact actor identity, including token name and ID when applicable. */
+                actor?: string;
                 cluster?: string;
                 /** @description Replay events after this durable event cursor. */
                 cursor?: string;
                 operationId?: string;
+                /** @description Exact resource category, such as clusters, accounts, auth or rbac. */
+                resource?: string;
                 type?: string;
             };
             header?: {

@@ -32,6 +32,24 @@ Two log paths serve different purposes:
 
 Redact passwords, credential-bearing URIs, environment contents, API tokens and PEM private keys before exporting logs. Capture cluster/member/operation/event identifiers and timestamps instead of full secret responses.
 
+## Reviewing audit activity
+
+Global and cluster **Events**/**Operations** show the initiating actor in the UI and CLI. Local actions use the persisted account name; OIDC actors include that name and an `(oidc: issuerURL)` suffix. API-token actions include owner, public token name and ID. Background work uses `reconciler`, `scheduler`, `system:startup` or `system` (orphan-volume janitor) unless attributable to an initiating user/operation. Desired-state generations persist the requesting actor, preserving attribution when reconciliation runs later or after restart.
+
+```sh
+karactl events list --cluster demo
+karactl operations cluster demo
+# Installation audit access requires audit:read on '*'.
+karactl events list --actor admin --resource accounts
+karactl events list --resource auth -o json
+```
+
+Actor/resource filters are exact, case-sensitive AND matches; omit a flag to leave that field unrestricted and preserve the filters when passing `--cursor`. Copy the full actor value, including OIDC issuer or token metadata, when filtering those actions. `events watch` supports the same actor/resource filters alongside cluster/type/operation/replay filters. In the global UI, audit-authorized users can apply Actor/Resource filters and inspect Resource/Target; cluster-detail views stay cluster-scoped. `audit:read` exposes noncluster records, not otherwise unauthorized clusters.
+
+Successful mutations and credential reveals are audited without request/response bodies or secret values; login/OIDC success/failure and logout are also recorded. Audit and cluster events share **indefinite SQLite retention**, without automatic age/count pruning. Monitor state-database disk use and preserve consistent off-platform state backups. The event API is append-only, not a tamper-proof remote audit sink. A remote mutation and local event persistence cannot commit atomically: an absent event or failed request is not sufficient evidence that the remote action did not happen. Inspect operation/resource status before retrying.
+
+See [security](security.md#audit-attribution-and-durability) and [API filter/transport semantics](user-guide/api.md#pagination-and-events).
+
 ## Node-agent semantics
 
 The agent receives nonsecret identity/connection environment (`KARAKORAM_URL`, `KARAKORAM_CLUSTER`, `KARAKORAM_MEMBER`, `KARAKORAM_INTERNAL_CA`, `KARAKORAM_DATA_DIR`) and the per-member secret `KARAKORAM_AGENT_TOKEN`. It pins the control-plane internal CA and pulls only its assigned MemberConfig.

@@ -43,6 +43,7 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 		return err
 	}
 	c.Generation = 1
+	c.RequestedBy = Actor(ctx)
 	c.CreatedAt = time.Now().UTC()
 	c.UpdatedAt = c.CreatedAt
 	if c.Status.Phase == "" {
@@ -76,7 +77,7 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?)", c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano()); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy); err != nil {
 		return typed(err)
 	}
 	if err = writeClusterValues(ctx, tx, c.Name, sealed); err != nil {
@@ -124,7 +125,7 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, name string, s
 			changed = true
 		}
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? OR ? THEN 1 ELSE 0 END,spec=?,updated=? WHERE name=?", data, changed, data, time.Now().UTC().UnixNano(), name)
+	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? OR ? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? OR ? THEN ? ELSE requested_by END,spec=?,updated=? WHERE name=?", data, changed, data, changed, Actor(ctx), data, time.Now().UTC().UnixNano(), name)
 	if err = affected(result, err); err != nil {
 		return err
 	}

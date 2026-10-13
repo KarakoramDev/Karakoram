@@ -19,6 +19,7 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 		return err
 	}
 	c.Generation = 1
+	c.RequestedBy = Actor(ctx)
 	c.CreatedAt = time.Now().UTC()
 	c.UpdatedAt = c.CreatedAt
 	if c.Status.Phase == "" {
@@ -40,7 +41,7 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	if !json.Valid(internal) {
 		return errors.New("invalid provider internal JSON")
 	}
-	_, err = s.writer.ExecContext(ctx, "INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,?,?,?,?,?,?,?)", c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano())
+	_, err = s.writer.ExecContext(ctx, "INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?)", c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy)
 	return typed(err)
 }
 
@@ -50,7 +51,7 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	var c domain.Cluster
 	var spec, status, internal, opts []byte
 	var created, updated int64
-	err := row.Scan(&c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated)
+	err := row.Scan(&c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated, &c.RequestedBy)
 	if err != nil {
 		return nil, typed(err)
 	}
@@ -68,7 +69,7 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	return &c, nil
 }
 
-const clusterColumns = "name,spec,status,internal,generation,deleting,delete_options,created,updated"
+const clusterColumns = "name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by"
 
 // GetCluster loads cluster.
 func (s *Store) GetCluster(ctx context.Context, name string) (*domain.Cluster, error) {
@@ -99,7 +100,7 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, name string, spec domain.
 	if err != nil {
 		return err
 	}
-	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,spec=?,updated=? WHERE name=?", data, data, time.Now().UTC().UnixNano(), name)
+	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), name)
 	return affected(result, err)
 }
 func affected(result sql.Result, err error) error {
@@ -142,7 +143,7 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, name string, opts domai
 	}
 	defer tx.Rollback()
 	data, _ := json.Marshal(opts)
-	r, err := tx.ExecContext(ctx, "UPDATE clusters SET deleting=1,delete_options=?,updated=? WHERE name=?", data, time.Now().UTC().UnixNano(), name)
+	r, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN deleting=0 OR delete_options<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN deleting=0 OR delete_options<>? THEN ? ELSE requested_by END,deleting=1,delete_options=?,updated=? WHERE name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), name)
 	if err = affected(r, err); err != nil {
 		return err
 	}
@@ -179,7 +180,7 @@ func (s *Store) ResumeCluster(ctx context.Context, name string) error {
 	}
 	c.Status.Phase = domain.PhaseCreating
 	data, _ := json.Marshal(c.Status)
-	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,deleting=0,updated=? WHERE name=?", data, time.Now().UTC().UnixNano(), name)
+	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,requested_by=?,deleting=0,updated=? WHERE name=?", data, Actor(ctx), time.Now().UTC().UnixNano(), name)
 	if err != nil {
 		return err
 	}

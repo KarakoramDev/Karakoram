@@ -24,7 +24,7 @@ type fakeTrigger struct{ names []string }
 
 func (t *fakeTrigger) Trigger(name string) { t.names = append(t.names, name) }
 func TestScheduleReloadFireAndRetention(t *testing.T) {
-	ctx := context.Background()
+	ctx := store.WithActor(context.Background(), "interactive-user")
 	key, _ := secrets.New(strings.Repeat("k", 32))
 	db, err := store.Open(filepath.Join(t.TempDir(), "schedule.db"), key)
 	if err != nil {
@@ -55,6 +55,9 @@ func TestScheduleReloadFireAndRetention(t *testing.T) {
 	if len(backups) != 1 || len(ops) != 1 || backups[0].Trigger != "schedule" || backups[0].Storage != "archive" || backups[0].Type != "physical" || !backups[0].CreatedAt.Equal(now) || len(trigger.names) != 1 {
 		t.Fatal(backups, ops, trigger)
 	}
+	if ops[0].Actor != "scheduler" {
+		t.Fatalf("scheduled backup actor=%q", ops[0].Actor)
+	}
 	var payload struct {
 		Backup string `json:"backup"`
 	}
@@ -74,6 +77,9 @@ func TestScheduleReloadFireAndRetention(t *testing.T) {
 	ops, _ = db.ListOperations(ctx, "demo")
 	deleted := map[string]bool{}
 	for _, op := range ops {
+		if op.Actor != "scheduler" {
+			t.Fatalf("scheduled operation actor=%q", op.Actor)
+		}
 		if op.Kind == domain.OperationDeleteBackup {
 			json.Unmarshal(op.Payload, &payload)
 			deleted[payload.Backup] = true

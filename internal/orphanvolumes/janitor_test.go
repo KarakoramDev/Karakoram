@@ -91,6 +91,9 @@ func TestJanitorAbsentVolumeRemovesRecordAndEmitsEvent(t *testing.T) {
 	if len(s.items) != 0 || b.deletes != 0 || len(e.items) != 1 || e.items[0].Reason != "OrphanedVolumeDeleted" || e.items[0].Type != "Normal" || e.items[0].Cluster != "demo" {
 		t.Fatal(s.items, b, e.items)
 	}
+	if e.items[0].Actor != "system" || e.items[0].Resource != "orphaned-volumes" || e.items[0].Target == "" {
+		t.Fatal("janitor event lacks attributed target", e.items[0])
+	}
 }
 
 func TestJanitorReplacementIsDroppedWithoutDeletion(t *testing.T) {
@@ -99,7 +102,7 @@ func TestJanitorReplacementIsDroppedWithoutDeletion(t *testing.T) {
 	if err := j.Tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.items) != 0 || b.deletes != 0 || b.polls != 0 || len(e.items) != 0 {
+	if len(s.items) != 0 || b.deletes != 0 || b.polls != 0 || len(e.items) != 1 || e.items[0].Reason != "OrphanedVolumeRecordRemoved" || e.items[0].Actor != "system" {
 		t.Fatal(s.items, b, e.items)
 	}
 }

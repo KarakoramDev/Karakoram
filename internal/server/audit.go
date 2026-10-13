@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package server
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+)
+
+// auditAction records identifiers and explicitly selected options, never request
+// bodies or responses: both may contain passwords, tokens or private keys.
+func (s *Server) auditAction(ctx context.Context, name string, in input, result response) error {
+	rule, exists := api.OperationRBAC[operationID(name)]
+	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection") {
+		return nil
+	}
+	if result.status >= 300 {
+		return nil
+	}
+	p := principal(ctx)
+	if p == nil {
+		return nil
+	}
+	e := domain.Event{Cluster: in.Cluster, Resource: rule.Resource, Actor: p.Actor(), Type: "Normal", Reason: name + "Succeeded"}
+	e.Target = in.Cluster
+	if op, ok := result.body.(api.Operation); ok {
+		e.Operation = op.Id
+	}
+	switch name {
+	case "CreateCluster":
+		b := in.Body.(*api.CreateClusterRequest)
+		e.Cluster, e.Target, e.Reason = b.Name, b.Name, "ClusterCreateRequested"
+		if b.Spec.DataSource != nil {
+			e.Reason = "ClusterCloneRequested"
+		}
+	case "ReplaceCluster", "PatchCluster":
+		e.Reason = "ClusterSpecChangeRequested"
+		if c, ok := result.body.(api.Cluster); ok {
+			e.Message = fmt.Sprintf("Cluster spec change requested for %s (generation=%d, version=%s, engineReplicas=%d)", c.Name, c.Generation, c.Spec.Version, c.Spec.Components.Engine.Replicas)
+		}
+	case "DeleteCluster":
+		e.Reason = "ClusterDeleteRequested"
+		q := request(ctx).URL.Query()
+		e.Message = fmt.Sprintf("Cluster deletion requested for %s (keepVolumes=%t, keepBackups=%t)", in.Cluster, q.Get("keepVolumes") == "true", q.Get("keepBackups") == "true")
+	case "ResumeCluster", "RestartCluster", "RotateClusterTLS", "ReplaceClusterMember", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
+		e.Reason = strings.TrimSuffix(name, "Cluster") + "Requested"
+	case "GetClusterConnection":
+		e.Reason = "ConnectionCredentialsRevealed"
+	case "CreateAccount":
+		e.Target = in.Body.(*api.CreateAccountRequest).Name
+	case "ReplaceAccount", "DeleteAccount", "ResetAccountPassword":
+		e.Target = in.Account
+	case "ChangePassword":
+		e.Target = p.Account
+	case "CreateAPIToken":
+		if b, ok := result.body.(api.CreatedAPIToken); ok {
+			e.Target = b.Token.Id
+		}
+	case "ReplaceAPIToken", "DeleteAPIToken":
+		e.Target = in.Token
+	case "CreateBackupStorage":
+		e.Target = in.Body.(*api.CreateBackupStorageRequest).Name
+	case "ReplaceBackupStorage", "DeleteBackupStorage", "VerifyBackupStorage":
+		e.Target = in.Storage
+	case "ReplaceRBACPolicy":
+		e.Target = "policy"
+	case "ReplaceSettings":
+		e.Target = "oidc"
+	case "CreateDatabaseUser":
+		b := in.Body.(*api.CreateDatabaseUserRequest)
+		e.Target = in.Cluster + "/" + b.Database + "/" + b.Username
+	case "ReplaceDatabaseUser", "DeleteDatabaseUser":
+		e.Target = in.Cluster + "/" + in.Database + "/" + in.Username
+	case "CreateDatabaseRole":
+		b := in.Body.(*api.DatabaseRole)
+		e.Target = in.Cluster + "/" + b.Database + "/" + b.Name
+	case "ReplaceDatabaseRole", "DeleteDatabaseRole":
+		e.Target = in.Cluster + "/" + in.Database + "/" + in.Role
+	}
+	if in.Member != "" {
+		e.Target += "/" + in.Member
+	}
+	if in.User != "" {
+		e.Target += "/" + in.User
+	}
+	if in.Backup != "" {
+		e.Target += "/" + in.Backup
+	}
+	if name == "CreateBackup" {
+		e.Target += "/" + in.Body.(*api.CreateBackupRequest).Name
+	}
+	if name == "CreateRestore" {
+		e.Target += "/" + in.Body.(*api.CreateRestoreRequest).Name
+	}
+	if name == "RaiseClusterFCV" {
+		e.Message = "Feature compatibility version " + in.Body.(*api.RaiseFCVRequest).Version + " requested for " + in.Cluster
+	}
+	if e.Message == "" {
+		e.Message = e.Reason + " for " + e.Target
+	}
+	return s.recordAudit(ctx, e)
+}
+
+func (s *Server) recordAudit(ctx context.Context, e domain.Event) error {
+	if err := s.Store.AppendEvent(ctx, &e); err != nil {
+		return err
+	}
+	s.Hub.Publish(e)
+	return nil
+}

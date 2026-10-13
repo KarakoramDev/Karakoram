@@ -29,6 +29,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - Cluster mutations with `--wait` observe operation completion and cluster generation. Default timeout is thirty minutes; `--timeout` changes it. A wait timeout does not cancel server work. Inspect status before another submission.
 - Backup/restore creation returns accepted records; inspect the corresponding Operation and record with `operations wait ID`, `backups get` or `restores get`. Those creation commands do not have an invented `--wait` flag.
 - `events watch` streams SSE, supports replay/filter flags, and runs until interrupted. `operations wait` polls a persisted operation until its terminal phase.
+- Events and Operations show the initiating `actor` in table/JSON/YAML output, including cluster-scoped views and event watch. `events list --actor VALUE --resource VALUE` and `events watch --actor VALUE --resource VALUE` add exact, case-sensitive AND filters; omit either flag to leave it unrestricted. Noncluster audit records require `audit:read` on `*`, while cluster authorization is unchanged. Use the full persisted account/token actor string and preserve filters with `--cursor`.
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
@@ -467,20 +468,24 @@ Commands absent below have no additional non-help flags. Query flags only reach 
 ### `karactl events list`
 
 ```text
+      --actor string       API actor parameter
       --cluster string     API cluster parameter
       --cursor string      API cursor parameter
       --limit int          API limit parameter (default 100)
       --operation string   API operationId parameter
+      --resource string    API resource parameter
       --type string        API type parameter
 ```
 
 ### `karactl events watch`
 
 ```text
+      --actor string           API actor parameter
       --cluster string         API cluster parameter
       --cursor string          API cursor parameter
       --last-event-id string   API Last-Event-ID parameter
       --operation string       API operationId parameter
+      --resource string        API resource parameter
       --type string            API type parameter
 ```
 

@@ -64,7 +64,7 @@ func DefaultPolicy() string {
 		} else if r == "backup-storages" || r == "providers" {
 			fmt.Fprintf(&b, "p, role:operator, %s, read, *, allow\n", r)
 		}
-		if r != "cluster-credentials" && r != "accounts" && r != "api-tokens" && r != "rbac" && r != "settings" {
+		if r != "audit" && r != "cluster-credentials" && r != "accounts" && r != "api-tokens" && r != "rbac" && r != "settings" {
 			fmt.Fprintf(&b, "p, role:viewer, %s, read, *, allow\n", r)
 		}
 	}
@@ -76,6 +76,12 @@ func vocabulary() map[string]map[string]bool {
 		if r.Resource == "" {
 			continue
 		}
+		if out[r.Resource] == nil {
+			out[r.Resource] = map[string]bool{}
+		}
+		out[r.Resource][r.Action] = true
+	}
+	for _, r := range api.AdditionalRBAC {
 		if out[r.Resource] == nil {
 			out[r.Resource] = map[string]bool{}
 		}

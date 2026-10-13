@@ -13,7 +13,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
-func prepareOperation(op *domain.Operation) error {
+func prepareOperation(ctx context.Context, op *domain.Operation) error {
+	if op.Actor == "" {
+		op.Actor = Actor(ctx)
+	}
 	if op.ID == "" {
 		id, err := secrets.RandomString(24)
 		if err != nil {
@@ -34,7 +37,7 @@ func prepareOperation(op *domain.Operation) error {
 
 // EnqueueOperation durably queues operation.
 func (s *Store) EnqueueOperation(ctx context.Context, op *domain.Operation) error {
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	return put(ctx, s.writer, "operation", op.Cluster, op.ID, op, "", "", string(op.Phase), true)
@@ -195,7 +198,7 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 
 // EnqueueBackup creates its inventory record and operation in one transaction.
 func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *domain.Operation) error {
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	if backup.CreatedAt.IsZero() {
@@ -220,7 +223,7 @@ func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 
 // EnqueueRestore creates a restore record and its operation in one transaction.
 func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op *domain.Operation) error {
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	if restore.CreatedAt.IsZero() {
@@ -245,7 +248,7 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 
 // EnqueueBackupDeletion marks inventory and enqueues deletion atomically.
 func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup, op *domain.Operation) error {
-	if err := prepareOperation(op); err != nil {
+	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
 	tx, err := s.writer.BeginTx(ctx, nil)

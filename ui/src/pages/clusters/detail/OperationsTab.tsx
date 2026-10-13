@@ -22,6 +22,7 @@ export function OperationsTable({ items, showCluster }: { items: Operation[]; sh
             {showCluster ? <th>Cluster</th> : null}
             <th>Type</th>
             <th>Phase</th>
+            <th>Actor</th>
             <th style={{ width: 200 }}>Progress</th>
             <th>Message</th>
             <th>Created</th>
@@ -37,6 +38,7 @@ export function OperationsTable({ items, showCluster }: { items: Operation[]; sh
               <td>
                 <OpPhaseBadge phase={op.phase} />
               </td>
+              <td className="small mono">{op.actor || '—'}</td>
               <td>
                 {op.progress !== undefined ? (
                   <div className="row">
@@ -69,7 +71,7 @@ export function OperationsTable({ items, showCluster }: { items: Operation[]; sh
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={showCluster ? 8 : 7} className="table-empty">
+              <td colSpan={showCluster ? 9 : 8} className="table-empty">
                 No operations.
               </td>
             </tr>

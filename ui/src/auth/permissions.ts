@@ -12,6 +12,7 @@ export type Resource =
   | 'backup-storages'
   | 'operations'
   | 'events'
+  | 'audit'
   | 'monitoring'
   | 'accounts'
   | 'api-tokens'
@@ -37,7 +38,8 @@ export function evaluate(perms: Schemas['Permission'][], resource: Resource, act
   let allowed = false;
   for (const p of perms) {
     if (!globMatch(p.resource, resource) || !globMatch(p.action, action)) continue;
-    if (object !== '*' && !globMatch(p.object, object)) continue;
+    // Installation audit is a global object, not an entry point for scoped resources.
+    if ((object !== '*' || resource === 'audit') && !globMatch(p.object, object)) continue;
     if (object === '*' && p.object !== '*' && !p.object.includes('*')) {
       // A rule scoped to a specific object does not grant the global capability,
       // but it does mean the caller can act on *something*; treat as allow so

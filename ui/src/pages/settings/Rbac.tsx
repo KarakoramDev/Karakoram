@@ -11,7 +11,7 @@ import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 
-const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'monitoring', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
+const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'audit', 'monitoring', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
 const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', '*'];
 
 /** Lightweight structural check so obvious typos never reach the server. */

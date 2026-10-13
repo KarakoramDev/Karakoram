@@ -32,8 +32,8 @@ Self-service password changes use `/api/v1/auth/change-password` (`currentPasswo
 | Role | Default authority |
 | --- | --- |
 | `role:admin` | All resources/actions/objects; bootstrap `user:admin` is bound to it |
-| `role:operator` | All actions on clusters, backups, restores, database-users (including roles), operations, events and monitoring; read backup-storages/providers; no credential reveal or account/token/RBAC/settings administration |
-| `role:viewer` | Read allowed operational resources, storages and providers; no cluster credentials, accounts, api-tokens, rbac or settings |
+| `role:operator` | All actions on clusters, backups, restores, database-users (including roles), operations, events and monitoring; read backup-storages/providers; no credential reveal, installation audit or account/token/RBAC/settings administration |
+| `role:viewer` | Read allowed operational resources, storages and providers; no cluster credentials, installation audit, accounts, api-tokens, rbac or settings |
 
 New accounts are not automatically bound to viewer/operator. Permissions accumulate via direct rules and role inheritance, subject to **deny overrides**. Give automation a dedicated account with only necessary rules; a token is not a second independently scoped role.
 
@@ -48,7 +48,7 @@ g, SUBJECT, role:ROLE
 
 The five-field `p` form defaults to allow; the optional sixth field is effect. Subjects are `user:NAME`, `group:OIDC_GROUP` or `role:NAME`. `g` binds a user/group/role to a role. Resource/action/object use Casbin glob matching, e.g. `prod*`; cluster-scoped objects are **cluster names**, while global resources use `*`. No match means deny, and any matching deny defeats a matching allow across the identity's subjects/roles. Comments beginning with `#` are supported.
 
-Resources: `clusters`, `cluster-credentials`, `database-users`, `backups`, `restores`, `backup-storages`, `operations`, `events`, `monitoring`, `accounts`, `api-tokens`, `rbac`, `settings`, `providers`. Database role CRUD shares `database-users`; there is no separate `database-roles` policy resource. Actions are `create`, `read`, `update`, `delete` or a glob such as `*`, as appropriate for each operation. Credential reveal is **`cluster-credentials, read`**, not an invented `read-credentials` action on clusters. The operation annotations in [OpenAPI](../../api/openapi.yaml) define the exact mapping.
+Resources: `clusters`, `cluster-credentials`, `database-users`, `backups`, `restores`, `backup-storages`, `operations`, `events`, `audit`, `monitoring`, `accounts`, `api-tokens`, `rbac`, `settings`, `providers`. Database role CRUD shares `database-users`; there is no separate `database-roles` policy resource. Actions are `create`, `read`, `update`, `delete` or a glob such as `*`, as appropriate for each operation. Credential reveal is **`cluster-credentials, read`**, not an invented `read-credentials` action on clusters. Installation audit visibility is **`audit, read, *`** for noncluster records in event lists and streams; ordinary `events` access continues to filter by cluster. Actor/resource filters do not widen that visibility. The operation annotations in [OpenAPI](../../api/openapi.yaml) define the exact mapping.
 
 Example additions to the existing policy:
 

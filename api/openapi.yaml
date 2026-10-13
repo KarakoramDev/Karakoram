@@ -2308,6 +2308,11 @@ paths:
         resource: events
         action: read
         object: '*'
+      description: Cluster events require events:read for the cluster. Events without a cluster require audit:read for '*', regardless of events:read grants. Actor and resource filters are exact matches.
+      x-karakoram-rbac-extra:
+        resource: audit
+        action: read
+        object: '*'
       responses:
         '400': *id001
         '401': *id002
@@ -2339,6 +2344,18 @@ paths:
         in: query
         schema:
           type: string
+      - &eventActor
+        name: actor
+        in: query
+        description: Exact actor identity, including token name and ID when applicable.
+        schema:
+          type: string
+      - &eventResource
+        name: resource
+        in: query
+        description: Exact resource category, such as clusters, accounts, auth or rbac.
+        schema:
+          type: string
   /events/stream:
     get:
       operationId: streamEvents
@@ -2347,6 +2364,10 @@ paths:
       summary: Stream authorization-filtered events with durable replay
       x-karakoram-rbac:
         resource: events
+        action: read
+        object: '*'
+      x-karakoram-rbac-extra:
+        resource: audit
         action: read
         object: '*'
       responses:
@@ -2366,12 +2387,14 @@ paths:
       description: 'SSE frames: id is the durable event ID, event is the event type,
         data is a JSON Event. Replays after the requested cursor then streams live
         events. Heartbeat comment frames keep the connection alive. Authorization
-        filtering applies to every event cluster. An unavailable cursor returns 409;
-        never skip lost history silently.'
+        filtering applies to every event cluster; non-cluster audit events require
+        audit:read for "*". Actor and resource filters are exact matches.'
       parameters:
       - *id008
       - *id009
       - *id010
+      - *eventActor
+      - *eventResource
       - name: cursor
         in: query
         schema:
@@ -3950,6 +3973,9 @@ components:
           - Failed
         message:
           type: string
+        actor:
+          type: string
+          description: Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
         progress:
           type: number
           minimum: 0
@@ -3981,6 +4007,13 @@ components:
           type: string
         actor:
           type: string
+          description: Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor.
+        resource:
+          type: string
+          description: Resource category for filtering, such as clusters, accounts, auth, rbac or backup-storages.
+        target:
+          type: string
+          description: Non-secret resource identifier, such as a cluster name, account name or token ID.
         operationId:
           type: string
         createdAt: *id011
