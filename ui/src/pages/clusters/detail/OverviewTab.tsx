@@ -12,7 +12,7 @@ import { useClusterContext } from './ClusterDetail';
 import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from '../cluster-utils';
 import { memberHealthCounts } from '../member-status';
 import { certificateDownload, colocatedGroups, credentialDatabaseLabel, generationState, knownHost, psmdbConnect } from './detail-state';
-import { hasCapability } from '@/engines';
+import { hasCapability, hasReplicaSetDetails } from '@/engines';
 
 
 export function OverviewTab() {
@@ -38,6 +38,7 @@ export function OverviewTab() {
   const roles = useMemberRoles(list, base);
   const health = memberHealthCounts(list);
   const spec = cluster.spec;
+  const replicaSetDetails = hasReplicaSetDetails(spec.provider);
   const conn = cluster.status.connection;
   const pl = placement.data ?? cluster.status.placement;
   const colocated = colocatedGroups(pl?.groups);
@@ -47,7 +48,7 @@ export function OverviewTab() {
   return (
     <div className="stack" style={{ gap: 20 }}>
       {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
-      <div className="grid-4">
+      <div className={replicaSetDetails ? 'grid-4' : 'grid-3'}>
         <Card flush>
           <div className="stat">
             <span className="stat-label">{suspended ? 'Historical members (runtime suspended)' : 'Members healthy'}</span>
@@ -61,12 +62,14 @@ export function OverviewTab() {
             {!suspended && health.leaving > 0 ? <span className="stat-sub"><Badge tone="progress">{health.leaving} Leaving</Badge></span> : null}
           </div>
         </Card>
-        <Card flush>
-          <div className="stat">
-            <span className="stat-label">Max replication lag</span>
-            <span className="stat-value">{formatDuration(Math.max(0, ...list.map((m) => m.lagSeconds ?? 0)))}</span>
-          </div>
-        </Card>
+        {replicaSetDetails ? (
+          <Card flush>
+            <div className="stat">
+              <span className="stat-label">Max replication lag</span>
+              <span className="stat-value">{formatDuration(Math.max(0, ...list.map((m) => m.lagSeconds ?? 0)))}</span>
+            </div>
+          </Card>
+        ) : null}
         <Card flush>
           <div className="stat">
             <span className="stat-label">Last backup</span>
@@ -115,10 +118,10 @@ export function OverviewTab() {
               <thead>
                 <tr>
                   <th>Member</th>
-                  <th>Set</th>
+                  {replicaSetDetails ? <th>Set</th> : null}
                   <th>Role</th>
                   <th>Health</th>
-                  <th className="num">Lag</th>
+                  {replicaSetDetails ? <th className="num">Lag</th> : null}
                   <th>Version</th>
                   <th>CPU</th>
                   <th>RAM</th>
@@ -141,7 +144,7 @@ export function OverviewTab() {
                         <div className="faint">Platform bounds are distinct from current allocation. Root disk is not the database volume.</div>
                       </details>
                     </td>
-                    <td className="mono">{m.set}</td>
+                    {replicaSetDetails ? <td className="mono">{m.set}</td> : null}
                     <td>
                       <span className="row" style={{ gap: 6 }}>
                         <MemberRole member={m} roles={roles} />
@@ -151,7 +154,7 @@ export function OverviewTab() {
                     <td>
                       <MemberHealthBadge member={m} suspended={suspended} />
                     </td>
-                    <td className="num small">{m.lagSeconds === undefined ? '—' : formatDuration(m.lagSeconds)}</td>
+                    {replicaSetDetails ? <td className="num small">{m.lagSeconds === undefined ? '—' : formatDuration(m.lagSeconds)}</td> : null}
                     <td className="mono small">{m.version ?? '—'}</td>
                     <td>{m.cpuUsage === undefined ? '—' : <Meter value={m.cpuUsage} max={100} unit="%" compact />}</td>
                     <td className="small nowrap">{formatBytes(m.ramUsageBytes)}</td>
@@ -172,7 +175,7 @@ export function OverviewTab() {
                 ))}
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="table-empty">
+                    <td colSpan={replicaSetDetails ? 12 : 10} className="table-empty">
                       {members.isPending ? <Loading /> : 'No members reported yet.'}
                     </td>
                   </tr>
@@ -193,7 +196,7 @@ export function OverviewTab() {
             <div className="stack">
               <KV
                 items={[
-                  ['Replica set', conn.replicaSet ? <span className="mono">{conn.replicaSet}</span> : null],
+                  replicaSetDetails ? ['Replica set', conn.replicaSet ? <span className="mono">{conn.replicaSet}</span> : null] : null,
                   ['Private hosts', <span className="mono small">{conn.hosts.join(', ')}</span>],
                   conn.publicHosts?.length ? ['Public hosts', <span className="mono small">{conn.publicHosts.join(', ')}</span>] : null,
                   ['TLS', `${spec.tls?.mode ?? 'requireTLS'}${spec.tls?.ca === 'userProvided' ? ' (user CA)' : ''}`],

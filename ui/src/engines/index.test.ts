@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Schemas } from '../api/client';
 import type { EngineUI } from './types';
-import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopologySummary, hasCapability, monitoringPanels, providerProcesses, publicExposureMetadata, replicaLimits, supportsOperation, tabAvailable, validateReplicas } from './index.ts';
+import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopologySummary, hasCapability, hasReplicaSetDetails, monitoringPanels, providerProcesses, publicExposureMetadata, replicaLimits, supportsOperation, tabAvailable, validateReplicas } from './index.ts';
 
 const resources: Schemas['Resources'] = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 2, maxDisk: 20 };
 const spec: Schemas['ClusterSpec'] = { provider: 'unregistered', version: '1.0', topology: { type: 'cluster' }, components: { engine: { replicas: 3, resources }, extra: { worker: { replicas: 2, resources }, disabled: { replicas: 0, resources } } } };
@@ -14,6 +14,21 @@ test('default provider selects psmdb explicitly rather than catalog order', () =
   assert.equal(defaultProvider([{ name: 'elasticsearch' }, { name: 'psmdb' }])?.name, 'psmdb');
   assert.equal(defaultProvider([{ name: 'other' }])?.name, 'other');
   assert.equal(defaultProvider([]), undefined);
+});
+
+test('replica-set overview details are opt-in through the engine registry', () => {
+  assert.equal(hasReplicaSetDetails('psmdb'), true);
+  assert.equal(hasReplicaSetDetails('unregistered'), false);
+  engines.test = { label: 'Test' };
+  try {
+    assert.equal(hasReplicaSetDetails('test'), false);
+    engines.test.replicaSetDetails = true;
+    assert.equal(hasReplicaSetDetails('test'), true);
+    engines.test.replicaSetDetails = false;
+    assert.equal(hasReplicaSetDetails('test'), false);
+  } finally {
+    delete engines.test;
+  }
 });
 
 test('older provider metadata retains Mongo capabilities, operations and processes', () => {

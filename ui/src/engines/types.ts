@@ -39,6 +39,8 @@ export interface ComponentValidation {
 export interface EngineUI {
   label: string;
   description?: string;
+  /** Show replica-set names and replication lag in the overview; defaults to false. */
+  replicaSetDetails?: boolean;
   publicPort?: number | ((spec: Schemas['ClusterSpec']) => number);
   /** Protocol label displayed beside the public port. */
   publicPortLabel?: string | ((spec: Schemas['ClusterSpec']) => string);

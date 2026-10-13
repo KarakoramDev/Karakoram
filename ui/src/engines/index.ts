@@ -13,6 +13,7 @@ export const engines: Record<string, EngineUI> = {
   psmdb: {
     label: 'Percona Server for MongoDB',
     description: 'Replica sets and sharded MongoDB clusters.',
+    replicaSetDetails: true,
     publicPort: 27017,
     monitoringPanels: [
       { title: 'Operations', names: ['opcounters.total'], unit: 'ops/s' },
@@ -22,6 +23,11 @@ export const engines: Record<string, EngineUI> = {
     ],
   },
 };
+
+/** Replica-set overview details are opt-in, including for unknown providers. */
+export function hasReplicaSetDetails(provider: string): boolean {
+  return engines[provider]?.replicaSetDetails === true;
+}
 
 export function publicExposureMetadata(engine: EngineUI | undefined, spec: Schemas['ClusterSpec']): { publicPort?: number; publicPortLabel?: string } {
   const port = engine?.publicPort;
