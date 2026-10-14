@@ -2687,8 +2687,11 @@ export type components = {
          *     original status, body and relevant headers, including one-time secrets
          *     and Karakoram-Operation-Id when present. Different bodies conflict with
          *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-         *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-         *     responses are retained. Use a fresh key for each new intended mutation.
+         *     in-flight duplicates return 409 with reason invalid_state. Reservations
+         *     use a five-minute lease renewed every minute while the handler runs;
+         *     after a crash, an expired reservation can be reclaimed. Only successful
+         *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+         *     the original mutation failed. Use a fresh key for each intended mutation.
          */
         IdempotencyKey: string;
         /** @description Maximum results per page. Results are authorization-filtered before pagination. */
@@ -2756,8 +2759,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -2987,8 +2993,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -3444,8 +3453,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -3534,8 +3546,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -3702,8 +3717,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -3795,8 +3813,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -3912,8 +3933,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -4027,8 +4051,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -4333,8 +4360,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -4428,8 +4458,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -4566,8 +4599,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -4661,8 +4697,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -4875,8 +4914,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5085,8 +5127,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5141,8 +5186,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5234,8 +5282,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5329,8 +5380,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5381,8 +5435,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5507,8 +5564,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
@@ -5751,8 +5811,11 @@ export interface operations {
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
                  *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
-                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
                  */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */

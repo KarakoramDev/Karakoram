@@ -1933,8 +1933,11 @@ type CreateAccountParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1976,8 +1979,11 @@ type CreateAPITokenParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2055,8 +2061,11 @@ type CreateBackupStorageParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2089,8 +2098,11 @@ type ReplaceBackupStorageParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2129,8 +2141,11 @@ type CreateClusterParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2166,8 +2181,11 @@ type PatchClusterParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2185,8 +2203,11 @@ type ReplaceClusterParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2216,8 +2237,11 @@ type CreateBackupParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2283,8 +2307,11 @@ type CreateDatabaseRoleParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2317,8 +2344,11 @@ type ReplaceDatabaseRoleParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2348,8 +2378,11 @@ type CreateDatabaseUserParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2382,8 +2415,11 @@ type ReplaceDatabaseUserParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2427,8 +2463,11 @@ type ReplaceClusterMemberParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2483,8 +2522,11 @@ type RaiseClusterFCVParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2502,8 +2544,11 @@ type RestartClusterParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2533,8 +2578,11 @@ type CreateRestoreParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2558,8 +2606,11 @@ type ResumeClusterParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2577,8 +2628,11 @@ type RotateClusterTLSParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2608,8 +2662,11 @@ type RotateSystemUserParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -2704,8 +2761,11 @@ type CreateNamespaceParams struct {
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
 	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
-	// responses are retained. Use a fresh key for each new intended mutation.
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 

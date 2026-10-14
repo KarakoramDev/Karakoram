@@ -136,8 +136,34 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 			}
 		}
 	}()
+	// Keep long-running handlers protected, independently of caller cancellation.
+	// Losing renewal cancels the handler; do not release an ambiguous mutation.
+	handlerCtx, cancelHandler := context.WithCancelCause(ctx)
+	leaseCtx, cancelLease := context.WithCancel(context.WithoutCancel(ctx))
+	leaseDone := make(chan struct{})
+	var leaseErr error
+	go func() {
+		defer close(leaseDone)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		leaseErr = s.renewIdempotencyLease(leaseCtx, identity, record.Owner, ticker.C)
+		if leaseErr != nil {
+			cancelHandler(leaseErr)
+		}
+	}()
+	stopLease := func() {
+		cancelLease()
+		<-leaseDone
+		cancelHandler(nil)
+	}
+	defer stopLease()
 	capture := &idempotencyWriter{header: w.Header().Clone()}
-	result, err := next(ctx, capture, r, v)
+	result, err := next(handlerCtx, capture, r.WithContext(handlerCtx), v)
+	stopLease()
+	if leaseErr != nil {
+		completed = true
+		return s.failure(leaseErr), nil
+	}
 	if err != nil {
 		return result, err
 	}
@@ -166,6 +192,25 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 		completed = true
 	}
 	return replayResponse(wire, false), nil
+}
+
+func (s *Server) renewIdempotencyLease(ctx context.Context, identity, owner string, ticks <-chan time.Time) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case now := <-ticks:
+			renew, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := s.Store.RenewIdempotency(renew, identity, owner, now)
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+		}
+	}
 }
 
 func idempotencyConflict(reason, message string) response {

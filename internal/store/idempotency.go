@@ -11,8 +11,12 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
-// IdempotencyTTL bounds both replay retention and abandoned request reservations.
+// IdempotencyTTL bounds successful response replay retention.
 const IdempotencyTTL = 24 * time.Hour
+
+// IdempotencyLease bounds abandoned reservations. Active handlers renew the lease
+// every minute, including while finishing work after a caller disconnects.
+const IdempotencyLease = 5 * time.Minute
 
 // IdempotentResponse is the final wire response. The entire value is sealed at rest,
 // including headers and bodies that may contain one-time credentials.
@@ -45,7 +49,7 @@ func (s *Store) BeginIdempotency(ctx context.Context, identity, bodyHash string,
 	if _, err = tx.ExecContext(ctx, "DELETE FROM idempotency_requests WHERE identity=? AND expires<=?", identity, now.UnixNano()); err != nil {
 		return record, false, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO idempotency_requests(identity,body_hash,owner,expires) VALUES(?,?,?,?) ON CONFLICT(identity) DO NOTHING", identity, bodyHash, owner, now.Add(IdempotencyTTL).UnixNano())
+	result, err := tx.ExecContext(ctx, "INSERT INTO idempotency_requests(identity,body_hash,owner,expires) VALUES(?,?,?,?) ON CONFLICT(identity) DO NOTHING", identity, bodyHash, owner, now.Add(IdempotencyLease).UnixNano())
 	if err != nil {
 		return record, false, err
 	}
@@ -67,6 +71,20 @@ func (s *Store) BeginIdempotency(ctx context.Context, identity, bodyHash string,
 		}
 	}
 	return record, n == 1, nil
+}
+
+// RenewIdempotency extends only an unexpired reservation held by this owner.
+// A handler that loses its lease cannot revive it or overwrite its replacement.
+func (s *Store) RenewIdempotency(ctx context.Context, identity, owner string, now time.Time) error {
+	r, err := s.writer.ExecContext(ctx, "UPDATE idempotency_requests SET expires=? WHERE identity=? AND owner=? AND response='' AND expires>?", now.Add(IdempotencyLease).UnixNano(), identity, owner, now.UnixNano())
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err == nil && n == 0 {
+		return ErrConflict
+	}
+	return err
 }
 
 // CompleteIdempotency persists only successful responses owned by this reservation.

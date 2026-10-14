@@ -283,7 +283,10 @@ resource or its returned operation to observe asynchronous completion.
   when a genuinely different mutation is intended.
 * A concurrent request with the same key returns **409** with reason
   `invalid_state` while the first request is in flight. Retry the same key/body
-  after that request finishes.
+  after that request finishes. Reservations have a **five-minute lease**, renewed
+  every minute while the handler runs, even after caller disconnection. After a
+  process crash, the same key can be reclaimed when the last lease expires,
+  rather than waiting for the 24-hour successful-response retention period.
 * **4xx/5xx are not cached**. Once a failed request finishes, its key can be retried
   with corrected input. Do not interpret a network timeout as a server rejection.
 
@@ -296,9 +299,11 @@ After expiry the key is a new request; existing resource names may then conflict
 
 This is bounded retry protection, not an atomic, universal exactly-once guarantee:
 an interrupted server between committing a mutation and saving its response leaves
-an in-flight reservation until expiry. A response-persistence failure likewise
-keeps the reservation instead of executing a duplicate. Inspect the resource and
-operation before deciding what to do; changing keys is not a recovery shortcut.
+an in-flight reservation until its five-minute lease expires. A response-persistence
+failure likewise keeps the remaining lease instead of immediately allowing a
+duplicate. Lease expiry permits another execution; it does not prove that the
+first mutation failed. Inspect the resource and operation before deciding what
+to do; changing keys is not a recovery shortcut.
 
 ## Pagination and events
 

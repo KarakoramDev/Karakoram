@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -245,6 +246,48 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 	}
 	if len(covered) != 20 {
 		t.Fatalf("covered operations = %d, want 20", len(covered))
+	}
+}
+
+func TestIdempotencyLeaseHeartbeat(t *testing.T) {
+	s, _, _ := testServer(t)
+	now := time.Now()
+	record, acquired, err := s.Store.BeginIdempotency(t.Context(), "long-handler", "hash", now)
+	if err != nil || !acquired {
+		t.Fatal(record, acquired, err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	ticks := make(chan time.Time)
+	done := make(chan error, 1)
+	go func() {
+		done <- s.renewIdempotencyLease(ctx, "long-handler", record.Owner, ticks)
+	}()
+	// Inject minute ticks across two original lease periods.
+	for minute := 1; minute <= 10; minute++ {
+		select {
+		case ticks <- now.Add(time.Duration(minute) * time.Minute):
+		case err := <-done:
+			t.Fatal("heartbeat stopped before long handler finished", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	// A heartbeat after the renewed lease expires must stop rather than revive it.
+	select {
+	case ticks <- now.Add(10*time.Minute + store.IdempotencyLease):
+	case err := <-done:
+		t.Fatal("heartbeat stopped early", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, store.ErrConflict) {
+			t.Fatal("lost lease was not reported", err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
 	}
 }
 

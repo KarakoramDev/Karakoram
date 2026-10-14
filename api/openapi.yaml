@@ -4402,8 +4402,11 @@ components:
         original status, body and relevant headers, including one-time secrets
         and Karakoram-Operation-Id when present. Different bodies conflict with
         HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-        in-flight duplicates return 409 with reason invalid_state. Only 2xx
-        responses are retained. Use a fresh key for each new intended mutation.
+        in-flight duplicates return 409 with reason invalid_state. Reservations
+        use a five-minute lease renewed every minute while the handler runs;
+        after a crash, an expired reservation can be reclaimed. Only successful
+        2xx responses are retained for 24 hours. Lease expiry does not prove that
+        the original mutation failed. Use a fresh key for each intended mutation.
       schema:
         type: string
         minLength: 1
