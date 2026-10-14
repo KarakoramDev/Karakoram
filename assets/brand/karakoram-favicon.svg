@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    path { fill: #141b21 }
+    .cap { fill: #0b6b74 }
+    @media (prefers-color-scheme: dark) {
+      path { fill: #e6ebee }
+      .cap { fill: #5fd0d8 }
+    }
+  </style>
+  <path d="M1 30 9 15.1V30Z"/>
+  <path class="cap" d="M16 2 19.9 9.2 12 18.7V9.5Z"/>
+  <path d="M14 20.9 21.4 12.1 31 30h-7.9Z"/>
+  <path d="M12 23.1 18.9 30H12Z"/>
+</svg>

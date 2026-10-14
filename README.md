@@ -1,6 +1,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Karakoram
+<h1 align="center">
+  <a href="https://karakoram.dev">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KarakoramDev/Karakoram/main/assets/brand/karakoram-lockup-dark.svg">
+      <img alt="Karakoram" src="https://raw.githubusercontent.com/KarakoramDev/Karakoram/main/assets/brand/karakoram-lockup-light.svg" width="320">
+    </picture>
+  </a>
+</h1>
+
+<p align="center"><a href="https://karakoram.dev">karakoram.dev</a> · <a href="https://karakoram.dev/docs/">Documentation</a> · <a href="https://github.com/KarakoramDev/Karakoram/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
 **Self-hosted MongoDB orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM) across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
 
