@@ -50,7 +50,7 @@ Maintainers may ask for clarification or decline contributions where AI use rais
 
 ## Development setup
 
-Requirements: Go 1.24+, Make, Node 20+ and npm for the UI. Docker and a Linux host are needed for the current agent integration suite's host networking. A Zerops account is not needed for unit tests. Install UI dependencies and build:
+Requirements: Go 1.24+, Make, Node 22.6+ and npm for the UI (the UI test runner uses Node's built-in TypeScript support). Docker and a Linux host are needed for the current agent integration suite's host networking. A Zerops account is not needed for unit tests. Install UI dependencies and build:
 
 ```sh
 make ui

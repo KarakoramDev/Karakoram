@@ -408,6 +408,11 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	}
 	observedGeneration := rc.Cluster.Status.ObservedGeneration
 	result, syncErr := p.Sync(ctx, rc)
+	// A successful Sync may record the generation it applied while still
+	// requesting periodic requeues; that observation only moves forward.
+	if applied := rc.Cluster.Status.ObservedGeneration; syncErr == nil && applied > observedGeneration && applied <= rc.Cluster.Generation {
+		observedGeneration = applied
+	}
 	if err := m.resolve(ctx, rc); err != nil {
 		return result, errors.Join(syncErr, err)
 	}

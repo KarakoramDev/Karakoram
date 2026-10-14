@@ -64,10 +64,11 @@ lost connectivity.
 The relay reconnects automatically using exponential backoff/jitter capped at
 thirty seconds. Verify outbound HTTPS to the configured public origin and
 WebSocket forwarding at `/relay/v1/connect`, then inspect the relay's Zerops
-runtime/deployment logs without exporting secret environment. `RelayConnected`,
-`RelayDisconnected` and `RelayTargetRefused` events identify session/policy
-transitions; token validation events report health transitions. Never publish
-relay/agent 9443 or broaden target policy to repair routing.
+runtime/deployment logs without exporting secret environment. `RelayConnected`
+and `RelayDisconnected` events identify session transitions; `RelayTargetRefused`
+names a target the relay could not open and why. Token validation events report
+health transitions. Never publish relay/agent 9443 or broaden target policy to
+repair routing.
 
 Rotate stored namespace tokens with `namespaces rotate-token NAME --token-file
 FILE` (or stdin `-`); validation precedes replacement and the live relay is not

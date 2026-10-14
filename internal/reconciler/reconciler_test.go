@@ -251,6 +251,60 @@ func createOperationCluster(t *testing.T, s *store.Store) {
 	}
 }
 
+// Providers such as psmdb record the applied generation during Sync while still
+// requesting periodic health requeues; reconciliation must publish it.
+func TestSyncAppliedGenerationIsObservedDespiteRequeue(t *testing.T) {
+	ctx := context.Background()
+	applied := false
+	p := &operationProvider{fakeProvider: &fakeProvider{}}
+	p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+		if applied {
+			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+		}
+		return engine.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+	p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+		return domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: rc.Cluster.Status.ObservedGeneration}, nil
+	}
+	m, s := openAttributionManager(t, p, filepath.Join(t.TempDir(), "observed.db"))
+	createOperationCluster(t, s)
+	ref := domain.ClusterRef{Name: "demo"}
+	observed := func() (int64, int64) {
+		t.Helper()
+		if _, err := m.reconcile(ctx, ref); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.GetCluster(ctx, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.Status.ObservedGeneration, got.Generation
+	}
+	if got, generation := observed(); got != 0 || generation != 1 {
+		t.Fatalf("unapplied generation observed=%d generation=%d", got, generation)
+	}
+	applied = true
+	if got, generation := observed(); got != generation {
+		t.Fatalf("applied generation observed=%d generation=%d", got, generation)
+	}
+	c, err := s.GetCluster(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Spec.Version = "8.0"
+	if err := s.UpdateClusterSpec(ctx, ref, c.Spec); err != nil {
+		t.Fatal(err)
+	}
+	applied = false
+	if got, generation := observed(); got != generation-1 {
+		t.Fatalf("pending update observed=%d generation=%d", got, generation)
+	}
+	applied = true
+	if got, generation := observed(); got != generation {
+		t.Fatalf("applied update observed=%d generation=%d", got, generation)
+	}
+}
+
 func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 	ctx := context.Background()
 	var calls []string

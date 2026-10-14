@@ -376,34 +376,56 @@ func (r *runtime) acceptLocal(ctx context.Context, l net.Listener) error {
 
 var hostnamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
 
+// Fixed dial refusal reasons a relay reports to the hub.
+const (
+	refusedPolicy     = "target is not in namespace policy"
+	refusedAddress    = "invalid target address"
+	refusedPort       = "target port is not allowed"
+	refusedHostname   = "target must be a bare hostname"
+	refusedReserved   = "target hostname is reserved"
+	refusedUnresolved = "target hostname could not be resolved"
+	refusedProhibited = "target resolves to a prohibited address"
+	refusedConnect    = "target TCP connection failed"
+)
+
+// RefusalReason returns reason when it is one of the fixed relay refusal
+// reasons; any other relay-supplied text is replaced with a generic reason.
+func RefusalReason(reason string) string {
+	switch reason {
+	case refusedPolicy, refusedAddress, refusedPort, refusedHostname, refusedReserved, refusedUnresolved, refusedProhibited, refusedConnect:
+		return reason
+	}
+	return "target refused"
+}
+
 func (r *runtime) target(ctx context.Context, s *relaySession, addr string) (net.Conn, error) {
 	s.mu.RLock()
 	_, allowed := s.targets[addr]
 	s.mu.RUnlock()
 	if !allowed {
-		return nil, errors.New("target is not in namespace policy")
+		return nil, errors.New(refusedPolicy)
 	}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return nil, errors.New("invalid target address")
+		return nil, errors.New(refusedAddress)
 	}
 	if port != "27017" && port != "9443" {
-		return nil, errors.New("target port is not allowed")
+		return nil, errors.New(refusedPort)
 	}
 	if _, err = netip.ParseAddr(host); err == nil || strings.Contains(host, ".") || !hostnamePattern.MatchString(host) {
-		return nil, errors.New("target must be a bare hostname")
+		return nil, errors.New(refusedHostname)
 	}
 	if host == "core" || strings.EqualFold(host, r.o.Hostname) {
-		return nil, errors.New("target hostname is reserved")
+		return nil, errors.New(refusedReserved)
 	}
 	ips, err := r.o.Resolver(ctx, host)
 	if err != nil || len(ips) == 0 {
-		return nil, errors.New("target hostname could not be resolved")
+		return nil, errors.New(refusedUnresolved)
 	}
 	for _, ip := range ips {
 		ip = ip.Unmap()
 		if !ip.IsValid() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
-			return nil, errors.New("target resolves to a prohibited address")
+			return nil, errors.New(refusedProhibited)
 		}
 	}
 	// Dial the addresses just checked, rather than resolving twice and permitting DNS rebinding.
@@ -416,7 +438,7 @@ func (r *runtime) target(ctx context.Context, s *relaySession, addr string) (net
 			break
 		}
 	}
-	return nil, errors.New("target TCP connection failed")
+	return nil, errors.New(refusedConnect)
 }
 func (r *runtime) handleDial(s *relaySession, stream *smux.Stream) {
 	defer stream.Close()

@@ -11,15 +11,18 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
-// EventFilter selects an ascending durable event page.
+// EventFilter selects a durable event page. Pages are ascending from SinceID
+// by default; Descending pages run newest-first below BeforeID (0 = newest).
 type EventFilter struct {
-	Namespace string
-	Cluster   string
-	Type      string
-	Actor     string
-	Resource  string
-	Limit     int
-	SinceID   int64
+	Namespace  string
+	Cluster    string
+	Type       string
+	Actor      string
+	Resource   string
+	Limit      int
+	SinceID    int64
+	Descending bool
+	BeforeID   int64
 }
 
 // AppendEvent appends an event and assigns its monotonic durable ID.
@@ -53,10 +56,14 @@ func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
 	return err
 }
 
-// ListEvents returns ordered events.
+// ListEvents returns one ordered event page (see EventFilter).
 func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Event, error) {
 	q := "SELECT id,namespace,data FROM events WHERE id>?"
 	args := []any{filter.SinceID}
+	if filter.Descending && filter.BeforeID > 0 {
+		q += " AND id<?"
+		args = append(args, filter.BeforeID)
+	}
 	if filter.Namespace != "" {
 		q += " AND namespace=?"
 		args = append(args, filter.Namespace)
@@ -84,7 +91,11 @@ func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Ev
 	if limit > 10000 {
 		limit = 10000
 	}
-	q += " ORDER BY id LIMIT ?"
+	if filter.Descending {
+		q += " ORDER BY id DESC LIMIT ?"
+	} else {
+		q += " ORDER BY id LIMIT ?"
+	}
 	args = append(args, limit)
 	rows, err := s.reader.QueryContext(ctx, q, args...)
 	if err != nil {

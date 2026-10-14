@@ -73,7 +73,7 @@ export function useLiveEvents(scope: { namespace?: string; cluster?: string; act
   const query = { ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace), ...(actor ? { actor } : {}), ...(resource ? { resource } : {}) };
   const list = useQuery({
     queryKey: [...(cluster ? keys.clusterSub(namespace ?? DEFAULT_NAMESPACE, cluster, 'events') : keys.eventList(namespace)), actor ?? '', resource ?? ''],
-    queryFn: () => unwrap(api.GET('/events', { params: { query: { ...query, limit: 200 } } })),
+    queryFn: () => unwrap(api.GET('/events', { params: { query: { ...query, limit: 200, order: 'desc' } } })),
     enabled,
   });
   const [live, setLive] = useState<KEvent[]>([]);
