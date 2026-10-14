@@ -1216,6 +1216,9 @@ paths:
           headers:
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
+            Karakoram-Operation-Id:
+              schema: {type: string}
+              description: Durable operation ID for the accepted request.
           content:
             application/json:
               schema:
@@ -1283,6 +1286,8 @@ paths:
           headers:
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1318,6 +1323,8 @@ paths:
           headers:
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1350,6 +1357,13 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
         '500':
           $ref: '#/components/responses/InternalError'
       description: With keepVolumes=true, delete runtimes while preserving volumes,
@@ -1387,7 +1401,10 @@ paths:
         '404': *id004
         '409': *id005
         '202':
-          description: Accepted; track the returned operation.
+          description: Accepted; track Cluster.operationId or the Karakoram-Operation-Id header.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1417,6 +1434,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1446,6 +1466,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1485,6 +1508,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1514,6 +1540,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -1576,6 +1605,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -2174,10 +2206,12 @@ paths:
         '404': *id004
         '409': *id005
         '202':
-          description: Accepted; track the returned operation.
+          description: Accepted; track Backup.operationId or the Karakoram-Operation-Id header. Clusters not yet formed and active are rejected with 409 and reason invalid_state.
           headers:
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -2243,6 +2277,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -2331,10 +2368,12 @@ paths:
         '404': *id004
         '409': *id005
         '202':
-          description: Accepted; track the returned operation.
+          description: Accepted; track Restore.operationId or the Karakoram-Operation-Id header.
           headers:
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
+            Karakoram-Operation-Id:
+              schema: {type: string}
           content:
             application/json:
               schema:
@@ -2679,6 +2718,40 @@ paths:
           $ref: '#/components/responses/InternalError'
       description: Resolve the globally unique operation ID first, then authorize
         operations read against its persisted namespace/cluster object.
+  /operations/{operation}/cancel:
+    parameters:
+    - name: operation
+      in: path
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
+    post:
+      operationId: cancelOperation
+      tags: [Operations]
+      summary: Request cooperative cancellation of an operation
+      description: Pending work is cancelled immediately. Running work is cancelled only at provider-supported safe checkpoints; unsafe or terminal states return 409 conflict with details.reason invalid_state. Requires clusters update permission on the operation's persisted namespace/cluster, resolved by the handler. Cancellation never rolls back accepted desired state.
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      responses:
+        '202':
+          description: Cancellation accepted; a Running operation remains Running until cooperative cleanup completes.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '404': *id004
+        '409': *id005
+        '500':
+          $ref: '#/components/responses/InternalError'
   /events:
     parameters:
     - $ref: '#/components/parameters/NamespaceQuery'
@@ -4159,6 +4232,7 @@ components:
       properties:
         phase:
           type: string
+          description: Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
           enum:
           - Creating
           - Initializing
@@ -4182,6 +4256,7 @@ components:
           format: int64
         version:
           type: string
+          description: Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version.
         fcv:
           type: string
         members:
@@ -4207,6 +4282,10 @@ components:
           - $ref: '#/components/schemas/NamespaceName'
           readOnly: true
         name: *id007
+        operationId:
+          type: string
+          readOnly: true
+          description: Tracking operation returned on create, PUT, PATCH and resume acceptance.
         generation:
           type: integer
           format: int64
@@ -4433,6 +4512,10 @@ components:
           readOnly: true
         name: *id006
         cluster: *id007
+        operationId:
+          type: string
+          readOnly: true
+          description: Durable operation that created this backup.
         storage: *id006
         type:
           type: string
@@ -4508,6 +4591,10 @@ components:
           readOnly: true
         name: *id006
         cluster: *id007
+        operationId:
+          type: string
+          readOnly: true
+          description: Durable operation that created this restore.
         source:
           $ref: '#/components/schemas/RestoreSource'
         phase:
@@ -4663,6 +4750,15 @@ components:
       - verified
       - checkedAt
       - message
+    OperationTarget:
+      type: object
+      properties:
+        kind:
+          type: string
+        name:
+          type: string
+          minLength: 1
+      required: [kind, name]
     Operation:
       type: object
       properties:
@@ -4672,6 +4768,15 @@ components:
           readOnly: true
         id: *id006
         cluster: *id007
+        target:
+          $ref: '#/components/schemas/OperationTarget'
+        targetGeneration:
+          type: integer
+          format: int64
+          description: Cluster generation observed by desired-state operations.
+        step:
+          type: string
+          description: Current durable execution checkpoint or convergence phase.
         type:
           type: string
           enum:
@@ -4683,6 +4788,12 @@ components:
           - replace-member
           - rotate-system-user
           - rotate-tls
+          - create
+          - update
+          - tls
+          - upgrade
+          - delete
+          - resume
         phase:
           type: string
           enum:
@@ -4690,8 +4801,13 @@ components:
           - Running
           - Succeeded
           - Failed
+          - Cancelled
         message:
           type: string
+          description: Current stage or error; every terminal operation has a non-empty summary.
+        cancelRequested:
+          type: boolean
+          description: Cooperative cancellation has been accepted but may still be cleaning up.
         actor:
           type: string
           description: Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
@@ -4708,6 +4824,7 @@ components:
       - namespace
       - id
       - cluster
+      - target
       - type
       - phase
       - createdAt

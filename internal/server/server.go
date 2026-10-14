@@ -77,13 +77,17 @@ type input struct {
 	Namespace, Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
 }
 type response struct {
-	status  int
-	body    any
-	serve   func(http.ResponseWriter) error
-	noStore bool
+	status      int
+	body        any
+	serve       func(http.ResponseWriter) error
+	noStore     bool
+	operationID string
 }
 
 func (r response) write(w http.ResponseWriter) error {
+	if r.operationID != "" {
+		w.Header().Set("Karakoram-Operation-Id", r.operationID)
+	}
 	if r.noStore {
 		w.Header().Set("Cache-Control", "no-store")
 	}
@@ -198,7 +202,7 @@ func selfService(id string) bool {
 }
 func collection(id string) bool {
 	switch id {
-	case "listClusters", "listOrphanedVolumes", "listOperations", "listEvents", "streamEvents", "getPrometheusMetrics", "getOperation", "listBackupStorages", "listNamespaces":
+	case "listClusters", "listOrphanedVolumes", "listOperations", "listEvents", "streamEvents", "getPrometheusMetrics", "getOperation", "cancelOperation", "listBackupStorages", "listNamespaces":
 		return true
 	}
 	return false
@@ -537,7 +541,7 @@ func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 		return s.namespaceMutation(ctx, name, in)
 	case "ListOrphanedVolumes":
 		return s.orphanedVolumes(ctx)
-	case "ListEvents", "StreamEvents", "ListOperations", "GetOperation", "GetPrometheusMetrics", "GetClusterMetrics":
+	case "ListEvents", "StreamEvents", "ListOperations", "GetOperation", "CancelOperation", "GetPrometheusMetrics", "GetClusterMetrics":
 		return s.observability(ctx, name, in)
 	default:
 		return s.cluster(ctx, name, in)

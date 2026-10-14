@@ -29,6 +29,9 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	if c.Status.Phase == "" {
 		c.Status.Phase = domain.PhaseCreating
 	}
+	if c.Status.Phase == domain.PhaseCreating && c.Status.Message == "" {
+		c.Status.Message = "Creating: queued platform provisioning"
+	}
 	spec, err := json.Marshal(c.Spec)
 	if err != nil {
 		return err
@@ -55,6 +58,9 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy); err != nil {
 		return typed(err)
+	}
+	if err = acceptClusterOperation(ctx, tx, c.Ref()); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -126,8 +132,19 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 	if err != nil {
 		return err
 	}
-	result, err := s.writer.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
-	return affected(result, err)
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	if err = affected(result, err); err != nil {
+		return err
+	}
+	if err = acceptClusterOperation(ctx, tx, ref); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func affected(result sql.Result, err error) error {
 	if err != nil {
@@ -174,13 +191,29 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, 
 		return err
 	}
 	defer tx.Rollback()
+	var previous domain.Phase
+	if err = tx.QueryRowContext(ctx, "SELECT json_extract(status,'$.phase') FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&previous); err != nil {
+		return typed(err)
+	}
 	data, _ := json.Marshal(opts)
-	r, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN deleting=0 OR delete_options<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN deleting=0 OR delete_options<>? THEN ? ELSE requested_by END,deleting=1,delete_options=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	r, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN deleting=0 OR delete_options<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN deleting=0 OR delete_options<>? THEN ? ELSE requested_by END,deleting=1,delete_options=?,status=json_set(status,'$.phase','Deleting','$.message','Deleting: queued resource cleanup'),updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(r, err); err != nil {
 		return err
 	}
 	if err = retireOperations(ctx, tx, ref.Key(), "Cluster deletion requested"); err != nil {
 		return err
+	}
+	if err = acceptClusterOperation(ctx, tx, ref); err != nil {
+		return err
+	}
+	if previous != domain.PhaseDeleting {
+		event := domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Type: "Normal", Reason: "PhaseChanged", Message: string(previous) + " → Deleting"}
+		if op, ok := ctx.Value(operationContextKey{}).(*domain.Operation); ok {
+			event.Operation = op.ID
+		}
+		if err = appendEvent(ctx, tx, &event); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -191,12 +224,39 @@ func (s *Store) SuspendCluster(ctx context.Context, c *domain.Cluster) error {
 		return err
 	}
 	c.Status.Phase = domain.PhaseSuspended
+	c.Status.ObservedGeneration = c.Generation
+	c.Status.Message = "Runtime suspended; retained volumes are available for resume"
+	for i := range c.Status.Members {
+		member := &c.Status.Members[i]
+		member.State, member.Health = "SUSPENDED", false
+		member.Agent.Healthy, member.Agent.Message = false, "Runtime suspended"
+		member.PublicHost = ""
+	}
+	for i := range c.Status.Conditions {
+		if c.Status.Conditions[i].Status != "Unknown" || c.Status.Conditions[i].Reason != "Suspended" {
+			c.Status.Conditions[i].LastTransitionTime = time.Now().UTC()
+		}
+		c.Status.Conditions[i].Status = "Unknown"
+		c.Status.Conditions[i].Reason = "Suspended"
+		c.Status.Conditions[i].Message = "Runtime observations are historical; cluster is suspended"
+	}
 	status, err := json.Marshal(c.Status)
 	if err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "UPDATE clusters SET deleting=0,status=?,internal=?,updated=? WHERE namespace=? AND name=?", status, []byte(c.Internal), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(c.Namespace), c.Name)
-	return affected(r, err)
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	r, err := tx.ExecContext(ctx, "UPDATE clusters SET deleting=0,status=?,internal=?,updated=? WHERE namespace=? AND name=?", status, []byte(c.Internal), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(c.Namespace), c.Name)
+	if err = affected(r, err); err != nil {
+		return err
+	}
+	if err = completeDeletionOperations(ctx, tx, c.Ref(), "Cluster runtime suspended; volumes retained"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ResumeCluster increments generation and resumes cluster.
@@ -217,9 +277,13 @@ func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error 
 		return ErrConflict
 	}
 	c.Status.Phase = domain.PhaseCreating
+	c.Status.Message = "Creating: queued runtime resume from retained volumes"
 	data, _ := json.Marshal(c.Status)
 	_, err = tx.ExecContext(ctx, "UPDATE clusters SET status=?,generation=generation+1,requested_by=?,deleting=0,updated=? WHERE namespace=? AND name=?", data, Actor(ctx), time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err != nil {
+		return err
+	}
+	if err = acceptClusterOperation(ctx, tx, ref); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -236,6 +300,9 @@ func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error 
 		return err
 	}
 	defer tx.Rollback()
+	if err = completeDeletionOperations(ctx, tx, ref, "Cluster deleted"); err != nil {
+		return err
+	}
 	if err = retireOperations(ctx, tx, ref.Key(), "Cluster deleted"); err != nil {
 		return err
 	}

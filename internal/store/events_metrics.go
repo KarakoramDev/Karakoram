@@ -27,6 +27,10 @@ type EventFilter struct {
 
 // AppendEvent appends an event and assigns its monotonic durable ID.
 func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
+	return appendEvent(ctx, s.writer, event)
+}
+
+func appendEvent(ctx context.Context, db executor, event *domain.Event) error {
 	if event.Cluster != "" {
 		event.Namespace = domain.NormalizedNamespace(event.Namespace)
 	}
@@ -48,7 +52,7 @@ func (s *Store) AppendEvent(ctx context.Context, event *domain.Event) error {
 	if err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,actor,resource,data,created) VALUES(?,?,?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, event.Actor, event.Resource, data, event.CreatedAt.UnixNano())
+	r, err := db.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,actor,resource,data,created) VALUES(?,?,?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, event.Actor, event.Resource, data, event.CreatedAt.UnixNano())
 	if err != nil {
 		return err
 	}

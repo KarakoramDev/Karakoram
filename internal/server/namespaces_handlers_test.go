@@ -77,7 +77,11 @@ func TestNamespaceDefaultsAndSameNameIsolation(t *testing.T) {
 		path := "/api/v1/clusters/prod/restart?namespace=" + namespace
 		decodeNamespaceResponse[api.Operation](t, call(s, "POST", path, `{}`, admin), 202)
 		ops := decodeNamespaceResponse[api.OperationList](t, call(s, "GET", "/api/v1/clusters/prod/operations?namespace="+namespace, "", admin), 200)
-		if len(ops.Items) != 1 || value(ops.Items[0].Namespace) != namespace {
+		expected := 1
+		if namespace == "dev" {
+			expected++
+		} // The desired-state patch also has a tracking record.
+		if len(ops.Items) != expected || value(ops.Items[len(ops.Items)-1].Namespace) != namespace {
 			t.Fatal(ops)
 		}
 		for _, route := range []string{"database-users", "metrics", "members", "backups", "restores"} {

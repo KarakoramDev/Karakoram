@@ -59,17 +59,20 @@ func (e *fakeEvents) Record(_ context.Context, v domain.Event) error {
 }
 
 type fakeAgent struct {
-	mu             sync.Mutex
-	requests       []agentapi.PBMRequest
-	actions        []string
-	receipts       map[string]agentapi.PBMResponse
-	starts         int
-	deleted        bool
-	pitrDeleted    bool
-	failRestore    bool
-	restorePolling int
-	requireConfig  bool
-	configured     bool
+	mu                sync.Mutex
+	requests          []agentapi.PBMRequest
+	actions           []string
+	receipts          map[string]agentapi.PBMResponse
+	starts            int
+	deleted           bool
+	pitrDeleted       bool
+	failRestore       bool
+	restorePolling    int
+	requireConfig     bool
+	configured        bool
+	activeBackup      bool
+	cancelledBackup   bool
+	backupCancelCalls int
 }
 
 func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +123,15 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			data = string(raw)
 		case "describe-backup":
 			data = sampleDescribe
+			if f.activeBackup {
+				data = `{"name":"2024-01-05T11:10:54Z","type":"logical","status":"running"}`
+				if f.cancelledBackup {
+					data = `{"name":"2024-01-05T11:10:54Z","type":"logical","status":"cancelled","error":"Backup cancelled"}`
+				}
+			}
+		case "cancel-backup":
+			f.cancelledBackup = true
+			f.backupCancelCalls++
 		case "describe-restore":
 			f.restorePolling++
 			data = `{"name":"2024-01-05T11:12:26.296561123Z","status":"done","finish":"2024-01-05T11:16:13Z"}`

@@ -29,7 +29,7 @@ export function PhaseBadge({ phase, message }: { phase: Phase; message?: string 
   );
 }
 
-const OP_TONE: Record<Schemas['Operation']['phase'], Tone> = { Pending: 'neutral', Running: 'progress', Succeeded: 'ok', Failed: 'danger' };
+const OP_TONE: Record<Schemas['Operation']['phase'], Tone> = { Pending: 'neutral', Running: 'progress', Succeeded: 'ok', Failed: 'danger', Cancelled: 'neutral' };
 
 export function OpPhaseBadge({ phase }: { phase: Schemas['Operation']['phase'] }) {
   return <Badge tone={OP_TONE[phase]}>{phase}</Badge>;

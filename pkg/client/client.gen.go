@@ -61,12 +61,12 @@ const (
 
 // Defines values for CanRequestAction.
 const (
-	Asterisk CanRequestAction = "*"
-	Create   CanRequestAction = "create"
-	Delete   CanRequestAction = "delete"
-	Export   CanRequestAction = "export"
-	Read     CanRequestAction = "read"
-	Update   CanRequestAction = "update"
+	CanRequestActionAsterisk CanRequestAction = "*"
+	CanRequestActionCreate   CanRequestAction = "create"
+	CanRequestActionDelete   CanRequestAction = "delete"
+	CanRequestActionExport   CanRequestAction = "export"
+	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
 // Defines values for ClusterStatusPhase.
@@ -128,6 +128,7 @@ const (
 
 // Defines values for OperationPhase.
 const (
+	OperationPhaseCancelled OperationPhase = "Cancelled"
 	OperationPhaseFailed    OperationPhase = "Failed"
 	OperationPhasePending   OperationPhase = "Pending"
 	OperationPhaseRunning   OperationPhase = "Running"
@@ -137,13 +138,19 @@ const (
 // Defines values for OperationType.
 const (
 	OperationTypeBackup           OperationType = "backup"
+	OperationTypeCreate           OperationType = "create"
+	OperationTypeDelete           OperationType = "delete"
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
+	OperationTypeResume           OperationType = "resume"
 	OperationTypeRotateSystemUser OperationType = "rotate-system-user"
 	OperationTypeRotateTls        OperationType = "rotate-tls"
+	OperationTypeTls              OperationType = "tls"
+	OperationTypeUpdate           OperationType = "update"
+	OperationTypeUpgrade          OperationType = "upgrade"
 )
 
 // Defines values for PermissionEffect.
@@ -374,14 +381,17 @@ type Backup struct {
 	LastWriteTime *time.Time     `json:"lastWriteTime,omitempty"`
 	Name          string         `json:"name"`
 	Namespace     *NamespaceName `json:"namespace,omitempty"`
-	PbmName       *string        `json:"pbmName,omitempty"`
-	Phase         BackupPhase    `json:"phase"`
-	Schedule      *string        `json:"schedule,omitempty"`
-	Size          *int64         `json:"size,omitempty"`
-	StartedAt     *time.Time     `json:"startedAt,omitempty"`
-	Storage       string         `json:"storage"`
-	Trigger       BackupTrigger  `json:"trigger"`
-	Type          BackupType     `json:"type"`
+
+	// OperationId Durable operation that created this backup.
+	OperationId *string       `json:"operationId,omitempty"`
+	PbmName     *string       `json:"pbmName,omitempty"`
+	Phase       BackupPhase   `json:"phase"`
+	Schedule    *string       `json:"schedule,omitempty"`
+	Size        *int64        `json:"size,omitempty"`
+	StartedAt   *time.Time    `json:"startedAt,omitempty"`
+	Storage     string        `json:"storage"`
+	Trigger     BackupTrigger `json:"trigger"`
+	Type        BackupType    `json:"type"`
 }
 
 // BackupPhase defines model for Backup.Phase.
@@ -491,9 +501,12 @@ type Cluster struct {
 	Generation int64          `json:"generation"`
 	Name       string         `json:"name"`
 	Namespace  *NamespaceName `json:"namespace,omitempty"`
-	Spec       ClusterSpec    `json:"spec"`
-	Status     ClusterStatus  `json:"status"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+
+	// OperationId Tracking operation returned on create, PUT, PATCH and resume acceptance.
+	OperationId *string       `json:"operationId,omitempty"`
+	Spec        ClusterSpec   `json:"spec"`
+	Status      ClusterStatus `json:"status"`
+	UpdatedAt   time.Time     `json:"updatedAt"`
 }
 
 // ClusterBackupStatus defines model for ClusterBackupStatus.
@@ -552,14 +565,18 @@ type ClusterStatus struct {
 	Members            []Member             `json:"members"`
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
-	Phase              ClusterStatusPhase   `json:"phase"`
+
+	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+	Phase ClusterStatusPhase `json:"phase"`
 
 	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
 	Placement *Placement `json:"placement,omitempty"`
-	Version   *string    `json:"version,omitempty"`
+
+	// Version Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version.
+	Version *string `json:"version,omitempty"`
 }
 
-// ClusterStatusPhase defines model for ClusterStatus.Phase.
+// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 type ClusterStatusPhase string
 
 // Component defines model for Component.
@@ -998,23 +1015,35 @@ type ObservedResources struct {
 // Operation defines model for Operation.
 type Operation struct {
 	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
-	Actor       *string    `json:"actor,omitempty"`
-	Cluster     string     `json:"cluster"`
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	Actor *string `json:"actor,omitempty"`
+
+	// CancelRequested Cooperative cancellation has been accepted but may still be cleaning up.
+	CancelRequested *bool      `json:"cancelRequested,omitempty"`
+	Cluster         string     `json:"cluster"`
+	CompletedAt     *time.Time `json:"completedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
 
 	// Error Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 	// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 	// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 	// `message` is a human-readable explanation that names the rejected field or resource.
-	Error     *Error         `json:"error,omitempty"`
-	Id        string         `json:"id"`
+	Error *Error `json:"error,omitempty"`
+	Id    string `json:"id"`
+
+	// Message Current stage or error; every terminal operation has a non-empty summary.
 	Message   *string        `json:"message,omitempty"`
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 	Phase     OperationPhase `json:"phase"`
 	Progress  *float32       `json:"progress,omitempty"`
 	StartedAt *time.Time     `json:"startedAt,omitempty"`
-	Type      OperationType  `json:"type"`
+
+	// Step Current durable execution checkpoint or convergence phase.
+	Step   *string         `json:"step,omitempty"`
+	Target OperationTarget `json:"target"`
+
+	// TargetGeneration Cluster generation observed by desired-state operations.
+	TargetGeneration *int64        `json:"targetGeneration,omitempty"`
+	Type             OperationType `json:"type"`
 }
 
 // OperationPhase defines model for Operation.Phase.
@@ -1029,6 +1058,12 @@ type OperationList struct {
 
 	// NextCursor Opaque continuation cursor; absent at the end.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// OperationTarget defines model for OperationTarget.
+type OperationTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // OrphanedVolume defines model for OrphanedVolume.
@@ -1245,7 +1280,10 @@ type Restore struct {
 	Error       *string        `json:"error,omitempty"`
 	Name        string         `json:"name"`
 	Namespace   *NamespaceName `json:"namespace,omitempty"`
-	Phase       RestorePhase   `json:"phase"`
+
+	// OperationId Durable operation that created this restore.
+	OperationId *string      `json:"operationId,omitempty"`
+	Phase       RestorePhase `json:"phase"`
 
 	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
 	Source    RestoreSource `json:"source"`
@@ -2255,6 +2293,12 @@ type ListOperationsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// CancelOperationParams defines parameters for CancelOperation.
+type CancelOperationParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListOrphanedVolumesParams defines parameters for ListOrphanedVolumes.
 type ListOrphanedVolumesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
@@ -2836,6 +2880,9 @@ type ClientInterface interface {
 
 	// GetOperation request
 	GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelOperation request
+	CancelOperation(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrphanedVolumes request
 	ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4088,6 +4135,18 @@ func (c *Client) ListOperations(ctx context.Context, params *ListOperationsParam
 
 func (c *Client) GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOperationRequest(c.Server, operation)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelOperation(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelOperationRequest(c.Server, operation, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9891,6 +9950,55 @@ func NewGetOperationRequest(server string, operation string) (*http.Request, err
 	return req, nil
 }
 
+// NewCancelOperationRequest generates requests for CancelOperation
+func NewCancelOperationRequest(server string, operation string, params *CancelOperationParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "operation", runtime.ParamLocationPath, operation)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/operations/%s/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListOrphanedVolumesRequest generates requests for ListOrphanedVolumes
 func NewListOrphanedVolumesRequest(server string, params *ListOrphanedVolumesParams) (*http.Request, error) {
 	var err error
@@ -10599,6 +10707,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetOperationWithResponse request
 	GetOperationWithResponse(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
+
+	// CancelOperationWithResponse request
+	CancelOperationWithResponse(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*CancelOperationResponse, error)
 
 	// ListOrphanedVolumesWithResponse request
 	ListOrphanedVolumesWithResponse(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error)
@@ -11367,6 +11478,7 @@ func (r CreateClusterResponse) StatusCode() int {
 type DeleteClusterResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON202      *Operation
 	JSON400      *BadRequest
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
@@ -12834,6 +12946,34 @@ func (r GetOperationResponse) StatusCode() int {
 	return 0
 }
 
+type CancelOperationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Operation
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelOperationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelOperationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListOrphanedVolumesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14005,6 +14145,15 @@ func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, oper
 		return nil, err
 	}
 	return ParseGetOperationResponse(rsp)
+}
+
+// CancelOperationWithResponse request returning *CancelOperationResponse
+func (c *ClientWithResponses) CancelOperationWithResponse(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*CancelOperationResponse, error) {
+	rsp, err := c.CancelOperation(ctx, operation, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelOperationResponse(rsp)
 }
 
 // ListOrphanedVolumesWithResponse request returning *ListOrphanedVolumesResponse
@@ -15896,6 +16045,13 @@ func ParseDeleteClusterResponse(rsp *http.Response) (*DeleteClusterResponse, err
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Operation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest BadRequest
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19340,6 +19496,74 @@ func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelOperationResponse parses an HTTP response from a CancelOperationWithResponse call
+func ParseCancelOperationResponse(rsp *http.Response) (*CancelOperationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelOperationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Operation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest BadRequest

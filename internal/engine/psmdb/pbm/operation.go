@@ -21,6 +21,8 @@ import (
 // checkpoint contains no credentials or YAML. Steps are committed before non-idempotent starts.
 type checkpoint struct {
 	Step             string       `json:"step"`
+	Cancelling       bool         `json:"cancelling,omitempty"`
+	CancelIssued     bool         `json:"cancelIssued,omitempty"`
 	Member           string       `json:"member,omitempty"`
 	PBMName          string       `json:"pbmName,omitempty"`
 	Snapshot         string       `json:"snapshot,omitempty"`
@@ -53,6 +55,25 @@ func loadCheckpoint(op *domain.Operation) (checkpoint, error) {
 		}
 	}
 	return cp, nil
+}
+
+// PrepareCancellation switches accepted pre-mutation restore cancellation to
+// target-configuration recovery; backup polling issues its durable cancel receipt.
+// Requests are accepted only at safe checkpoints by the owning provider.
+func PrepareCancellation(op *domain.Operation) (bool, error) {
+	cp, err := loadCheckpoint(op)
+	if err != nil {
+		return false, err
+	}
+	if cp.Step == "" {
+		return true, nil
+	}
+	if op.Kind == domain.OperationRestore && !cp.Cancelling {
+		cp.Step, cp.Failure = "configure-target", "Restore cancelled before data mutation"
+	}
+	cp.Cancelling = true
+	op.Checkpoint, err = json.Marshal(cp)
+	return false, err
 }
 
 func result(cp checkpoint, done bool) engine.OpResult {

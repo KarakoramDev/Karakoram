@@ -194,16 +194,36 @@ func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatu
 	return a
 }
 func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
-	return api.Cluster{Namespace: ptr(domain.NormalizedNamespace(c.Namespace)), Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(domain.ClusterRef{Namespace: c.Namespace, Name: c.Name}, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	a := api.Cluster{Namespace: ptr(domain.NormalizedNamespace(c.Namespace)), Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(domain.ClusterRef{Namespace: c.Namespace, Name: c.Name}, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	if c.OperationID != "" {
+		a.OperationId = &c.OperationID
+	}
+	return a
 }
 func operationAPI(o domain.Operation) api.Operation {
-	return api.Operation{Namespace: ptr(domain.NormalizedNamespace(o.Namespace)), Id: o.ID, Cluster: o.Cluster, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, Actor: &o.Actor, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
+	if o.Target.Kind == "" {
+		o.Target = domain.OperationTarget{Kind: "cluster", Name: o.Cluster}
+	}
+	a := api.Operation{Namespace: ptr(domain.NormalizedNamespace(o.Namespace)), Id: o.ID, Cluster: o.Cluster, Target: api.OperationTarget{Kind: o.Target.Kind, Name: o.Target.Name}, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, Actor: &o.Actor, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
+	if o.Step != "" {
+		a.Step = &o.Step
+	}
+	if o.TargetGeneration != 0 {
+		a.TargetGeneration = &o.TargetGeneration
+	}
+	if o.CancelRequested {
+		a.CancelRequested = &o.CancelRequested
+	}
+	if o.Terminal() {
+		a.Progress = ptr(float32(100))
+	}
+	return a
 }
 func backupAPI(b domain.Backup) api.Backup {
-	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: optionalString(b.Schedule), Phase: api.BackupPhase(b.Phase), PbmName: optionalString(b.PBMName), StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: optionalString(b.Error)}
+	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: optionalString(b.Schedule), Phase: api.BackupPhase(b.Phase), PbmName: optionalString(b.PBMName), StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: optionalString(b.Error), OperationId: optionalString(b.OperationID)}
 }
 func restoreAPI(r domain.Restore) api.Restore {
-	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error)}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
 }
 func eventAPI(e domain.Event) api.Event {
 	var namespace *string

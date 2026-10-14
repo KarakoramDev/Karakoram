@@ -194,7 +194,7 @@ func TestClusterPatchOperationPayloadsAndDeleteIntent(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	ops, err := s.Store.ListOperations(context.Background(), domain.ClusterRef{Name: "prod"})
-	if err != nil || len(ops) != 1 || ops[0].Kind != "raise-fcv" || string(ops[0].Payload) != `{"version":"8.0"}` {
+	if err != nil || len(ops) != 2 || ops[1].Kind != "raise-fcv" || string(ops[1].Payload) != `{"version":"8.0"}` {
 		t.Fatal(ops, err)
 	}
 	if w = call(s, "DELETE", "/api/v1/clusters/prod?keepVolumes=true&keepBackups=true", "", token); w.Code != 202 {

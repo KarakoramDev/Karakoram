@@ -82,7 +82,7 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 		return s.failure(err)
 	}
 	s.trigger(ctx, ref)
-	return response{status: 202, body: operationAPI(op)}
+	return response{status: 202, body: operationAPI(op), operationID: op.ID}
 }
 func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	switch name {
@@ -159,16 +159,19 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
+		op := domain.Operation{Kind: domain.OperationCreate, Actor: principal(ctx).Actor()}
+		ctx = store.WithOperation(ctx, &op)
 		if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
 			return s.failure(err)
 		}
 		if d := c.Spec.DataSource; d != nil && d.Namespace != namespace {
-			if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", ""); err != nil {
+			if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", op.ID); err != nil {
 				return s.failure(err)
 			}
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return response{status: 201, body: s.clusterAPI(c)}
+		c.OperationID = op.ID
+		return response{status: 201, body: s.clusterAPI(c), operationID: op.ID}
 	}
 	if name == "ListBackups" || name == "GetBackup" || name == "DeleteBackup" {
 		if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, in.Cluster)); errors.Is(err, store.ErrNotFound) {
@@ -251,6 +254,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				}
 			}
 		}
+		kind := domain.OperationUpdate
+		if next.Spec.Version != c.Spec.Version {
+			kind = domain.OperationUpgrade
+		} else if !sameTLS(c.Spec.TLS, next.Spec.TLS) || len(values) != 0 {
+			kind = domain.OperationTLS
+		}
+		op := domain.Operation{Kind: kind, Actor: principal(ctx).Actor()}
+		ctx = store.WithOperation(ctx, &op)
 		if err = s.Store.UpdateClusterSpecWithSecrets(ctx, clusterRef(ctx, c.Name), next.Spec, values); err != nil {
 			return s.failure(err)
 		}
@@ -259,16 +270,21 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return ok(s.clusterAPI(*updated))
+		updated.OperationID = op.ID
+		return response{status: 200, body: s.clusterAPI(*updated), operationID: op.ID}
 	case "DeleteCluster":
 		q := request(ctx).URL.Query()
 		opts := domain.DeleteOptions{KeepVolumes: q.Get("keepVolumes") == "true", KeepBackups: q.Get("keepBackups") == "true"}
+		op := domain.Operation{Kind: domain.OperationDelete, Actor: principal(ctx).Actor()}
+		ctx = store.WithOperation(ctx, &op)
 		if err = s.Store.MarkClusterDeleting(ctx, clusterRef(ctx, c.Name), opts); err != nil {
 			return s.failure(err)
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return response{status: 202}
+		return response{status: 202, body: operationAPI(op), operationID: op.ID}
 	case "ResumeCluster":
+		op := domain.Operation{Kind: domain.OperationResume, Actor: principal(ctx).Actor()}
+		ctx = store.WithOperation(ctx, &op)
 		if err = s.Store.ResumeCluster(ctx, clusterRef(ctx, c.Name)); err != nil {
 			return s.failure(err)
 		}
@@ -277,7 +293,8 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return response{status: 202, body: s.clusterAPI(*updated)}
+		updated.OperationID = op.ID
+		return response{status: 202, body: s.clusterAPI(*updated), operationID: op.ID}
 	case "RestartCluster":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "restart", map[string]string{})
 	case "RotateClusterTLS":
@@ -342,6 +359,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return ok(backupAPI(*b))
 	case "CreateBackup":
 		b := in.Body.(*api.CreateBackupRequest)
+		if c.Deleting || (c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation {
+			return failDetails(409, "conflict", "Backup requires a formed, active cluster; cluster "+c.Name+" is "+string(c.Status.Phase), map[string]any{"resource": "cluster", "name": c.Name, "reason": domain.ReasonInvalidState, "state": string(c.Status.Phase)})
+		}
 		if b.Name == "" {
 			return invalidField("name", domain.ReasonRequired, "name is required")
 		}
@@ -365,7 +385,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return response{status: 202, body: backupAPI(v)}
+		return response{status: 202, body: backupAPI(v), operationID: op.ID}
 	case "DeleteBackup":
 		b, err := s.Store.GetBackup(ctx, clusterRef(ctx, c.Name), in.Backup)
 		if err != nil {
@@ -376,7 +396,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return response{status: 202, body: operationAPI(op)}
+		return response{status: 202, body: operationAPI(op), operationID: op.ID}
 	case "ListRestores":
 		items, err := s.Store.ListRestores(ctx, clusterRef(ctx, c.Name))
 		out := make([]api.Restore, 0, len(items))
@@ -457,7 +477,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
-		return response{status: 202, body: restoreAPI(r)}
+		return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 	}
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure
@@ -542,6 +562,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	default:
 		return s.database(ctx, name, in, rc, dp)
 	}
+}
+
+func sameTLS(a, b domain.TLSConfig) bool {
+	left, _ := json.Marshal(a)
+	right, _ := json.Marshal(b)
+	return bytes.Equal(left, right)
 }
 
 func namespaceOrDefaultSource(source, target string) string {

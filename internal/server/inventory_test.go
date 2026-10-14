@@ -95,6 +95,7 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"ListOperations", "GET", "/api/v1/operations", ""},
 		{"ListOrphanedVolumes", "GET", "/api/v1/orphaned-volumes", ""},
 		{"GetOperation", "GET", "/api/v1/operations/test-operation", ""},
+		{"CancelOperation", "POST", "/api/v1/operations/test-operation/cancel", ""},
 		{"GetPermissions", "GET", "/api/v1/permissions", ""},
 		{"ListProviders", "GET", "/api/v1/providers", ""},
 		{"GetProvider", "GET", "/api/v1/providers/fake", ""},

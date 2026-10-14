@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"net/http"
 	"strconv"
@@ -61,6 +62,40 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 			return fail(403, "forbidden", "Permission denied")
 		}
 		return ok(operationAPI(*o))
+	case "CancelOperation":
+		op, err := s.Store.GetOperation(ctx, in.Operation)
+		if err != nil {
+			return s.failure(err)
+		}
+		if !s.allowed(ctx, "clusters", "update", clusterObject(op.Namespace, op.Cluster)) {
+			return fail(403, "forbidden", "Cluster write permission is required to cancel operation "+op.ID)
+		}
+		if op.Terminal() {
+			return failDetails(409, "conflict", "Operation "+op.ID+" is "+string(op.Phase)+" and cannot be cancelled", map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
+		}
+		if op.Phase == domain.PhaseRunning {
+			c, err := s.Store.GetCluster(ctx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster})
+			if err != nil {
+				return s.failure(err)
+			}
+			p, err := s.Registry.Get(c.Spec.Provider)
+			if err != nil {
+				return s.failure(err)
+			}
+			canceller, ok := p.(engine.OperationCanceller)
+			if !ok || domain.IsConvergenceOperation(op.Kind) {
+				return failDetails(409, "conflict", "Operation "+op.ID+" ("+op.Kind+") cannot be cancelled safely once Running; accepted desired state and deletion are not rolled back", map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
+			}
+			if err = canceller.CanCancelOperation(op); err != nil {
+				return failDetails(409, "conflict", err.Error(), map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
+			}
+		}
+		cancelled, err := s.Store.RequestOperationCancellation(ctx, op.ID, op)
+		if err != nil {
+			return s.failure(err)
+		}
+		s.trigger(ctx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster})
+		return response{status: 202, body: operationAPI(*cancelled), operationID: op.ID}
 	case "ListEvents":
 		limit := 100
 		if raw := q.Get("limit"); raw != "" {

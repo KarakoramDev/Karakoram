@@ -40,6 +40,9 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 	if b.Type == "physical" && env.RC.Cluster.Spec.Provider != "psmdb" {
 		return result(cp, false), errors.New("physical backups require PSMDB")
 	}
+	if cp.Cancelling && cp.Step == "configure" {
+		cp.Failure, cp.Step = "Backup cancelled before start", "target-configure"
+	}
 	switch cp.Step {
 	case "":
 		if b.PBMPrefix == "" {
@@ -125,6 +128,13 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 			if b.Phase == domain.PhaseFailed {
 				cp.Failure = b.Error
 			}
+			return result(cp, false), nil
+		}
+		if cp.Cancelling && !cp.CancelIssued {
+			if _, err = command(ctx, env, cp.Member, op.ID+"/cancel", "cancel-backup", nil); err != nil {
+				return result(cp, false), err
+			}
+			cp.CancelIssued = true
 			return result(cp, false), nil
 		}
 	case "target-configure", "target-resync", "target-inventory":

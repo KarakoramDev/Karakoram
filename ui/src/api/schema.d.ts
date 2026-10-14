@@ -1239,6 +1239,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/operations/{operation}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request cooperative cancellation of an operation
+         * @description Pending work is cancelled immediately. Running work is cancelled only at provider-supported safe checkpoints; unsafe or terminal states return 409 conflict with details.reason invalid_state. Requires clusters update permission on the operation's persisted namespace/cluster, resolved by the handler. Cancellation never rolls back accepted desired state.
+         */
+        post: operations["cancelOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orphaned-volumes": {
         parameters: {
             query?: {
@@ -1453,6 +1475,8 @@ export type components = {
             lastWriteTime?: string;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
+            /** @description Durable operation that created this backup. */
+            readonly operationId?: string;
             pbmName?: string;
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed" | "Deleting";
@@ -1544,6 +1568,8 @@ export type components = {
             generation: number;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
+            /** @description Tracking operation returned on create, PUT, PATCH and resume acceptance. */
+            readonly operationId?: string;
             spec: components["schemas"]["ClusterSpec"];
             status: components["schemas"]["ClusterStatus"];
             /** Format: date-time */
@@ -1593,9 +1619,13 @@ export type components = {
             message?: string;
             /** Format: int64 */
             observedGeneration: number;
-            /** @enum {string} */
+            /**
+             * @description Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+             * @enum {string}
+             */
             phase: "Creating" | "Initializing" | "Ready" | "Updating" | "Scaling" | "Upgrading" | "Restoring" | "Degraded" | "Error" | "Deleting" | "Suspended";
             placement?: components["schemas"]["Placement"];
+            /** @description Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version. */
             version?: string;
         };
         Component: {
@@ -1941,6 +1971,8 @@ export type components = {
         Operation: {
             /** @description Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor. */
             actor?: string;
+            /** @description Cooperative cancellation has been accepted but may still be cleaning up. */
+            cancelRequested?: boolean;
             cluster: string;
             /** Format: date-time */
             completedAt?: string;
@@ -1948,20 +1980,33 @@ export type components = {
             createdAt: string;
             error?: components["schemas"]["Error"];
             id: string;
+            /** @description Current stage or error; every terminal operation has a non-empty summary. */
             message?: string;
             readonly namespace: components["schemas"]["NamespaceName"];
             /** @enum {string} */
-            phase: "Pending" | "Running" | "Succeeded" | "Failed";
+            phase: "Pending" | "Running" | "Succeeded" | "Failed" | "Cancelled";
             progress?: number;
             /** Format: date-time */
             startedAt?: string;
+            /** @description Current durable execution checkpoint or convergence phase. */
+            step?: string;
+            target: components["schemas"]["OperationTarget"];
+            /**
+             * Format: int64
+             * @description Cluster generation observed by desired-state operations.
+             */
+            targetGeneration?: number;
             /** @enum {string} */
-            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "replace-member" | "rotate-system-user" | "rotate-tls";
+            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "replace-member" | "rotate-system-user" | "rotate-tls" | "create" | "update" | "tls" | "upgrade" | "delete" | "resume";
         };
         OperationList: {
             items: components["schemas"]["Operation"][];
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
+        };
+        OperationTarget: {
+            kind: string;
+            name: string;
         };
         OrphanedVolume: {
             attempts: number;
@@ -2134,6 +2179,8 @@ export type components = {
             error?: string;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
+            /** @description Durable operation that created this restore. */
+            readonly operationId?: string;
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed";
             source: components["schemas"]["RestoreSource"];
@@ -3303,6 +3350,8 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Durable operation ID for the accepted request. */
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3387,6 +3436,7 @@ export interface operations {
             200: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3424,9 +3474,12 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
@@ -3473,6 +3526,7 @@ export interface operations {
             200: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3556,10 +3610,11 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted; track the returned operation. */
+            /** @description Accepted; track Backup.operationId or the Karakoram-Operation-Id header. Clusters not yet formed and active are rejected with 409 and reason invalid_state. */
             202: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3629,6 +3684,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4276,6 +4332,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4452,6 +4509,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4487,6 +4545,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4570,10 +4629,11 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted; track the returned operation. */
+            /** @description Accepted; track Restore.operationId or the Karakoram-Operation-Id header. */
             202: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4639,9 +4699,10 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Accepted; track the returned operation. */
+            /** @description Accepted; track Cluster.operationId or the Karakoram-Operation-Id header. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4677,6 +4738,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4777,6 +4839,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5239,6 +5302,38 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    cancelOperation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation accepted; a Running operation remains Running until cooperative cleanup completes. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {

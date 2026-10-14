@@ -59,12 +59,12 @@ const (
 
 // Defines values for CanRequestAction.
 const (
-	Asterisk CanRequestAction = "*"
-	Create   CanRequestAction = "create"
-	Delete   CanRequestAction = "delete"
-	Export   CanRequestAction = "export"
-	Read     CanRequestAction = "read"
-	Update   CanRequestAction = "update"
+	CanRequestActionAsterisk CanRequestAction = "*"
+	CanRequestActionCreate   CanRequestAction = "create"
+	CanRequestActionDelete   CanRequestAction = "delete"
+	CanRequestActionExport   CanRequestAction = "export"
+	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
 // Defines values for ClusterStatusPhase.
@@ -126,6 +126,7 @@ const (
 
 // Defines values for OperationPhase.
 const (
+	OperationPhaseCancelled OperationPhase = "Cancelled"
 	OperationPhaseFailed    OperationPhase = "Failed"
 	OperationPhasePending   OperationPhase = "Pending"
 	OperationPhaseRunning   OperationPhase = "Running"
@@ -135,13 +136,19 @@ const (
 // Defines values for OperationType.
 const (
 	OperationTypeBackup           OperationType = "backup"
+	OperationTypeCreate           OperationType = "create"
+	OperationTypeDelete           OperationType = "delete"
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
+	OperationTypeResume           OperationType = "resume"
 	OperationTypeRotateSystemUser OperationType = "rotate-system-user"
 	OperationTypeRotateTls        OperationType = "rotate-tls"
+	OperationTypeTls              OperationType = "tls"
+	OperationTypeUpdate           OperationType = "update"
+	OperationTypeUpgrade          OperationType = "upgrade"
 )
 
 // Defines values for PermissionEffect.
@@ -372,14 +379,17 @@ type Backup struct {
 	LastWriteTime *time.Time     `json:"lastWriteTime,omitempty"`
 	Name          string         `json:"name"`
 	Namespace     *NamespaceName `json:"namespace,omitempty"`
-	PbmName       *string        `json:"pbmName,omitempty"`
-	Phase         BackupPhase    `json:"phase"`
-	Schedule      *string        `json:"schedule,omitempty"`
-	Size          *int64         `json:"size,omitempty"`
-	StartedAt     *time.Time     `json:"startedAt,omitempty"`
-	Storage       string         `json:"storage"`
-	Trigger       BackupTrigger  `json:"trigger"`
-	Type          BackupType     `json:"type"`
+
+	// OperationId Durable operation that created this backup.
+	OperationId *string       `json:"operationId,omitempty"`
+	PbmName     *string       `json:"pbmName,omitempty"`
+	Phase       BackupPhase   `json:"phase"`
+	Schedule    *string       `json:"schedule,omitempty"`
+	Size        *int64        `json:"size,omitempty"`
+	StartedAt   *time.Time    `json:"startedAt,omitempty"`
+	Storage     string        `json:"storage"`
+	Trigger     BackupTrigger `json:"trigger"`
+	Type        BackupType    `json:"type"`
 }
 
 // BackupPhase defines model for Backup.Phase.
@@ -489,9 +499,12 @@ type Cluster struct {
 	Generation int64          `json:"generation"`
 	Name       string         `json:"name"`
 	Namespace  *NamespaceName `json:"namespace,omitempty"`
-	Spec       ClusterSpec    `json:"spec"`
-	Status     ClusterStatus  `json:"status"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+
+	// OperationId Tracking operation returned on create, PUT, PATCH and resume acceptance.
+	OperationId *string       `json:"operationId,omitempty"`
+	Spec        ClusterSpec   `json:"spec"`
+	Status      ClusterStatus `json:"status"`
+	UpdatedAt   time.Time     `json:"updatedAt"`
 }
 
 // ClusterBackupStatus defines model for ClusterBackupStatus.
@@ -550,14 +563,18 @@ type ClusterStatus struct {
 	Members            []Member             `json:"members"`
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
-	Phase              ClusterStatusPhase   `json:"phase"`
+
+	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+	Phase ClusterStatusPhase `json:"phase"`
 
 	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
 	Placement *Placement `json:"placement,omitempty"`
-	Version   *string    `json:"version,omitempty"`
+
+	// Version Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version.
+	Version *string `json:"version,omitempty"`
 }
 
-// ClusterStatusPhase defines model for ClusterStatus.Phase.
+// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 type ClusterStatusPhase string
 
 // Component defines model for Component.
@@ -996,23 +1013,35 @@ type ObservedResources struct {
 // Operation defines model for Operation.
 type Operation struct {
 	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
-	Actor       *string    `json:"actor,omitempty"`
-	Cluster     string     `json:"cluster"`
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	Actor *string `json:"actor,omitempty"`
+
+	// CancelRequested Cooperative cancellation has been accepted but may still be cleaning up.
+	CancelRequested *bool      `json:"cancelRequested,omitempty"`
+	Cluster         string     `json:"cluster"`
+	CompletedAt     *time.Time `json:"completedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
 
 	// Error Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 	// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 	// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 	// `message` is a human-readable explanation that names the rejected field or resource.
-	Error     *Error         `json:"error,omitempty"`
-	Id        string         `json:"id"`
+	Error *Error `json:"error,omitempty"`
+	Id    string `json:"id"`
+
+	// Message Current stage or error; every terminal operation has a non-empty summary.
 	Message   *string        `json:"message,omitempty"`
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 	Phase     OperationPhase `json:"phase"`
 	Progress  *float32       `json:"progress,omitempty"`
 	StartedAt *time.Time     `json:"startedAt,omitempty"`
-	Type      OperationType  `json:"type"`
+
+	// Step Current durable execution checkpoint or convergence phase.
+	Step   *string         `json:"step,omitempty"`
+	Target OperationTarget `json:"target"`
+
+	// TargetGeneration Cluster generation observed by desired-state operations.
+	TargetGeneration *int64        `json:"targetGeneration,omitempty"`
+	Type             OperationType `json:"type"`
 }
 
 // OperationPhase defines model for Operation.Phase.
@@ -1027,6 +1056,12 @@ type OperationList struct {
 
 	// NextCursor Opaque continuation cursor; absent at the end.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// OperationTarget defines model for OperationTarget.
+type OperationTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // OrphanedVolume defines model for OrphanedVolume.
@@ -1243,7 +1278,10 @@ type Restore struct {
 	Error       *string        `json:"error,omitempty"`
 	Name        string         `json:"name"`
 	Namespace   *NamespaceName `json:"namespace,omitempty"`
-	Phase       RestorePhase   `json:"phase"`
+
+	// OperationId Durable operation that created this restore.
+	OperationId *string      `json:"operationId,omitempty"`
+	Phase       RestorePhase `json:"phase"`
 
 	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
 	Source    RestoreSource `json:"source"`
@@ -2253,6 +2291,12 @@ type ListOperationsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// CancelOperationParams defines parameters for CancelOperation.
+type CancelOperationParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListOrphanedVolumesParams defines parameters for ListOrphanedVolumes.
 type ListOrphanedVolumesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
@@ -2718,6 +2762,9 @@ type ServerInterface interface {
 	// Read a durable operation
 	// (GET /operations/{operation})
 	GetOperation(w http.ResponseWriter, r *http.Request, operation string)
+	// Request cooperative cancellation of an operation
+	// (POST /operations/{operation}/cancel)
+	CancelOperation(w http.ResponseWriter, r *http.Request, operation string, params CancelOperationParams)
 	// List orphaned platform volumes
 	// (GET /orphaned-volumes)
 	ListOrphanedVolumes(w http.ResponseWriter, r *http.Request, params ListOrphanedVolumesParams)
@@ -7392,6 +7439,63 @@ func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// CancelOperation operation middleware
+func (siw *ServerInterfaceWrapper) CancelOperation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "operation" -------------
+	var operation string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operation", r.PathValue("operation"), &operation, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operation", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelOperationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelOperation(w, r, operation, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOrphanedVolumes operation middleware
 func (siw *ServerInterfaceWrapper) ListOrphanedVolumes(w http.ResponseWriter, r *http.Request) {
 
@@ -7905,6 +8009,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/openapi.yaml", wrapper.GetOpenAPISpec)
 	m.HandleFunc("GET "+options.BaseURL+"/operations", wrapper.ListOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/operations/{operation}", wrapper.GetOperation)
+	m.HandleFunc("POST "+options.BaseURL+"/operations/{operation}/cancel", wrapper.CancelOperation)
 	m.HandleFunc("GET "+options.BaseURL+"/orphaned-volumes", wrapper.ListOrphanedVolumes)
 	m.HandleFunc("GET "+options.BaseURL+"/permissions", wrapper.GetPermissions)
 	m.HandleFunc("GET "+options.BaseURL+"/providers", wrapper.ListProviders)
@@ -9847,7 +9952,8 @@ type CreateClusterResponseObject interface {
 }
 
 type CreateCluster201ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
 }
 
 type CreateCluster201JSONResponse struct {
@@ -9858,6 +9964,7 @@ type CreateCluster201JSONResponse struct {
 func (response CreateCluster201JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -9937,12 +10044,21 @@ type DeleteClusterResponseObject interface {
 	VisitDeleteClusterResponse(w http.ResponseWriter) error
 }
 
-type DeleteCluster202Response struct {
+type DeleteCluster202ResponseHeaders struct {
+	KarakoramOperationId string
 }
 
-func (response DeleteCluster202Response) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+type DeleteCluster202JSONResponse struct {
+	Body    Operation
+	Headers DeleteCluster202ResponseHeaders
+}
+
+func (response DeleteCluster202JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
-	return nil
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster400JSONResponse struct{ BadRequestJSONResponse }
@@ -10082,7 +10198,8 @@ type PatchClusterResponseObject interface {
 }
 
 type PatchCluster200ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
 }
 
 type PatchCluster200JSONResponse struct {
@@ -10093,6 +10210,7 @@ type PatchCluster200JSONResponse struct {
 func (response PatchCluster200JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10163,7 +10281,8 @@ type ReplaceClusterResponseObject interface {
 }
 
 type ReplaceCluster200ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
 }
 
 type ReplaceCluster200JSONResponse struct {
@@ -10174,6 +10293,7 @@ type ReplaceCluster200JSONResponse struct {
 func (response ReplaceCluster200JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10316,7 +10436,8 @@ type CreateBackupResponseObject interface {
 }
 
 type CreateBackup202ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
 }
 
 type CreateBackup202JSONResponse struct {
@@ -10327,6 +10448,7 @@ type CreateBackup202JSONResponse struct {
 func (response CreateBackup202JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10396,13 +10518,21 @@ type DeleteBackupResponseObject interface {
 	VisitDeleteBackupResponse(w http.ResponseWriter) error
 }
 
-type DeleteBackup202JSONResponse Operation
+type DeleteBackup202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type DeleteBackup202JSONResponse struct {
+	Body    Operation
+	Headers DeleteBackup202ResponseHeaders
+}
 
 func (response DeleteBackup202JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackup204Response struct {
@@ -11754,13 +11884,21 @@ type ReplaceClusterMemberResponseObject interface {
 	VisitReplaceClusterMemberResponse(w http.ResponseWriter) error
 }
 
-type ReplaceClusterMember202JSONResponse Operation
+type ReplaceClusterMember202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type ReplaceClusterMember202JSONResponse struct {
+	Body    Operation
+	Headers ReplaceClusterMember202ResponseHeaders
+}
 
 func (response ReplaceClusterMember202JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember400JSONResponse struct{ BadRequestJSONResponse }
@@ -12115,13 +12253,21 @@ type RaiseClusterFCVResponseObject interface {
 	VisitRaiseClusterFCVResponse(w http.ResponseWriter) error
 }
 
-type RaiseClusterFCV202JSONResponse Operation
+type RaiseClusterFCV202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RaiseClusterFCV202JSONResponse struct {
+	Body    Operation
+	Headers RaiseClusterFCV202ResponseHeaders
+}
 
 func (response RaiseClusterFCV202JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV400JSONResponse struct{ BadRequestJSONResponse }
@@ -12187,13 +12333,21 @@ type RestartClusterResponseObject interface {
 	VisitRestartClusterResponse(w http.ResponseWriter) error
 }
 
-type RestartCluster202JSONResponse Operation
+type RestartCluster202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RestartCluster202JSONResponse struct {
+	Body    Operation
+	Headers RestartCluster202ResponseHeaders
+}
 
 func (response RestartCluster202JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster400JSONResponse struct{ BadRequestJSONResponse }
@@ -12333,7 +12487,8 @@ type CreateRestoreResponseObject interface {
 }
 
 type CreateRestore202ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
 }
 
 type CreateRestore202JSONResponse struct {
@@ -12344,6 +12499,7 @@ type CreateRestore202JSONResponse struct {
 func (response CreateRestore202JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -12485,13 +12641,21 @@ type ResumeClusterResponseObject interface {
 	VisitResumeClusterResponse(w http.ResponseWriter) error
 }
 
-type ResumeCluster202JSONResponse Cluster
+type ResumeCluster202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type ResumeCluster202JSONResponse struct {
+	Body    Cluster
+	Headers ResumeCluster202ResponseHeaders
+}
 
 func (response ResumeCluster202JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster400JSONResponse struct{ BadRequestJSONResponse }
@@ -12557,13 +12721,21 @@ type RotateClusterTLSResponseObject interface {
 	VisitRotateClusterTLSResponse(w http.ResponseWriter) error
 }
 
-type RotateClusterTLS202JSONResponse Operation
+type RotateClusterTLS202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RotateClusterTLS202JSONResponse struct {
+	Body    Operation
+	Headers RotateClusterTLS202ResponseHeaders
+}
 
 func (response RotateClusterTLS202JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS400JSONResponse struct{ BadRequestJSONResponse }
@@ -12774,13 +12946,21 @@ type RotateSystemUserResponseObject interface {
 	VisitRotateSystemUserResponse(w http.ResponseWriter) error
 }
 
-type RotateSystemUser202JSONResponse Operation
+type RotateSystemUser202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RotateSystemUser202JSONResponse struct {
+	Body    Operation
+	Headers RotateSystemUser202ResponseHeaders
+}
 
 func (response RotateSystemUser202JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser400JSONResponse struct{ BadRequestJSONResponse }
@@ -13797,6 +13977,86 @@ func (response GetOperation500JSONResponse) VisitGetOperationResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type CancelOperationRequestObject struct {
+	Operation string `json:"operation"`
+	Params    CancelOperationParams
+}
+
+type CancelOperationResponseObject interface {
+	VisitCancelOperationResponse(w http.ResponseWriter) error
+}
+
+type CancelOperation202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type CancelOperation202JSONResponse struct {
+	Body    Operation
+	Headers CancelOperation202ResponseHeaders
+}
+
+func (response CancelOperation202JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CancelOperation400JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelOperation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CancelOperation401JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelOperation403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CancelOperation403JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelOperation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CancelOperation404JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelOperation409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CancelOperation409JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CancelOperation500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CancelOperation500JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListOrphanedVolumesRequestObject struct {
 	Params ListOrphanedVolumesParams
 }
@@ -14726,6 +14986,9 @@ type StrictServerInterface interface {
 	// Read a durable operation
 	// (GET /operations/{operation})
 	GetOperation(ctx context.Context, request GetOperationRequestObject) (GetOperationResponseObject, error)
+	// Request cooperative cancellation of an operation
+	// (POST /operations/{operation}/cancel)
+	CancelOperation(ctx context.Context, request CancelOperationRequestObject) (CancelOperationResponseObject, error)
 	// List orphaned platform volumes
 	// (GET /orphaned-volumes)
 	ListOrphanedVolumes(ctx context.Context, request ListOrphanedVolumesRequestObject) (ListOrphanedVolumesResponseObject, error)
@@ -17060,6 +17323,33 @@ func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, op
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOperationResponseObject); ok {
 		if err := validResponse.VisitGetOperationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelOperation operation middleware
+func (sh *strictHandler) CancelOperation(w http.ResponseWriter, r *http.Request, operation string, params CancelOperationParams) {
+	var request CancelOperationRequestObject
+
+	request.Operation = operation
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelOperation(ctx, request.(CancelOperationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelOperation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelOperationResponseObject); ok {
+		if err := validResponse.VisitCancelOperationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -50,6 +50,13 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 	if name == "GetBackup" {
 		return ok(backupAPI(*b))
 	}
+	if b.PBMName == "" && (b.Phase == domain.PhaseFailed || b.Phase == domain.PhasePending) {
+		op := &domain.Operation{Namespace: b.Namespace, Cluster: b.Cluster, Kind: domain.OperationDeleteBackup, Actor: principal(ctx).Actor()}
+		if err = s.Store.EnqueueBackupDeletion(ctx, b, op); err != nil {
+			return s.failure(err)
+		}
+		return response{status: 204, operationID: op.ID}
+	}
 	storage, err := s.Store.GetBackupStorage(ctx, b.Namespace, b.Storage)
 	if err != nil {
 		return s.failure(err)
