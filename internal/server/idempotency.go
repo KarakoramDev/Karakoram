@@ -110,7 +110,8 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	}
 	identity := s.Store.IdempotencyIdentityHash(scope)
 	bodyHash := s.Store.IdempotencyBodyHash(canonical)
-	record, acquired, err := s.Store.BeginIdempotency(ctx, identity, bodyHash, time.Now())
+	reservedAt := time.Now()
+	record, acquired, err := s.Store.BeginIdempotency(ctx, identity, bodyHash, reservedAt)
 	if err != nil {
 		return s.failure(err), nil
 	}
@@ -136,7 +137,8 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 		}
 	}()
 	// Keep long-running handlers protected, independently of caller cancellation.
-	// Losing renewal cancels the handler; do not release an ambiguous mutation.
+	// Lease loss or expiry cancels the handler; transient errors do not. Do not
+	// release an ambiguous mutation once lease ownership is no longer certain.
 	handlerCtx, cancelHandler := context.WithCancelCause(ctx)
 	leaseCtx, cancelLease := context.WithCancel(context.WithoutCancel(ctx))
 	leaseDone := make(chan struct{})
@@ -145,7 +147,7 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 		defer close(leaseDone)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		leaseErr = s.renewIdempotencyLease(leaseCtx, identity, record.Owner, ticker.C)
+		leaseErr = s.renewIdempotencyLease(leaseCtx, identity, record.Owner, reservedAt.Add(store.IdempotencyLease), ticker.C, s.Store.RenewIdempotency)
 		if leaseErr != nil {
 			cancelHandler(leaseErr)
 		}
@@ -193,21 +195,52 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	return replayResponse(wire, false), nil
 }
 
-func (s *Server) renewIdempotencyLease(ctx context.Context, identity, owner string, ticks <-chan time.Time) error {
+func (s *Server) renewIdempotencyLease(ctx context.Context, identity, owner string, expires time.Time, ticks <-chan time.Time, renewLease func(context.Context, string, string, time.Time) error) error {
+	expiry := time.NewTimer(time.Until(expires))
+	defer expiry.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-expiry.C:
+			if ctx.Err() != nil {
+				return nil
+			}
+			return store.ErrConflict
 		case now := <-ticks:
-			renew, cancel := context.WithTimeout(ctx, 5*time.Second)
-			err := s.Store.RenewIdempotency(renew, identity, owner, now)
+			if ctx.Err() != nil {
+				return nil
+			}
+			if !now.Before(expires) || !time.Now().Before(expires) {
+				return store.ErrConflict
+			}
+			// A blocked database call must not outlive the lease either.
+			deadline := time.Now().Add(5 * time.Second)
+			if expires.Before(deadline) {
+				deadline = expires
+			}
+			renew, cancel := context.WithDeadline(ctx, deadline)
+			err := renewLease(renew, identity, owner, now)
 			cancel()
-			if err != nil {
-				if ctx.Err() != nil {
-					return nil
-				}
+			if ctx.Err() != nil {
+				return nil
+			}
+			if errors.Is(err, store.ErrConflict) {
 				return err
 			}
+			if err != nil {
+				if !time.Now().Before(expires) {
+					return store.ErrConflict
+				}
+				// Keep the last confirmed expiry; a failed write cannot extend it.
+				s.Logger.Warn("Failed to renew idempotency lease; retrying while lease remains valid")
+				continue
+			}
+			expires = now.Add(store.IdempotencyLease)
+			if !time.Now().Before(expires) {
+				return store.ErrConflict
+			}
+			expiry.Reset(time.Until(expires))
 		}
 	}
 }

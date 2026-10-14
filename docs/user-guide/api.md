@@ -292,7 +292,7 @@ resource or its returned operation to observe asynchronous completion.
 * A concurrent request with the same key returns **409** with reason
   `invalid_state` while the first request is in flight. Retry the same key/body
   after that request finishes. Reservations have a **five-minute lease**, renewed
-  every minute while the handler runs, even after caller disconnection. After a
+  every minute while the handler runs, even after caller disconnection. Transient renewal failures are logged and retried while the last confirmed lease remains valid; only ownership loss or actual expiry cancels the in-flight handler. After a
   process crash, the same key can be reclaimed when the last lease expires,
   rather than waiting for the 24-hour successful-response retention period.
 * **4xx/5xx are not cached**. Once a failed request finishes, its key can be retried

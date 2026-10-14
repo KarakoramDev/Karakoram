@@ -4,10 +4,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -298,7 +300,7 @@ func TestIdempotencyLeaseHeartbeat(t *testing.T) {
 	ticks := make(chan time.Time)
 	done := make(chan error, 1)
 	go func() {
-		done <- s.renewIdempotencyLease(ctx, "long-handler", record.Owner, ticks)
+		done <- s.renewIdempotencyLease(ctx, "long-handler", record.Owner, now.Add(store.IdempotencyLease), ticks, s.Store.RenewIdempotency)
 	}()
 	// Inject minute ticks across two original lease periods.
 	for minute := 1; minute <= 10; minute++ {
@@ -325,6 +327,124 @@ func TestIdempotencyLeaseHeartbeat(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
+	}
+}
+
+func TestIdempotencyLeaseTransientRenewalFailure(t *testing.T) {
+	s, _, _ := testServer(t)
+	var logs bytes.Buffer
+	s.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	ticks := make(chan time.Time)
+	calls := make(chan time.Time, 1)
+	done := make(chan error, 1)
+	transient := errors.New("temporary database failure")
+	go func() {
+		done <- s.renewIdempotencyLease(ctx, "request", "owner", start.Add(store.IdempotencyLease), ticks,
+			func(ctx context.Context, identity, owner string, now time.Time) error {
+				calls <- now
+				if now.Equal(start.Add(time.Minute)) {
+					return transient
+				}
+				return nil
+			})
+	}()
+	// A failed first renewal must not cancel the handler. Successful later
+	// renewals must extend protection past the original lease deadline.
+	for _, minute := range []int{1, 2, 6} {
+		now := start.Add(time.Duration(minute) * time.Minute)
+		select {
+		case ticks <- now:
+		case err := <-done:
+			t.Fatalf("heartbeat stopped while lease remained valid: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		select {
+		case got := <-calls:
+			if !got.Equal(now) {
+				t.Fatal("unexpected renewal time", got)
+			}
+		case err := <-done:
+			t.Fatalf("heartbeat stopped while lease remained valid: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal("transient failure survived a recovered lease", err)
+	}
+	if !strings.Contains(logs.String(), "Failed to renew idempotency lease") {
+		t.Fatal("transient renewal failure was not logged")
+	}
+}
+
+func TestIdempotencyLeaseRenewalStopsAtExpiryOrOwnershipLoss(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		err   error
+		ticks []time.Duration
+		calls int
+	}{
+		{"lease lost", store.ErrConflict, []time.Duration{time.Minute}, 1},
+		{"transient until expiry", errors.New("temporary database failure"), []time.Duration{time.Minute, 4 * time.Minute, store.IdempotencyLease}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, _ := testServer(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			start := time.Now()
+			ticks := make(chan time.Time, len(tc.ticks))
+			for _, tick := range tc.ticks {
+				ticks <- start.Add(tick)
+			}
+			calls := 0
+			err := s.renewIdempotencyLease(ctx, "request", "owner", start.Add(store.IdempotencyLease), ticks,
+				func(context.Context, string, string, time.Time) error {
+					calls++
+					return tc.err
+				})
+			if !errors.Is(err, store.ErrConflict) {
+				t.Fatal("expired or lost lease was not reported", err)
+			}
+			if calls != tc.calls {
+				t.Fatalf("renewal calls = %d, want %d", calls, tc.calls)
+			}
+		})
+	}
+}
+
+func TestIdempotencyLeaseExpiryBoundsBlockedRenewal(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	ticks := make(chan time.Time, 1)
+	now := time.Now()
+	ticks <- now
+	err := s.renewIdempotencyLease(ctx, "request", "owner", now.Add(20*time.Millisecond), ticks,
+		func(ctx context.Context, identity, owner string, now time.Time) error {
+			<-ctx.Done()
+			return ctx.Err()
+		})
+	if !errors.Is(err, store.ErrConflict) {
+		t.Fatal("blocked renewal outlived the lease", err)
+	}
+}
+
+func TestIdempotencyLeaseExpiryWithoutHeartbeat(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	err := s.renewIdempotencyLease(ctx, "request", "owner", time.Now().Add(20*time.Millisecond), nil,
+		func(context.Context, string, string, time.Time) error {
+			t.Error("renewed without a heartbeat")
+			return nil
+		})
+	if !errors.Is(err, store.ErrConflict) {
+		t.Fatal("lease expiry did not stop the handler", err)
 	}
 }
 
