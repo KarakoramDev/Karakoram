@@ -6,9 +6,9 @@ The React SPA is embedded in the Karakoram server when production assets are bui
 
 ## Sign in
 
-Use local username/password or the configured SSO button. First bootstrap and reset-password users are directed to **Change password** before ordinary pages. After a local password change, sign in again. Browser credentials are HttpOnly cookies, not local-storage bearer tokens; refresh and CSRF handling are built into the client. [Authentication](rbac-and-auth.md) explains local/OIDC setup and authorization.
+Use local username/password or the configured SSO button. First bootstrap and reset-password users are directed to **Change password** before ordinary pages. After a local password change, sign in again. To change your own password later, open the sidebar user menu and choose **Change password**. Browser credentials are HttpOnly cookies, not local-storage bearer tokens; refresh and CSRF handling are built into the client. [Authentication](rbac-and-auth.md) explains local/OIDC setup and authorization.
 
-A missing/disabled control can be an RBAC restriction, not missing functionality. The server enforces permissions regardless of what the UI displays. Unauthorized resources do not become visible just by typing a URL.
+A missing/disabled control can be an RBAC restriction, not missing functionality. Without deletion permission, the destructive Delete tab is hidden; backup-policy controls without mutation permission are read-only. Permission-specific empty states explain when an administrator must grant access rather than inviting an unauthorized create action. The server enforces permissions regardless of what the UI displays. Unauthorized resources do not become visible just by typing a URL.
 
 ## Namespace selection
 
@@ -22,11 +22,44 @@ server authorization. See [namespaces](namespaces.md).
 
 ## Clusters and creation
 
-**Clusters** lists authorized clusters and their current phases. **Create cluster** opens the topology/provider-driven wizard at `/clusters/new`. Select a name, exact catalog version, replica-set or sharded topology, component replicas/resources and the relevant backup, PITR, TLS, exposure and monitoring settings. Review costs and placement warnings before submitting.
+**Clusters** lists authorized clusters and their current phases. **Create cluster** opens the catalog-driven wizard at `/clusters/new`. Select a name, exact catalog version, topology, component replicas/resources and the relevant backup, recovery, TLS, exposure and monitoring settings. Review the resource footprint and placement limitations before submitting; resource choices are not a binding price quote.
 
 The wizard uses provider metadata/presets; it does not promise a “production” preset supplies physical anti-affinity. Name, topology, backup dependencies and unsafe transitions are validated by the server. Creation acceptance starts reconciliation; keep observing until member health and desired-generation convergence are reported. [Replica sets](replica-sets.md), [sharding](sharding.md) and [limitations](../limitations.md) describe the constraints.
 
 Percona member resources require at least **0.5 GiB RAM** and **5 GiB data disk**. The resource editor applies these limits before submission; an initial cluster may not yet have connection hosts, in which case Overview shows the initializing message rather than a connection URI.
+
+### Creation wizard walkthrough
+
+The wizard has six screens, in this order. Choose **Continue** after completing
+each screen, or **Back** to revise a previous screen. Invalid input keeps you
+on the affected step with field errors; review errors must be resolved before
+creation.
+
+| Screen | Fields and choices |
+| --- | --- |
+| **Basics** | Target namespace (selected automatically when only one is available), cluster name, engine, exact version, topology and optional preset. Unavailable catalog versions cannot be selected. |
+| **Topology** | Replica-set member count; for sharding, shard count, members per shard, config-server members and routers. MongoDB replica-set/config-server choices are 1/3/5/7. Optional engine configuration overrides are YAML and remain subject to provider-owned-setting restrictions. |
+| **Resources** | CPU mode, minimum/maximum CPU cores, optional start CPU and minimum/maximum RAM in GiB for each component. Data-bearing components also have minimum/maximum disk in GiB. Sharded clusters have separate shard-member, config-server and router resource editors; routers have no durable data-disk editor. |
+| **Backups** | Primary namespace-local storage or None; provider-supported backup schedules (name, five-field UTC cron, type, storage, positive retain count, enabled); PITR and oplog slice interval where supported; optional seed data from a backup or recovery time, including source namespace/cluster. |
+| **Access & TLS** | TLS mode, managed or supplied CA, certificate inputs, private/public exposure, IP family and client CIDR allowlist, plus per-member monitoring. A supplied CA needs its certificate and signing private key; supplied server certificate/key are an optional matching pair. |
+| **Review** | Namespace/name, engine/version, complete topology, each component's resource bounds, backup storage/schedules/PITR, optional seed source, TLS/CA source, exposure/IP family/allowlist and monitoring. Review also summarizes the aggregate infrastructure footprint and placement limitations and links to Zerops pricing; no live monetary quote or host-separation guarantee is implied. |
+
+The current MongoDB catalog offers **Custom** (no preset), **dev** (one member,
+1 GiB RAM, no database redundancy), **prod** (three voting members, without a
+host-separation guarantee), and **sharded** (two three-member shards, three config
+servers and one router). A preset replaces topology/resource/backup defaults,
+but you can edit them afterward; it is not a capacity or production-readiness
+certification. The catalog served by your installation is authoritative.
+
+For a first replica set, choose **dev** for disposable development or **prod**
+for three voting members, keep private access and `requireTLS`, choose an existing
+S3 storage if you need backups, then inspect Review before **Create cluster**.
+For a sharded deployment, also check the resource totals across *all* shards and
+config servers. Creation starts asynchronous work; follow the resulting cluster
+and operation until the desired generation is observed and members are healthy.
+For literal CLI examples and readiness checks, see [replica sets](replica-sets.md)
+and [sharding](sharding.md).
+
 
 ## Cluster detail tabs
 
@@ -50,9 +83,9 @@ recovery checks source `backups/export` as well as backup read and target
 mutation. Source storage is used during recovery; target backup settings must
 refer to target-local storage. See [cross-namespace recovery](backups-and-restore.md#cross-namespace-recovery).
 
-**Reveal credentials** is an explicit, audited action requiring `cluster-credentials:read`. Its response is not stored in the query cache; treat displayed/copied URI/password/CA material according to [users/TLS/access](users-tls-access.md). Normal Overview data does not reveal application/system passwords. Use your own application account rather than the revealed administrative identity for workloads.
+**Reveal credentials** is an explicit, audited action requiring `cluster-credentials:read`. Its response is not stored in the query cache; treat displayed/copied URI/password material according to [users/TLS/access](users-tls-access.md). Reveal includes the public cluster **CA certificate**, with copy and `ca.pem` download controls. If browser clipboard access is denied, use the visible error/manual-copy alternative or download rather than losing the PEM line breaks. Normal Overview data does not reveal application/system passwords. The revealed administrative account is not a workload identity: follow the scoped application-user link and the [mongosh/PyMongo TLS recipe](users-tls-access.md#connect-an-application-user-with-tls). Public replica-set endpoints still require correct discovery of private advertised members; a public seed is not by itself an external failover solution.
 
-When adding a database user under **Users**, leave the password empty to have the server generate one. The success dialog displays that generated password exactly once; copy it into a secret manager before closing. Alternatively, supply your own password of at least eight characters.
+For **MongoDB application users** under **Users → Add user**, an empty password is intentionally omitted from the create request: the server generates a password and the success dialog displays it exactly once. Copy it into a secret manager before closing, or supply your own password of at least eight characters. In **Edit roles / password**, an empty password instead retains the existing password; it does not generate a replacement. Application authentication databases and role references are separate from Karakoram accounts. See the [scoped application-user and TLS recipe](users-tls-access.md#connect-an-application-user-with-tls).
 
 ## Installation settings
 
@@ -66,11 +99,45 @@ When adding a database user under **Users**, leave the password empty to have th
 - **SSO:** OIDC issuer/client/scopes/groups settings.
 - **Monitoring:** collection status and Prometheus integration guidance; the actual scrape URL is the installation-root `/metrics`.
 
+The sidebar **API** link opens the installation's authoritative specification at
+`/api/v1/openapi.yaml`; see [REST API](api.md) for authentication and examples.
+
 Global **Events** and **Operations** pages aggregate authorized activity across clusters and show **Actor**, as do their cluster-detail tabs. Actors identify local account names, OIDC account names with an `(oidc: issuerURL)` suffix, API-token owners with token name/ID, or system work such as `reconciler`, `scheduler`, `system:startup` and the orphan-volume janitor's `system`. Desired-state reconciliation preserves the actor recorded with the generation; asynchronous operations retain their initiating actor rather than attributing their results to whichever user last opened the page.
 
 With **`audit:read`** for the affected objects, the global **Events** page also includes authorized audit activity and **Resource**/**Target** columns. Use **Audit filters > Actor / Resource**, then **Apply filters**, to match exact, case-sensitive values; leave a field blank to include all values. These filters compose with the namespace switcher and apply to both the durable list and matching live updates. Resource examples include `accounts`, `rbac`, `settings`, `api-tokens`, `auth`, `backup-storages`, `namespaces`, `clusters` and `orphaned-volumes`. Noncluster audit records have no Cluster: namespace-level records require namespace-scoped audit access, while global installation records require global audit access. Cluster records keep their cluster name and require `events:read` or `audit:read` on that namespace-qualified cluster. Clearing both fields and applying restores the view for the selected namespace, not every namespace.
 
 Every successful mutation and credential reveal is audited without logging request/response bodies or secrets. Authentication records also cover login/OIDC success/failure and logout. Audit events use the same SQLite event history as cluster events, currently retained indefinitely without automatic age/count pruning; this is not a tamper-proof external archive. See [security](../security.md#audit-attribution-and-durability) for identity and durability limits.
+
+### Events history, live rows and investigation
+
+Global **Events** and the cluster **Events** tab load the newest **200**
+authorized persisted events first (`order=desc`). This is one history page, not
+an automatic fetch of every `nextCursor` page and not the complete audit archive.
+Matching live/replayed SSE events are merged with that page, deduplicated by ID
+and sorted newest-first; the live buffer keeps up to **500** rows. This can show
+more than 200 rows without the user requesting another history page. To inspect
+older history deterministically, use the [API's cursor pagination](api.md#pagination-and-events)
+or `karactl events list` with the same filters and returned cursor.
+
+Applied filters (including actor, resource and type where available) and the
+namespace are kept in the URL query. Refreshing or sharing that URL preserves
+the investigation scope; editing a draft filter does not apply it until **Apply
+filters**. Actor/resource values are exact and case-sensitive. Event **Type**
+is the stored event type, such as `Normal`, `Warning` or `Audit`; the lifecycle
+action is the **reason**, such as `OperationFailed`, not a `type=operation.updated`
+filter.
+
+Expand an event row to inspect its metadata, including diagnostic references
+when present. Cluster names link to their cluster and operation IDs link to
+`/operations/<id>`. The operation detail page shows phase, target, message,
+timestamps and duration. Use these durable records even if live delivery is
+disconnected or buffered. Authorization still applies to shared URLs and
+operation links.
+
+**Monitoring** offers ranges up to **24 hours**, matching retained metric
+history; there is no seven-day query. The selected range is kept in the URL so
+refresh and shared links preserve it.
+
 
 Group-based roles, complete CSV policy replacement and token ownership are explained in [RBAC/auth](rbac-and-auth.md). Settings pages do not grant access to Zerops project tokens or the operator master key.
 
@@ -79,6 +146,12 @@ Group-based roles, complete CSV policy replacement and token ownership are expla
 ## Errors and live updates
 
 Read error messages, cluster conditions and the failed Operation before resubmitting. A failed request can differ from a failed asynchronous job. Events can replay on SSE reconnect; loss of the live connection does not erase durable operations. If a view looks stale, refresh and inspect [CLI/API](cli.md) status before assuming the mutation was lost. Do not repeatedly initiate backup/restore after a response-loss error; PBM receipts may deliberately report an ambiguous outcome.
+
+Mutation dialogs keep the server's human error message and field/resource
+context visible without discarding the form. Submit controls become busy
+immediately to prevent duplicate requests; retries for the same submission
+reuse its idempotency key. Read the outcome and existing operation before
+starting another submission.
 
 Proxies can **buffer small SSE event frames**. Karakoram sends approximately 16-KiB random-base64 connection comments and similarly padded fifteen-second heartbeats, but view invalidation can still wait until the next heartbeat. Each open stream adds approximately 16 KiB at startup and 16 KiB per heartbeat (~1.1 KiB/s before wire compression). Configure a nonbuffering custom-domain/proxy path where possible. Refresh/read durable status if a view appears stale; do not resubmit a completed mutation. See [API transport details](api.md#pagination-and-events) and [limitations](../limitations.md).
 
