@@ -73,17 +73,23 @@ func PrepareCancellation(op *domain.Operation) (bool, error) {
 		if op.Step == "failure-cleanup" && op.LastError != "" {
 			failure = op.LastError
 		}
-		cp.Failure = failure
 		switch cp.Step {
 		case "configure-source", "source-resync", "source-inventory", "disable-pitr":
+			cp.Failure = failure
 			cp.Step, cp.Index = "configure-target", 0
 		case "routers-off":
+			cp.Failure = failure
 			// Finish an already-submitted stop before starting routers again.
 			if cp.RouterOp == nil {
 				cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
 			}
-		case "balancer-off", "maintenance-on", "start", "poll":
+		case "balancer-off", "maintenance-on":
+			cp.Failure = failure
 			cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
+		case "start", "poll":
+			// The start receipt may already represent an active physical
+			// restore. Replay it and observe PBM before restarting processes.
+			// Only PBM's terminal outcome determines restored data success.
 		}
 	}
 	cp.Cancelling = true

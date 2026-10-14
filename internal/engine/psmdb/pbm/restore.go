@@ -287,6 +287,7 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		switch desc.Status {
 		case "done":
+			cp.Failure = ""
 		case "error", "partlyDone", "partly-done", "cancelled", "canceled":
 			cp.Failure = desc.Error
 			if cp.Failure == "" {

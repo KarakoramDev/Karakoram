@@ -68,6 +68,7 @@ type fakeAgent struct {
 	pitrDeleted       bool
 	failRestore       bool
 	restorePolling    int
+	restoreRunning    bool
 	requireConfig     bool
 	configured        bool
 	activeBackup      bool
@@ -137,6 +138,9 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			data = `{"name":"2024-01-05T11:12:26.296561123Z","status":"done","finish":"2024-01-05T11:16:13Z"}`
 			if f.failRestore {
 				data = `{"status":"error","error":"restore failed"}`
+			}
+			if f.restoreRunning {
+				data = `{"status":"running"}`
 			}
 		case "delete-backup":
 			f.deleted = true

@@ -182,6 +182,12 @@ Karakoram serializes disruptive cluster work. It disables PITR and, for sharding
 
 While an in-place restore is Running, cluster phase is **Restoring**, with the operation checkpoint exposed in its message. Successful completion transitions to health observation; terminal failure exposes Degraded with the error. Cancellation is cooperative only before data mutation (including waiting for PBM source inventory); already-started restore is not an undoable operation. Wait for cancellation cleanup and inspect member/agent health before reopening traffic.
 
+If the operation exhausts its ordinary work limit after PBM starts, recovery
+continues to observe PBM until a terminal status before starting database
+processes. A PBM `done` outcome remains a Succeeded restore even if recovery
+exceeded that limit; the operation records the limit failure separately. The
+fresh-base backup is still enqueued and PITR remains gated until it succeeds.
+
 After completion verify every member/agent, application authentication, collection data, balancer state, backup inventory and the fresh post-restore base. Do not reopen writers solely because PBM reported `done`. See [physical-restore troubleshooting](../operations.md#troubleshooting-by-symptom).
 
 ## Clone into a new cluster

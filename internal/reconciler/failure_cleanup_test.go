@@ -18,6 +18,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -53,7 +54,7 @@ func (b *cleanupBackend) OpStatus(ctx context.Context, _ infra.Op) (infra.OpStat
 
 func TestExpiredRestoreRunsCompensationBeforeFailure(t *testing.T) {
 	for _, expiry := range []string{"deadline", "retry budget"} {
-		for _, step := range []string{"poll", "routers-off", "maintenance-on"} {
+		for _, step := range []string{"poll", "routers-off", "maintenance-on", "routers-on"} {
 			t.Run(expiry+"/"+step, func(t *testing.T) {
 				ctx := context.Background()
 				m, st := newTestManager(t, &psmdb.Provider{})
@@ -87,6 +88,8 @@ func TestExpiredRestoreRunsCompensationBeforeFailure(t *testing.T) {
 						}
 						if req.Command == "describe-restore" {
 							restorePolls++
+							_ = json.NewEncoder(w).Encode(agentapi.PBMResponse{Output: json.RawMessage(`{"status":"error","error":"restore failed"}`)})
+							return
 						}
 						_ = json.NewEncoder(w).Encode(agentapi.PBMResponse{Output: json.RawMessage(`{"running":{},"snapshots":[]}`)})
 						return
@@ -95,7 +98,8 @@ func TestExpiredRestoreRunsCompensationBeforeFailure(t *testing.T) {
 				}))
 				t.Cleanup(agent.Close)
 				m.opts.Context.Agents = cleanupAgentDialer{agent.URL, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: agent.Certificate().Raw})}
-				c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"phase":"restore","members":[{"name":"m0","set":"rs0","role":"mongod","stage":"active"},{"name":"router","role":"mongos","stage":"active"}],"pbmMaintenance":{"m0":true},"pbmStopped":{"router":["mongos"]}}`)}
+				c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"phase":"restore","pbmHash":"previous-config","pbmPrefix":"karakoram/demo","members":[{"name":"m0","set":"rs0","role":"mongod","stage":"active"},{"name":"router","role":"mongos","stage":"active"}],"pbmMaintenance":{"m0":true},"pbmStopped":{"router":["mongos"]}}`)}
+				c.Spec.Backup.Storage, c.Spec.Backup.PITR.Enabled = "storage", true
 				if err := st.CreateCluster(ctx, c); err != nil {
 					t.Fatal(err)
 				}
@@ -148,15 +152,52 @@ func TestExpiredRestoreRunsCompensationBeforeFailure(t *testing.T) {
 				var state struct {
 					Maintenance map[string]bool     `json:"pbmMaintenance"`
 					Stopped     map[string][]string `json:"pbmStopped"`
+					PBMHash     string              `json:"pbmHash"`
 				}
 				if err := json.Unmarshal(got.Internal, &state); err != nil {
 					t.Fatal(err)
 				}
-				if len(state.Maintenance) != 0 || len(state.Stopped) != 0 || starts != 2 || maintenanceOff != 1 || backend.starts != 1 || configs == 0 || restorePolls != 0 {
+				expectedStarts, expectedMaintenance, expectedPolls := 2, 1, 0
+				if step == "poll" {
+					expectedPolls = 1
+				}
+				if step == "routers-on" {
+					expectedStarts, expectedMaintenance = 0, 0
+				}
+				if (step != "routers-on" && len(state.Maintenance) != 0) || len(state.Stopped) != 0 || state.PBMHash != "" || starts != expectedStarts || maintenanceOff != expectedMaintenance || backend.starts != 1 || (step != "routers-on" && configs == 0) || restorePolls != expectedPolls {
 					t.Fatalf("incomplete compensation: state=%s starts=%d maintenance=%d routerStarts=%d configs=%d restorePolls=%d", got.Internal, starts, maintenanceOff, backend.starts, configs, restorePolls)
 				}
 				r, err := st.GetRestore(ctx, c.Ref(), "recover")
-				if err != nil || r.Phase != domain.PhaseFailed || !strings.Contains(r.Error, expiry) {
+				expectedPhase := domain.PhaseFailed
+				if step == "routers-on" {
+					expectedPhase = domain.PhaseSucceeded
+					base, e := st.GetOperation(ctx, op.ID+"-base")
+					if e != nil || base.Kind != domain.OperationBackup {
+						t.Fatal("fresh base was not enqueued", base, e)
+					}
+					var fresh struct {
+						Pending bool `json:"freshBaseBackupPending"`
+					}
+					if e := json.Unmarshal(got.Internal, &fresh); e != nil || !fresh.Pending {
+						t.Fatal("fresh base gate missing", string(got.Internal), e)
+					}
+					// Exercise the same hash/config application used by Sync.
+					// Pending fresh-base recovery must install target config
+					// with PITR still disabled, rather than trust the old hash.
+					storage, e := st.GetBackupStorage(ctx, got.Namespace, "storage")
+					if e != nil {
+						t.Fatal(e)
+					}
+					rc := m.opts.Context
+					rc.Cluster = got
+					env := pbm.Env{RC: &rc, Nodes: []pbm.Node{{Member: "m0", ReplSet: "rs0"}}, Storage: *storage, Credentials: storage.Credentials, Prefix: "karakoram/demo"}
+					before := configs
+					hash, e := pbm.EnsureConfig(ctx, env, state.PBMHash)
+					if e != nil || hash == "" || configs <= before {
+						t.Fatal("target PBM config was not reapplied", hash, configs, e)
+					}
+				}
+				if err != nil || r.Phase != expectedPhase || (step != "routers-on" && !strings.Contains(r.Error, expiry)) {
 					t.Fatal(r, err)
 				}
 			})
