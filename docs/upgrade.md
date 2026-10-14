@@ -71,7 +71,27 @@ API/tooling; do not assume the base runtime ships the `sqlite3` CLI.
 ## Deploy the new control plane
 
 For a local checkout, check out the desired published release or your intended
-source revision, then run from its root:
+source revision. Run `git describe --tags --always` and `git rev-parse HEAD`
+locally, then add their **literal output** under `build.envVariables` in the
+`zerops.yaml` used for this push:
+
+```yaml
+zerops:
+  - setup: karakoram
+    build:
+      envVariables:
+        KARAKORAM_VERSION: v0.x.y
+        KARAKORAM_COMMIT: <git rev-parse HEAD>
+```
+
+Replace the example release label and commit placeholder with the actual values.
+Merge this excerpt into the existing file, preserving the rest of its build,
+deploy and run pipeline. The existing Go `buildCommands` reads these variables
+from the build environment and passes them to the version/commit linker fields.
+`--no-git` has no repository metadata remotely; setting runtime variables or
+exporting values only in your local shell cannot identify the uploaded revision
+in the executable. Refresh these values for every source revision you push.
+Then run from the checkout root:
 
 ```sh
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
@@ -81,13 +101,10 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
 For a Git-connected service, redeploy the chosen revision using Zerops's normal
 Git deployment controls. `buildFromGit` in the installer is a one-time source
 import, not an automatically configured GitHub webhook integration. You may
-always use the local push path instead. Before a `--no-git` push, provide both
-`KARAKORAM_VERSION` and `KARAKORAM_COMMIT` in the **remote build environment**;
-the archive has no `.git`, so Git discovery cannot identify that revision.
-Use a release tag/source label and the checkout's `git rev-parse HEAD` output.
-These are build-time inputs, not settings that can be changed in a running
-binary. The pipeline gives the commit override priority and records a UTC build
-date using the same linker fields as `make build`. See
+always use the local push path instead. These provenance inputs are build-time
+values, not settings that can be changed in a running binary. The pipeline gives
+the commit override priority over Git discovery and records a UTC build date
+using the same linker fields as `make build`. See
 [build provenance](install.md#build-provenance-for-local-pushes) for local builds.
 Public `/api/v1/version` and the UI explicitly report
 `unknown (built without git metadata)` when provenance was not supplied.
