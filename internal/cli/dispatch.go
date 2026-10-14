@@ -214,6 +214,8 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		return c.GetDatabaseUser(ctx, args[0], args[1], args[2], &p)
 	case "getHealth":
 		return root.GetHealth(ctx)
+	case "getOpenAPISpec":
+		return c.GetOpenAPISpec(ctx)
 	case "getMemberLogs":
 		var p client.GetMemberLogsParams
 		if err = json.Unmarshal(q, &p); err != nil {

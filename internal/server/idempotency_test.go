@@ -30,7 +30,7 @@ func idempotentCall(s *Server, method, path, body, token, key string) *httptest.
 	r.Header.Set("Authorization", "Bearer "+token)
 	r.Header.Set("Idempotency-Key", key)
 	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, r)
+	testHandler(s).ServeHTTP(w, r)
 	return w
 }
 

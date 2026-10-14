@@ -8,6 +8,7 @@ var commandSpecs = []commandSpec{
 	{"whoami", "getCurrentUser", 0, false, []queryFlag{}},
 	{"version", "getVersion", 0, false, []queryFlag{}},
 	{"health", "getHealth", 0, false, []queryFlag{}},
+	{"openapi", "getOpenAPISpec", 0, false, []queryFlag{}},
 	{"metrics", "getPrometheusMetrics", 0, false, []queryFlag{}},
 	{"permissions", "getPermissions", 0, false, []queryFlag{}},
 	{"settings get", "getSettings", 0, false, []queryFlag{}},
