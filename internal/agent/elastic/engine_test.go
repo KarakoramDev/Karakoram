@@ -294,12 +294,14 @@ func TestAdapterProtectedFilesRejectSymlinkEscape(t *testing.T) {
 }
 
 func TestAdapterReadinessDispatch(t *testing.T) {
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/status" {
+			t.Errorf("unexpected readiness path %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
 	for _, component := range NewEngine().Processes() {
 		if err := agent.Readiness(context.Background(), agent.Options{Engine: agentspec.Engine}, []string{component, port}, NewEngine()); err != nil {
 			t.Fatal(component, err)

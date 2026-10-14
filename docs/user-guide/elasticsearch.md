@@ -61,6 +61,10 @@ A 2026-10-13 probe at fixed 2-GB RAM found automatic Elasticsearch 9.5.5 heap si
 
 The agent renders product configuration below `DATA_DIR/karakoram/config` and runtime data/logs below `DATA_DIR/karakoram`, not `DATA_DIR/config`. `ES_PATH_CONF`, `KBN_PATH_CONF` and Logstash `--path.settings` point to that rendered configuration directory. Deployment readiness explicitly invokes `karakoram agent readiness --engine=elasticsearch <component>` (`elasticsearch`, `kibana`, `logstash` or `apm-server`): Zerops readiness exec was measured to run without the service environment, so it cannot rely on `KARAKORAM_ENGINE`. This listener check is not cluster formation or delivery verification.
 
+Kibana deployment readiness requires local `/api/status` to return HTTP 200,
+not merely an open port. Startup HTTP 503 responses keep the deployment pending
+until Kibana's application initialization finishes; redirects are not accepted.
+
 ## Create
 
 In **Clusters → Create cluster**, select **Elasticsearch**, its advertised version, topology/preset and component counts/resources. Keep private exposure and `requireTLS`. Cluster names must match `^[a-z][a-z0-9]{1,11}$`: 2–12 lowercase letters/digits, beginning with a letter. Select the namespace in the UI, or use `-n NAME` with the CLI.

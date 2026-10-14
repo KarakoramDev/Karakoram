@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -312,7 +313,7 @@ func keystoreCommand(ctx context.Context, binary string, args, env []string, std
 	return cmd.Run()
 }
 
-// Readiness probes the component's local TCP listener, with an optional port.
+// Readiness probes the local listener; Kibana must finish HTTP initialization.
 func (*Runner) Readiness(ctx context.Context, args []string) error {
 	if len(args) < 1 || len(args) > 2 {
 		return errors.New("readiness requires component and optional port")
@@ -332,6 +333,23 @@ func (*Runner) Readiness(ctx context.Context, args []string) error {
 	defer cancel()
 	var err error
 	for _, host := range []string{"127.0.0.1", "::1"} {
+		if args[0] == agentspec.ComponentKibana {
+			request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort(host, strconv.Itoa(port))+"/api/status", nil)
+			if requestErr != nil {
+				return requestErr
+			}
+			client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+			response, requestErr := client.Do(request)
+			if requestErr != nil {
+				err = requestErr
+				continue
+			}
+			response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				return fmt.Errorf("Kibana is not ready: HTTP %d", response.StatusCode)
+			}
+			return nil
+		}
 		var conn net.Conn
 		conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 		if err == nil {

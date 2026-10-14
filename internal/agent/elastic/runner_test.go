@@ -10,6 +10,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -516,6 +518,9 @@ func TestReadiness(t *testing.T) {
 	defer listener.Close()
 	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
 	for _, component := range New().Processes() {
+		if component == "kibana" {
+			continue // Kibana readiness requires its HTTP status, not just TCP.
+		}
 		if err := New().Readiness(context.Background(), []string{component, port}); err != nil {
 			t.Fatal(err)
 		}
@@ -537,6 +542,26 @@ func TestReadiness(t *testing.T) {
 	defer v6.Close()
 	if err := New().Readiness(context.Background(), []string{"elasticsearch", strconv.Itoa(v6.Addr().(*net.TCPAddr).Port)}); err != nil {
 		t.Fatal("IPv6 fallback failed", err)
+	}
+}
+
+func TestKibanaReadinessRequiresSuccessfulStatus(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable, http.StatusFound} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/api/status" {
+					t.Errorf("unexpected readiness path %s", request.URL.Path)
+				}
+				w.Header().Set("Location", "/ready")
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+			port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
+			err := New().Readiness(t.Context(), []string{"kibana", port})
+			if (err == nil) != (status == http.StatusOK) {
+				t.Fatalf("HTTP %d readiness error=%v", status, err)
+			}
+		})
 	}
 }
 
