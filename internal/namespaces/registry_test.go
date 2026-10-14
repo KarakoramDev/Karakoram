@@ -146,7 +146,11 @@ func TestCreateValidationAndRouting(t *testing.T) {
 	for _, tc := range []struct{ name, project, token string }{{"default", "proj-test", "valid-token"}, {"x", "proj-test", "valid-token"}, {"testing", "proj-default", "valid-token"}, {"testing", "proj-test", "bad-token"}, {"testing", "proj-test", "wrong-project-token"}} {
 		t.Run(tc.name+tc.token+tc.project, func(t *testing.T) {
 			r, _, _ := setupRegistry(t)
-			if _, err := r.Create(context.Background(), tc.name, tc.project, tc.token, ""); !errors.Is(err, ErrInvalid) {
+			want := ErrInvalid
+			if tc.name == "default" {
+				want = ErrConflict
+			}
+			if _, err := r.Create(context.Background(), tc.name, tc.project, tc.token, ""); !errors.Is(err, want) {
 				t.Fatalf("validation: %v", err)
 			}
 		})

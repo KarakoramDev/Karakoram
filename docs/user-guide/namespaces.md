@@ -10,6 +10,8 @@ Namespace names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters
 
 CLI single-object/create/mutation commands resolve namespace as **`--namespace/-n` > saved context namespace > `default`**. Collection commands without an explicit `-n` list all authorized namespaces; with `-n` they filter. Save a default for object commands with `karactl config set-context production --namespace prod`. Responses carry `namespace`, and unfiltered tables identify it.
 
+An explicit nonexistent `?namespace=NAME` returns **404** `not_found` on collections, details and sub-resources, with `details.resource: namespace` and `details.name`. It is not an empty namespace. Omit the parameter entirely for **All namespaces**; an empty or malformed parameter returns **400**.
+
 `karactl namespaces list` follows every authorized result page in all output formats.
 
 The UI namespace switcher offers **All namespaces** and authorized namespace names with health indicators. Selection is carried in `?namespace=` and a non-secret localStorage preference; cluster detail routes include the namespace. Choose an explicit namespace when creating a cluster/storage. A shared link does not bypass authorization. Reading namespace metadata is separate from reading its clusters.
@@ -34,7 +36,7 @@ karactl namespaces rotate-token dev --token-file replacement-token.txt
 karactl -n dev clusters list
 ```
 
-Do not place the token in an argument value, committed file or shell trace. Creation rejects invalid credentials/project scope, a duplicate project or an occupied relay hostname with **422**; an existing namespace name returns **409**. Missing/invalid request shape may return **400**. A valid token is not proof that the relay is connected: wait for relay `Ready` and `connected: true`.
+Do not place the token in an argument value, committed file or shell trace. Missing `name`, `projectId` or `token` returns **400** `invalid_request` naming the missing field. Invalid name syntax returns **400** with `details.field: name` and the full 2–32-character rule. Both an existing name and reserved `default` return **409** `conflict` with reason `already_exists`. Invalid credentials/project scope, a duplicate project or an occupied relay hostname return **422**. A valid token is not proof that the relay is connected: wait for relay `Ready` and `connected: true`.
 
 Re-validation returns updated health; an invalid stored token is represented by `token.valid: false` and `lastError`, not necessarily an HTTP error. Automatic checks refresh token health about every five minutes. Rotation validates access to the **same project**, persists the replacement and changes the Backend's token without restarting the relay/session. Revoke the old Zerops token only after successful rotation. For `default`, API rotation returns **409**: update the control-plane service secret and restart instead.
 

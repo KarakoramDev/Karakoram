@@ -55,7 +55,7 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		return s.failure(err)
 	}
 	if _, _, err := backupstorage.SnapshotKeys(*storage, *b); err != nil {
-		return fail(409, "conflict", "Retained backup lacks a safe recorded snapshot namespace; preserve its record and repair its storage/provenance before deletion")
+		return s.failure(&domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: store.ErrConflict, Message: "backup " + b.Name + " lacks a safe recorded snapshot namespace; preserve its record and repair its storage/provenance before deletion"})
 	}
 	if err := s.Store.MarkRetainedBackupDeleting(ctx, b); err != nil {
 		return s.failure(err)
@@ -90,7 +90,7 @@ func (s *Server) retainedRestoreSource(ctx context.Context, cluster domain.Clust
 	}
 	b, err := s.Store.GetBackup(ctx, cluster, backup)
 	if err != nil {
-		r := s.failure(err)
+		r := s.backupDependencyFailure(err, cluster, backup)
 		return &r
 	}
 	message := ""
@@ -112,7 +112,7 @@ func (s *Server) retainedRestoreSource(ctx context.Context, cluster domain.Clust
 		}
 	}
 	if message != "" {
-		r := fail(409, "conflict", message)
+		r := s.failure(&domain.ResourceError{Resource: "backup", Name: b.Name, Reason: domain.ReasonInvalidState, State: string(b.Phase), Err: store.ErrConflict, Message: "backup " + b.Name + ": " + message})
 		return &r
 	}
 	return nil

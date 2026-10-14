@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -284,6 +285,7 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 		return err
 	}
 	defer tx.Rollback()
+	previousPhase := backup.Phase
 	backup.Phase = domain.PhaseDeleting
 	data, err := json.Marshal(backup)
 	if err != nil {
@@ -298,7 +300,7 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 		return err
 	}
 	if n == 0 {
-		return ErrConflict
+		return &domain.ResourceError{Resource: "backup", Name: backup.Name, Reason: domain.ReasonInvalidState, State: string(previousPhase), Err: ErrConflict, Message: fmt.Sprintf("backup %q cannot be deleted in state %s", backup.Name, previousPhase)}
 	}
 	if err := put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), true); err != nil {
 		return err

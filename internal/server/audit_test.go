@@ -283,6 +283,11 @@ func TestNamespaceMutationAuditUsesRequestActor(t *testing.T) {
 func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 	s, _, admin := testServer(t)
 	ctx := t.Context()
+	for _, name := range []string{"dev", "prod"} {
+		if err := s.Store.CreateNamespace(ctx, &domain.Namespace{Name: name, Phase: "Ready"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: "auditor"}, "auditor-test-password"); err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +317,6 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 		{"", 2}, {"?namespace=dev", 2}, {"?namespace=prod", 0},
 		{"?namespace=dev&actor=alice&resource=clusters", 1},
 		{"?namespace=dev&actor=bob&resource=namespaces", 1},
-		{"?actor=alice&resource=accounts", 0},
 	} {
 		w := call(s, "GET", "/api/v1/events"+tc.query, "", token)
 		var list api.EventList
@@ -324,6 +328,9 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 				t.Fatal("list leaks unauthorized audit", e)
 			}
 		}
+	}
+	if w := call(s, "GET", "/api/v1/events?actor=alice&resource=accounts", "", token); w.Code != 403 {
+		t.Fatal("explicit unauthorized audit filter", w.Code, w.Body.String())
 	}
 	// Even installation administrators do not receive global audits through a namespace filter.
 	w := call(s, "GET", "/api/v1/events?namespace=dev&resource=accounts", "", admin)

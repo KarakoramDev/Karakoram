@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -337,8 +338,25 @@ func (r *Registry) Get(ctx context.Context, name string) (*domain.Namespace, err
 	return r.o.Store.GetNamespace(ctx, name)
 }
 func (r *Registry) Create(ctx context.Context, name, projectID, token, description string) (*domain.Namespace, error) {
-	if name == domain.DefaultNamespace || domain.ValidateNamespaceName(name) != nil || projectID == "" || token == "" {
-		return nil, fmt.Errorf("%w: name, project and token are required; default is reserved", ErrInvalid)
+	if name == "" {
+		e := domain.InvalidField("name", domain.ReasonRequired, "name is required")
+		e.Err = ErrInvalid
+		return nil, e
+	}
+	if err := domain.ValidateNamespaceName(name); err != nil {
+		e := domain.InvalidField("name", domain.ReasonInvalid, "%s", err)
+		e.Err = ErrInvalid
+		return nil, e
+	}
+	if name == domain.DefaultNamespace {
+		return nil, domain.Conflict("namespace", name, domain.ReasonAlreadyExists, ErrConflict, "namespace %q already exists and is reserved", name)
+	}
+	for _, field := range []struct{ name, value string }{{"projectId", projectID}, {"token", token}} {
+		if strings.TrimSpace(field.value) == "" {
+			e := domain.InvalidField(field.name, domain.ReasonRequired, "%s is required", field.name)
+			e.Err = ErrInvalid
+			return nil, e
+		}
 	}
 	if !relayHostnamePattern.MatchString(r.o.RelayHostname) || r.o.RelayHostname == "core" {
 		return nil, fmt.Errorf("%w: invalid relay hostname", ErrInvalid)
@@ -354,7 +372,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	}
 	for _, n := range all {
 		if n.Name == name {
-			return nil, fmt.Errorf("%w: namespace already exists", ErrConflict)
+			return nil, domain.Conflict("namespace", name, domain.ReasonAlreadyExists, ErrConflict, "namespace %q already exists", name)
 		}
 		if n.ProjectID == projectID {
 			return nil, fmt.Errorf("%w: project is already registered", ErrInvalid)

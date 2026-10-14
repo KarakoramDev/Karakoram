@@ -89,12 +89,6 @@ const (
 	ConditionStatusUnknown ConditionStatus = "Unknown"
 )
 
-// Defines values for CreateBackupRequestType.
-const (
-	CreateBackupRequestTypeLogical  CreateBackupRequestType = "logical"
-	CreateBackupRequestTypePhysical CreateBackupRequestType = "physical"
-)
-
 // Defines values for CreateBackupStorageRequestType.
 const (
 	CreateBackupStorageRequestTypeS3 CreateBackupStorageRequestType = "s3"
@@ -163,8 +157,8 @@ const (
 
 // Defines values for ProviderBackupTypes.
 const (
-	ProviderBackupTypesLogical  ProviderBackupTypes = "logical"
-	ProviderBackupTypesPhysical ProviderBackupTypes = "physical"
+	Logical  ProviderBackupTypes = "logical"
+	Physical ProviderBackupTypes = "physical"
 )
 
 // Defines values for ProviderTopologyType.
@@ -201,6 +195,17 @@ const (
 	RestorePhasePending   RestorePhase = "Pending"
 	RestorePhaseRunning   RestorePhase = "Running"
 	RestorePhaseSucceeded RestorePhase = "Succeeded"
+)
+
+// Defines values for StorageVerificationFailureReason.
+const (
+	AccessDenied       StorageVerificationFailureReason = "access_denied"
+	BucketNotFound     StorageVerificationFailureReason = "bucket_not_found"
+	EndpointNotAllowed StorageVerificationFailureReason = "endpoint_not_allowed"
+	Timeout            StorageVerificationFailureReason = "timeout"
+	TlsError           StorageVerificationFailureReason = "tls_error"
+	Unknown            StorageVerificationFailureReason = "unknown"
+	Unreachable        StorageVerificationFailureReason = "unreachable"
 )
 
 // Defines values for SystemUserName.
@@ -254,6 +259,56 @@ const (
 const (
 	Asc  ListEventsParamsOrder = "asc"
 	Desc ListEventsParamsOrder = "desc"
+)
+
+// Defines values for ListEventsParamsType.
+const (
+	ListEventsParamsTypeAudit   ListEventsParamsType = "Audit"
+	ListEventsParamsTypeNormal  ListEventsParamsType = "Normal"
+	ListEventsParamsTypeWarning ListEventsParamsType = "Warning"
+)
+
+// Defines values for ListEventsParamsResource.
+const (
+	ListEventsParamsResourceAccounts           ListEventsParamsResource = "accounts"
+	ListEventsParamsResourceApiTokens          ListEventsParamsResource = "api-tokens"
+	ListEventsParamsResourceAuth               ListEventsParamsResource = "auth"
+	ListEventsParamsResourceBackupStorages     ListEventsParamsResource = "backup-storages"
+	ListEventsParamsResourceBackups            ListEventsParamsResource = "backups"
+	ListEventsParamsResourceClusterCredentials ListEventsParamsResource = "cluster-credentials"
+	ListEventsParamsResourceClusters           ListEventsParamsResource = "clusters"
+	ListEventsParamsResourceDatabaseUsers      ListEventsParamsResource = "database-users"
+	ListEventsParamsResourceNamespaces         ListEventsParamsResource = "namespaces"
+	ListEventsParamsResourceOperations         ListEventsParamsResource = "operations"
+	ListEventsParamsResourceOrphanedVolumes    ListEventsParamsResource = "orphaned-volumes"
+	ListEventsParamsResourceRbac               ListEventsParamsResource = "rbac"
+	ListEventsParamsResourceRestores           ListEventsParamsResource = "restores"
+	ListEventsParamsResourceSettings           ListEventsParamsResource = "settings"
+)
+
+// Defines values for StreamEventsParamsType.
+const (
+	StreamEventsParamsTypeAudit   StreamEventsParamsType = "Audit"
+	StreamEventsParamsTypeNormal  StreamEventsParamsType = "Normal"
+	StreamEventsParamsTypeWarning StreamEventsParamsType = "Warning"
+)
+
+// Defines values for StreamEventsParamsResource.
+const (
+	StreamEventsParamsResourceAccounts           StreamEventsParamsResource = "accounts"
+	StreamEventsParamsResourceApiTokens          StreamEventsParamsResource = "api-tokens"
+	StreamEventsParamsResourceAuth               StreamEventsParamsResource = "auth"
+	StreamEventsParamsResourceBackupStorages     StreamEventsParamsResource = "backup-storages"
+	StreamEventsParamsResourceBackups            StreamEventsParamsResource = "backups"
+	StreamEventsParamsResourceClusterCredentials StreamEventsParamsResource = "cluster-credentials"
+	StreamEventsParamsResourceClusters           StreamEventsParamsResource = "clusters"
+	StreamEventsParamsResourceDatabaseUsers      StreamEventsParamsResource = "database-users"
+	StreamEventsParamsResourceNamespaces         StreamEventsParamsResource = "namespaces"
+	StreamEventsParamsResourceOperations         StreamEventsParamsResource = "operations"
+	StreamEventsParamsResourceOrphanedVolumes    StreamEventsParamsResource = "orphaned-volumes"
+	StreamEventsParamsResourceRbac               StreamEventsParamsResource = "rbac"
+	StreamEventsParamsResourceRestores           StreamEventsParamsResource = "restores"
+	StreamEventsParamsResourceSettings           StreamEventsParamsResource = "settings"
 )
 
 // APIToken Only metadata and a non-sensitive identifying prefix; the token value is never returned here.
@@ -580,13 +635,12 @@ type CreateAccountRequest struct {
 
 // CreateBackupRequest defines model for CreateBackupRequest.
 type CreateBackupRequest struct {
-	Name    string                  `json:"name"`
-	Storage string                  `json:"storage"`
-	Type    CreateBackupRequestType `json:"type"`
-}
+	Name    string `json:"name"`
+	Storage string `json:"storage"`
 
-// CreateBackupRequestType defines model for CreateBackupRequest.Type.
-type CreateBackupRequestType string
+	// Type Must be one of the cluster provider catalog's backupTypes. Unsupported values return 400 with the provider's supported types.
+	Type string `json:"type"`
+}
 
 // CreateBackupStorageRequest defines model for CreateBackupStorageRequest.
 type CreateBackupStorageRequest struct {
@@ -629,7 +683,7 @@ type CreateDatabaseUserRequest struct {
 type CreateRestoreRequest struct {
 	Name string `json:"name"`
 
-	// Source Exactly one of backup and pitrTime is required.
+	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
 	Source RestoreSource `json:"source"`
 
 	// SourceNamespace Source namespace; defaults to the target cluster namespace.
@@ -865,7 +919,7 @@ type Namespace struct {
 	Default      bool      `json:"default"`
 	Description  *string   `json:"description,omitempty"`
 
-	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens.
+	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 	Name        NamespaceName  `json:"name"`
 	Phase       NamespacePhase `json:"phase"`
 	ProjectId   string         `json:"projectId"`
@@ -886,7 +940,7 @@ type NamespacePhase string
 type NamespaceCreate struct {
 	Description *string `json:"description,omitempty"`
 
-	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens.
+	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 	Name      NamespaceName `json:"name"`
 	ProjectId string        `json:"projectId"`
 	Token     *string       `json:"token,omitempty"`
@@ -900,7 +954,7 @@ type NamespaceList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// NamespaceName Project namespace name, 2–32 lowercase letters, digits or hyphens.
+// NamespaceName Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 type NamespaceName = string
 
 // NamespaceTokenRotate defines model for NamespaceTokenRotate.
@@ -1189,7 +1243,7 @@ type Restore struct {
 	Namespace   *NamespaceName `json:"namespace,omitempty"`
 	Phase       RestorePhase   `json:"phase"`
 
-	// Source Exactly one of backup and pitrTime is required.
+	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
 	Source    RestoreSource `json:"source"`
 	StartedAt *time.Time    `json:"startedAt,omitempty"`
 }
@@ -1205,12 +1259,19 @@ type RestoreList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// RestoreSource Exactly one of backup and pitrTime is required.
+// RestoreSource Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
 type RestoreSource struct {
 	Backup        *string    `json:"backup,omitempty"`
 	PitrTime      *time.Time `json:"pitrTime,omitempty"`
-	SourceCluster string     `json:"sourceCluster"`
+	SourceCluster *string    `json:"sourceCluster,omitempty"`
+	union         json.RawMessage
 }
+
+// RestoreSource0 defines model for .
+type RestoreSource0 = interface{}
+
+// RestoreSource1 defines model for .
+type RestoreSource1 = interface{}
 
 // RoleReference defines model for RoleReference.
 type RoleReference struct {
@@ -1237,12 +1298,18 @@ type Settings struct {
 	Oidc OIDCConfig `json:"oidc"`
 }
 
-// StorageVerification Checks S3 read/write/delete access and TLS without exposing credentials.
+// StorageVerification Checks S3 read/write/delete access and TLS without exposing credentials. A completed verification returns HTTP 200 even on failure, with verified false, failureReason and actionable message.
 type StorageVerification struct {
 	CheckedAt time.Time `json:"checkedAt"`
-	Message   string    `json:"message"`
-	Verified  bool      `json:"verified"`
+
+	// FailureReason Present when verified is false; categorized, secret-free cause.
+	FailureReason *StorageVerificationFailureReason `json:"failureReason,omitempty"`
+	Message       string                            `json:"message"`
+	Verified      bool                              `json:"verified"`
 }
+
+// StorageVerificationFailureReason Present when verified is false; categorized, secret-free cause.
+type StorageVerificationFailureReason string
 
 // SystemUser defines model for SystemUser.
 type SystemUser struct {
@@ -1382,10 +1449,10 @@ type IdempotencyKey = string
 // Limit defines model for Limit.
 type Limit = int
 
-// NamespacePath Project namespace name, 2–32 lowercase letters, digits or hyphens.
+// NamespacePath Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 type NamespacePath = NamespaceName
 
-// NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens.
+// NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 type NamespaceQuery = NamespaceName
 
 // BadRequest Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
@@ -1554,13 +1621,13 @@ type ListBackupStoragesParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateBackupStorageParams defines parameters for CreateBackupStorage.
 type CreateBackupStorageParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1579,7 +1646,7 @@ type CreateBackupStorageParams struct {
 
 // DeleteBackupStorageParams defines parameters for DeleteBackupStorage.
 type DeleteBackupStorageParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1588,13 +1655,13 @@ type DeleteBackupStorageParams struct {
 
 // GetBackupStorageParams defines parameters for GetBackupStorage.
 type GetBackupStorageParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ReplaceBackupStorageParams defines parameters for ReplaceBackupStorage.
 type ReplaceBackupStorageParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1603,7 +1670,7 @@ type ReplaceBackupStorageParams struct {
 
 // VerifyBackupStorageParams defines parameters for VerifyBackupStorage.
 type VerifyBackupStorageParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1618,13 +1685,13 @@ type ListClustersParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateClusterParams defines parameters for CreateCluster.
 type CreateClusterParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1646,7 +1713,7 @@ type DeleteClusterParams struct {
 	KeepVolumes *bool `form:"keepVolumes,omitempty" json:"keepVolumes,omitempty"`
 	KeepBackups *bool `form:"keepBackups,omitempty" json:"keepBackups,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1655,13 +1722,13 @@ type DeleteClusterParams struct {
 
 // GetClusterParams defines parameters for GetCluster.
 type GetClusterParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // PatchClusterParams defines parameters for PatchCluster.
 type PatchClusterParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1680,7 +1747,7 @@ type PatchClusterParams struct {
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
 type ReplaceClusterParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1705,13 +1772,13 @@ type ListBackupsParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateBackupParams defines parameters for CreateBackup.
 type CreateBackupParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1730,7 +1797,7 @@ type CreateBackupParams struct {
 
 // DeleteBackupParams defines parameters for DeleteBackup.
 type DeleteBackupParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1739,19 +1806,19 @@ type DeleteBackupParams struct {
 
 // GetBackupParams defines parameters for GetBackup.
 type GetBackupParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetClusterBalancerParams defines parameters for GetClusterBalancer.
 type GetClusterBalancerParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ReplaceClusterBalancerParams defines parameters for ReplaceClusterBalancer.
 type ReplaceClusterBalancerParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1760,7 +1827,7 @@ type ReplaceClusterBalancerParams struct {
 
 // GetClusterConnectionParams defines parameters for GetClusterConnection.
 type GetClusterConnectionParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
@@ -1772,13 +1839,13 @@ type ListDatabaseRolesParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateDatabaseRoleParams defines parameters for CreateDatabaseRole.
 type CreateDatabaseRoleParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1797,7 +1864,7 @@ type CreateDatabaseRoleParams struct {
 
 // DeleteDatabaseRoleParams defines parameters for DeleteDatabaseRole.
 type DeleteDatabaseRoleParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1806,13 +1873,13 @@ type DeleteDatabaseRoleParams struct {
 
 // GetDatabaseRoleParams defines parameters for GetDatabaseRole.
 type GetDatabaseRoleParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ReplaceDatabaseRoleParams defines parameters for ReplaceDatabaseRole.
 type ReplaceDatabaseRoleParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1827,13 +1894,13 @@ type ListDatabaseUsersParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateDatabaseUserParams defines parameters for CreateDatabaseUser.
 type CreateDatabaseUserParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1852,7 +1919,7 @@ type CreateDatabaseUserParams struct {
 
 // DeleteDatabaseUserParams defines parameters for DeleteDatabaseUser.
 type DeleteDatabaseUserParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1861,13 +1928,13 @@ type DeleteDatabaseUserParams struct {
 
 // GetDatabaseUserParams defines parameters for GetDatabaseUser.
 type GetDatabaseUserParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ReplaceDatabaseUserParams defines parameters for ReplaceDatabaseUser.
 type ReplaceDatabaseUserParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1876,13 +1943,13 @@ type ReplaceDatabaseUserParams struct {
 
 // ListClusterMembersParams defines parameters for ListClusterMembers.
 type ListClusterMembersParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetClusterMemberParams defines parameters for GetClusterMember.
 type GetClusterMemberParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
@@ -1893,7 +1960,7 @@ type GetMemberLogsParams struct {
 	Cursor  *string                     `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Since   *time.Time                  `form:"since,omitempty" json:"since,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
@@ -1902,7 +1969,7 @@ type GetMemberLogsParamsProcess string
 
 // ReplaceClusterMemberParams defines parameters for ReplaceClusterMember.
 type ReplaceClusterMemberParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1917,7 +1984,7 @@ type GetClusterMetricsParams struct {
 	// Step Aggregation interval.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
@@ -1930,25 +1997,25 @@ type ListClusterOperationsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Phase  *string `form:"phase,omitempty" json:"phase,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetPITRWindowParams defines parameters for GetPITRWindow.
 type GetPITRWindowParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // GetClusterPlacementParams defines parameters for GetClusterPlacement.
 type GetClusterPlacementParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1957,7 +2024,7 @@ type RaiseClusterFCVParams struct {
 
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1972,13 +2039,13 @@ type ListRestoresParams struct {
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // CreateRestoreParams defines parameters for CreateRestore.
 type CreateRestoreParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -1997,13 +2064,13 @@ type CreateRestoreParams struct {
 
 // GetRestoreParams defines parameters for GetRestore.
 type GetRestoreParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ResumeClusterParams defines parameters for ResumeCluster.
 type ResumeClusterParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -2012,7 +2079,7 @@ type ResumeClusterParams struct {
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -2021,19 +2088,19 @@ type RotateClusterTLSParams struct {
 
 // GetClusterStatusParams defines parameters for GetClusterStatus.
 type GetClusterStatusParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListSystemUsersParams defines parameters for ListSystemUsers.
 type ListSystemUsersParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // RotateSystemUserParams defines parameters for RotateSystemUser.
 type RotateSystemUserParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -2051,47 +2118,59 @@ type ListEventsParams struct {
 	// Order Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order.
 	Order       *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
 	Cluster     *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Type        *string                `form:"type,omitempty" json:"type,omitempty"`
+	Type        *ListEventsParamsType  `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string                `form:"operationId,omitempty" json:"operationId,omitempty"`
 
 	// Actor Exact actor identity, including token name and ID when applicable.
 	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
 
-	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
-	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+	// Resource Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
+	Resource *ListEventsParamsResource `form:"resource,omitempty" json:"resource,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListEventsParamsOrder defines parameters for ListEvents.
 type ListEventsParamsOrder string
 
+// ListEventsParamsType defines parameters for ListEvents.
+type ListEventsParamsType string
+
+// ListEventsParamsResource defines parameters for ListEvents.
+type ListEventsParamsResource string
+
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
-	Cluster     *string `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Type        *string `form:"type,omitempty" json:"type,omitempty"`
-	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
+	Cluster     *string                 `form:"cluster,omitempty" json:"cluster,omitempty"`
+	Type        *StreamEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
+	OperationId *string                 `form:"operationId,omitempty" json:"operationId,omitempty"`
 
 	// Actor Exact actor identity, including token name and ID when applicable.
 	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
 
-	// Resource Exact resource category, such as clusters, accounts, auth or rbac.
-	Resource *string `form:"resource,omitempty" json:"resource,omitempty"`
+	// Resource Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
+	Resource *StreamEventsParamsResource `form:"resource,omitempty" json:"resource,omitempty"`
 
 	// Cursor Replay events after this durable event cursor.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
 	// LastEventID SSE reconnection cursor; used when cursor is absent.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
+// StreamEventsParamsType defines parameters for StreamEvents.
+type StreamEventsParamsType string
+
+// StreamEventsParamsResource defines parameters for StreamEvents.
+type StreamEventsParamsResource string
+
 // GetPrometheusMetricsParams defines parameters for GetPrometheusMetrics.
 type GetPrometheusMetricsParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
@@ -2154,13 +2233,13 @@ type ListOperationsParams struct {
 	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Phase   *string `form:"phase,omitempty" json:"phase,omitempty"`
 
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListOrphanedVolumesParams defines parameters for ListOrphanedVolumes.
 type ListOrphanedVolumesParams struct {
-	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
@@ -2259,6 +2338,130 @@ type ReplaceRBACPolicyJSONRequestBody = RBACPolicy
 
 // ReplaceSettingsJSONRequestBody defines body for ReplaceSettings for application/json ContentType.
 type ReplaceSettingsJSONRequestBody = Settings
+
+// AsRestoreSource0 returns the union data inside the RestoreSource as a RestoreSource0
+func (t RestoreSource) AsRestoreSource0() (RestoreSource0, error) {
+	var body RestoreSource0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRestoreSource0 overwrites any union data inside the RestoreSource as the provided RestoreSource0
+func (t *RestoreSource) FromRestoreSource0(v RestoreSource0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRestoreSource0 performs a merge with any union data inside the RestoreSource, using the provided RestoreSource0
+func (t *RestoreSource) MergeRestoreSource0(v RestoreSource0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsRestoreSource1 returns the union data inside the RestoreSource as a RestoreSource1
+func (t RestoreSource) AsRestoreSource1() (RestoreSource1, error) {
+	var body RestoreSource1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRestoreSource1 overwrites any union data inside the RestoreSource as the provided RestoreSource1
+func (t *RestoreSource) FromRestoreSource1(v RestoreSource1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRestoreSource1 performs a merge with any union data inside the RestoreSource, using the provided RestoreSource1
+func (t *RestoreSource) MergeRestoreSource1(v RestoreSource1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RestoreSource) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	object := make(map[string]json.RawMessage)
+	if t.union != nil {
+		err = json.Unmarshal(b, &object)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if t.Backup != nil {
+		object["backup"], err = json.Marshal(t.Backup)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'backup': %w", err)
+		}
+	}
+
+	if t.PitrTime != nil {
+		object["pitrTime"], err = json.Marshal(t.PitrTime)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'pitrTime': %w", err)
+		}
+	}
+
+	if t.SourceCluster != nil {
+		object["sourceCluster"], err = json.Marshal(t.SourceCluster)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'sourceCluster': %w", err)
+		}
+	}
+	b, err = json.Marshal(object)
+	return b, err
+}
+
+func (t *RestoreSource) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	if err != nil {
+		return err
+	}
+	object := make(map[string]json.RawMessage)
+	err = json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["backup"]; found {
+		err = json.Unmarshal(raw, &t.Backup)
+		if err != nil {
+			return fmt.Errorf("error reading 'backup': %w", err)
+		}
+	}
+
+	if raw, found := object["pitrTime"]; found {
+		err = json.Unmarshal(raw, &t.PitrTime)
+		if err != nil {
+			return fmt.Errorf("error reading 'pitrTime': %w", err)
+		}
+	}
+
+	if raw, found := object["sourceCluster"]; found {
+		err = json.Unmarshal(raw, &t.SourceCluster)
+		if err != nil {
+			return fmt.Errorf("error reading 'sourceCluster': %w", err)
+		}
+	}
+
+	return err
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -13474,11 +13677,29 @@ func (response ListOrphanedVolumes200JSONResponse) VisitListOrphanedVolumesRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListOrphanedVolumes400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListOrphanedVolumes400JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListOrphanedVolumes401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListOrphanedVolumes401JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListOrphanedVolumes404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListOrphanedVolumes404JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 
 	return json.NewEncoder(w).Encode(response)
 }

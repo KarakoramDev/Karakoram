@@ -28,7 +28,7 @@ type fakeProvider struct{}
 
 func (*fakeProvider) Name() string { return "fake" }
 func (*fakeProvider) Describe() domain.ProviderInfo {
-	return domain.ProviderInfo{Name: "fake", DisplayName: "Fake engine", Versions: []domain.VersionInfo{{Version: "8.0", Major: "8.0", Default: true, Status: "supported"}}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}, MinReplicas: 1, MaxReplicas: 7}}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}}, "configServer": {Defaults: domain.ComponentSpec{Replicas: 1}}, "router": {Defaults: domain.ComponentSpec{Replicas: 1}}}}}}
+	return domain.ProviderInfo{Name: "fake", DisplayName: "Fake engine", BackupTypes: []string{"logical", "physical"}, Versions: []domain.VersionInfo{{Version: "8.0", Major: "8.0", Default: true, Status: "supported"}}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}, MinReplicas: 1, MaxReplicas: 7}}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}}, "configServer": {Defaults: domain.ComponentSpec{Replicas: 1}}, "router": {Defaults: domain.ComponentSpec{Replicas: 1}}}}}}
 }
 func (*fakeProvider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Provider == "" {

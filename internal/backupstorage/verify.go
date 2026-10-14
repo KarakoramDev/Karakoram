@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -26,9 +27,53 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+type verificationFailure struct {
+	reason string
+	err    error
+}
+
+func (e *verificationFailure) Error() string {
+	_, message := Failure(e)
+	return message
+}
+func (e *verificationFailure) Unwrap() error { return e.err }
+
+// Failure returns only fixed, caller-safe advice. S3 errors, URLs and credentials
+// supplied by a remote service are never included in the verification response.
+func Failure(err error) (reason, message string) {
+	if err == nil {
+		return "", "Read, write and delete access verified"
+	}
+	reason = "unknown"
+	var failure *verificationFailure
+	if errors.As(err, &failure) {
+		reason = failure.reason
+	}
+	switch reason {
+	case "access_denied":
+		message = "S3 authentication or permission denied; check credentials and bucket read/write/delete permissions"
+	case "bucket_not_found":
+		message = "S3 bucket does not exist; check the bucket name, endpoint and region"
+	case "endpoint_not_allowed":
+		message = "S3 endpoint is not permitted; use an HTTPS origin without credentials, path, query or fragment; redirects, loopback and metadata addresses are forbidden and private endpoints require an operator allowlist"
+	case "tls_error":
+		message = "S3 TLS certificate verification or handshake failed; check the endpoint hostname, certificate chain and TLS configuration"
+	case "unreachable":
+		message = "S3 endpoint is unreachable; check DNS, endpoint, port and network connectivity from the control plane"
+	case "timeout":
+		message = "S3 verification timed out; check endpoint connectivity and retry when the storage service is responsive"
+	default:
+		message = "S3 verification failed; check endpoint, region, bucket and read/write/delete access, then retry"
+	}
+	return reason, message
+}
+
 // Verify probes put, get and delete permissions with a random, private object under the configured prefix.
 // TLS certificate verification and path-style addressing follow the storage settings exactly.
 func Verify(ctx context.Context, s domain.BackupStorage, c domain.StorageCredentials) error {
+	if u, err := url.Parse(s.EndpointURL); err == nil && u.Scheme == "http" {
+		return &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 verification requires HTTPS")}
+	}
 	return verify(ctx, s, c, nil)
 }
 
@@ -89,7 +134,7 @@ func newClient(s domain.BackupStorage, c domain.StorageCredentials, probeTranspo
 	}
 	u, err := url.Parse(s.EndpointURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return nil, nil, errors.New("S3 endpoint must be an HTTP(S) origin without credentials, path, query or fragment")
+		return nil, nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("invalid S3 origin")}
 	}
 	if s.Bucket == "" {
 		return nil, nil, errors.New("S3 bucket is required")
@@ -121,18 +166,36 @@ func newClient(s domain.BackupStorage, c domain.StorageCredentials, probeTranspo
 }
 
 func probeError(action string, err error) error {
-	code := minio.ToErrorResponse(err).Code
-	switch code {
+	var existing *verificationFailure
+	if errors.As(err, &existing) {
+		return err
+	}
+	reason := "unknown"
+	switch minio.ToErrorResponse(err).Code {
 	case "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "InvalidToken", "ExpiredToken":
-		return fmt.Errorf("S3 %s: authentication or permission denied (%s)", action, code)
+		reason = "access_denied"
 	case "NoSuchBucket":
-		return fmt.Errorf("S3 %s: bucket does not exist", action)
+		reason = "bucket_not_found"
+	default:
+		var tlsErr *tls.CertificateVerificationError
+		var unknownCA x509.UnknownAuthorityError
+		var hostname x509.HostnameError
+		var invalidCert x509.CertificateInvalidError
+		var record tls.RecordHeaderError
+		var network net.Error
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			reason = "timeout"
+		case errors.As(err, &tlsErr), errors.As(err, &unknownCA), errors.As(err, &hostname), errors.As(err, &invalidCert), errors.As(err, &record):
+			reason = "tls_error"
+		case errors.As(err, &network):
+			reason = "unreachable"
+			if network.Timeout() {
+				reason = "timeout"
+			}
+		}
 	}
-	var tlsErr *tls.CertificateVerificationError
-	if errors.As(err, &tlsErr) {
-		return fmt.Errorf("S3 %s: TLS certificate verification failed: %w", action, err)
-	}
-	return fmt.Errorf("S3 %s failed: %w", action, err)
+	return &verificationFailure{reason: reason, err: err}
 }
 
 // noRedirectTransport also rejects redirects handled internally by the S3
@@ -143,7 +206,7 @@ func (t noRedirectTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 	response, err := t.RoundTripper.RoundTrip(r)
 	if err == nil && response.StatusCode >= 300 && response.StatusCode < 400 {
 		response.Body.Close()
-		return nil, errors.New("S3 endpoint redirects are not permitted")
+		return nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 endpoint redirects are not permitted")}
 	}
 	return response, err
 }
@@ -200,7 +263,7 @@ func endpointDialer(endpoint *url.URL, allowlist string) func(context.Context, s
 		}
 		host = strings.ToLower(strings.TrimSuffix(host, "."))
 		if port != endpointPort || (host != endpointHost && !strings.HasSuffix(host, "."+endpointHost)) || (!approved && port != "80" && port != "443") {
-			return nil, errors.New("S3 endpoint destination or port is not permitted")
+			return nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 endpoint destination or port is not permitted")}
 		}
 		// Resolve on every new connection and dial the checked numeric address,
 		// preventing DNS rebinding between policy validation and connection.
@@ -213,7 +276,7 @@ func endpointDialer(endpoint *url.URL, allowlist string) func(context.Context, s
 		}
 		for _, ip := range addresses {
 			if !endpointAddressAllowed(ip, approved) {
-				return nil, errors.New("S3 endpoint address is not permitted")
+				return nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 endpoint address is not permitted")}
 			}
 		}
 		var dialErr error

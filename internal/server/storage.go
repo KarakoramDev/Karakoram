@@ -8,7 +8,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -19,9 +21,28 @@ func storageAPI(b domain.BackupStorage) api.BackupStorage {
 func credentialsDomain(c api.S3Credentials) domain.StorageCredentials {
 	return domain.StorageCredentials{AccessKeyID: value(c.AccessKeyId), SecretAccessKey: value(c.SecretAccessKey)}
 }
-func validStorage(b domain.BackupStorage) bool {
+func validateStorage(b domain.BackupStorage, create bool) error {
+	if create {
+		if err := store.ValidateBackupStorageName(b.Name); err != nil {
+			return err
+		}
+	}
+	for _, field := range []struct{ name, value string }{
+		{"type", b.Type}, {"endpointURL", b.EndpointURL}, {"region", b.Region}, {"bucket", b.Bucket},
+		{"credentials.accessKeyId", b.Credentials.AccessKeyID}, {"credentials.secretAccessKey", b.Credentials.SecretAccessKey},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			return domain.InvalidField(field.name, domain.ReasonRequired, "%s is required", field.name)
+		}
+	}
+	if b.Type != "s3" {
+		return domain.InvalidField("type", domain.ReasonUnsupported, "type must be s3")
+	}
 	u, err := url.Parse(b.EndpointURL)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && b.Name != "" && b.Type == "s3" && b.Region != "" && b.Bucket != "" && b.Credentials.AccessKeyID != "" && b.Credentials.SecretAccessKey != ""
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return domain.InvalidField("endpointURL", domain.ReasonInvalid, "endpointURL must be an HTTP(S) URL without credentials, query or fragment")
+	}
+	return nil
 }
 func (s *Server) storage(ctx context.Context, name string, in input) response {
 	namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
@@ -49,8 +70,8 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 			return *failure
 		}
 		v := domain.BackupStorage{Namespace: namespace, Name: b.Name, Type: string(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: value(b.Prefix), ForcePathStyle: b.ForcePathStyle == nil || *b.ForcePathStyle, VerifyTLS: b.VerifyTLS == nil || *b.VerifyTLS, Description: value(b.Description), Credentials: credentialsDomain(b.Credentials)}
-		if !validStorage(v) {
-			return invalid()
+		if err := validateStorage(v, true); err != nil {
+			return s.failure(err)
 		}
 		if err := s.Store.CreateBackupStorage(ctx, &v); err != nil {
 			return s.failure(err)
@@ -82,8 +103,8 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 				b.Credentials.SecretAccessKey = *v.Credentials.SecretAccessKey
 			}
 		}
-		if !validStorage(*b) {
-			return invalid()
+		if err := validateStorage(*b, false); err != nil {
+			return s.failure(err)
 		}
 		if err = s.Store.UpdateBackupStorage(ctx, b); err != nil {
 			return s.failure(err)
@@ -96,11 +117,11 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		}
 		for _, c := range clusters {
 			if c.Spec.Backup.Storage == b.Name {
-				return fail(409, "conflict", "Storage is used by a cluster")
+				return s.failure(domain.Conflict("backupStorage", b.Name, domain.ReasonInvalidState, store.ErrConflict, "backupStorage %q is used by cluster %q", b.Name, c.Name))
 			}
 			for _, schedule := range c.Spec.Backup.Schedules {
 				if schedule.Storage == b.Name {
-					return fail(409, "conflict", "Storage is used by a backup schedule")
+					return s.failure(domain.Conflict("backupStorage", b.Name, domain.ReasonInvalidState, store.ErrConflict, "backupStorage %q is used by a backup schedule on cluster %q", b.Name, c.Name))
 				}
 			}
 		}
@@ -110,7 +131,7 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		}
 		for _, backup := range backups {
 			if backup.Storage == b.Name {
-				return fail(409, "conflict", "Storage contains a backup record; delete retained backups using their original cluster name before removing the storage")
+				return s.failure(domain.Conflict("backupStorage", b.Name, domain.ReasonInvalidState, store.ErrConflict, "backupStorage %q contains backup %q on cluster %q; delete retained backups using their original cluster name before removing the storage", b.Name, backup.Name, backup.Cluster))
 			}
 		}
 		if err = s.Store.DeleteBackupStorage(ctx, namespace, b.Name); err != nil {
@@ -119,11 +140,13 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		return response{status: 204}
 	case "VerifyBackupStorage":
 		err := backupstorage.Verify(ctx, *b, b.Credentials)
-		message := "Read, write and delete access verified"
-		if err != nil {
-			message = "Storage verification failed"
+		reason, message := backupstorage.Failure(err)
+		result := api.StorageVerification{Verified: err == nil, CheckedAt: time.Now().UTC(), Message: message}
+		if reason != "" {
+			category := api.StorageVerificationFailureReason(reason)
+			result.FailureReason = &category
 		}
-		return ok(api.StorageVerification{Verified: err == nil, CheckedAt: time.Now().UTC(), Message: message})
+		return ok(result)
 	}
 	return fail(500, "internal_error", "Unknown storage operation")
 }

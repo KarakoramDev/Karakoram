@@ -223,7 +223,7 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 		}
 		if namespaces, present := r.URL.Query()["namespace"]; present {
 			if len(namespaces) != 1 || domain.ValidateNamespaceName(namespaces[0]) != nil {
-				return invalid(), nil
+				return invalidField("namespace", domain.ReasonInvalid, "namespace must contain 2–32 lowercase letters, digits or hyphens, start with a letter and end with a letter or digit"), nil
 			}
 		}
 		if id == "login" || id == "refreshSession" || id == "logout" || id == "oidcLogin" {
@@ -278,6 +278,12 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 				if !selfService(id) && !collection(id) && !s.RBAC.Can(p.Subjects, rule.Resource, rule.Action, obj) {
 					return failDetails(403, "forbidden", fmt.Sprintf("Permission denied: %s %s on %q; ask an administrator to grant access", rule.Resource, rule.Action, obj), map[string]any{"resource": rule.Resource, "action": rule.Action, "object": obj}), nil
 				}
+			}
+		}
+		// Cluster creation checks name syntax before resolving its namespace.
+		if namespace := r.URL.Query().Get("namespace"); namespace != "" && id != "createCluster" {
+			if failure := s.requireNamespace(ctx, namespace); failure != nil {
+				return *failure, nil
 			}
 		}
 		return s.idempotent(next, id, ctx, w, r.WithContext(ctx), v)
@@ -490,6 +496,9 @@ func clusterObject(namespace, name string) string {
 	return domain.NormalizedNamespace(namespace) + "/" + name
 }
 func (s *Server) usableNamespace(namespace string) *response {
+	if failure := s.requireNamespace(context.Background(), namespace); failure != nil {
+		return failure
+	}
 	if _, err := s.namespaces.Backend(namespace); err != nil {
 		r := fail(422, "invalid_namespace", "Namespace "+namespace+" does not exist or is unavailable")
 		return &r

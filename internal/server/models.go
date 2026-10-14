@@ -177,7 +177,14 @@ func backupAPI(b domain.Backup) api.Backup {
 	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: &b.Schedule, Phase: api.BackupPhase(b.Phase), PbmName: &b.PBMName, StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: &b.Error}
 }
 func restoreAPI(r domain.Restore) api.Restore {
-	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: &r.Source.Backup, PitrTime: r.Source.PITRTime, SourceCluster: r.Source.SourceCluster}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: &r.Error}
+	source := api.RestoreSource{PitrTime: r.Source.PITRTime}
+	if r.Source.Backup != "" {
+		source.Backup = &r.Source.Backup
+	}
+	if r.Source.SourceCluster != "" {
+		source.SourceCluster = &r.Source.SourceCluster
+	}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: source, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: &r.Error}
 }
 func eventAPI(e domain.Event) api.Event {
 	var namespace *string

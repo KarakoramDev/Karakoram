@@ -182,7 +182,7 @@ func TestCrossNamespaceRestoreAndCloneExportPermission(t *testing.T) {
 		t.Fatal(r)
 	}
 	for _, ns := range []string{"default", "dev"} {
-		events, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: ns, Type: "CrossNamespaceRestore"})
+		events, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: ns, Type: "Audit"})
 		if err != nil || len(events) != 2 {
 			t.Fatal(ns, events, err)
 		}
@@ -220,10 +220,10 @@ func TestNamespaceStorageIsolationAndCreateValidation(t *testing.T) {
 	if w := call(s, "POST", "/api/v1/backup-storages?namespace=dev", body, reader); w.Code != 403 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if w := call(s, "POST", "/api/v1/backup-storages?namespace=missing", body, admin); w.Code != 422 {
+	if w := call(s, "POST", "/api/v1/backup-storages?namespace=missing", body, admin); w.Code != 404 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if w := call(s, "POST", "/api/v1/clusters?namespace=missing", `{"name":"new",`+namespaceClusterSpec+`}}`, admin); w.Code != 422 {
+	if w := call(s, "POST", "/api/v1/clusters?namespace=missing", `{"name":"new",`+namespaceClusterSpec+`}}`, admin); w.Code != 404 {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	defaultCluster, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "prod"})

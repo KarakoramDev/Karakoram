@@ -125,6 +125,9 @@ Collection `/clusters`, `/operations`, `/events`, `/events/stream`,
 authorized namespaces when omitted; a value filters to that namespace.
 Responses identify their namespace. A bare cluster name is not an
 installation-wide identity; keep namespace in caches and links.
+An explicit nonexistent namespace returns **404** `not_found` with
+`details.resource: namespace` and `details.name` on lists, details and sub-resources;
+omit the parameter rather than passing an empty value for all namespaces.
 
 `spec.dataSource.namespace` selects a cluster-create recovery source;
 in-place restore uses `sourceNamespace`. Both default to the target namespace.
@@ -141,8 +144,9 @@ Cross-namespace recovery additionally checks source `backups/export`.
 | `DELETE /namespaces/{namespace}` | 202 asynchronous owned-relay teardown; 409 for default or retained resources |
 
 Tokens are write-only. Invalid token/project, duplicate project and occupied
-relay hostname return **422** `invalid_namespace`; duplicate name returns
-**409**. Deletion is guarded by clusters, storages, retained backup records and
+relay hostname return **422** `invalid_namespace`; missing fields and invalid name
+syntax return **400** naming the field/rule. Duplicate name and reserved `default`
+return **409**, reason `already_exists`. Deletion is guarded by clusters, storages, retained backup records and
 orphaned-volume records, and does not remove policy rules.
 See [namespace lifecycle](namespaces.md).
 
@@ -215,11 +219,13 @@ Paginated lists return `{items: [...], nextCursor?: "..."}`. `limit` defaults to
 
 `GET /api/v1/events` accepts optional string filters **`actor`** and **`resource`**, alongside `namespace`, `cluster`, `type`, `operationId`, `limit` and `cursor`. Actor/resource filters are exact, case-sensitive matches, combined with each other and all other filters (AND); omitted/empty values do not restrict that field. For example, `/api/v1/events?namespace=dev&actor=alice&resource=namespaces` selects that actor's namespace-management activity in dev. URL-encode actor strings containing spaces or token metadata. Filters never grant permission: cluster events require **`events:read` or `audit:read`** on `<namespace>/<cluster>`; namespace-level audit requires **`audit:read`** on `<namespace>`; global installation audit requires it on `*`. Keep the same filters when advancing a cursor.
 
+Event list/stream `type` accepts **Normal, Warning, Audit**; lifecycle action names such as `OperationFailed` are `reason`, not `type`. Unknown types/resources return **400** and list accepted values. The `cluster` filter on events and operations must be 2–12 lowercase letters/digits starting with a letter. An explicit `resource=auth` (or another unreadable resource category) returns **403** naming the missing `audit/read` permission. Unfiltered queries continue to silently omit unauthorized records, so a successful empty list does not prove there are no installation-wide audit records.
+
 Events are listed oldest-first by default, so following `nextCursor` replays history forward. Pass **`order=desc`** to start from the newest event instead; its `nextCursor` then continues to older events. The Events pages in the web UI use `order=desc`.
 
 Events expose `actor`, optional string **`resource`**/**`target`**, and `namespace` for namespace-scoped activity (omitted for global installation activity). Cluster-management events use `resource: "clusters"`, `target` equal to the cluster name, and retain `cluster`. Orphan-volume janitor events retain the original namespace/cluster but use resource `orphaned-volumes` and target equal to the volume hostname. Namespace-management and relay lifecycle records leave `cluster` empty, retain `namespace` and use resource `namespaces`. Other audit records use the affected resource (for example `accounts`, `rbac`, `settings`, `api-tokens`, `auth` or `backup-storages`) and target. Older events may omit attribution/resource/target. Every successful mutation and credential reveal is audited using safe action metadata, not request/response bodies or secrets. Login/OIDC success/failure and logout have authentication-owned events. All audit activity shares the durable event history and indefinite retention described in [security](../security.md#audit-attribution-and-durability).
 
-`GET /api/v1/events/stream` uses `text/event-stream`, numeric event IDs and named event types such as `cluster.updated`, `backup.updated`, `restore.updated`, `operation.updated` and `member.updated`. Clients must tolerate new dot-qualified types. Reconnect with `Last-Event-ID`, or an explicit `cursor` query (which takes precedence), to replay authorized durable events. Filters include namespace/cluster/type/operationId and the same exact, case-sensitive actor/resource intersections as the list; preserve all filters on reconnect. SSE live delivery can reconnect; it does not replace persisted operation/status queries.
+`GET /api/v1/events/stream` uses `text/event-stream`, numeric event IDs and named event types **Normal**, **Warning** and **Audit**. Lifecycle action names such as `OperationFailed` appear in `reason`; `type=operation.updated` is not a supported filter. Reconnect with `Last-Event-ID`, or an explicit `cursor` query (which takes precedence), to replay authorized durable events. Filters include namespace/cluster/type/operationId and the same exact, case-sensitive actor/resource intersections as the list; preserve all filters on reconnect. SSE live delivery can reconnect; it does not replace persisted operation/status queries.
 
 SSE also sends **comment frames**: an immediately flushed `: connected` comment with approximately **16 KiB of random-base64 padding**, followed by similarly padded `: heartbeat` comments every **fifteen seconds**. Three precomputed heartbeat variants are cycled to resist gzip dictionary compression without generating fresh padding for each heartbeat. A correct SSE parser ignores comments; they carry no event ID/data and must **not** advance the replay cursor or become application events. The stream sets `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`, rather than the ordinary sensitive-JSON `no-store` policy. Preserve these headers through additional proxies. Authentication/permissions are revalidated while draining durable events and on heartbeats; a closed/expired session stream should reauthenticate and reconnect using its last received event ID.
 
@@ -239,7 +245,7 @@ Structured errors are `{code, message, details?}`; do not rely on English messag
 | 404 | Missing/not-visible resource or API route |
 | 409 | Conflicting resource state/operation or unsupported action reported as conflict |
 | 413 | Request exceeds the current 2 MiB body limit |
-| 422 | Namespace token/project/name or relay-hostname validation failed |
+| 422 | Namespace token/project or relay-hostname validation failed |
 | 429 | `rate_limited` login backoff; retry after the header/body delay |
 | 500 | Unexpected server error, deliberately generic public response |
 | 503 | Unavailable store/monitoring subsystem for the relevant endpoint |

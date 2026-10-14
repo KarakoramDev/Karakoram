@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Backups, PITR, restore and clone
 
-Karakoram uses PBM for consistent MongoDB recovery, for both replica sets and sharded clusters. Zerops Local Storage live archives are **not** consistent MongoDB backups. PBM backup objects are independent of [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
+Backup types and recovery capabilities come from the cluster's provider catalog (`backupTypes`). The MongoDB provider uses PBM for consistent replica-set and sharded recovery; the MongoDB/PBM workflows below apply to that provider. Zerops Local Storage live archives are **not** consistent database backups. Engine backup objects are independent of [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
 
 ## Register S3 storage
 
@@ -14,9 +14,11 @@ backup settings and schedules resolve storage names in their own namespace.
 Verification runs from the control plane's network, while backup payloads go
 directly between members and S3, not through the relay.
 
-New storage names must not contain `:` or `/`. Existing storages in namespace
-`default` with either character in their name remain readable and updatable;
-this creation-only restriction does not rename or invalidate legacy storages.
+New storage names must contain 1–128 characters, must not be blank, and must not
+contain `:` or `/`; violations return **400** naming `name` and the rule.
+Existing storages in namespace `default` with either character remain readable
+and updatable. Missing configuration or credential fields return **400** with
+the specific field; an existing storage name returns **409** `already_exists`.
 
 For the CLI, prepare a protected API-shaped YAML/JSON request and pass it with `-f`:
 
@@ -44,9 +46,25 @@ karactl storages get archive
 
 Verification performs a temporary put/get/delete under the prefix; read-only S3 credentials cannot pass or support normal recovery-object lifecycle. Storage reads return metadata and `credentialsConfigured`, never keys. The effective PBM prefix adds a stable per-cluster UID namespace, avoiding collisions among clusters sharing the bucket. Preserve storage configuration/credentials and control-plane state (with its encryption key) as part of recovery.
 
+### Edit storage and replace credentials
+
+Use **Settings → Backup storages → Edit**, or `karactl storages set archive -f storage-update.yaml`. The update file contains the full configuration (`type`, `endpointURL`, `region`, `bucket`, `forcePathStyle`, `verifyTLS`, plus optional prefix/description); omit `name`. Omit the entire `credentials` object to retain the existing encrypted pair. To rotate credentials, include both `credentials.accessKeyId` and `credentials.secretAccessKey`, using a protected file as for creation. Verify after every edit or rotation before revoking the old keys.
+
+Registration saves configuration, not proof of S3 access. A verification failure still returns **HTTP 200**, with `verified: false`, `failureReason` and a secret-free message; success omits `failureReason`. The probe checks put/get/delete from the control plane, not connectivity from every database member.
+
+| `failureReason` | What to check |
+| --- | --- |
+| `access_denied` | Access key/secret pair and bucket read, write and delete permissions; expired credentials or a signature/region mismatch |
+| `bucket_not_found` | Existing bucket name, regional endpoint and signing region |
+| `endpoint_not_allowed` | HTTPS origin only; no credentials, non-root path, query, fragment or redirects. Loopback/metadata destinations are forbidden; private addresses and nonstandard ports need the operator allowlist below |
+| `tls_error` | Endpoint hostname, certificate chain and TLS handshake; repair certificates rather than disabling verification |
+| `unreachable` | DNS, endpoint port, network routes and firewall from the control plane |
+| `timeout` | Endpoint responsiveness and network connectivity; retry after the service is reachable |
+| `unknown` | Endpoint/region/bucket configuration and read/write/delete access; inspect storage-service diagnostics without publishing credentials |
+
 ### Endpoint verification policy
 
-The verification endpoint must be an HTTP(S) origin without embedded credentials, a non-root path, query or fragment. Public global-unicast destinations on **80/443** are permitted by default. For a private S3 server or nonstandard port, configure the **control-plane service** environment `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` with comma-separated exact `host` or `host:port` entries, then restart/redeploy that service. Host-only entries allow ports 80/443; host:port allows that exact port. `storage-prg1.zerops.io` on 80/443 is already trusted for Zerops storage's private addresses.
+The verification endpoint must be an **HTTPS** origin without embedded credentials, a non-root path, query or fragment. Public global-unicast destinations on **443** are permitted by default. For a private S3 server or nonstandard port, configure the **control-plane service** environment `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` with comma-separated exact `host` or `host:port` entries, then restart/redeploy that service. Host-only entries allow standard ports; host:port allows that exact port. `storage-prg1.zerops.io` on 443 is already trusted for Zerops storage's private addresses. Allowlisting never permits HTTP verification.
 
 Loopback, link-local/metadata-style addresses, unspecified/non-global addresses and shared range 100.64.0.0/10 stay blocked even when allowlisted. The verifier checks all DNS answers on every connection, disables proxies, rejects redirects and has a thirty-second deadline. Use the actual regional S3 origin, not a redirecting website URL; keep HTTPS/TLS verification enabled. This is the verifier's policy, not a guarantee that PBM uses the same outbound sandbox. See [security](../security.md#s3-verifier-outbound-policy) and [installation settings](../install.md#required-secrets-and-generated-settings).
 
@@ -65,6 +83,8 @@ Both types execute on nodes via PBM; physical snapshots require PSMDB. A create 
 If a mutation returns an Operation ID, use `karactl operations wait ID`. For backups/restores, inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
 
 For applications outside this repository, see the [Go client installation and usage walkthrough](api.md#clientssdk), including bearer authentication, structured errors and operation polling. The public client exposes backup, PITR-window, restore and clone request methods from the same OpenAPI contract; after polling, inspect the recovery resource and validate the recovered data as described above.
+
+Missing storage dependencies return **404** with `details.resource: backupStorage` and the requested name. A duplicate backup name returns **409** `already_exists`; state conflicts identify the backup and its current state. Unsupported `type` returns **400** naming the field and listing the provider's supported types; do not assume every engine supports logical/physical backups. A PITR-window request for an engine without PITR returns an explicit unsupported-capability error naming that engine.
 
 ## Schedules and count retention
 
@@ -128,6 +148,8 @@ karactl operations cluster demo
 ```
 
 The timestamp is illustrative; replace it with a real point in your reported window. Exactly one of backup or time is required. Restore requests accept a source cluster, with the target used by default. Use matching topology/engine major and a successful snapshot; physical restores especially depend on binary/data compatibility.
+
+REST uses `source.backup` or `source.pitrTime`: set exactly one. Both selectors or neither return **400**, `details.field: source`, reason `conflict`. A nonexistent backup returns **404** with its name and source cluster/namespace; the same dependency context is returned for clone creation. Duplicate restore names return **409** `already_exists`. These errors are synchronous: no restore operation is accepted.
 
 Karakoram serializes disruptive cluster work. It disables PITR and, for sharding, coordinates balancer/router holds. Physical restore suppresses automatic mongod/PBM restart on all relevant nodes. Mongod may be offline and PBM may exit successfully as part of recovery; progress is read with PBM storage configuration while MongoDB is unavailable. Karakoram then starts mongod/PBM, releases maintenance, restores system users, resyncs target storage and restores router/balancer state. Logical restores do not use the offline physical lifecycle.
 

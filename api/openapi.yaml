@@ -937,8 +937,10 @@ paths:
       tags: [Namespaces]
       summary: Register a project namespace and deploy its relay
       description: Requires namespaces/create on '*'. Validates the token and project
-        synchronously, then starts relay deployment asynchronously. The name default
-        is reserved and each project may belong to only one namespace.
+        synchronously, then starts relay deployment asynchronously. Missing fields and
+        invalid name syntax return 400 with field and reason. Reserved default and
+        duplicate names return 409 conflict with reason already_exists. Each project
+        may belong to only one namespace.
       x-karakoram-rbac: {resource: namespaces, action: create, object: '*'}
       parameters:
       - $ref: '#/components/parameters/CSRF'
@@ -2073,6 +2075,8 @@ paths:
         object: '*'
       responses:
         '401': *id002
+        '400': *id001
+        '404': *id004
         '200':
           description: Orphaned volumes, including an empty items array when none are visible.
           content:
@@ -2216,7 +2220,11 @@ paths:
       tags:
       - Backups
       summary: Read the continuous restorable PITR window
-      description: Returns the latest continuous backed interval; an initializing cluster returns 409 invalid_state with PITR prerequisite guidance instead of an internal error.
+      description: >-
+        Returns the latest continuous backed interval; an initializing cluster returns
+        409 invalid_state with PITR prerequisite guidance instead of an internal error.
+        Engines without PITR return 400 invalid_request with reason unsupported and a
+        message naming the engine capability.
       x-karakoram-rbac:
         resource: backups
         action: read
@@ -2679,6 +2687,7 @@ paths:
         in: query
         schema:
           type: string
+          enum: [Normal, Warning, Audit]
       - &id010
         name: operationId
         in: query
@@ -2693,9 +2702,10 @@ paths:
       - &eventResource
         name: resource
         in: query
-        description: Exact resource category, such as clusters, accounts, auth or rbac.
+        description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
         schema:
           type: string
+          enum: [accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
   /events/stream:
     parameters:
     - $ref: '#/components/parameters/NamespaceQuery'
@@ -2923,6 +2933,8 @@ components:
         routes and creation. On collection routes (/clusters, /operations, /events,
         /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence
         includes all authorized namespaces and a value filters to that namespace.
+        A nonexistent explicit namespace returns 404 not_found with resource namespace
+        and its name, including on list and sub-resource routes.
       schema:
         $ref: '#/components/schemas/NamespaceName'
     NamespacePath:
@@ -3020,7 +3032,9 @@ components:
     NamespaceName:
       type: string
       pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'
-      description: Project namespace name, 2–32 lowercase letters, digits or hyphens.
+      minLength: 2
+      maxLength: 32
+      description: Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
     TokenStatus:
       type: object
       description: Secret-safe token health; never contains a token or fingerprint.
@@ -4401,9 +4415,8 @@ components:
         storage: *id006
         type:
           type: string
-          enum:
-          - logical
-          - physical
+          minLength: 1
+          description: Must be one of the cluster provider catalog's backupTypes. Unsupported values return 400 with the provider's supported types.
       required:
       - name
       - storage
@@ -4414,9 +4427,14 @@ components:
         backup: *id006
         pitrTime: *id011
         sourceCluster: *id007
-      description: Exactly one of backup and pitrTime is required.
-      required:
-      - sourceCluster
+      description: Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+      oneOf:
+      - required: [backup]
+        not:
+          required: [pitrTime]
+      - required: [pitrTime]
+        not:
+          required: [backup]
     Restore:
       type: object
       properties:
@@ -4572,7 +4590,11 @@ components:
         checkedAt: *id011
         message:
           type: string
-      description: Checks S3 read/write/delete access and TLS without exposing credentials.
+        failureReason:
+          type: string
+          enum: [access_denied, bucket_not_found, endpoint_not_allowed, tls_error, unreachable, timeout, unknown]
+          description: Present when verified is false; categorized, secret-free cause.
+      description: Checks S3 read/write/delete access and TLS without exposing credentials. A completed verification returns HTTP 200 even on failure, with verified false, failureReason and actionable message.
       required:
       - verified
       - checkedAt
