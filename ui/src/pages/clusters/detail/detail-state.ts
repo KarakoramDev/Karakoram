@@ -95,3 +95,9 @@ export function certificateDownload(certificate: string): { filename: string; hr
 export function requireUpgradeBackup(requiresBackup: boolean, hasSuccessfulBackup: boolean): void {
   if (requiresBackup && !hasSuccessfulBackup) throw new Error('This upgrade path requires a successful backup. Create one before starting the upgrade.');
 }
+
+export function refreshSubmissionBody(attempt: { body: string }, body: string, reset: () => void): void {
+  if (attempt.body === body) return;
+  attempt.body = body;
+  reset();
+}

@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useBackupStorages, useProviders } from '@/api/hooks';
-import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, SelectField, Switch, TextField } from '@/components/ui/Field';
@@ -19,6 +19,7 @@ import { BackupPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
 import { latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
+import { useSubmissionKey } from './use-submission-key';
 
 type BackupType = Schemas['CreateBackupRequest']['type'];
 
@@ -205,7 +206,7 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
   const [name, setName] = useState(() => `manual-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
   const [storage, setStorage] = useState(defaultStorage ?? storages[0] ?? '');
   const [type, setType] = useState<BackupType>(backupTypes[0] ?? 'logical');
-  const submission = useIdempotencyKey();
+  const submission = useSubmissionKey(JSON.stringify({ name, storage, type }));
   const create = useMutation({
     mutationFn: () => unwrap(api.POST('/clusters/{cluster}/backups', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { name, storage, type } })),
     onSuccess: (b) => {
@@ -268,7 +269,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
   const [span, setSpan] = useState(persisted.pitr?.oplogSpanMinutes ?? 10);
   const persistedKey = JSON.stringify(persisted);
   const [seed, setSeed] = useState(persistedKey);
-  const submission = useIdempotencyKey();
+  const submission = useSubmissionKey(JSON.stringify({ storage, schedules, pitrEnabled, span }));
   const saving = useRef(false);
   useEffect(() => {
     if (persistedKey !== seed) {

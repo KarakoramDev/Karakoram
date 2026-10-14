@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useClusters, useProviders } from '@/api/hooks';
-import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, Switch, TextAreaField, TextField } from '@/components/ui/Field';
@@ -19,6 +19,7 @@ import { scalingReview } from './detail-state';
 import { resourceMinimums, validateResources } from '../wizard/resources';
 import { memberChoices } from '../wizard/validation';
 import { validateExposure, validateTLS } from '../wizard/access';
+import { useSubmissionKey } from './use-submission-key';
 
 type Spec = Schemas['ClusterSpec'];
 const RS_SIZES = [1, 3, 5, 7];
@@ -115,7 +116,7 @@ export function TopologyTab() {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(cluster.spec));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [replaceMember, setReplaceMember] = useState<string | null>(null);
-  const submission = useIdempotencyKey();
+  const submission = useSubmissionKey(JSON.stringify(draft));
   const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
 
   // Re-seed when the persisted spec changes under us and the user has no edits.

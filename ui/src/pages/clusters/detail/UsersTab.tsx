@@ -13,6 +13,7 @@ import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Ti
 import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from './ClusterDetail';
 import { assignedUsers, passwordValid } from './detail-state';
+import { useSubmissionKey } from './use-submission-key';
 
 type DBUser = Schemas['DatabaseUser'];
 type DBRole = Schemas['DatabaseRole'];
@@ -287,7 +288,7 @@ function UserDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [password, setPassword] = useState('');
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [roles, setRoles] = useState(existing ? rolesText(existing.roles) : 'readWrite@');
-  const submission = useIdempotencyKey();
+  const submission = useSubmissionKey(JSON.stringify({ username, database, password, roles }));
   const parsed = parseRoles(roles);
   const rolesOk = parsed.length > 0 && parsed.every((r) => r.role && r.db);
   const valid = username.trim() && database.trim() && rolesOk && passwordValid(password);
@@ -377,7 +378,7 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [database, setDatabase] = useState(existing?.database ?? 'admin');
   const [privText, setPrivText] = useState(existing ? existing.privileges.map((p) => `${p.resource.anyResource ? 'anyResource' : p.resource.cluster ? 'cluster' : `${p.resource.db ?? ''}.${p.resource.collection ?? ''}`} ${p.actions.join(',')}`).join('\n') : '');
   const [inherits, setInherits] = useState(existing ? rolesText(existing.roles) : '');
-  const submission = useIdempotencyKey();
+  const submission = useSubmissionKey(JSON.stringify({ name, database, privText, inherits }));
 
   const parsePrivileges = (): Schemas['Privilege'][] | null => {
     const out: Schemas['Privilege'][] = [];

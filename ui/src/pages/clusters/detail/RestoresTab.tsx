@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/api/client';
 import { useNamespaceOptions } from '@/api/hooks';
 import { keys } from '@/api/keys';
-import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, TextField } from '@/components/ui/Field';
@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/Toast';
 import { BackupPicker, PitrPicker, SourceClusterPicker } from '../ClusterWizard';
 import { OpPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
+import { useSubmissionKey } from './use-submission-key';
 
 export function RestoresTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -126,7 +127,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, onClose }: { n
   const [backup, setBackup] = useState(initialBackup ?? '');
   const [pitrTime, setPitrTime] = useState('');
   const [name, setName] = useState(() => `restore-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
-  const submission = useIdempotencyKey();
+  const submission = useSubmissionKey(JSON.stringify({ name, sourceNamespace, sourceCluster, mode, backup, pitrTime }));
   useEffect(() => {
     if (initialBackup) setBackup(initialBackup);
   }, [initialBackup]);

@@ -2,7 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assignedUsers, certificateDownload, clusterEmptyCopy, colocatedGroups, credentialDatabaseLabel, FCV_GUIDANCE, fcvObservation, generationState, latestSuccessfulBackup, maintenanceCopy, observedVersion, passwordValid, psmdbConnect, requireUpgradeBackup, scalingReview } from './detail-state.ts';
+import { assignedUsers, certificateDownload, clusterEmptyCopy, colocatedGroups, credentialDatabaseLabel, FCV_GUIDANCE, fcvObservation, generationState, latestSuccessfulBackup, maintenanceCopy, observedVersion, passwordValid, psmdbConnect, refreshSubmissionBody, requireUpgradeBackup, scalingReview } from './detail-state.ts';
 import { fetchBackupInventory } from './backup-inventory.ts';
 
 const resources = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 5, maxDisk: 10 };
@@ -114,4 +114,16 @@ test('an upgrade requiring a backup cannot start without a successful record', (
 test('RAM-only review never claims storage changes', () => {
   const copy = scalingReview(spec, { components: { engine: { resources: { ...resources, maxRam: 4 } } } }).join(' ');
   assert.doesNotMatch(copy, /storage bounds/i);
+});
+
+test('unchanged retries retain a key, but edited submissions reset it exactly once', () => {
+  const attempt = { body: 'original' };
+  let resets = 0;
+  const reset = () => { resets++; };
+  refreshSubmissionBody(attempt, 'original', reset);
+  assert.equal(resets, 0);
+  refreshSubmissionBody(attempt, 'edited', reset);
+  assert.equal(resets, 1);
+  refreshSubmissionBody(attempt, 'edited', reset);
+  assert.equal(resets, 1);
 });
