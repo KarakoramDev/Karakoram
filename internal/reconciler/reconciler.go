@@ -303,9 +303,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			}
 		}
 	}
+	var convergenceErr error
+	convergenceAttempted := false
 	defer func() {
 		if !errors.Is(err, errClusterGone) {
-			err = errors.Join(err, m.trackingOperations(ctx, c, err))
+			err = errors.Join(err, m.trackingOperations(ctx, c, convergenceErr, convergenceAttempted))
 		}
 	}()
 	// Capture attribution before synchronization advances ObservedGeneration.
@@ -337,10 +339,13 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		if err = m.state(ctx, c, previous); err != nil {
 			return 0, err
 		}
+		convergenceAttempted = true
 		if err = m.resolve(ctx, &rc); err != nil {
+			convergenceErr = err
 			return 0, err
 		}
 		done, cleanupErr := p.Cleanup(ctx, &rc, c.DeleteOptions)
+		convergenceErr = cleanupErr
 		if err = m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 			return 0, err
 		}
@@ -383,6 +388,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		return 0, err
 	}
 	result, syncErr := m.synchronize(ctx, p, &rc)
+	convergenceErr, convergenceAttempted = syncErr, true
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}

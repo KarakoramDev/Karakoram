@@ -179,6 +179,10 @@ Operations limit ordinary work to **20 consecutive retryable failures** or a **t
 Desired-state tracking deadlines govern the operation record only. They do not
 shorten the context used for cluster synchronization or deletion cleanup, so a
 platform call near the deadline can finish while convergence continues.
+Only errors from the cluster's own synchronization or deletion cleanup consume
+its tracking retry budget. A running queue operation, such as initial restore,
+has an independent failure count; its errors do not fail the create/update
+tracking record. Successful convergence resets its own consecutive-failure count.
 
 Zerops failure messages expose diagnostic codes/messages, field/reason metadata
 and known validation limits (`minDisk`, `maxDisk`, `min`, `max` and

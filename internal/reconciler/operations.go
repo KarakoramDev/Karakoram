@@ -88,7 +88,7 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 // trackingOperations do not own the imperative queue: ordinary Sync converges
 // desired state while these records observe the target generation. Failed tracking
 // does not discard desired state or stop eventual cleanup.
-func (m *Manager) trackingOperations(ctx context.Context, c *domain.Cluster, cause error) error {
+func (m *Manager) trackingOperations(ctx context.Context, c *domain.Cluster, cause error, convergenceAttempted bool) error {
 	ops, err := m.opts.Store.ListOperations(ctx, c.Ref(), domain.PhasePending, domain.PhaseRunning)
 	if err != nil {
 		return err
@@ -107,6 +107,9 @@ func (m *Manager) trackingOperations(ctx context.Context, c *domain.Cluster, cau
 		}
 		if op.Phase == domain.PhasePending {
 			op.Phase, op.StartedAt = domain.PhaseRunning, &now
+		}
+		if convergenceAttempted && cause == nil {
+			op.Failures = 0
 		}
 		op.Attempts++
 		if c.Generation > op.TargetGeneration {
