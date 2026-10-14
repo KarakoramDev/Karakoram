@@ -13,6 +13,7 @@ import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, SelectField, Switch, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading, Menu, MenuItem, Time, formatBytes, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
+import { OperationNotice } from '@/components/OperationNotice';
 import { SchedulesEditor } from '../editors/SchedulesEditor';
 import { validateSchedules } from '../wizard/schedules';
 import { BackupPhaseBadge } from '../cluster-utils';
@@ -134,7 +135,7 @@ export function BackupsTab() {
               </thead>
               <tbody>
                 {backups.data.items.map((b) => (
-                  <tr key={b.name}>
+                  <tr key={b.name} id={`backup-${b.name}`}>
                     <td className="mono">
                       {b.name}
                       {b.error ? (
@@ -211,7 +212,7 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
     mutationFn: () => unwrap(api.POST('/clusters/{cluster}/backups', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { name, storage, type } })),
     onSuccess: (b) => {
       submission.reset();
-      toast.success(`Backup ${b.name} queued.`);
+      toast.success(<OperationNotice operationId={b.operationId}>Backup {b.name} queued.</OperationNotice>);
       void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, cluster, 'backups') });
       onClose();
     },
@@ -299,7 +300,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     onSuccess: (c) => {
       submission.reset();
       queryClient.setQueryData(keys.cluster(namespace, name), c);
-      toast.success('Backup policy updated.');
+      toast.success(<OperationNotice operationId={c.operationId}>Backup policy updated.</OperationNotice>);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });

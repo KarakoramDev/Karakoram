@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, Switch, TextAreaField, TextField } from '@/components/ui/Field';
 import { Callout, Card, Menu, MenuItem } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
+import { OperationNotice } from '@/components/OperationNotice';
 import { ResourcesEditor } from '../editors/ResourcesEditor';
 import { ExposureEditor, TLSEditor } from '../editors/AccessEditor';
 import { useClusterContext } from './ClusterDetail';
@@ -152,7 +153,7 @@ export function TopologyTab() {
       submission.reset();
       queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
-      toast.success('Changes submitted; the cluster is reconciling.');
+      toast.success(<OperationNotice operationId={c.operationId}>Changes submitted; the cluster is reconciling.</OperationNotice>);
       setConfirmOpen(false);
       setDraft(draftFrom(c.spec));
       setSeedKey(JSON.stringify(c.spec));
@@ -164,7 +165,7 @@ export function TopologyTab() {
     mutationFn: (member: string) => unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name, member }, query: { namespace } } })),
     onSuccess: (op) => {
       submission.reset();
-      toast.success(`Replacement started (operation ${op.id}).`);
+      toast.success(<OperationNotice operationId={op.id}>Replacement started.</OperationNotice>);
       setReplaceMember(null);
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
     },

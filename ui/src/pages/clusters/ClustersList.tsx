@@ -10,7 +10,7 @@ import { spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
 import { LinkButton } from '@/components/ui/Button';
 import { Badge, Card, Empty, ErrorBlock, Loading, PageHeader, Time } from '@/components/ui/Primitives';
 import { BackupSummary, HealthSummary, PhaseBadge, topologySummary } from './cluster-utils';
-import { clusterPath } from './detail/ClusterDetail';
+import { clusterPath } from './cluster-path';
 import { clusterEmptyCopy, colocatedGroups, observedVersion } from './detail/detail-state';
 
 export function ClustersListPage() {

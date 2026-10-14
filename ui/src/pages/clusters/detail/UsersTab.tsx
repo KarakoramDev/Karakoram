@@ -11,6 +11,7 @@ import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Time } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
+import { OperationNotice } from '@/components/OperationNotice';
 import { useClusterContext } from './ClusterDetail';
 import { assignedUsers, passwordValid } from './detail-state';
 import { useSubmissionKey } from './use-submission-key';
@@ -82,7 +83,7 @@ export function UsersTab() {
     mutationFn: (u: Schemas['SystemUser']) => unwrap(api.POST('/clusters/{cluster}/system-users/{user}/rotate', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name, user: u.name }, query: { namespace } } })),
     onSuccess: (op) => {
       submission.reset();
-      toast.success(`Rotation started (operation ${op.id}).`);
+      toast.success(<OperationNotice operationId={op.id}>Rotation started.</OperationNotice>);
       setRotate(null);
       invalidate();
     },

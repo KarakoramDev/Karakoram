@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Badge, Callout, Card, ErrorBlock, KV, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
+import { OperationNotice } from '@/components/OperationNotice';
 import { useClusterContext } from './ClusterDetail';
 import { FCV_GUIDANCE, fcvObservation, latestSuccessfulBackup, maintenanceCopy, observedVersion, requireUpgradeBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
@@ -65,7 +66,7 @@ export function UpgradesTab() {
       submission.reset();
       queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
-      toast.success(`Upgrade to ${c.spec.version} requested.`);
+      toast.success(<OperationNotice operationId={c.operationId}>Upgrade to {c.spec.version} requested.</OperationNotice>);
       setTarget(null);
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -75,7 +76,7 @@ export function UpgradesTab() {
     mutationFn: (version: string) => unwrap(api.POST('/clusters/{cluster}/raise-fcv', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } }, body: { version } })),
     onSuccess: (op) => {
       submission.reset();
-      toast.success(`FCV raise started (operation ${op.id}).`);
+      toast.success(<OperationNotice operationId={op.id}>FCV raise started.</OperationNotice>);
       setFcvTarget(null);
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
       navigate(`${base}/operations`);
@@ -87,7 +88,7 @@ export function UpgradesTab() {
     mutationFn: () => unwrap(api.POST('/clusters/{cluster}/restart', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } } })),
     onSuccess: (op) => {
       submission.reset();
-      toast.success(`Rolling restart started (operation ${op.id}).`);
+      toast.success(<OperationNotice operationId={op.id}>Rolling restart started.</OperationNotice>);
       setRestartOpen(false);
       navigate(`${base}/operations`);
     },

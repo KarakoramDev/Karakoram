@@ -19,7 +19,8 @@ import { ResourcesEditor } from './editors/ResourcesEditor';
 import { SchedulesEditor } from './editors/SchedulesEditor';
 import { ExposureEditor, TLSEditor } from './editors/AccessEditor';
 import { resourcesSummary } from './cluster-utils';
-import { clusterPath } from './detail/ClusterDetail';
+import { clusterPath } from './cluster-path';
+import { OperationNotice } from '@/components/OperationNotice';
 import { dataSourceFor, dataSourceLabel, wireDataSource } from './data-source';
 import { STEPS, claimSubmission, firstInvalidStep, nextStep, normalizeWizardSpec, resetEditedAttempt, type StepId } from './wizard/state';
 import { memberChoices, nameError, topologyErrors, validateWizard } from './wizard/validation';
@@ -123,7 +124,7 @@ export function ClusterWizardPage() {
     onSuccess: (c) => {
       idempotency.reset();
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
-      toast.success(`Cluster ${c.name} is being created.`);
+      toast.success(<OperationNotice operationId={c.operationId}>Cluster {c.name} is being created.</OperationNotice>);
       navigate(clusterPath(c.namespace || targetNamespace, c.name));
     },
     onError: () => { setStep('review'); },

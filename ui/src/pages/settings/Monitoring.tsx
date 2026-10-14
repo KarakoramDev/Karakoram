@@ -7,7 +7,7 @@ import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 import { spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
 import { Badge, Card, CodeLine, KV } from '@/components/ui/Primitives';
-import { clusterPath } from '../clusters/detail/ClusterDetail';
+import { clusterPath } from '../clusters/cluster-path';
 
 export function MonitoringSettingsPage() {
   const auth = useAuth();

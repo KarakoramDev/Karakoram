@@ -13,7 +13,8 @@ import { namespaceQuery } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
 import { Badge, Card, ErrorBlock, Loading, Time } from '@/components/ui/Primitives';
-import { clusterPath, useClusterContext } from './ClusterDetail';
+import { useClusterContext } from './ClusterDetail';
+import { clusterPath } from '../cluster-path';
 import { EventFilters, useEventFilters } from '@/components/EventFilters';
 
 type KEvent = Schemas['Event'];
