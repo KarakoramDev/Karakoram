@@ -513,7 +513,10 @@ export type paths = {
         /** Replace role privileges and inherited roles */
         put: operations["replaceDatabaseRole"];
         post?: never;
-        /** Delete a custom database role */
+        /**
+         * Delete a custom database role
+         * @description Rejects with 409 invalid_state while the role is assigned to users or inherited by custom roles. Remove those references explicitly before deletion; assignments are never silently stripped.
+         */
         delete: operations["deleteDatabaseRole"];
         options?: never;
         head?: never;
@@ -725,7 +728,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read the continuous restorable PITR window */
+        /**
+         * Read the continuous restorable PITR window
+         * @description Returns the latest continuous backed interval; an initializing cluster returns 409 invalid_state with PITR prerequisite guidance instead of an internal error.
+         */
         get: operations["getPITRWindow"];
         put?: never;
         post?: never;
@@ -822,7 +828,7 @@ export type paths = {
         put?: never;
         /**
          * Queue in-place backup or point-in-time restore
-         * @description Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata.
+         * @description Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
          */
         post: operations["createRestore"];
         delete?: never;
@@ -1638,7 +1644,7 @@ export type components = {
         /** @description Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours. */
         CreateDatabaseUserRequest: {
             database: string;
-            /** Format: password */
+            /** @description At least eight Unicode characters accepted by MongoDB SASLprep (Unicode 3.2). Emoji, prohibited controls, unassigned characters and invalid bidirectional text are rejected. Omit to generate a password. */
             password?: string;
             roles: components["schemas"]["RoleReference"][];
             username: string;
@@ -2027,6 +2033,7 @@ export type components = {
             version: string;
         };
         RaiseFCVRequest: {
+            /** @description Deployed engine major form, for example 8.0 (not 8.0.32-14). All members must finish the binary rollout before promotion. */
             version: string;
         };
         RBACPolicy: {
@@ -2208,7 +2215,7 @@ export type components = {
             roles: components["schemas"]["RoleReference"][];
         };
         UpdateDatabaseUserRequest: {
-            /** Format: password */
+            /** @description Omit to retain the current password; a supplied value must satisfy the same minimum and SASLprep rules as creation. */
             password?: string;
             roles: components["schemas"]["RoleReference"][];
         };

@@ -599,7 +599,9 @@ type CreateClusterRequest struct {
 
 // CreateDatabaseUserRequest Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours.
 type CreateDatabaseUserRequest struct {
-	Database string          `json:"database"`
+	Database string `json:"database"`
+
+	// Password At least eight Unicode characters accepted by MongoDB SASLprep (Unicode 3.2). Emoji, prohibited controls, unassigned characters and invalid bidirectional text are rejected. Omit to generate a password.
 	Password *string         `json:"password,omitempty"`
 	Roles    []RoleReference `json:"roles"`
 	Username string          `json:"username"`
@@ -1102,6 +1104,7 @@ type RBACPolicy struct {
 
 // RaiseFCVRequest defines model for RaiseFCVRequest.
 type RaiseFCVRequest struct {
+	// Version Deployed engine major form, for example 8.0 (not 8.0.32-14). All members must finish the binary rollout before promotion.
 	Version string `json:"version"`
 }
 
@@ -1317,6 +1320,7 @@ type UpdateDatabaseRoleRequest struct {
 
 // UpdateDatabaseUserRequest defines model for UpdateDatabaseUserRequest.
 type UpdateDatabaseUserRequest struct {
+	// Password Omit to retain the current password; a supplied value must satisfy the same minimum and SASLprep rules as creation.
 	Password *string         `json:"password,omitempty"`
 	Roles    []RoleReference `json:"roles"`
 }

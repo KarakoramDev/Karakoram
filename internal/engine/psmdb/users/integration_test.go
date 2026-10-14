@@ -125,6 +125,13 @@ func TestAuthenticatedUserAndRoleLifecycle(t *testing.T) {
 	app := domain.DatabaseUser{Name: "alice", Database: "emptyapp", Roles: []domain.RoleRef{{Role: "appReader", DB: "emptyapp"}}}
 	must(CreateUser(ctx, admin, app, "alice-initial-integration-only"))
 	wantError(CreateUser(ctx, admin, app, "alice-initial-integration-only"), engine.ErrConflict)
+	wantError(DeleteRole(ctx, admin, app.Database, "appReader"), engine.ErrConflict)
+	// A refused role deletion must preserve the user's explicit assignment.
+	preserved, err := GetUser(ctx, admin, app.Database, app.Name)
+	must(err)
+	if !sameRoles(preserved.Roles, app.Roles) {
+		t.Fatal("refused role deletion stripped assignments")
+	}
 	must(CreateUser(ctx, admin, domain.DatabaseUser{Name: "alice", Database: "secondempty", Roles: []domain.RoleRef{{Role: "read", DB: "secondempty"}}}, "second-alice-integration-only"))
 	gotUser, err := GetUser(ctx, admin, app.Database, app.Name)
 	must(err)

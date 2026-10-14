@@ -16,6 +16,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.9.1
 	github.com/xtaci/smux v1.5.57
+	github.com/xdg-go/stringprep v1.0.4
 	go.mongodb.org/mongo-driver/v2 v2.4.3
 	golang.org/x/crypto v0.41.0
 	golang.org/x/oauth2 v0.30.0
@@ -62,7 +63,6 @@ require (
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
-	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect

@@ -67,6 +67,9 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 			return result(cp, false), errors.New("restore requires exactly one backup or PITR time")
 		}
 		cp.TargetTime = r.Source.PITRTime
+		if cp.TargetTime != nil && cp.TargetTime.After(now(env)) {
+			return rejectRestore(ctx, env, r, cp, ValidatePITRTarget(nil, *cp.TargetTime, now(env)))
+		}
 		source := sourceRef
 		var b *domain.Backup
 		if r.Source.Backup != "" {
@@ -96,7 +99,7 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 				}
 			}
 			if err == nil && b == nil {
-				err = errors.New("no successful base snapshot at or before PITR target")
+				return rejectRestore(ctx, env, r, cp, errors.New("source.pitrTime has no successful base snapshot at or before the target"))
 			}
 		}
 		if err != nil {
@@ -184,14 +187,11 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 			if e != nil {
 				return result(cp, false), e
 			}
-			valid := false
-			for _, w := range ranges {
-				if !cp.TargetTime.Before(w.Start) && !cp.TargetTime.After(w.End) {
-					valid = true
-				}
-			}
-			if !valid {
-				return result(cp, false), errors.New("PITR target is outside the continuous restorable ranges")
+			if err := ValidatePITRTarget(ranges, *cp.TargetTime, now(env)); err != nil {
+				// PBM source configuration already changed, but no database or
+				// router was stopped. Restore target configuration, then fail.
+				cp.Failure, cp.Step = err.Error(), "configure-target"
+				return result(cp, false), nil
 			}
 		}
 		cp.Step = "balancer-off"
@@ -412,6 +412,16 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		return result(cp, false), fmt.Errorf("unknown restore checkpoint step %q", cp.Step)
 	}
 	return result(cp, false), nil
+}
+
+func rejectRestore(ctx context.Context, env Env, r *domain.Restore, cp checkpoint, reason error) (engine.OpResult, error) {
+	stamp := now(env)
+	r.Phase, r.Error, r.CompletedAt = domain.PhaseFailed, reason.Error(), &stamp
+	if err := env.RC.Store.UpdateRestore(ctx, r); err != nil {
+		return result(cp, false), err
+	}
+	cp.Step, cp.Failure = "done", reason.Error()
+	return result(cp, true), reason
 }
 
 // Stop/Start acts on the entire Zerops router service, not one DNS-selected

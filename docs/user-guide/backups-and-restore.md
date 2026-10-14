@@ -110,6 +110,8 @@ PITR records oplog slices into the cluster's primary backup destination. It need
 
 4. Select a UTC RFC3339 time **inside** the advertised continuous window. Do not assume that every timestamp between cluster creation and now is recoverable.
 
+The API validates `source.pitrTime` **before accepting** a restore. A future time, a time before/after the observed coverage, or a gap between continuous windows returns HTTP **400** with `details.field: source.pitrTime`, `reason: out_of_range`, and UTC `earliest`/`latest` bounds for the current coverage. Those bounds do not imply that intervening gaps are recoverable. A source that is initializing or has no coverage returns **409** with reason `invalid_state` and explains the base-snapshot/oplog prerequisite; the PITR-window endpoint also reports initialization as a state conflict, not an internal error. Refresh the window and select a covered time once prerequisites complete. Coverage is checked again during execution; a permanently invalid target fails its Restore and Operation with a reason rather than retrying forever.
+
 Enabling PITR alone does not create proof of a usable window. Gaps, quota exhaustion, failed slicing, base deletion or storage changes can remove recovery coverage. After restore Karakoram holds PITR disabled until its required fresh base snapshot succeeds; check that backup and the new timeline before trusting recovery coverage again.
 
 ## In-place restore

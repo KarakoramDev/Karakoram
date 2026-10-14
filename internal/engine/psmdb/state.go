@@ -39,6 +39,7 @@ type internalState struct {
 	CleanupSecrets     bool                      `json:"cleanupSecrets"`
 	CleanedStorages    []string                  `json:"cleanedStorages,omitempty"`
 	RotationSecrets    []string                  `json:"rotationSecrets,omitempty"`
+	LastRotatedAt      map[string]*time.Time     `json:"lastRotatedAt,omitempty"`
 	ReplaceActive      bool                      `json:"replaceActive"`
 	Suspended          bool                      `json:"suspended"`
 	TLSMode            string                    `json:"tlsMode"`

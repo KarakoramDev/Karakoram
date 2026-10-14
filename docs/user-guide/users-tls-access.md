@@ -24,6 +24,8 @@ karactl db-users get demo appdb appwriter
 
 If creation omits `password`, the server generates one and returns `generatedPassword` **once**. Capture it securely at creation; subsequent reads cannot recover an application password. A supplied password is write-only. Update with `db-users set CLUSTER DATABASE USER -f FILE`; omit the password to retain it. Delete with `db-users delete CLUSTER DATABASE USER`.
 
+Every supplied password, on creation or password change, must contain **at least eight Unicode characters**. Omit the field to generate a password on creation or retain it on update; an explicitly empty value is rejected. MongoDB SCRAM authentication uses **SASLprep (Unicode 3.2)** normalization: ordinary punctuation, accented Latin and supported CJK characters are allowed, but emoji, unassigned/prohibited characters, controls and invalid bidirectional text are rejected before contacting MongoDB. Invalid passwords return HTTP 400 with `details.field: password` and reason `out_of_range` (minimum) or `invalid` (character/profile rule); error messages never include the password.
+
 Custom roles use MongoDB privilege resource/action documents and optional inherited role references:
 
 ```yaml
@@ -44,6 +46,8 @@ karactl db-roles get demo appdb appreader
 ```
 
 `db-roles set` updates inherited roles/privileges; `db-roles delete` removes a custom role. Role resources `cluster`/`anyResource` are not interchangeable with database/collection resources. MongoDB built-in roles are referenced, not managed as editable custom roles. Provider-reserved accounts/roles are protected. Application user/role operations require `database-users` permissions in Karakoram; do not grant broad database system roles to applications for convenience.
+
+Deleting a custom role that is still assigned to any user or inherited by another custom role returns **409** with reason `invalid_state`, naming the dependent identities. Remove those role references explicitly using user/role updates, then retry the same DELETE; there is no force-delete parameter. This prevents MongoDB's native `dropRole` behavior from silently stripping user assignments.
 
 ## System users and rotation
 
@@ -66,6 +70,8 @@ karactl operations cluster demo
 ```
 
 Rotation is a durable operation: passwords are changed per set and local backup/monitor credentials reloaded member by member. Follow the operation to success. Do not manually reset these users behind the provider; it must retain usable credentials. System-user listings do not reveal passwords. Connection reveal currently returns **databaseAdmin only**, not every system account or any application password.
+
+After the rotation operation succeeds, system-user listings return that account's `lastRotatedAt` in UTC. The timestamp is durable provider state and survives control-plane restarts; a failed or still-running rotation does not advance it.
 
 ## Keyfile
 
@@ -258,3 +264,9 @@ The documentation prefix above is an example, not a usable client network. Repla
 **Replica-set split-horizon caveat:** Karakoram does not configure a complete external DNS/SNI split-horizon scheme. A reachable public seed still advertises private member hostnames in normal MongoDB discovery; external clients must be able to resolve/reach the discovered addresses with their correct per-member ports and certificate validation. Merely mapping names to the shared IP does not fix distinct public port mappings. `directConnection=true` can target one publicly routed member for diagnostics, but it bypasses normal replica-set discovery/failover and is not an external HA connection solution.
 
 Treat `publicHosts` as routing information, not proof of externally usable replica-set failover. A complete external discovery solution requires coordinated advertised horizons/DNS/ports and TLS/SNI-aware clients; this is a known [limitation](../limitations.md). Public routers for sharded clusters do not have this replica-set client discovery requirement. Never expose agent port 9443 or broad allowlist ranges merely to work around a connection error.
+
+In public endpoint summaries, show the discovery caveat alongside the seed address: **Public seeds advertise private member hostnames. External clients must resolve and reach the discovered members; `directConnection=true` is for diagnostics only, not HA/failover.** This caveat applies to MongoDB replica sets, not sharded-cluster mongos endpoints.
+
+## Reading placement
+
+Host fingerprints are best-effort observations, not guaranteed anti-affinity. Co-location warnings only group members with the same **known** fingerprint. Members grouped as `unknown` have not reported a usable fingerprint: **placement unknown until members report host fingerprints**, not evidence that they share a physical host.

@@ -16,7 +16,7 @@ func (s *Server) database(ctx context.Context, name string, in input, rc *engine
 		items, err := dp.SystemUsers(ctx, rc)
 		out := make([]api.SystemUser, 0, len(items))
 		for _, u := range items {
-			out = append(out, api.SystemUser{Name: api.SystemUserName(u.Name), Username: u.Name, Roles: rolesAPI(u.Roles)})
+			out = append(out, api.SystemUser{Name: api.SystemUserName(u.Name), Username: u.Name, Roles: rolesAPI(u.Roles), LastRotatedAt: u.LastRotatedAt})
 		}
 		if err != nil {
 			return s.failure(err)
@@ -37,6 +37,13 @@ func (s *Server) database(ctx context.Context, name string, in input, rc *engine
 		return ok(userAPI(*u))
 	case "CreateDatabaseUser":
 		b := in.Body.(*api.CreateDatabaseUserRequest)
+		if b.Password != nil {
+			if validator, yes := dp.(engine.DatabasePasswordValidator); yes {
+				if err := validator.ValidateDatabasePassword(*b.Password); err != nil {
+					return s.failure(err)
+				}
+			}
+		}
 		u := domain.DatabaseUser{Name: b.Username, Database: b.Database, Roles: rolesDomain(b.Roles)}
 		password, err := dp.CreateDatabaseUser(ctx, rc, u, value(b.Password))
 		if err != nil {
@@ -49,6 +56,13 @@ func (s *Server) database(ctx context.Context, name string, in input, rc *engine
 		return response{status: 201, body: a, noStore: true}
 	case "ReplaceDatabaseUser":
 		b := in.Body.(*api.UpdateDatabaseUserRequest)
+		if b.Password != nil {
+			if validator, yes := dp.(engine.DatabasePasswordValidator); yes {
+				if err := validator.ValidateDatabasePassword(*b.Password); err != nil {
+					return s.failure(err)
+				}
+			}
+		}
 		u := domain.DatabaseUser{Name: in.Username, Database: in.Database, Roles: rolesDomain(b.Roles)}
 		if err := dp.UpdateDatabaseUser(ctx, rc, u, value(b.Password)); err != nil {
 			return s.failure(err)

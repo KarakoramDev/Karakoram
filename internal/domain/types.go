@@ -514,6 +514,7 @@ type Privilege struct {
 
 // SystemUser describes a fixed-purpose engine account.
 type SystemUser struct {
-	Name  string    `json:"name"`
-	Roles []RoleRef `json:"roles"`
+	Name          string     `json:"name"`
+	Roles         []RoleRef  `json:"roles"`
+	LastRotatedAt *time.Time `json:"lastRotatedAt,omitempty"`
 }

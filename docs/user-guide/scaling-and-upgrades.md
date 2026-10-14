@@ -76,7 +76,7 @@ karactl clusters raise-fcv demo --version 8.0 --wait
 karactl clusters status demo
 ```
 
-FCV uses the major form (`8.0`), not the package version (`8.0.32-14`). The operation checks observed/deployed component majors and uses confirmation for 7.0+. Raising FCV is a compatibility/rollback boundary: do not assume redeploying an old binary is a supported downgrade after it. Karakoram does not offer an arbitrary engine rollback command; follow the target engine's supported recovery process and use tested backups when necessary.
+FCV uses the major form (`8.0`), not the package version (`8.0.32-14`). The API rejects package-form or non-deployed-major `version` values with HTTP **400** and a field-specific message naming the accepted form, before enqueueing an operation. Promotion during an unfinished binary rollout returns **409** with reason `invalid_state`; wait until every member reports the exact desired package version and convergence finishes. The operation rechecks deployment and uses confirmation for 7.0+; a failed run-time prerequisite ends the operation as **Failed** with a reason, not an eternal retry. Retained FCV is for compatibility observation, not a promise of supported binary rollback. Karakoram rejects downgrades regardless of retained FCV; follow the target engine's supported recovery process and use tested backups when necessary.
 
 ### Cancel and recover a stuck FCV request
 
@@ -139,5 +139,7 @@ karactl clusters restart demo --wait
 ```
 
 Restarts checkpoint per-member progress, check health/quorum and process secondaries before a primary. They are not control-plane redeploys or agent binary upgrades. Existing agents receive a newer executable on their next provider-driven **member deployment**, not merely a control-plane restart.
+
+**A one-member replica set is unavailable while its only member restarts or upgrades.** There is no secondary or primary failover to preserve availability; plan an application maintenance window for singleton binary upgrades, explicit restarts and resource changes that require member replacement/restart.
 
 `engineConfig` accepts validated YAML overrides, but provider-owned networking/authentication/TLS/replication/sharding/process/logging/dbpath/cache settings cannot be replaced. Do not use overrides to bypass orchestration safety. Use API-shaped patch files for supported advanced settings and inspect validation errors; see [API](api.md) and [operations](../operations.md).

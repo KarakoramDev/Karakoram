@@ -282,8 +282,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "rotate-tls", map[string]string{})
 	case "RaiseClusterFCV":
 		b := in.Body.(*api.RaiseFCVRequest)
-		if b.Version == "" {
-			return invalid()
+		if validator, yes := p.(engine.FCVValidator); yes {
+			if err := validator.ValidateFCV(ctx, rc, b.Version); err != nil {
+				return s.failure(err)
+			}
+		} else if b.Version == "" {
+			return invalidField("version", domain.ReasonRequired, "version is required")
 		}
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "raise-fcv", map[string]string{"version": b.Version})
 	case "ReplaceClusterMember":
@@ -392,6 +396,38 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 			if _, err = s.Store.GetBackup(ctx, sourceRef, *b.Source.Backup); err != nil {
 				return s.failure(err)
+			}
+		}
+		if b.Source.PitrTime != nil {
+			sourceRC, sourceProvider, err := s.context(ctx, sourceRef)
+			if err != nil {
+				return s.failure(err)
+			}
+			if failure := s.providerContext(sourceRC); failure != nil {
+				return *failure
+			}
+			if validator, yes := sourceProvider.(engine.PITRRestoreValidator); yes {
+				windows, err := validator.ValidatePITRRestore(ctx, sourceRC, *b.Source.PitrTime)
+				if err != nil {
+					var field *domain.FieldError
+					if errors.As(err, &field) {
+						details := map[string]any{"field": field.Field, "reason": field.Reason}
+						if len(windows) > 0 {
+							earliest, latest := windows[0].Start, windows[0].End
+							for _, w := range windows[1:] {
+								if w.Start.Before(earliest) {
+									earliest = w.Start
+								}
+								if w.End.After(latest) {
+									latest = w.End
+								}
+							}
+							details["earliest"], details["latest"] = earliest, latest
+						}
+						return failDetails(400, "invalid_request", field.Message, details)
+					}
+					return s.failure(err)
+				}
 			}
 		}
 		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: b.Source.SourceCluster}, Phase: domain.PhasePending}
