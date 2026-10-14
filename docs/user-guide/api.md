@@ -22,6 +22,70 @@ For cookie-authenticated unsafe methods (anything except GET/HEAD/OPTIONS), send
 
 `POST /auth/refresh` rotates the refresh secret; reusing an older refresh token revokes that family. Forced password-change sessions permit current-user discovery, password change and logout, not normal operations or token creation. After password change reauthenticate. OIDC uses `/auth/oidc/login` and `/auth/oidc/callback` under `/api/v1`, with browser redirect/state/PKCE rather than an invented device-code API.
 
+### Copyable curl bootstrap
+
+Use this Bash recipe with `curl` and `jq` installed. Start with an enabled local
+account whose required first-login password change is already complete (see
+[first sign-in](../install.md#first-sign-in-and-cli-connection)). Replace the
+HTTPS installation origin below, without a trailing slash. The login response
+supplies `csrfToken`; curl's cookie jar preserves the matching
+`karakoram_access`, `karakoram_refresh` and `karakoram_csrf` cookies.
+
+```bash
+set -euo pipefail
+set +x
+umask 077
+SERVER='https://YOUR-SUBDOMAIN'
+COOKIE_DIR=$(mktemp -d)
+trap 'rm -rf "$COOKIE_DIR"' EXIT
+COOKIE_JAR="$COOKIE_DIR/cookies"
+
+read -r -p 'Karakoram username: ' USERNAME
+read -r -s -p 'Karakoram password: ' PASSWORD
+printf '\n'
+LOGIN=$(jq -n --arg username "$USERNAME" --arg password "$PASSWORD" \
+  '{username: $username, password: $password}' \
+  | curl --fail-with-body --silent --show-error \
+      -c "$COOKIE_JAR" -H 'Content-Type: application/json' \
+      --data-binary @- "$SERVER/api/v1/auth/login")
+unset PASSWORD
+if [ "$(printf '%s' "$LOGIN" | jq -r '.account.mustChangePassword')" = true ]; then
+  printf 'Complete the required password change and sign in again before creating a token.\n' >&2
+  exit 1
+fi
+CSRF=$(printf '%s' "$LOGIN" | jq -er .csrfToken)
+unset LOGIN
+
+# Cookie-authenticated token creation needs BOTH the cookie jar and CSRF header.
+CREATED=$(curl --fail-with-body --silent --show-error \
+  -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -H 'Content-Type: application/json' -H "X-Karakoram-CSRF: $CSRF" \
+  --data '{"name":"automation"}' "$SERVER/api/v1/api-tokens")
+KARAKORAM_TOKEN=$(printf '%s' "$CREATED" | jq -er .secret)
+TOKEN_ID=$(printf '%s' "$CREATED" | jq -er .token.id)
+unset CREATED
+
+# Bearer requests use the one-time secret, not the token ID or a Zerops token.
+curl --fail-with-body --silent --show-error \
+  -H "Authorization: Bearer $KARAKORAM_TOKEN" "$SERVER/api/v1/auth/me"
+printf '\nCreated token ID: %s\n' "$TOKEN_ID"
+
+# Close the temporary browser-style session; this does not revoke the API token.
+curl --fail-with-body --silent --show-error \
+  -b "$COOKIE_JAR" -H "X-Karakoram-CSRF: $CSRF" \
+  -X POST "$SERVER/api/v1/auth/logout"
+unset CSRF
+```
+
+Save `KARAKORAM_TOKEN` securely before closing the shell; `.secret` is returned
+only at creation, while `.token.id` is the metadata/revocation identifier.
+Bearer calls need neither cookies nor CSRF. All curl calls above report server
+error bodies and fail on HTTP errors. Use an account with the resource permissions
+needed by your automation; a token does not bypass its owner's RBAC. Revoke it
+when no longer needed with `DELETE /api/v1/api-tokens/{id}` and bearer
+authentication.
+
+
 ## Authorization and credential reveal
 
 Every authenticated operation is classified by `x-karakoram-rbac` in OpenAPI. Resources/actions/objects, deny-overrides semantics and default roles are described in [RBAC](rbac-and-auth.md). List/stream/metrics filtering checks each namespace-qualified object, not just a collection-wide allow. Reading clusters does not grant `cluster-credentials:read`.
