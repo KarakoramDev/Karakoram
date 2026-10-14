@@ -23,8 +23,10 @@ var (
 )
 
 // ValidationError is an ErrInvalid whose Message is safe to show to the API
-// caller: it explains which part of the request was rejected and why.
-type ValidationError struct{ Message string }
+// caller: it explains which part of the request was rejected and why. Field
+// (JSON path such as spec.components.engine.replicas) and Reason (one of the
+// domain.Reason* constants) are optional and become the API error details.
+type ValidationError struct{ Field, Reason, Message string }
 
 func (e *ValidationError) Error() string { return ErrInvalid.Error() + ": " + e.Message }
 
@@ -34,6 +36,12 @@ func (e *ValidationError) Is(target error) bool { return target == ErrInvalid }
 // Invalid returns a ValidationError with a formatted, caller-facing message.
 func Invalid(format string, args ...any) error {
 	return &ValidationError{Message: fmt.Sprintf(format, args...)}
+}
+
+// InvalidField returns a ValidationError for one request field. The message
+// should name the field so it reads well without the details object.
+func InvalidField(field, reason, format string, args ...any) error {
+	return &ValidationError{Field: field, Reason: reason, Message: fmt.Sprintf(format, args...)}
 }
 
 // DataPlane is implemented by providers for synchronous requests that the

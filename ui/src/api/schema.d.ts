@@ -1695,12 +1695,26 @@ export type components = {
             /** Format: date-time */
             pitrTime?: string;
         };
+        /**
+         * @description Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+         *     `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+         *     `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+         *     `message` is a human-readable explanation that names the rejected field or resource.
+         */
         Error: {
             code: string;
-            /** @description Structured validation or conflict details; never contains secrets. */
+            /**
+             * @description Structured, secret-free context; omitted when there is nothing to add. Validation
+             *     errors carry `field` (JSON path such as `spec.components.engine.replicas`, or a
+             *     query/path parameter name) and `reason` (`required`, `unknown_field`, `invalid`,
+             *     `out_of_range`, `unsupported`, `conflict`, `reused`). Missing or conflicting
+             *     resources carry `resource`, `name` and `reason` (`not_found`, `already_exists`,
+             *     `invalid_state`, `protected`) and, for `invalid_state`, the current `state`.
+             *     Other keys may be added; clients must ignore unknown keys.
+             */
             details?: {
                 [key: string]: unknown;
-            } | null;
+            };
             message: string;
         };
         Event: {

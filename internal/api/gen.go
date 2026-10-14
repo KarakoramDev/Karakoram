@@ -686,12 +686,21 @@ type DatabaseUserList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// Error defines model for Error.
+// Error Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type Error struct {
 	Code string `json:"code"`
 
-	// Details Structured validation or conflict details; never contains secrets.
-	Details *map[string]interface{} `json:"details"`
+	// Details Structured, secret-free context; omitted when there is nothing to add. Validation
+	// errors carry `field` (JSON path such as `spec.components.engine.replicas`, or a
+	// query/path parameter name) and `reason` (`required`, `unknown_field`, `invalid`,
+	// `out_of_range`, `unsupported`, `conflict`, `reused`). Missing or conflicting
+	// resources carry `resource`, `name` and `reason` (`not_found`, `already_exists`,
+	// `invalid_state`, `protected`) and, for `invalid_state`, the current `state`.
+	// Other keys may be added; clients must ignore unknown keys.
+	Details *map[string]interface{} `json:"details,omitempty"`
 	Message string                  `json:"message"`
 }
 
@@ -911,18 +920,23 @@ type ObservedResources struct {
 // Operation defines model for Operation.
 type Operation struct {
 	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
-	Actor       *string        `json:"actor,omitempty"`
-	Cluster     string         `json:"cluster"`
-	CompletedAt *time.Time     `json:"completedAt,omitempty"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	Error       *Error         `json:"error,omitempty"`
-	Id          string         `json:"id"`
-	Message     *string        `json:"message,omitempty"`
-	Namespace   *NamespaceName `json:"namespace,omitempty"`
-	Phase       OperationPhase `json:"phase"`
-	Progress    *float32       `json:"progress,omitempty"`
-	StartedAt   *time.Time     `json:"startedAt,omitempty"`
-	Type        OperationType  `json:"type"`
+	Actor       *string    `json:"actor,omitempty"`
+	Cluster     string     `json:"cluster"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+
+	// Error Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+	// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+	// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+	// `message` is a human-readable explanation that names the rejected field or resource.
+	Error     *Error         `json:"error,omitempty"`
+	Id        string         `json:"id"`
+	Message   *string        `json:"message,omitempty"`
+	Namespace *NamespaceName `json:"namespace,omitempty"`
+	Phase     OperationPhase `json:"phase"`
+	Progress  *float32       `json:"progress,omitempty"`
+	StartedAt *time.Time     `json:"startedAt,omitempty"`
+	Type      OperationType  `json:"type"`
 }
 
 // OperationPhase defines model for Operation.Phase.
@@ -1344,25 +1358,46 @@ type NamespacePath = NamespaceName
 // NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens.
 type NamespaceQuery = NamespaceName
 
-// BadRequest defines model for BadRequest.
+// BadRequest Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type BadRequest = Error
 
-// Conflict defines model for Conflict.
+// Conflict Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type Conflict = Error
 
-// Forbidden defines model for Forbidden.
+// Forbidden Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type Forbidden = Error
 
-// InternalError defines model for InternalError.
+// InternalError Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type InternalError = Error
 
-// NotFound defines model for NotFound.
+// NotFound Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type NotFound = Error
 
-// Unauthorized defines model for Unauthorized.
+// Unauthorized Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type Unauthorized = Error
 
-// UnprocessableEntity defines model for UnprocessableEntity.
+// UnprocessableEntity Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
 type UnprocessableEntity = Error
 
 // ListAccountsParams defines parameters for ListAccounts.

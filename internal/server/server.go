@@ -104,6 +104,21 @@ func ok(body any) response { return response{status: 200, body: body} }
 func fail(status int, code, message string) response {
 	return response{status: status, body: api.Error{Code: code, Message: message}}
 }
+
+// failDetails is fail with a structured, secret-free details object.
+func failDetails(status int, code, message string, details map[string]any) response {
+	e := api.Error{Code: code, Message: message}
+	if len(details) > 0 {
+		e.Details = &details
+	}
+	return response{status: status, body: e}
+}
+
+// invalidField rejects one request field or parameter with 400 invalid_request.
+func invalidField(field, reason, message string) response {
+	return failDetails(400, "invalid_request", message, map[string]any{"field": field, "reason": reason})
+}
+
 func (s *Server) failure(err error) response {
 	var namespaceConflict *store.NamespaceConflictError
 	if errors.As(err, &namespaceConflict) {
@@ -113,6 +128,21 @@ func (s *Server) failure(err error) response {
 	if errors.As(err, &invalidRef) {
 		return fail(400, "invalid_request", invalidRef.Error())
 	}
+	var fieldErr *domain.FieldError
+	if errors.As(err, &fieldErr) {
+		return invalidField(fieldErr.Field, fieldErr.Reason, fieldErr.Message)
+	}
+	var resErr *domain.ResourceError
+	if errors.As(err, &resErr) {
+		details := map[string]any{"resource": resErr.Resource, "name": resErr.Name, "reason": resErr.Reason}
+		if resErr.State != "" {
+			details["state"] = resErr.State
+		}
+		if resErr.Reason == domain.ReasonNotFound {
+			return failDetails(404, "not_found", resErr.Message, details)
+		}
+		return failDetails(409, "conflict", resErr.Message, details)
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
@@ -121,6 +151,13 @@ func (s *Server) failure(err error) response {
 	case errors.Is(err, engine.ErrInvalid), errors.Is(err, auth.ErrInvalid), errors.Is(err, store.ErrInvalid):
 		var v *engine.ValidationError
 		if errors.As(err, &v) {
+			if v.Field != "" {
+				reason := v.Reason
+				if reason == "" {
+					reason = domain.ReasonInvalid
+				}
+				return invalidField(v.Field, reason, v.Message)
+			}
 			return fail(400, "invalid_request", v.Message)
 		}
 		return fail(400, "invalid_request", "Invalid request")
