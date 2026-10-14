@@ -7,43 +7,31 @@ import { api, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
 import { namespaceQuery, spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
-import { Button } from '@/components/ui/Button';
-import { TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading, PageHeader, Segmented } from '@/components/ui/Primitives';
 import { EventTable, useLiveEvents } from './clusters/detail/EventsTab';
 import { OperationsTable } from './clusters/detail/OperationsTab';
+import { EventFilters, useEventFilters } from '@/components/EventFilters';
 
 export function EventsPage() {
   const auth = useAuth();
   const { namespace } = useNamespace();
   const canAudit = auth.can('audit', 'read');
   const canEvents = auth.can('events', 'read') || canAudit;
-  const [actor, setActor] = useState('');
-  const [resource, setResource] = useState('');
-  const [filters, setFilters] = useState<{ actor?: string; resource?: string }>({});
-  const events = useLiveEvents({ namespace, ...(canAudit ? filters : {}) }, canEvents);
+  const filters = useEventFilters();
+  const events = useLiveEvents({ ...filters, namespace }, canEvents);
   return (
     <div className="page">
       <PageHeader title="Events" description={namespace ? `Durable activity and authorized audit log of namespace ${namespace}, updated live.` : canAudit ? 'Durable cluster and authorized audit activity across namespaces, updated live.' : 'Durable activity log across every cluster you can see, updated live.'} />
-      {canAudit ? (
-        <Card title="Audit filters">
-          <form className="row wrap" style={{ alignItems: 'flex-end', gap: 12 }} onSubmit={(e) => {
-            e.preventDefault();
-            setFilters({ actor: actor || undefined, resource: resource || undefined });
-          }}>
-            <TextField label="Actor" value={actor} onChange={(e) => setActor(e.target.value)} placeholder="Exact actor identity" className="grow" />
-            <TextField label="Resource" value={resource} onChange={(e) => setResource(e.target.value)} placeholder="e.g. accounts, clusters, namespaces" className="grow" />
-            <Button type="submit">Apply filters</Button>
-          </form>
-          <p className="small muted">Exact, case-sensitive matches combined with the namespace selection; blank fields include all values. Audit records require audit:read for their object. Cluster permissions still apply.</p>
-        </Card>
-      ) : null}
+      <Card title="Event filters">
+        <EventFilters audit={canAudit} cluster />
+        <p className="small muted">Exact, case-sensitive matches combined with the namespace selection. Filters are saved in the URL. Only activity authorized for your account is included; an empty result is not proof that no activity occurred.</p>
+      </Card>
       <Card
         flush
         title="Recent events"
         actions={
-          <Badge tone={events.connected ? 'ok' : 'warn'} plain>
-            {events.connected ? 'live' : 'polling'}
+          <Badge tone={events.connected && !events.stale ? 'ok' : 'warn'} plain>
+            {events.stale ? 'connection lost — data may be stale' : events.connected ? 'live' : 'reconnecting — data may be stale'}
           </Badge>
         }
       >
