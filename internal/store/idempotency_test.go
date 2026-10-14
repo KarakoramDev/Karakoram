@@ -248,3 +248,35 @@ func TestIdempotencyLeaseMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestIdempotencyHashUpgradePurgesLegacyRowsOnce(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	if _, err := s.writer.ExecContext(ctx, "DELETE FROM schema_migrations WHERE name='008_idempotency_hmac.sql'"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for _, response := range []string{"", "legacy-sealed-response"} {
+		if _, err := s.writer.ExecContext(ctx, "INSERT INTO idempotency_requests(identity,body_hash,owner,response,expires) VALUES(?,?,?,?,?)", secrets.Hash(response), secrets.Hash("password-body"), "owner", response, now.Add(IdempotencyTTL).UnixNano()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := s.reader.QueryRowContext(ctx, "SELECT count(*) FROM idempotency_requests").Scan(&count); err != nil || count != 0 {
+		t.Fatal("legacy request digests retained after upgrade", count, err)
+	}
+	record, acquired, err := s.BeginIdempotency(ctx, "new-request", "keyed-hash", now)
+	if err != nil || !acquired {
+		t.Fatal("upgrade prevented a fresh reservation", record, acquired, err)
+	}
+	if err := s.migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	retry, acquired, err := s.BeginIdempotency(ctx, "new-request", "keyed-hash", now)
+	if err != nil || acquired || retry.Owner != record.Owner {
+		t.Fatal("restart purged a new reservation", retry, acquired, err)
+	}
+}

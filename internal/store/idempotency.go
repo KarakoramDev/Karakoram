@@ -33,6 +33,17 @@ type IdempotencyRecord struct {
 	Response *IdempotentResponse
 }
 
+// IdempotencyBodyHash keys canonical request bodies independently of encryption
+// and identity lookup, so persisted digests cannot be used to guess passwords.
+func (s *Store) IdempotencyBodyHash(body []byte) string {
+	return s.sealer.IdempotencyBodyHash(body)
+}
+
+// IdempotencyIdentityHash keys the complete authenticated request scope.
+func (s *Store) IdempotencyIdentityHash(scope []byte) string {
+	return s.sealer.IdempotencyIdentityHash(scope)
+}
+
 // BeginIdempotency atomically reserves identity or returns its existing record.
 // acquired distinguishes the owner from concurrent duplicates, including across
 // separate Store instances. Expired reservations can be replaced immediately.

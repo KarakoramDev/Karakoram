@@ -14,7 +14,6 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -109,8 +108,8 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	if err != nil {
 		return s.failure(err), nil
 	}
-	identity := secrets.Hash(string(scope))
-	bodyHash := secrets.Hash(string(canonical))
+	identity := s.Store.IdempotencyIdentityHash(scope)
+	bodyHash := s.Store.IdempotencyBodyHash(canonical)
 	record, acquired, err := s.Store.BeginIdempotency(ctx, identity, bodyHash, time.Now())
 	if err != nil {
 		return s.failure(err), nil

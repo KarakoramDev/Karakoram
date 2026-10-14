@@ -273,6 +273,8 @@ When upgrading from an account-name-only replay scope, previously stored keys
 do not match the new creation-scoped identity. Inspect any pre-upgrade ambiguous
 resource or operation before retrying it; its old response will not be replayed.
 
+Upgrading from unkeyed request digests clears all existing retry reservations and stored responses once, during database migration. New request-body and scoped-key digests use HMAC-SHA256 with separate master-key-derived subkeys, preventing a database reader from guessing passwords from request-body hashes. A pre-upgrade key starts a new request rather than causing a digest-mismatch conflict; inspect any ambiguous mutation before retrying because its old response cannot be replayed.
+
 After a successful **2xx** response, the server retains its exact status and body,
 plus relevant headers such as `Content-Type`, `Cache-Control`, `Location`, `ETag`
 and `Karakoram-Operation-Id` when supplied, for **24 hours**. A matching retry

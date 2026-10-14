@@ -19,6 +19,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -107,6 +108,42 @@ func TestIdempotentTokenCreationReplaysEncryptedSecret(t *testing.T) {
 	afterExpiry := idempotentCall(s, "POST", "/api/v1/api-tokens", `{"name":"retry-token"}`, token, "token-request")
 	if afterExpiry.Code != 201 || afterExpiry.Header().Get("Idempotent-Replayed") != "" || afterExpiry.Body.String() == first.Body.String() {
 		t.Fatal("expired response replayed", afterExpiry.Code)
+	}
+}
+
+func TestIdempotencyPasswordBodyHashIsKeyed(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path, body, different string
+		status                              int
+	}{
+		{"account", "POST", "/api/v1/accounts", `{"name":"reader","password":"chosen-test-password"}`, `{"name":"reader","password":"different-test-password"}`, 201},
+		{"database user create", "POST", "/api/v1/clusters/prod/database-users", `{"username":"app","database":"app","roles":[],"password":"chosen-test-password"}`, `{"username":"app","database":"app","roles":[],"password":"different-test-password"}`, 201},
+		{"database user replace", "PUT", "/api/v1/clusters/prod/database-users/app/app", `{"roles":[],"password":"chosen-test-password"}`, `{"roles":[],"password":"different-test-password"}`, 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.db")
+			s, _, token := testServerWithDatabase(t, path)
+			first := idempotentCall(s, tc.method, tc.path, tc.body, token, "password-request")
+			second := idempotentCall(s, tc.method, tc.path, tc.body, token, "password-request")
+			assertReplay(t, first, second, tc.status)
+			assertIdempotencyConflict(t, idempotentCall(s, tc.method, tc.path, tc.different, token, "password-request"), domain.ReasonConflict)
+			db, err := sql.Open("sqlite", "file:"+path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			var bodyHash string
+			if err := db.QueryRow("SELECT body_hash FROM idempotency_requests").Scan(&bodyHash); err != nil {
+				t.Fatal(err)
+			}
+			canonical, err := canonicalIdempotencyBody([]byte(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bodyHash == secrets.Hash(string(canonical)) {
+				t.Fatal("password-bearing request stored as unkeyed SHA-256")
+			}
+		})
 	}
 }
 

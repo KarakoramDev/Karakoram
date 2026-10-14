@@ -6,6 +6,7 @@ package secrets
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -22,8 +23,13 @@ import (
 
 const prefix = "kk:v1:"
 
-// Sealer encrypts versioned, authenticated secrets using a derived AES-256 key.
-type Sealer struct{ aead cipher.AEAD }
+// Sealer encrypts secrets and authenticates idempotency digests with separate
+// master-key-derived keys.
+type Sealer struct {
+	aead                   cipher.AEAD
+	idempotencyBodyKey     [32]byte
+	idempotencyIdentityKey [32]byte
+}
 
 // New derives a sealer from a master key of at least 32 characters.
 func New(masterKey string) (*Sealer, error) {
@@ -42,7 +48,19 @@ func New(masterKey string) (*Sealer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Sealer{aead: aead}, nil
+	s := &Sealer{aead: aead}
+	for _, subkey := range []struct {
+		label string
+		key   []byte
+	}{
+		{"idempotency-body/HMAC-SHA256", s.idempotencyBodyKey[:]},
+		{"idempotency-identity/HMAC-SHA256", s.idempotencyIdentityKey[:]},
+	} {
+		if _, err := io.ReadFull(hkdf.New(sha256.New, []byte(masterKey), []byte("karakoram/secrets/v1"), []byte(subkey.label)), subkey.key); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 // FromEnv loads the encryption master key from KARAKORAM_MASTER_KEY.
@@ -82,6 +100,23 @@ func (s *Sealer) OpenFor(identity, value string) ([]byte, error) {
 		return nil, errors.New("sealed-secret authentication failed")
 	}
 	return plain, nil
+}
+
+// IdempotencyBodyHash prevents offline guessing of password-bearing JSON bodies
+// from a database copy without the installation's master key.
+func (s *Sealer) IdempotencyBodyHash(body []byte) string {
+	return keyedHash(s.idempotencyBodyKey[:], body)
+}
+
+// IdempotencyIdentityHash hides caller-provided retry keys using a separate key.
+func (s *Sealer) IdempotencyIdentityHash(scope []byte) string {
+	return keyedHash(s.idempotencyIdentityKey[:], scope)
+}
+
+func keyedHash(key, value []byte) string {
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write(value)
+	return "hmac-sha256:v1:" + hex.EncodeToString(mac.Sum(nil))
 }
 
 // RandomString generates unbiased alphanumeric characters using crypto/rand.
