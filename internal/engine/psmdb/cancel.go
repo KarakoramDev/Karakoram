@@ -15,7 +15,7 @@ import (
 
 // CanCancelOperation refuses any checkpoint that may already have changed data.
 // FCV executes atomically in one call; cancellation is honored before that call.
-func (p *Provider) CanCancelOperation(op *domain.Operation) error {
+func (p *Provider) CanCancelOperation(ctx context.Context, op *domain.Operation) error {
 	if op.Kind == domain.OperationBackup {
 		var payload struct {
 			Backup  string `json:"backup"`
@@ -28,9 +28,11 @@ func (p *Provider) CanCancelOperation(op *domain.Operation) error {
 		// Existing queued bases predate the payload marker; consult inventory
 		// so they receive the same protection as newly enqueued backups.
 		if trigger == "" && payload.Backup != "" && p.options.Store != nil {
-			backup, err := p.options.Store.GetBackup(context.Background(), domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}, payload.Backup)
+			backup, err := p.options.Store.GetBackup(ctx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}, payload.Backup)
 			if err != nil {
-				return err
+				// Fail closed: missing legacy inventory cannot prove this is
+				// not a mandatory post-restore base. Never expose store errors.
+				return fmt.Errorf("Operation %s cannot verify backup inventory for safe cancellation; retry after the backup record is available", op.ID)
 			}
 			trigger = backup.Trigger
 		}

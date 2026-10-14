@@ -175,7 +175,7 @@ func TestRestoreBaseCancellationRefused(t *testing.T) {
 			}
 		}
 		for _, checkpoint := range []string{`{}`, `{"step":"poll"}`, `{"cancelling":true}`} {
-			err := p.CanCancelOperation(&domain.Operation{ID: "base", Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Payload: payload, Checkpoint: json.RawMessage(checkpoint)})
+			err := p.CanCancelOperation(ctx, &domain.Operation{ID: "base", Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Payload: payload, Checkpoint: json.RawMessage(checkpoint)})
 			if err == nil || !strings.Contains(err.Error(), "protects PITR continuity") {
 				t.Fatal("post-restore base cancellation allowed", err)
 			}

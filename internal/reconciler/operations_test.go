@@ -30,7 +30,7 @@ func (p *boundedProvider) RunOperation(ctx context.Context, rc *engine.Context, 
 	}
 	return p.fakeProvider.RunOperation(ctx, rc, op)
 }
-func (*boundedProvider) CanCancelOperation(*domain.Operation) error { return nil }
+func (*boundedProvider) CanCancelOperation(context.Context, *domain.Operation) error { return nil }
 func (*boundedProvider) CancelOperation(context.Context, *engine.Context, *domain.Operation) (engine.OpResult, error) {
 	return engine.OpResult{Done: true, Step: "cancelled"}, nil
 }

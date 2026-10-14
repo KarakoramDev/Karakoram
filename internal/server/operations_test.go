@@ -12,6 +12,8 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 )
 
 func clusterTracking(t *testing.T, w *httptest.ResponseRecorder, status int) string {
@@ -191,5 +193,34 @@ func TestRetainedNeverStartedBackupRemovalDoesNotRequireStorage(t *testing.T) {
 	}
 	if err := s.Store.CreateBackup(ctx, &domain.Backup{Cluster: backup.Cluster, Name: backup.Name, Type: "logical"}); err != nil {
 		t.Fatal("name was not reusable", err)
+	}
+}
+
+type requestCancellationProvider struct {
+	*psmdb.Provider
+	sawRequest bool
+}
+
+func (*requestCancellationProvider) Name() string { return "fake" }
+func (p *requestCancellationProvider) CanCancelOperation(ctx context.Context, op *domain.Operation) error {
+	p.sawRequest = request(ctx) != nil
+	return p.Provider.CanCancelOperation(ctx, op)
+}
+
+func TestCancellationMissingBackupReturnsSafeConflictWithRequestContext(t *testing.T) {
+	s, _, token := testServer(t)
+	p := &requestCancellationProvider{Provider: psmdb.New(psmdb.Options{Store: s.Store})}
+	s.Registry, _ = engine.NewRegistry(p)
+	op := &domain.Operation{Cluster: "prod", Kind: domain.OperationBackup, Phase: domain.PhaseRunning, Payload: json.RawMessage(`{"backup":"missing-legacy-base"}`)}
+	if err := s.Store.EnqueueOperation(context.Background(), op); err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "POST", "/api/v1/operations/"+op.ID+"/cancel", "", token)
+	if w.Code != 409 || !p.sawRequest || !strings.Contains(w.Body.String(), "cannot verify backup inventory") || strings.Contains(w.Body.String(), "resource not found") {
+		t.Fatal("unsafe cancellation conflict", w.Code, w.Body.String(), p.sawRequest)
+	}
+	got, err := s.Store.GetOperation(context.Background(), op.ID)
+	if err != nil || got.CancelRequested {
+		t.Fatal("unverified backup cancellation accepted", got, err)
 	}
 }

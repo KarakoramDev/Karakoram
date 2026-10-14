@@ -255,6 +255,12 @@ cleanup keeps queue ownership and retries beyond the ordinary retry/deadline
 budget. Failed-operation recovery is bounded by the separate recovery window
 above; exceeding it requires manual recovery, not automatic rollback.
 
+For legacy backup operations without a recorded trigger, safe cancellation
+checks backup inventory using the request context. Missing or unreadable
+inventory returns a clean **409** asking you to retry after the record is
+available: the server cannot establish that this is not a required post-restore
+base backup. Store/transport diagnostics are not included in that response.
+
 ## Safe retries with Idempotency-Key
 
 Send an optional `Idempotency-Key` header on these operations:

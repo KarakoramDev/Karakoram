@@ -45,7 +45,7 @@ type OperationSyncPolicy interface {
 // CanCancelOperation must be side-effect free and explain unsafe checkpoints.
 // CancelOperation cooperatively restores safe invariants before returning Done.
 type OperationCanceller interface {
-	CanCancelOperation(*domain.Operation) error
+	CanCancelOperation(context.Context, *domain.Operation) error
 	CancelOperation(context.Context, *Context, *domain.Operation) (OpResult, error)
 }
 
