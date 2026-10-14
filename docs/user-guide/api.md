@@ -133,8 +133,11 @@ authorized namespaces when omitted; a value filters to that namespace.
 Responses identify their namespace. A bare cluster name is not an
 installation-wide identity; keep namespace in caches and links.
 An explicit nonexistent namespace returns **404** `not_found` with
-`details.resource: namespace` and `details.name` on lists, details and sub-resources;
-omit the parameter rather than passing an empty value for all namespaces.
+`details.resource: namespace` and `details.name` only when the caller has a permission
+in that namespace. Without such permission, collections remain empty and object
+requests retain their normal 403 response, whether the namespace exists or not.
+Public and unauthenticated authentication routes do not resolve this parameter.
+Omit the parameter rather than passing an empty value for all namespaces.
 
 `spec.dataSource.namespace` selects a cluster-create recovery source;
 in-place restore uses `sourceNamespace`. Both default to the target namespace.

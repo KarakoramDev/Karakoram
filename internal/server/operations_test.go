@@ -144,7 +144,7 @@ func TestCancellationAuthorizesPersistedClusterAndRejectsUnsafeRunning(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := call(s, "POST", "/api/v1/operations/"+op.ID+"/cancel?namespace=missing", "", limited)
+	w := call(s, "POST", "/api/v1/operations/"+op.ID+"/cancel?namespace=missing", "", admin)
 	if w.Code != 404 || !strings.Contains(w.Body.String(), `"resource":"namespace"`) {
 		t.Fatal(w.Code, w.Body.String())
 	}
