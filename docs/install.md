@@ -72,11 +72,22 @@ replace `run.envVariables.KARAKORAM_PUBLIC_URL` in `zerops.yaml` with its HTTPS
 origin and redeploy. A secret with that same key does **not** override a
 pipeline runtime variable.
 
-## Local checkout installation (available now)
+## Installation sources
 
-The public repository URL in `deploy/zerops/import.yaml` is a **future publication
-URL**, not a currently available release. Use the local installer until the
-repository is public, or replace that URL with your own publicly accessible fork.
+The public repository is available at
+[github.com/KarakoramDev/Karakoram](https://github.com/KarakoramDev/Karakoram).
+For a Git-based deployment, use
+[`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml) and follow
+[the import procedure below](#import-yaml-installation-from-a-public-repository).
+For deployment from your own checkout, clone the repository and use the local
+procedure:
+
+```sh
+git clone https://github.com/KarakoramDev/Karakoram
+cd Karakoram
+```
+
+## Local checkout installation
 
 ### Import, set the secret, then push
 
@@ -140,10 +151,12 @@ installer to upgrade an existing installation.
 
 ## Import YAML installation from a public repository
 
-1. Replace `buildFromGit` in `deploy/zerops/import.yaml` with your public fork until
-   the documented publication URL is available. Use a plain GitHub/GitLab
-   repository URL, without a trailing `.git`; private repositories cannot be
-   cloned through this import mechanism.
+1. Obtain [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml) from the
+   public repository. Its `buildFromGit` already points to
+   `https://github.com/KarakoramDev/Karakoram`; no fork is required. If deploying
+   your own fork, replace it with your plain public GitHub/GitLab repository URL,
+   without a trailing `.git`. Private repositories cannot be cloned through
+   this import mechanism.
 2. Replace the empty `KARAKORAM_ZEROPS_TOKEN` value in a private copy before import,
    or plan to add it in the GUI immediately afterward.
 3. In the existing project's dashboard select **Import services** and paste the

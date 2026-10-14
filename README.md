@@ -63,6 +63,11 @@ A Go-only `make build` without built UI assets serves a “UI not built” page.
 
 ## Documentation index
 
+These guides belong to a complete repository checkout. Keep `docs/` beside
+`api/`, `ui/` and this root README when copying them: relative links to the
+OpenAPI specification, architecture decisions and UI development instructions
+are repository paths, not a standalone documentation-bundle layout.
+
 - [Installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
 - [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)
 - [Replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
