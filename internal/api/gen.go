@@ -1847,9 +1847,6 @@ type NamespacePath = NamespaceName
 // NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 type NamespaceQuery = NamespaceName
 
-// RequestID defines model for RequestID.
-type RequestID = string
-
 // BadRequest Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
@@ -1923,9 +1920,6 @@ type ListAccountsParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAccountParams defines parameters for CreateAccount.
@@ -1942,42 +1936,24 @@ type CreateAccountParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteAccountParams defines parameters for DeleteAccount.
 type DeleteAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetAccountParams defines parameters for GetAccount.
-type GetAccountParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceAccountParams defines parameters for ReplaceAccount.
 type ReplaceAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ResetAccountPasswordParams defines parameters for ResetAccountPassword.
 type ResetAccountPasswordParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListAPITokensParams defines parameters for ListAPITokens.
@@ -1987,9 +1963,6 @@ type ListAPITokensParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAPITokenParams defines parameters for CreateAPIToken.
@@ -2006,93 +1979,54 @@ type CreateAPITokenParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteAPITokenParams defines parameters for DeleteAPIToken.
 type DeleteAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetAPITokenParams defines parameters for GetAPIToken.
-type GetAPITokenParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceAPITokenParams defines parameters for ReplaceAPIToken.
 type ReplaceAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ChangePasswordParams defines parameters for ChangePassword.
 type ChangePasswordParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // LoginParams defines parameters for Login.
 type LoginParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetCurrentUserParams defines parameters for GetCurrentUser.
-type GetCurrentUserParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // OidcCallbackParams defines parameters for OidcCallback.
 type OidcCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // OidcLoginParams defines parameters for OidcLogin.
 type OidcLoginParams struct {
 	// ReturnTo Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
 	ReturnTo *string `form:"returnTo,omitempty" json:"returnTo,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RefreshSessionParams defines parameters for RefreshSession.
 type RefreshSessionParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListBackupStoragesParams defines parameters for ListBackupStorages.
@@ -2105,9 +2039,6 @@ type ListBackupStoragesParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateBackupStorageParams defines parameters for CreateBackupStorage.
@@ -2127,9 +2058,6 @@ type CreateBackupStorageParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteBackupStorageParams defines parameters for DeleteBackupStorage.
@@ -2139,18 +2067,12 @@ type DeleteBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetBackupStorageParams defines parameters for GetBackupStorage.
 type GetBackupStorageParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceBackupStorageParams defines parameters for ReplaceBackupStorage.
@@ -2160,9 +2082,6 @@ type ReplaceBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // VerifyBackupStorageParams defines parameters for VerifyBackupStorage.
@@ -2172,9 +2091,6 @@ type VerifyBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClustersParams defines parameters for ListClusters.
@@ -2187,9 +2103,6 @@ type ListClustersParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateClusterParams defines parameters for CreateCluster.
@@ -2209,9 +2122,6 @@ type CreateClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteClusterParams defines parameters for DeleteCluster.
@@ -2224,18 +2134,12 @@ type DeleteClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterParams defines parameters for GetCluster.
 type GetClusterParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // PatchClusterParams defines parameters for PatchCluster.
@@ -2255,9 +2159,6 @@ type PatchClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
@@ -2277,9 +2178,6 @@ type ReplaceClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListBackupsParams defines parameters for ListBackups.
@@ -2292,9 +2190,6 @@ type ListBackupsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateBackupParams defines parameters for CreateBackup.
@@ -2314,9 +2209,6 @@ type CreateBackupParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteBackupParams defines parameters for DeleteBackup.
@@ -2326,27 +2218,18 @@ type DeleteBackupParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetBackupParams defines parameters for GetBackup.
 type GetBackupParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterBalancerParams defines parameters for GetClusterBalancer.
 type GetClusterBalancerParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceClusterBalancerParams defines parameters for ReplaceClusterBalancer.
@@ -2356,18 +2239,12 @@ type ReplaceClusterBalancerParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterConnectionParams defines parameters for GetClusterConnection.
 type GetClusterConnectionParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListDatabaseRolesParams defines parameters for ListDatabaseRoles.
@@ -2380,9 +2257,6 @@ type ListDatabaseRolesParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateDatabaseRoleParams defines parameters for CreateDatabaseRole.
@@ -2402,9 +2276,6 @@ type CreateDatabaseRoleParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteDatabaseRoleParams defines parameters for DeleteDatabaseRole.
@@ -2414,18 +2285,12 @@ type DeleteDatabaseRoleParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetDatabaseRoleParams defines parameters for GetDatabaseRole.
 type GetDatabaseRoleParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceDatabaseRoleParams defines parameters for ReplaceDatabaseRole.
@@ -2435,9 +2300,6 @@ type ReplaceDatabaseRoleParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListDatabaseUsersParams defines parameters for ListDatabaseUsers.
@@ -2450,9 +2312,6 @@ type ListDatabaseUsersParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateDatabaseUserParams defines parameters for CreateDatabaseUser.
@@ -2472,9 +2331,6 @@ type CreateDatabaseUserParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteDatabaseUserParams defines parameters for DeleteDatabaseUser.
@@ -2484,18 +2340,12 @@ type DeleteDatabaseUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetDatabaseUserParams defines parameters for GetDatabaseUser.
 type GetDatabaseUserParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceDatabaseUserParams defines parameters for ReplaceDatabaseUser.
@@ -2505,27 +2355,18 @@ type ReplaceDatabaseUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClusterMembersParams defines parameters for ListClusterMembers.
 type ListClusterMembersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterMemberParams defines parameters for GetClusterMember.
 type GetClusterMemberParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
@@ -2537,9 +2378,6 @@ type GetMemberLogsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetMemberLogsParamsProcess defines parameters for GetMemberLogs.
@@ -2552,9 +2390,6 @@ type ReplaceClusterMemberParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterMetricsParams defines parameters for GetClusterMetrics.
@@ -2567,9 +2402,6 @@ type GetClusterMetricsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
@@ -2583,27 +2415,18 @@ type ListClusterOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetPITRWindowParams defines parameters for GetPITRWindow.
 type GetPITRWindowParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterPlacementParams defines parameters for GetClusterPlacement.
 type GetClusterPlacementParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
@@ -2613,9 +2436,6 @@ type RaiseClusterFCVParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RestartClusterParams defines parameters for RestartCluster.
@@ -2625,9 +2445,6 @@ type RestartClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListRestoresParams defines parameters for ListRestores.
@@ -2640,9 +2457,6 @@ type ListRestoresParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateRestoreParams defines parameters for CreateRestore.
@@ -2662,18 +2476,12 @@ type CreateRestoreParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetRestoreParams defines parameters for GetRestore.
 type GetRestoreParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ResumeClusterParams defines parameters for ResumeCluster.
@@ -2683,9 +2491,6 @@ type ResumeClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
@@ -2695,27 +2500,18 @@ type RotateClusterTLSParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterStatusParams defines parameters for GetClusterStatus.
 type GetClusterStatusParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListSystemUsersParams defines parameters for ListSystemUsers.
 type ListSystemUsersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateSystemUserParams defines parameters for RotateSystemUser.
@@ -2725,9 +2521,6 @@ type RotateSystemUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListEventsParams defines parameters for ListEvents.
@@ -2754,9 +2547,6 @@ type ListEventsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListEventsParamsOrder defines parameters for ListEvents.
@@ -2790,9 +2580,6 @@ type StreamEventsParams struct {
 
 	// LastEventID SSE reconnection cursor; used when cursor is absent.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // StreamEventsParamsType defines parameters for StreamEvents.
@@ -2801,19 +2588,10 @@ type StreamEventsParamsType string
 // StreamEventsParamsResource defines parameters for StreamEvents.
 type StreamEventsParamsResource string
 
-// GetHealthParams defines parameters for GetHealth.
-type GetHealthParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
 // GetPrometheusMetricsParams defines parameters for GetPrometheusMetrics.
 type GetPrometheusMetricsParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListNamespacesParams defines parameters for ListNamespaces.
@@ -2823,9 +2601,6 @@ type ListNamespacesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateNamespaceParams defines parameters for CreateNamespace.
@@ -2842,51 +2617,30 @@ type CreateNamespaceParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteNamespaceParams defines parameters for DeleteNamespace.
 type DeleteNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetNamespaceParams defines parameters for GetNamespace.
-type GetNamespaceParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // UpdateNamespaceParams defines parameters for UpdateNamespace.
 type UpdateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateNamespaceTokenParams defines parameters for RotateNamespaceToken.
 type RotateNamespaceTokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ValidateNamespaceParams defines parameters for ValidateNamespace.
 type ValidateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListOperationsParams defines parameters for ListOperations.
@@ -2901,15 +2655,6 @@ type ListOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetOperationParams defines parameters for GetOperation.
-type GetOperationParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CancelOperationParams defines parameters for CancelOperation.
@@ -2922,72 +2667,24 @@ type CancelOperationParams struct {
 type ListOrphanedVolumesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetPermissionsParams defines parameters for GetPermissions.
-type GetPermissionsParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// ListProvidersParams defines parameters for ListProviders.
-type ListProvidersParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetProviderParams defines parameters for GetProvider.
-type GetProviderParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CheckPermissionParams defines parameters for CheckPermission.
 type CheckPermissionParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetRBACPolicyParams defines parameters for GetRBACPolicy.
-type GetRBACPolicyParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceRBACPolicyParams defines parameters for ReplaceRBACPolicy.
 type ReplaceRBACPolicyParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetSettingsParams defines parameters for GetSettings.
-type GetSettingsParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceSettingsParams defines parameters for ReplaceSettings.
 type ReplaceSettingsParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetVersionParams defines parameters for GetVersion.
-type GetVersionParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
@@ -3205,7 +2902,7 @@ type ServerInterface interface {
 	DeleteAccount(w http.ResponseWriter, r *http.Request, account string, params DeleteAccountParams)
 	// Read a local account
 	// (GET /accounts/{account})
-	GetAccount(w http.ResponseWriter, r *http.Request, account string, params GetAccountParams)
+	GetAccount(w http.ResponseWriter, r *http.Request, account string)
 	// Replace account administrative flags
 	// (PUT /accounts/{account})
 	ReplaceAccount(w http.ResponseWriter, r *http.Request, account string, params ReplaceAccountParams)
@@ -3223,7 +2920,7 @@ type ServerInterface interface {
 	DeleteAPIToken(w http.ResponseWriter, r *http.Request, token string, params DeleteAPITokenParams)
 	// Read API token metadata
 	// (GET /api-tokens/{token})
-	GetAPIToken(w http.ResponseWriter, r *http.Request, token string, params GetAPITokenParams)
+	GetAPIToken(w http.ResponseWriter, r *http.Request, token string)
 	// Replace API token name and expiry
 	// (PUT /api-tokens/{token})
 	ReplaceAPIToken(w http.ResponseWriter, r *http.Request, token string, params ReplaceAPITokenParams)
@@ -3238,7 +2935,7 @@ type ServerInterface interface {
 	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
 	// Read the authenticated identity
 	// (GET /auth/me)
-	GetCurrentUser(w http.ResponseWriter, r *http.Request, params GetCurrentUserParams)
+	GetCurrentUser(w http.ResponseWriter, r *http.Request)
 	// Exchange OIDC authorization code and establish a cookie session
 	// (GET /auth/oidc/callback)
 	OidcCallback(w http.ResponseWriter, r *http.Request, params OidcCallbackParams)
@@ -3397,7 +3094,7 @@ type ServerInterface interface {
 	StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams)
 	// Read control-plane health
 	// (GET /healthz)
-	GetHealth(w http.ResponseWriter, r *http.Request, params GetHealthParams)
+	GetHealth(w http.ResponseWriter, r *http.Request)
 	// Scrape Prometheus-compatible cluster metrics
 	// (GET /metrics)
 	GetPrometheusMetrics(w http.ResponseWriter, r *http.Request, params GetPrometheusMetricsParams)
@@ -3412,7 +3109,7 @@ type ServerInterface interface {
 	DeleteNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params DeleteNamespaceParams)
 	// Read namespace project, token status and relay health
 	// (GET /namespaces/{namespace})
-	GetNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params GetNamespaceParams)
+	GetNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath)
 	// Update a namespace description
 	// (PATCH /namespaces/{namespace})
 	UpdateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params UpdateNamespaceParams)
@@ -3430,7 +3127,7 @@ type ServerInterface interface {
 	ListOperations(w http.ResponseWriter, r *http.Request, params ListOperationsParams)
 	// Read a durable operation
 	// (GET /operations/{operation})
-	GetOperation(w http.ResponseWriter, r *http.Request, operation string, params GetOperationParams)
+	GetOperation(w http.ResponseWriter, r *http.Request, operation string)
 	// Request cooperative cancellation of an operation
 	// (POST /operations/{operation}/cancel)
 	CancelOperation(w http.ResponseWriter, r *http.Request, operation string, params CancelOperationParams)
@@ -3439,31 +3136,31 @@ type ServerInterface interface {
 	ListOrphanedVolumes(w http.ResponseWriter, r *http.Request, params ListOrphanedVolumesParams)
 	// Resolve caller permissions and role inheritance
 	// (GET /permissions)
-	GetPermissions(w http.ResponseWriter, r *http.Request, params GetPermissionsParams)
+	GetPermissions(w http.ResponseWriter, r *http.Request)
 	// List engine providers and their catalogs
 	// (GET /providers)
-	ListProviders(w http.ResponseWriter, r *http.Request, params ListProvidersParams)
+	ListProviders(w http.ResponseWriter, r *http.Request)
 	// Read versions, topologies, presets and upgrade paths
 	// (GET /providers/{provider})
-	GetProvider(w http.ResponseWriter, r *http.Request, provider string, params GetProviderParams)
+	GetProvider(w http.ResponseWriter, r *http.Request, provider string)
 	// Evaluate an authorization tuple
 	// (POST /rbac/can)
 	CheckPermission(w http.ResponseWriter, r *http.Request, params CheckPermissionParams)
 	// Read Casbin policy
 	// (GET /rbac/policy)
-	GetRBACPolicy(w http.ResponseWriter, r *http.Request, params GetRBACPolicyParams)
+	GetRBACPolicy(w http.ResponseWriter, r *http.Request)
 	// Validate and atomically replace Casbin policy
 	// (PUT /rbac/policy)
 	ReplaceRBACPolicy(w http.ResponseWriter, r *http.Request, params ReplaceRBACPolicyParams)
 	// Read OIDC configuration without client secrets
 	// (GET /settings)
-	GetSettings(w http.ResponseWriter, r *http.Request, params GetSettingsParams)
+	GetSettings(w http.ResponseWriter, r *http.Request)
 	// Replace OIDC configuration
 	// (PUT /settings)
 	ReplaceSettings(w http.ResponseWriter, r *http.Request, params ReplaceSettingsParams)
 	// Read server build and API version
 	// (GET /version)
-	GetVersion(w http.ResponseWriter, r *http.Request, params GetVersionParams)
+	GetVersion(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -3505,27 +3202,6 @@ func (siw *ServerInterfaceWrapper) ListAccounts(w http.ResponseWriter, r *http.R
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3595,25 +3271,6 @@ func (siw *ServerInterfaceWrapper) CreateAccount(w http.ResponseWriter, r *http.
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAccount(w, r, params)
 	}))
@@ -3671,25 +3328,6 @@ func (siw *ServerInterfaceWrapper) DeleteAccount(w http.ResponseWriter, r *http.
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteAccount(w, r, account, params)
 	}))
@@ -3723,32 +3361,8 @@ func (siw *ServerInterfaceWrapper) GetAccount(w http.ResponseWriter, r *http.Req
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetAccountParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAccount(w, r, account, params)
+		siw.Handler.GetAccount(w, r, account)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3801,25 +3415,6 @@ func (siw *ServerInterfaceWrapper) ReplaceAccount(w http.ResponseWriter, r *http
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -3880,25 +3475,6 @@ func (siw *ServerInterfaceWrapper) ResetAccountPassword(w http.ResponseWriter, r
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResetAccountPassword(w, r, account, params)
 	}))
@@ -3940,27 +3516,6 @@ func (siw *ServerInterfaceWrapper) ListAPITokens(w http.ResponseWriter, r *http.
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4030,25 +3585,6 @@ func (siw *ServerInterfaceWrapper) CreateAPIToken(w http.ResponseWriter, r *http
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAPIToken(w, r, params)
 	}))
@@ -4106,25 +3642,6 @@ func (siw *ServerInterfaceWrapper) DeleteAPIToken(w http.ResponseWriter, r *http
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteAPIToken(w, r, token, params)
 	}))
@@ -4158,32 +3675,8 @@ func (siw *ServerInterfaceWrapper) GetAPIToken(w http.ResponseWriter, r *http.Re
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetAPITokenParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAPIToken(w, r, token, params)
+		siw.Handler.GetAPIToken(w, r, token)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4239,25 +3732,6 @@ func (siw *ServerInterfaceWrapper) ReplaceAPIToken(w http.ResponseWriter, r *htt
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceAPIToken(w, r, token, params)
 	}))
@@ -4306,25 +3780,6 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangePassword(w, r, params)
 	}))
@@ -4362,25 +3817,6 @@ func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request)
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -4432,25 +3868,6 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r, params)
 	}))
@@ -4465,8 +3882,6 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 // GetCurrentUser operation middleware
 func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -4475,32 +3890,8 @@ func (siw *ServerInterfaceWrapper) GetCurrentUser(w http.ResponseWriter, r *http
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetCurrentUserParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetCurrentUser(w, r, params)
+		siw.Handler.GetCurrentUser(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4548,27 +3939,6 @@ func (siw *ServerInterfaceWrapper) OidcCallback(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.OidcCallback(w, r, params)
 	}))
@@ -4594,27 +3964,6 @@ func (siw *ServerInterfaceWrapper) OidcLogin(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "returnTo", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4662,25 +4011,6 @@ func (siw *ServerInterfaceWrapper) RefreshSession(w http.ResponseWriter, r *http
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -4733,27 +4063,6 @@ func (siw *ServerInterfaceWrapper) ListBackupStorages(w http.ResponseWriter, r *
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4831,25 +4140,6 @@ func (siw *ServerInterfaceWrapper) CreateBackupStorage(w http.ResponseWriter, r 
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateBackupStorage(w, r, params)
 	}))
@@ -4915,25 +4205,6 @@ func (siw *ServerInterfaceWrapper) DeleteBackupStorage(w http.ResponseWriter, r 
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteBackupStorage(w, r, storage, params)
 	}))
@@ -4976,27 +4247,6 @@ func (siw *ServerInterfaceWrapper) GetBackupStorage(w http.ResponseWriter, r *ht
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5061,25 +4311,6 @@ func (siw *ServerInterfaceWrapper) ReplaceBackupStorage(w http.ResponseWriter, r
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -5148,25 +4379,6 @@ func (siw *ServerInterfaceWrapper) VerifyBackupStorage(w http.ResponseWriter, r 
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyBackupStorage(w, r, storage, params)
 	}))
@@ -5216,27 +4428,6 @@ func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.R
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5311,25 +4502,6 @@ func (siw *ServerInterfaceWrapper) CreateCluster(w http.ResponseWriter, r *http.
 		}
 
 		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -5414,25 +4586,6 @@ func (siw *ServerInterfaceWrapper) DeleteCluster(w http.ResponseWriter, r *http.
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCluster(w, r, cluster, params)
 	}))
@@ -5475,27 +4628,6 @@ func (siw *ServerInterfaceWrapper) GetCluster(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5579,25 +4711,6 @@ func (siw *ServerInterfaceWrapper) PatchCluster(w http.ResponseWriter, r *http.R
 		}
 
 		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -5685,25 +4798,6 @@ func (siw *ServerInterfaceWrapper) ReplaceCluster(w http.ResponseWriter, r *http
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceCluster(w, r, cluster, params)
 	}))
@@ -5762,27 +4856,6 @@ func (siw *ServerInterfaceWrapper) ListBackups(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5869,25 +4942,6 @@ func (siw *ServerInterfaceWrapper) CreateBackup(w http.ResponseWriter, r *http.R
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateBackup(w, r, cluster, params)
 	}))
@@ -5962,25 +5016,6 @@ func (siw *ServerInterfaceWrapper) DeleteBackup(w http.ResponseWriter, r *http.R
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteBackup(w, r, cluster, backup, params)
 	}))
@@ -6034,27 +5069,6 @@ func (siw *ServerInterfaceWrapper) GetBackup(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetBackup(w, r, cluster, backup, params)
 	}))
@@ -6097,27 +5111,6 @@ func (siw *ServerInterfaceWrapper) GetClusterBalancer(w http.ResponseWriter, r *
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6185,25 +5178,6 @@ func (siw *ServerInterfaceWrapper) ReplaceClusterBalancer(w http.ResponseWriter,
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceClusterBalancer(w, r, cluster, params)
 	}))
@@ -6246,27 +5220,6 @@ func (siw *ServerInterfaceWrapper) GetClusterConnection(w http.ResponseWriter, r
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6327,27 +5280,6 @@ func (siw *ServerInterfaceWrapper) ListDatabaseRoles(w http.ResponseWriter, r *h
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6434,25 +5366,6 @@ func (siw *ServerInterfaceWrapper) CreateDatabaseRole(w http.ResponseWriter, r *
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateDatabaseRole(w, r, cluster, params)
 	}))
@@ -6536,25 +5449,6 @@ func (siw *ServerInterfaceWrapper) DeleteDatabaseRole(w http.ResponseWriter, r *
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteDatabaseRole(w, r, cluster, database, role, params)
 	}))
@@ -6615,27 +5509,6 @@ func (siw *ServerInterfaceWrapper) GetDatabaseRole(w http.ResponseWriter, r *htt
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6721,25 +5594,6 @@ func (siw *ServerInterfaceWrapper) ReplaceDatabaseRole(w http.ResponseWriter, r 
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceDatabaseRole(w, r, cluster, database, role, params)
 	}))
@@ -6798,27 +5652,6 @@ func (siw *ServerInterfaceWrapper) ListDatabaseUsers(w http.ResponseWriter, r *h
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6905,25 +5738,6 @@ func (siw *ServerInterfaceWrapper) CreateDatabaseUser(w http.ResponseWriter, r *
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateDatabaseUser(w, r, cluster, params)
 	}))
@@ -7007,25 +5821,6 @@ func (siw *ServerInterfaceWrapper) DeleteDatabaseUser(w http.ResponseWriter, r *
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteDatabaseUser(w, r, cluster, database, username, params)
 	}))
@@ -7086,27 +5881,6 @@ func (siw *ServerInterfaceWrapper) GetDatabaseUser(w http.ResponseWriter, r *htt
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7192,25 +5966,6 @@ func (siw *ServerInterfaceWrapper) ReplaceDatabaseUser(w http.ResponseWriter, r 
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceDatabaseUser(w, r, cluster, database, username, params)
 	}))
@@ -7253,27 +6008,6 @@ func (siw *ServerInterfaceWrapper) ListClusterMembers(w http.ResponseWriter, r *
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7327,27 +6061,6 @@ func (siw *ServerInterfaceWrapper) GetClusterMember(w http.ResponseWriter, r *ht
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7435,27 +6148,6 @@ func (siw *ServerInterfaceWrapper) GetMemberLogs(w http.ResponseWriter, r *http.
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMemberLogs(w, r, cluster, member, params)
 	}))
@@ -7530,25 +6222,6 @@ func (siw *ServerInterfaceWrapper) ReplaceClusterMember(w http.ResponseWriter, r
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceClusterMember(w, r, cluster, member, params)
 	}))
@@ -7607,27 +6280,6 @@ func (siw *ServerInterfaceWrapper) GetClusterMetrics(w http.ResponseWriter, r *h
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7698,27 +6350,6 @@ func (siw *ServerInterfaceWrapper) ListClusterOperations(w http.ResponseWriter, 
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListClusterOperations(w, r, cluster, params)
 	}))
@@ -7763,27 +6394,6 @@ func (siw *ServerInterfaceWrapper) GetPITRWindow(w http.ResponseWriter, r *http.
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPITRWindow(w, r, cluster, params)
 	}))
@@ -7826,27 +6436,6 @@ func (siw *ServerInterfaceWrapper) GetClusterPlacement(w http.ResponseWriter, r 
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7911,25 +6500,6 @@ func (siw *ServerInterfaceWrapper) RaiseClusterFCV(w http.ResponseWriter, r *htt
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -7998,25 +6568,6 @@ func (siw *ServerInterfaceWrapper) RestartCluster(w http.ResponseWriter, r *http
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestartCluster(w, r, cluster, params)
 	}))
@@ -8075,27 +6626,6 @@ func (siw *ServerInterfaceWrapper) ListRestores(w http.ResponseWriter, r *http.R
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -8182,25 +6712,6 @@ func (siw *ServerInterfaceWrapper) CreateRestore(w http.ResponseWriter, r *http.
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRestore(w, r, cluster, params)
 	}))
@@ -8252,27 +6763,6 @@ func (siw *ServerInterfaceWrapper) GetRestore(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -8337,25 +6827,6 @@ func (siw *ServerInterfaceWrapper) ResumeCluster(w http.ResponseWriter, r *http.
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -8424,25 +6895,6 @@ func (siw *ServerInterfaceWrapper) RotateClusterTLS(w http.ResponseWriter, r *ht
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RotateClusterTLS(w, r, cluster, params)
 	}))
@@ -8487,27 +6939,6 @@ func (siw *ServerInterfaceWrapper) GetClusterStatus(w http.ResponseWriter, r *ht
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterStatus(w, r, cluster, params)
 	}))
@@ -8550,27 +6981,6 @@ func (siw *ServerInterfaceWrapper) ListSystemUsers(w http.ResponseWriter, r *htt
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -8644,25 +7054,6 @@ func (siw *ServerInterfaceWrapper) RotateSystemUser(w http.ResponseWriter, r *ht
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -8763,27 +7154,6 @@ func (siw *ServerInterfaceWrapper) ListEvents(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -8890,25 +7260,6 @@ func (siw *ServerInterfaceWrapper) StreamEvents(w http.ResponseWriter, r *http.R
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StreamEvents(w, r, params)
 	}))
@@ -8923,34 +7274,8 @@ func (siw *ServerInterfaceWrapper) StreamEvents(w http.ResponseWriter, r *http.R
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetHealthParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHealth(w, r, params)
+		siw.Handler.GetHealth(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8982,27 +7307,6 @@ func (siw *ServerInterfaceWrapper) GetPrometheusMetrics(w http.ResponseWriter, r
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -9046,27 +7350,6 @@ func (siw *ServerInterfaceWrapper) ListNamespaces(w http.ResponseWriter, r *http
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
 		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -9136,25 +7419,6 @@ func (siw *ServerInterfaceWrapper) CreateNamespace(w http.ResponseWriter, r *htt
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateNamespace(w, r, params)
 	}))
@@ -9212,25 +7476,6 @@ func (siw *ServerInterfaceWrapper) DeleteNamespace(w http.ResponseWriter, r *htt
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteNamespace(w, r, namespace, params)
 	}))
@@ -9264,32 +7509,8 @@ func (siw *ServerInterfaceWrapper) GetNamespace(w http.ResponseWriter, r *http.R
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetNamespaceParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetNamespace(w, r, namespace, params)
+		siw.Handler.GetNamespace(w, r, namespace)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9342,25 +7563,6 @@ func (siw *ServerInterfaceWrapper) UpdateNamespace(w http.ResponseWriter, r *htt
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -9421,25 +7623,6 @@ func (siw *ServerInterfaceWrapper) RotateNamespaceToken(w http.ResponseWriter, r
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RotateNamespaceToken(w, r, namespace, params)
 	}))
@@ -9494,25 +7677,6 @@ func (siw *ServerInterfaceWrapper) ValidateNamespace(w http.ResponseWriter, r *h
 		}
 
 		params.XKarakoramCSRF = &XKarakoramCSRF
-
-	}
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
 
 	}
 
@@ -9597,27 +7761,6 @@ func (siw *ServerInterfaceWrapper) ListOperations(w http.ResponseWriter, r *http
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListOperations(w, r, params)
 	}))
@@ -9651,32 +7794,8 @@ func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.R
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetOperationParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetOperation(w, r, operation, params)
+		siw.Handler.GetOperation(w, r, operation)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9767,27 +7886,6 @@ func (siw *ServerInterfaceWrapper) ListOrphanedVolumes(w http.ResponseWriter, r 
 		return
 	}
 
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListOrphanedVolumes(w, r, params)
 	}))
@@ -9802,8 +7900,6 @@ func (siw *ServerInterfaceWrapper) ListOrphanedVolumes(w http.ResponseWriter, r 
 // GetPermissions operation middleware
 func (siw *ServerInterfaceWrapper) GetPermissions(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -9812,32 +7908,8 @@ func (siw *ServerInterfaceWrapper) GetPermissions(w http.ResponseWriter, r *http
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetPermissionsParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetPermissions(w, r, params)
+		siw.Handler.GetPermissions(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9850,8 +7922,6 @@ func (siw *ServerInterfaceWrapper) GetPermissions(w http.ResponseWriter, r *http
 // ListProviders operation middleware
 func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -9860,32 +7930,8 @@ func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListProvidersParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListProviders(w, r, params)
+		siw.Handler.ListProviders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9917,32 +7963,8 @@ func (siw *ServerInterfaceWrapper) GetProvider(w http.ResponseWriter, r *http.Re
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetProviderParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetProvider(w, r, provider, params)
+		siw.Handler.GetProvider(w, r, provider)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9989,25 +8011,6 @@ func (siw *ServerInterfaceWrapper) CheckPermission(w http.ResponseWriter, r *htt
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckPermission(w, r, params)
 	}))
@@ -10022,8 +8025,6 @@ func (siw *ServerInterfaceWrapper) CheckPermission(w http.ResponseWriter, r *htt
 // GetRBACPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetRBACPolicy(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -10032,32 +8033,8 @@ func (siw *ServerInterfaceWrapper) GetRBACPolicy(w http.ResponseWriter, r *http.
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetRBACPolicyParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRBACPolicy(w, r, params)
+		siw.Handler.GetRBACPolicy(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10104,25 +8081,6 @@ func (siw *ServerInterfaceWrapper) ReplaceRBACPolicy(w http.ResponseWriter, r *h
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceRBACPolicy(w, r, params)
 	}))
@@ -10137,8 +8095,6 @@ func (siw *ServerInterfaceWrapper) ReplaceRBACPolicy(w http.ResponseWriter, r *h
 // GetSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
@@ -10147,32 +8103,8 @@ func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Re
 
 	r = r.WithContext(ctx)
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetSettingsParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSettings(w, r, params)
+		siw.Handler.GetSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10219,25 +8151,6 @@ func (siw *ServerInterfaceWrapper) ReplaceSettings(w http.ResponseWriter, r *htt
 
 	}
 
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceSettings(w, r, params)
 	}))
@@ -10252,34 +8165,8 @@ func (siw *ServerInterfaceWrapper) ReplaceSettings(w http.ResponseWriter, r *htt
 // GetVersion operation middleware
 func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Request) {
 
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetVersionParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "X-Request-ID" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
-		var XRequestID RequestID
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
-			return
-		}
-
-		params.XRequestID = &XRequestID
-
-	}
-
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetVersion(w, r, params)
+		siw.Handler.GetVersion(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10953,7 +8840,6 @@ func (response DeleteAccount500JSONResponse) VisitDeleteAccountResponse(w http.R
 
 type GetAccountRequestObject struct {
 	Account string `json:"account"`
-	Params  GetAccountParams
 }
 
 type GetAccountResponseObject interface {
@@ -11663,8 +9549,7 @@ func (response DeleteAPIToken500JSONResponse) VisitDeleteAPITokenResponse(w http
 }
 
 type GetAPITokenRequestObject struct {
-	Token  string `json:"token"`
-	Params GetAPITokenParams
+	Token string `json:"token"`
 }
 
 type GetAPITokenResponseObject interface {
@@ -12269,7 +10154,6 @@ func (response Logout500JSONResponse) VisitLogoutResponse(w http.ResponseWriter)
 }
 
 type GetCurrentUserRequestObject struct {
-	Params GetCurrentUserParams
 }
 
 type GetCurrentUserResponseObject interface {
@@ -18698,7 +16582,6 @@ func (response StreamEvents500JSONResponse) VisitStreamEventsResponse(w http.Res
 }
 
 type GetHealthRequestObject struct {
-	Params GetHealthParams
 }
 
 type GetHealthResponseObject interface {
@@ -19263,7 +17146,6 @@ func (response DeleteNamespace500JSONResponse) VisitDeleteNamespaceResponse(w ht
 
 type GetNamespaceRequestObject struct {
 	Namespace NamespacePath `json:"namespace"`
-	Params    GetNamespaceParams
 }
 
 type GetNamespaceResponseObject interface {
@@ -19907,7 +17789,6 @@ func (response ListOperations500JSONResponse) VisitListOperationsResponse(w http
 
 type GetOperationRequestObject struct {
 	Operation string `json:"operation"`
-	Params    GetOperationParams
 }
 
 type GetOperationResponseObject interface {
@@ -20209,7 +18090,6 @@ func (response ListOrphanedVolumes500JSONResponse) VisitListOrphanedVolumesRespo
 }
 
 type GetPermissionsRequestObject struct {
-	Params GetPermissionsParams
 }
 
 type GetPermissionsResponseObject interface {
@@ -20327,7 +18207,6 @@ func (response GetPermissions500JSONResponse) VisitGetPermissionsResponse(w http
 }
 
 type ListProvidersRequestObject struct {
-	Params ListProvidersParams
 }
 
 type ListProvidersResponseObject interface {
@@ -20446,7 +18325,6 @@ func (response ListProviders500JSONResponse) VisitListProvidersResponse(w http.R
 
 type GetProviderRequestObject struct {
 	Provider string `json:"provider"`
-	Params   GetProviderParams
 }
 
 type GetProviderResponseObject interface {
@@ -20683,7 +18561,6 @@ func (response CheckPermission500JSONResponse) VisitCheckPermissionResponse(w ht
 }
 
 type GetRBACPolicyRequestObject struct {
-	Params GetRBACPolicyParams
 }
 
 type GetRBACPolicyResponseObject interface {
@@ -20920,7 +18797,6 @@ func (response ReplaceRBACPolicy500JSONResponse) VisitReplaceRBACPolicyResponse(
 }
 
 type GetSettingsRequestObject struct {
-	Params GetSettingsParams
 }
 
 type GetSettingsResponseObject interface {
@@ -21157,7 +19033,6 @@ func (response ReplaceSettings500JSONResponse) VisitReplaceSettingsResponse(w ht
 }
 
 type GetVersionRequestObject struct {
-	Params GetVersionParams
 }
 
 type GetVersionResponseObject interface {
@@ -21664,11 +19539,10 @@ func (sh *strictHandler) DeleteAccount(w http.ResponseWriter, r *http.Request, a
 }
 
 // GetAccount operation middleware
-func (sh *strictHandler) GetAccount(w http.ResponseWriter, r *http.Request, account string, params GetAccountParams) {
+func (sh *strictHandler) GetAccount(w http.ResponseWriter, r *http.Request, account string) {
 	var request GetAccountRequestObject
 
 	request.Account = account
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetAccount(ctx, request.(GetAccountRequestObject))
@@ -21845,11 +19719,10 @@ func (sh *strictHandler) DeleteAPIToken(w http.ResponseWriter, r *http.Request, 
 }
 
 // GetAPIToken operation middleware
-func (sh *strictHandler) GetAPIToken(w http.ResponseWriter, r *http.Request, token string, params GetAPITokenParams) {
+func (sh *strictHandler) GetAPIToken(w http.ResponseWriter, r *http.Request, token string) {
 	var request GetAPITokenRequestObject
 
 	request.Token = token
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetAPIToken(ctx, request.(GetAPITokenRequestObject))
@@ -21998,10 +19871,8 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request, params L
 }
 
 // GetCurrentUser operation middleware
-func (sh *strictHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request, params GetCurrentUserParams) {
+func (sh *strictHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	var request GetCurrentUserRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetCurrentUser(ctx, request.(GetCurrentUserRequestObject))
@@ -23529,10 +21400,8 @@ func (sh *strictHandler) StreamEvents(w http.ResponseWriter, r *http.Request, pa
 }
 
 // GetHealth operation middleware
-func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request, params GetHealthParams) {
+func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	var request GetHealthRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetHealth(ctx, request.(GetHealthRequestObject))
@@ -23667,11 +21536,10 @@ func (sh *strictHandler) DeleteNamespace(w http.ResponseWriter, r *http.Request,
 }
 
 // GetNamespace operation middleware
-func (sh *strictHandler) GetNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params GetNamespaceParams) {
+func (sh *strictHandler) GetNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath) {
 	var request GetNamespaceRequestObject
 
 	request.Namespace = namespace
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetNamespace(ctx, request.(GetNamespaceRequestObject))
@@ -23839,11 +21707,10 @@ func (sh *strictHandler) ListOperations(w http.ResponseWriter, r *http.Request, 
 }
 
 // GetOperation operation middleware
-func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, operation string, params GetOperationParams) {
+func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, operation string) {
 	var request GetOperationRequestObject
 
 	request.Operation = operation
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetOperation(ctx, request.(GetOperationRequestObject))
@@ -23919,10 +21786,8 @@ func (sh *strictHandler) ListOrphanedVolumes(w http.ResponseWriter, r *http.Requ
 }
 
 // GetPermissions operation middleware
-func (sh *strictHandler) GetPermissions(w http.ResponseWriter, r *http.Request, params GetPermissionsParams) {
+func (sh *strictHandler) GetPermissions(w http.ResponseWriter, r *http.Request) {
 	var request GetPermissionsRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetPermissions(ctx, request.(GetPermissionsRequestObject))
@@ -23945,10 +21810,8 @@ func (sh *strictHandler) GetPermissions(w http.ResponseWriter, r *http.Request, 
 }
 
 // ListProviders operation middleware
-func (sh *strictHandler) ListProviders(w http.ResponseWriter, r *http.Request, params ListProvidersParams) {
+func (sh *strictHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
 	var request ListProvidersRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListProviders(ctx, request.(ListProvidersRequestObject))
@@ -23971,11 +21834,10 @@ func (sh *strictHandler) ListProviders(w http.ResponseWriter, r *http.Request, p
 }
 
 // GetProvider operation middleware
-func (sh *strictHandler) GetProvider(w http.ResponseWriter, r *http.Request, provider string, params GetProviderParams) {
+func (sh *strictHandler) GetProvider(w http.ResponseWriter, r *http.Request, provider string) {
 	var request GetProviderRequestObject
 
 	request.Provider = provider
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetProvider(ctx, request.(GetProviderRequestObject))
@@ -24031,10 +21893,8 @@ func (sh *strictHandler) CheckPermission(w http.ResponseWriter, r *http.Request,
 }
 
 // GetRBACPolicy operation middleware
-func (sh *strictHandler) GetRBACPolicy(w http.ResponseWriter, r *http.Request, params GetRBACPolicyParams) {
+func (sh *strictHandler) GetRBACPolicy(w http.ResponseWriter, r *http.Request) {
 	var request GetRBACPolicyRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetRBACPolicy(ctx, request.(GetRBACPolicyRequestObject))
@@ -24090,10 +21950,8 @@ func (sh *strictHandler) ReplaceRBACPolicy(w http.ResponseWriter, r *http.Reques
 }
 
 // GetSettings operation middleware
-func (sh *strictHandler) GetSettings(w http.ResponseWriter, r *http.Request, params GetSettingsParams) {
+func (sh *strictHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	var request GetSettingsRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetSettings(ctx, request.(GetSettingsRequestObject))
@@ -24149,10 +22007,8 @@ func (sh *strictHandler) ReplaceSettings(w http.ResponseWriter, r *http.Request,
 }
 
 // GetVersion operation middleware
-func (sh *strictHandler) GetVersion(w http.ResponseWriter, r *http.Request, params GetVersionParams) {
+func (sh *strictHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	var request GetVersionRequestObject
-
-	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetVersion(ctx, request.(GetVersionRequestObject))

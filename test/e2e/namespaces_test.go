@@ -34,7 +34,7 @@ func TestMultiNamespace(t *testing.T) {
 		t.Fatal("the test namespace must not be default")
 	}
 	var registered api.Namespace
-	response, err := s.client.GetNamespace(s.ctx, namespace, nil)
+	response, err := s.client.GetNamespace(s.ctx, namespace)
 	if err != nil {
 		t.Fatal("read namespace transport failed")
 	}
@@ -53,7 +53,7 @@ func TestMultiNamespace(t *testing.T) {
 		s.expect(&registered, 201)(s.client.CreateNamespace(s.ctx, &api.CreateNamespaceParams{}, api.NamespaceCreate{Name: namespace, ProjectId: project, Token: &token, Description: ptr("Multi-project end-to-end test")}))
 	}
 	s.poll("namespace relay ready", 15*time.Minute, func() bool {
-		s.expect(&registered)(s.client.GetNamespace(s.ctx, namespace, nil))
+		s.expect(&registered)(s.client.GetNamespace(s.ctx, namespace))
 		if registered.Phase == api.NamespacePhaseError {
 			t.Fatal("namespace entered Error")
 		}
@@ -120,7 +120,7 @@ func TestMultiNamespace(t *testing.T) {
 	s.namespaceRBAC(namespace, name, clone, cloneSpec)
 
 	var before, after api.Namespace
-	s.expect(&before)(s.client.GetNamespace(s.ctx, namespace, nil))
+	s.expect(&before)(s.client.GetNamespace(s.ctx, namespace))
 	if before.Relay.ConnectedSince == nil || !before.Relay.Connected || before.Phase != api.NamespacePhaseReady {
 		t.Fatal("relay is not connected before token rotation")
 	}
@@ -137,7 +137,7 @@ func TestMultiNamespace(t *testing.T) {
 		t.Fatal("test context expired during rotation observation")
 	case <-time.After(35 * time.Second):
 	}
-	s.expect(&after)(s.client.GetNamespace(s.ctx, namespace, nil))
+	s.expect(&after)(s.client.GetNamespace(s.ctx, namespace))
 	assertRotation(after)
 	s.expect(nil, 409)(s.client.DeleteNamespace(s.ctx, namespace, &api.DeleteNamespaceParams{}))
 }
@@ -145,7 +145,7 @@ func TestMultiNamespace(t *testing.T) {
 func (s *suite) namespaceRBAC(namespace, source, clone string, cloneSpec api.ClusterSpec) {
 	s.t.Helper()
 	var original api.RBACPolicy
-	s.expect(&original)(s.client.GetRBACPolicy(s.ctx, nil))
+	s.expect(&original)(s.client.GetRBACPolicy(s.ctx))
 	s.t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -187,7 +187,7 @@ func (s *suite) cleanupNamespace(namespace string) {
 	defer cancel()
 	accepted := false
 	for {
-		response, err := s.client.GetNamespace(ctx, namespace, nil)
+		response, err := s.client.GetNamespace(ctx, namespace)
 		if err != nil {
 			s.t.Error("namespace teardown transport failure")
 			return

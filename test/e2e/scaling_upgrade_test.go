@@ -438,7 +438,7 @@ func (s *suite) rollingRestart(name string) {
 			s.snapshot(name+"-rolling-restart-members", samples)
 		default:
 		}
-		s.expect(&operation)(s.client.GetOperation(s.ctx, operation.Id, nil))
+		s.expect(&operation)(s.client.GetOperation(s.ctx, operation.Id))
 		if operation.Phase == api.OperationPhaseFailed {
 			s.t.Fatal("rolling restart failed")
 		}

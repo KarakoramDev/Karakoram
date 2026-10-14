@@ -1849,9 +1849,6 @@ type NamespacePath = NamespaceName
 // NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 type NamespaceQuery = NamespaceName
 
-// RequestID defines model for RequestID.
-type RequestID = string
-
 // BadRequest Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
@@ -1925,9 +1922,6 @@ type ListAccountsParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAccountParams defines parameters for CreateAccount.
@@ -1944,42 +1938,24 @@ type CreateAccountParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteAccountParams defines parameters for DeleteAccount.
 type DeleteAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetAccountParams defines parameters for GetAccount.
-type GetAccountParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceAccountParams defines parameters for ReplaceAccount.
 type ReplaceAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ResetAccountPasswordParams defines parameters for ResetAccountPassword.
 type ResetAccountPasswordParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListAPITokensParams defines parameters for ListAPITokens.
@@ -1989,9 +1965,6 @@ type ListAPITokensParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAPITokenParams defines parameters for CreateAPIToken.
@@ -2008,93 +1981,54 @@ type CreateAPITokenParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteAPITokenParams defines parameters for DeleteAPIToken.
 type DeleteAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetAPITokenParams defines parameters for GetAPIToken.
-type GetAPITokenParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceAPITokenParams defines parameters for ReplaceAPIToken.
 type ReplaceAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ChangePasswordParams defines parameters for ChangePassword.
 type ChangePasswordParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // LoginParams defines parameters for Login.
 type LoginParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetCurrentUserParams defines parameters for GetCurrentUser.
-type GetCurrentUserParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // OidcCallbackParams defines parameters for OidcCallback.
 type OidcCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // OidcLoginParams defines parameters for OidcLogin.
 type OidcLoginParams struct {
 	// ReturnTo Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
 	ReturnTo *string `form:"returnTo,omitempty" json:"returnTo,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RefreshSessionParams defines parameters for RefreshSession.
 type RefreshSessionParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListBackupStoragesParams defines parameters for ListBackupStorages.
@@ -2107,9 +2041,6 @@ type ListBackupStoragesParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateBackupStorageParams defines parameters for CreateBackupStorage.
@@ -2129,9 +2060,6 @@ type CreateBackupStorageParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteBackupStorageParams defines parameters for DeleteBackupStorage.
@@ -2141,18 +2069,12 @@ type DeleteBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetBackupStorageParams defines parameters for GetBackupStorage.
 type GetBackupStorageParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceBackupStorageParams defines parameters for ReplaceBackupStorage.
@@ -2162,9 +2084,6 @@ type ReplaceBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // VerifyBackupStorageParams defines parameters for VerifyBackupStorage.
@@ -2174,9 +2093,6 @@ type VerifyBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClustersParams defines parameters for ListClusters.
@@ -2189,9 +2105,6 @@ type ListClustersParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateClusterParams defines parameters for CreateCluster.
@@ -2211,9 +2124,6 @@ type CreateClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteClusterParams defines parameters for DeleteCluster.
@@ -2226,18 +2136,12 @@ type DeleteClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterParams defines parameters for GetCluster.
 type GetClusterParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // PatchClusterParams defines parameters for PatchCluster.
@@ -2257,9 +2161,6 @@ type PatchClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
@@ -2279,9 +2180,6 @@ type ReplaceClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListBackupsParams defines parameters for ListBackups.
@@ -2294,9 +2192,6 @@ type ListBackupsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateBackupParams defines parameters for CreateBackup.
@@ -2316,9 +2211,6 @@ type CreateBackupParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteBackupParams defines parameters for DeleteBackup.
@@ -2328,27 +2220,18 @@ type DeleteBackupParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetBackupParams defines parameters for GetBackup.
 type GetBackupParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterBalancerParams defines parameters for GetClusterBalancer.
 type GetClusterBalancerParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceClusterBalancerParams defines parameters for ReplaceClusterBalancer.
@@ -2358,18 +2241,12 @@ type ReplaceClusterBalancerParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterConnectionParams defines parameters for GetClusterConnection.
 type GetClusterConnectionParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListDatabaseRolesParams defines parameters for ListDatabaseRoles.
@@ -2382,9 +2259,6 @@ type ListDatabaseRolesParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateDatabaseRoleParams defines parameters for CreateDatabaseRole.
@@ -2404,9 +2278,6 @@ type CreateDatabaseRoleParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteDatabaseRoleParams defines parameters for DeleteDatabaseRole.
@@ -2416,18 +2287,12 @@ type DeleteDatabaseRoleParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetDatabaseRoleParams defines parameters for GetDatabaseRole.
 type GetDatabaseRoleParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceDatabaseRoleParams defines parameters for ReplaceDatabaseRole.
@@ -2437,9 +2302,6 @@ type ReplaceDatabaseRoleParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListDatabaseUsersParams defines parameters for ListDatabaseUsers.
@@ -2452,9 +2314,6 @@ type ListDatabaseUsersParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateDatabaseUserParams defines parameters for CreateDatabaseUser.
@@ -2474,9 +2333,6 @@ type CreateDatabaseUserParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteDatabaseUserParams defines parameters for DeleteDatabaseUser.
@@ -2486,18 +2342,12 @@ type DeleteDatabaseUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetDatabaseUserParams defines parameters for GetDatabaseUser.
 type GetDatabaseUserParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceDatabaseUserParams defines parameters for ReplaceDatabaseUser.
@@ -2507,27 +2357,18 @@ type ReplaceDatabaseUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClusterMembersParams defines parameters for ListClusterMembers.
 type ListClusterMembersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterMemberParams defines parameters for GetClusterMember.
 type GetClusterMemberParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
@@ -2539,9 +2380,6 @@ type GetMemberLogsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetMemberLogsParamsProcess defines parameters for GetMemberLogs.
@@ -2554,9 +2392,6 @@ type ReplaceClusterMemberParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterMetricsParams defines parameters for GetClusterMetrics.
@@ -2569,9 +2404,6 @@ type GetClusterMetricsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
@@ -2585,27 +2417,18 @@ type ListClusterOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetPITRWindowParams defines parameters for GetPITRWindow.
 type GetPITRWindowParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterPlacementParams defines parameters for GetClusterPlacement.
 type GetClusterPlacementParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
@@ -2615,9 +2438,6 @@ type RaiseClusterFCVParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RestartClusterParams defines parameters for RestartCluster.
@@ -2627,9 +2447,6 @@ type RestartClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListRestoresParams defines parameters for ListRestores.
@@ -2642,9 +2459,6 @@ type ListRestoresParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateRestoreParams defines parameters for CreateRestore.
@@ -2664,18 +2478,12 @@ type CreateRestoreParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetRestoreParams defines parameters for GetRestore.
 type GetRestoreParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ResumeClusterParams defines parameters for ResumeCluster.
@@ -2685,9 +2493,6 @@ type ResumeClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
@@ -2697,27 +2502,18 @@ type RotateClusterTLSParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterStatusParams defines parameters for GetClusterStatus.
 type GetClusterStatusParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListSystemUsersParams defines parameters for ListSystemUsers.
 type ListSystemUsersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateSystemUserParams defines parameters for RotateSystemUser.
@@ -2727,9 +2523,6 @@ type RotateSystemUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListEventsParams defines parameters for ListEvents.
@@ -2756,9 +2549,6 @@ type ListEventsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListEventsParamsOrder defines parameters for ListEvents.
@@ -2792,9 +2582,6 @@ type StreamEventsParams struct {
 
 	// LastEventID SSE reconnection cursor; used when cursor is absent.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // StreamEventsParamsType defines parameters for StreamEvents.
@@ -2803,19 +2590,10 @@ type StreamEventsParamsType string
 // StreamEventsParamsResource defines parameters for StreamEvents.
 type StreamEventsParamsResource string
 
-// GetHealthParams defines parameters for GetHealth.
-type GetHealthParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
 // GetPrometheusMetricsParams defines parameters for GetPrometheusMetrics.
 type GetPrometheusMetricsParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListNamespacesParams defines parameters for ListNamespaces.
@@ -2825,9 +2603,6 @@ type ListNamespacesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateNamespaceParams defines parameters for CreateNamespace.
@@ -2844,51 +2619,30 @@ type CreateNamespaceParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteNamespaceParams defines parameters for DeleteNamespace.
 type DeleteNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetNamespaceParams defines parameters for GetNamespace.
-type GetNamespaceParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // UpdateNamespaceParams defines parameters for UpdateNamespace.
 type UpdateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateNamespaceTokenParams defines parameters for RotateNamespaceToken.
 type RotateNamespaceTokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ValidateNamespaceParams defines parameters for ValidateNamespace.
 type ValidateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListOperationsParams defines parameters for ListOperations.
@@ -2903,15 +2657,6 @@ type ListOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetOperationParams defines parameters for GetOperation.
-type GetOperationParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CancelOperationParams defines parameters for CancelOperation.
@@ -2924,72 +2669,24 @@ type CancelOperationParams struct {
 type ListOrphanedVolumesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetPermissionsParams defines parameters for GetPermissions.
-type GetPermissionsParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// ListProvidersParams defines parameters for ListProviders.
-type ListProvidersParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetProviderParams defines parameters for GetProvider.
-type GetProviderParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CheckPermissionParams defines parameters for CheckPermission.
 type CheckPermissionParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetRBACPolicyParams defines parameters for GetRBACPolicy.
-type GetRBACPolicyParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceRBACPolicyParams defines parameters for ReplaceRBACPolicy.
 type ReplaceRBACPolicyParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetSettingsParams defines parameters for GetSettings.
-type GetSettingsParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceSettingsParams defines parameters for ReplaceSettings.
 type ReplaceSettingsParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
-
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
-}
-
-// GetVersionParams defines parameters for GetVersion.
-type GetVersionParams struct {
-	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
-	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
@@ -3279,7 +2976,7 @@ type ClientInterface interface {
 	DeleteAccount(ctx context.Context, account string, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAccount request
-	GetAccount(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAccount(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceAccountWithBody request with any body
 	ReplaceAccountWithBody(ctx context.Context, account string, params *ReplaceAccountParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3303,7 +3000,7 @@ type ClientInterface interface {
 	DeleteAPIToken(ctx context.Context, token string, params *DeleteAPITokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAPIToken request
-	GetAPIToken(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAPIToken(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceAPITokenWithBody request with any body
 	ReplaceAPITokenWithBody(ctx context.Context, token string, params *ReplaceAPITokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3324,7 +3021,7 @@ type ClientInterface interface {
 	Logout(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentUser request
-	GetCurrentUser(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetCurrentUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OidcCallback request
 	OidcCallback(ctx context.Context, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3509,7 +3206,7 @@ type ClientInterface interface {
 	StreamEvents(ctx context.Context, params *StreamEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth request
-	GetHealth(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPrometheusMetrics request
 	GetPrometheusMetrics(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3526,7 +3223,7 @@ type ClientInterface interface {
 	DeleteNamespace(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNamespace request
-	GetNamespace(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetNamespace(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateNamespaceWithBody request with any body
 	UpdateNamespaceWithBody(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3548,7 +3245,7 @@ type ClientInterface interface {
 	ListOperations(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOperation request
-	GetOperation(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelOperation request
 	CancelOperation(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3557,13 +3254,13 @@ type ClientInterface interface {
 	ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPermissions request
-	GetPermissions(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetPermissions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProviders request
-	ListProviders(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetProvider request
-	GetProvider(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetProvider(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CheckPermissionWithBody request with any body
 	CheckPermissionWithBody(ctx context.Context, params *CheckPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3571,7 +3268,7 @@ type ClientInterface interface {
 	CheckPermission(ctx context.Context, params *CheckPermissionParams, body CheckPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRBACPolicy request
-	GetRBACPolicy(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetRBACPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceRBACPolicyWithBody request with any body
 	ReplaceRBACPolicyWithBody(ctx context.Context, params *ReplaceRBACPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3579,7 +3276,7 @@ type ClientInterface interface {
 	ReplaceRBACPolicy(ctx context.Context, params *ReplaceRBACPolicyParams, body ReplaceRBACPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSettings request
-	GetSettings(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceSettingsWithBody request with any body
 	ReplaceSettingsWithBody(ctx context.Context, params *ReplaceSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3587,7 +3284,7 @@ type ClientInterface interface {
 	ReplaceSettings(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVersion request
-	GetVersion(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3638,8 +3335,8 @@ func (c *Client) DeleteAccount(ctx context.Context, account string, params *Dele
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAccount(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAccountRequest(c.Server, account, params)
+func (c *Client) GetAccount(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountRequest(c.Server, account)
 	if err != nil {
 		return nil, err
 	}
@@ -3746,8 +3443,8 @@ func (c *Client) DeleteAPIToken(ctx context.Context, token string, params *Delet
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAPIToken(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAPITokenRequest(c.Server, token, params)
+func (c *Client) GetAPIToken(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAPITokenRequest(c.Server, token)
 	if err != nil {
 		return nil, err
 	}
@@ -3842,8 +3539,8 @@ func (c *Client) Logout(ctx context.Context, params *LogoutParams, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetCurrentUser(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetCurrentUserRequest(c.Server, params)
+func (c *Client) GetCurrentUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCurrentUserRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4634,8 +4331,8 @@ func (c *Client) StreamEvents(ctx context.Context, params *StreamEventsParams, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHealth(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetHealthRequest(c.Server, params)
+func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHealthRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4706,8 +4403,8 @@ func (c *Client) DeleteNamespace(ctx context.Context, namespace NamespacePath, p
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetNamespace(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetNamespaceRequest(c.Server, namespace, params)
+func (c *Client) GetNamespace(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNamespaceRequest(c.Server, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -4802,8 +4499,8 @@ func (c *Client) ListOperations(ctx context.Context, params *ListOperationsParam
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetOperation(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOperationRequest(c.Server, operation, params)
+func (c *Client) GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOperationRequest(c.Server, operation)
 	if err != nil {
 		return nil, err
 	}
@@ -4838,8 +4535,8 @@ func (c *Client) ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVo
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetPermissions(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetPermissionsRequest(c.Server, params)
+func (c *Client) GetPermissions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPermissionsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4850,8 +4547,8 @@ func (c *Client) GetPermissions(ctx context.Context, params *GetPermissionsParam
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListProviders(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListProvidersRequest(c.Server, params)
+func (c *Client) ListProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListProvidersRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4862,8 +4559,8 @@ func (c *Client) ListProviders(ctx context.Context, params *ListProvidersParams,
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetProvider(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetProviderRequest(c.Server, provider, params)
+func (c *Client) GetProvider(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProviderRequest(c.Server, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -4898,8 +4595,8 @@ func (c *Client) CheckPermission(ctx context.Context, params *CheckPermissionPar
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetRBACPolicy(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetRBACPolicyRequest(c.Server, params)
+func (c *Client) GetRBACPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRBACPolicyRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4934,8 +4631,8 @@ func (c *Client) ReplaceRBACPolicy(ctx context.Context, params *ReplaceRBACPolic
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSettings(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSettingsRequest(c.Server, params)
+func (c *Client) GetSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSettingsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4970,8 +4667,8 @@ func (c *Client) ReplaceSettings(ctx context.Context, params *ReplaceSettingsPar
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetVersion(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVersionRequest(c.Server, params)
+func (c *Client) GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -5044,21 +4741,6 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -5123,17 +4805,6 @@ func NewCreateAccountRequestWithBody(server string, params *CreateAccountParams,
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -5183,24 +4854,13 @@ func NewDeleteAccountRequest(server string, account string, params *DeleteAccoun
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetAccountRequest generates requests for GetAccount
-func NewGetAccountRequest(server string, account string, params *GetAccountParams) (*http.Request, error) {
+func NewGetAccountRequest(server string, account string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5228,21 +4888,6 @@ func NewGetAccountRequest(server string, account string, params *GetAccountParam
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -5305,17 +4950,6 @@ func NewReplaceAccountRequestWithBody(server string, account string, params *Rep
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -5376,17 +5010,6 @@ func NewResetAccountPasswordRequestWithBody(server string, account string, param
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -5456,21 +5079,6 @@ func NewListAPITokensRequest(server string, params *ListAPITokensParams) (*http.
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -5535,17 +5143,6 @@ func NewCreateAPITokenRequestWithBody(server string, params *CreateAPITokenParam
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -5595,24 +5192,13 @@ func NewDeleteAPITokenRequest(server string, token string, params *DeleteAPIToke
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetAPITokenRequest generates requests for GetAPIToken
-func NewGetAPITokenRequest(server string, token string, params *GetAPITokenParams) (*http.Request, error) {
+func NewGetAPITokenRequest(server string, token string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5640,21 +5226,6 @@ func NewGetAPITokenRequest(server string, token string, params *GetAPITokenParam
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -5717,17 +5288,6 @@ func NewReplaceAPITokenRequestWithBody(server string, token string, params *Repl
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -5781,17 +5341,6 @@ func NewChangePasswordRequestWithBody(server string, params *ChangePasswordParam
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -5849,17 +5398,6 @@ func NewLoginRequestWithBody(server string, params *LoginParams, contentType str
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -5902,24 +5440,13 @@ func NewLogoutRequest(server string, params *LogoutParams) (*http.Request, error
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetCurrentUserRequest generates requests for GetCurrentUser
-func NewGetCurrentUserRequest(server string, params *GetCurrentUserParams) (*http.Request, error) {
+func NewGetCurrentUserRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5940,21 +5467,6 @@ func NewGetCurrentUserRequest(server string, params *GetCurrentUserParams) (*htt
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -6014,21 +5526,6 @@ func NewOidcCallbackRequest(server string, params *OidcCallbackParams) (*http.Re
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -6078,21 +5575,6 @@ func NewOidcLoginRequest(server string, params *OidcLoginParams) (*http.Request,
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -6131,17 +5613,6 @@ func NewRefreshSessionRequest(server string, params *RefreshSessionParams) (*htt
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -6225,21 +5696,6 @@ func NewListBackupStoragesRequest(server string, params *ListBackupStoragesParam
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -6328,17 +5784,6 @@ func NewCreateBackupStorageRequestWithBody(server string, params *CreateBackupSt
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -6410,17 +5855,6 @@ func NewDeleteBackupStorageRequest(server string, storage string, params *Delete
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -6477,21 +5911,6 @@ func NewGetBackupStorageRequest(server string, storage string, params *GetBackup
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -6576,17 +5995,6 @@ func NewReplaceBackupStorageRequestWithBody(server string, storage string, param
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -6656,17 +6064,6 @@ func NewVerifyBackupStorageRequest(server string, storage string, params *Verify
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -6750,21 +6147,6 @@ func NewListClustersRequest(server string, params *ListClustersParams) (*http.Re
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -6851,17 +6233,6 @@ func NewCreateClusterRequestWithBody(server string, params *CreateClusterParams,
 			}
 
 			req.Header.Set("Idempotency-Key", headerParam1)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
 		}
 
 	}
@@ -6967,17 +6338,6 @@ func NewDeleteClusterRequest(server string, cluster ClusterPath, params *DeleteC
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -7034,21 +6394,6 @@ func NewGetClusterRequest(server string, cluster ClusterPath, params *GetCluster
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -7142,17 +6487,6 @@ func NewPatchClusterRequestWithBody(server string, cluster ClusterPath, params *
 			}
 
 			req.Header.Set("Idempotency-Key", headerParam1)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
 		}
 
 	}
@@ -7250,17 +6584,6 @@ func NewReplaceClusterRequestWithBody(server string, cluster ClusterPath, params
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -7349,21 +6672,6 @@ func NewListBackupsRequest(server string, cluster ClusterPath, params *ListBacku
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -7459,17 +6767,6 @@ func NewCreateBackupRequestWithBody(server string, cluster ClusterPath, params *
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -7548,17 +6845,6 @@ func NewDeleteBackupRequest(server string, cluster ClusterPath, backup string, p
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -7624,21 +6910,6 @@ func NewGetBackupRequest(server string, cluster ClusterPath, backup string, para
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -7693,21 +6964,6 @@ func NewGetClusterBalancerRequest(server string, cluster ClusterPath, params *Ge
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -7792,17 +7048,6 @@ func NewReplaceClusterBalancerRequestWithBody(server string, cluster ClusterPath
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -7859,21 +7104,6 @@ func NewGetClusterConnectionRequest(server string, cluster ClusterPath, params *
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -7962,21 +7192,6 @@ func NewListDatabaseRolesRequest(server string, cluster ClusterPath, params *Lis
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -8072,17 +7287,6 @@ func NewCreateDatabaseRoleRequestWithBody(server string, cluster ClusterPath, pa
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -8168,17 +7372,6 @@ func NewDeleteDatabaseRoleRequest(server string, cluster ClusterPath, database s
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -8249,21 +7442,6 @@ func NewGetDatabaseRoleRequest(server string, cluster ClusterPath, database stri
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -8362,17 +7540,6 @@ func NewReplaceDatabaseRoleRequestWithBody(server string, cluster ClusterPath, d
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -8461,21 +7628,6 @@ func NewListDatabaseUsersRequest(server string, cluster ClusterPath, params *Lis
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -8571,17 +7723,6 @@ func NewCreateDatabaseUserRequestWithBody(server string, cluster ClusterPath, pa
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -8667,17 +7808,6 @@ func NewDeleteDatabaseUserRequest(server string, cluster ClusterPath, database s
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -8748,21 +7878,6 @@ func NewGetDatabaseUserRequest(server string, cluster ClusterPath, database stri
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -8861,17 +7976,6 @@ func NewReplaceDatabaseUserRequestWithBody(server string, cluster ClusterPath, d
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -8928,21 +8032,6 @@ func NewListClusterMembersRequest(server string, cluster ClusterPath, params *Li
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -9006,21 +8095,6 @@ func NewGetClusterMemberRequest(server string, cluster ClusterPath, member strin
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -9150,21 +8224,6 @@ func NewGetMemberLogsRequest(server string, cluster ClusterPath, member string, 
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -9239,17 +8298,6 @@ func NewReplaceClusterMemberRequest(server string, cluster ClusterPath, member s
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -9340,21 +8388,6 @@ func NewGetClusterMetricsRequest(server string, cluster ClusterPath, params *Get
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -9461,21 +8494,6 @@ func NewListClusterOperationsRequest(server string, cluster ClusterPath, params 
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -9532,21 +8550,6 @@ func NewGetPITRWindowRequest(server string, cluster ClusterPath, params *GetPITR
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -9601,21 +8604,6 @@ func NewGetClusterPlacementRequest(server string, cluster ClusterPath, params *G
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -9700,17 +8688,6 @@ func NewRaiseClusterFCVRequestWithBody(server string, cluster ClusterPath, param
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -9780,17 +8757,6 @@ func NewRestartClusterRequest(server string, cluster ClusterPath, params *Restar
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -9881,21 +8847,6 @@ func NewListRestoresRequest(server string, cluster ClusterPath, params *ListRest
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -9991,17 +8942,6 @@ func NewCreateRestoreRequestWithBody(server string, cluster ClusterPath, params 
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -10065,21 +9005,6 @@ func NewGetRestoreRequest(server string, cluster ClusterPath, restore string, pa
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -10149,17 +9074,6 @@ func NewResumeClusterRequest(server string, cluster ClusterPath, params *ResumeC
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -10233,17 +9147,6 @@ func NewRotateClusterTLSRequest(server string, cluster ClusterPath, params *Rota
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -10302,21 +9205,6 @@ func NewGetClusterStatusRequest(server string, cluster ClusterPath, params *GetC
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -10371,21 +9259,6 @@ func NewListSystemUsersRequest(server string, cluster ClusterPath, params *ListS
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -10462,17 +9335,6 @@ func NewRotateSystemUserRequest(server string, cluster ClusterPath, user string,
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -10654,21 +9516,6 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -10827,24 +9674,13 @@ func NewStreamEventsRequest(server string, params *StreamEventsParams) (*http.Re
 			req.Header.Set("Last-Event-ID", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetHealthRequest generates requests for GetHealth
-func NewGetHealthRequest(server string, params *GetHealthParams) (*http.Request, error) {
+func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10865,21 +9701,6 @@ func NewGetHealthRequest(server string, params *GetHealthParams) (*http.Request,
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -10929,21 +9750,6 @@ func NewGetPrometheusMetricsRequest(server string, params *GetPrometheusMetricsP
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -11011,21 +9817,6 @@ func NewListNamespacesRequest(server string, params *ListNamespacesParams) (*htt
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
@@ -11090,17 +9881,6 @@ func NewCreateNamespaceRequestWithBody(server string, params *CreateNamespacePar
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam2 string
-
-			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam2)
-		}
-
 	}
 
 	return req, nil
@@ -11150,24 +9930,13 @@ func NewDeleteNamespaceRequest(server string, namespace NamespacePath, params *D
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetNamespaceRequest generates requests for GetNamespace
-func NewGetNamespaceRequest(server string, namespace NamespacePath, params *GetNamespaceParams) (*http.Request, error) {
+func NewGetNamespaceRequest(server string, namespace NamespacePath) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11195,21 +9964,6 @@ func NewGetNamespaceRequest(server string, namespace NamespacePath, params *GetN
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -11270,17 +10024,6 @@ func NewUpdateNamespaceRequestWithBody(server string, namespace NamespacePath, p
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -11345,17 +10088,6 @@ func NewRotateNamespaceTokenRequestWithBody(server string, namespace NamespacePa
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
@@ -11403,17 +10135,6 @@ func NewValidateNamespaceRequest(server string, namespace NamespacePath, params 
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
-		}
-
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -11558,26 +10279,11 @@ func NewListOperationsRequest(server string, params *ListOperationsParams) (*htt
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
 // NewGetOperationRequest generates requests for GetOperation
-func NewGetOperationRequest(server string, operation string, params *GetOperationParams) (*http.Request, error) {
+func NewGetOperationRequest(server string, operation string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11605,21 +10311,6 @@ func NewGetOperationRequest(server string, operation string, params *GetOperatio
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -11720,26 +10411,11 @@ func NewListOrphanedVolumesRequest(server string, params *ListOrphanedVolumesPar
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
 // NewGetPermissionsRequest generates requests for GetPermissions
-func NewGetPermissionsRequest(server string, params *GetPermissionsParams) (*http.Request, error) {
+func NewGetPermissionsRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11762,26 +10438,11 @@ func NewGetPermissionsRequest(server string, params *GetPermissionsParams) (*htt
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
 // NewListProvidersRequest generates requests for ListProviders
-func NewListProvidersRequest(server string, params *ListProvidersParams) (*http.Request, error) {
+func NewListProvidersRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11804,26 +10465,11 @@ func NewListProvidersRequest(server string, params *ListProvidersParams) (*http.
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
 // NewGetProviderRequest generates requests for GetProvider
-func NewGetProviderRequest(server string, provider string, params *GetProviderParams) (*http.Request, error) {
+func NewGetProviderRequest(server string, provider string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11851,21 +10497,6 @@ func NewGetProviderRequest(server string, provider string, params *GetProviderPa
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -11921,24 +10552,13 @@ func NewCheckPermissionRequestWithBody(server string, params *CheckPermissionPar
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetRBACPolicyRequest generates requests for GetRBACPolicy
-func NewGetRBACPolicyRequest(server string, params *GetRBACPolicyParams) (*http.Request, error) {
+func NewGetRBACPolicyRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11959,21 +10579,6 @@ func NewGetRBACPolicyRequest(server string, params *GetRBACPolicyParams) (*http.
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -12029,24 +10634,13 @@ func NewReplaceRBACPolicyRequestWithBody(server string, params *ReplaceRBACPolic
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetSettingsRequest generates requests for GetSettings
-func NewGetSettingsRequest(server string, params *GetSettingsParams) (*http.Request, error) {
+func NewGetSettingsRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -12067,21 +10661,6 @@ func NewGetSettingsRequest(server string, params *GetSettingsParams) (*http.Requ
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -12137,24 +10716,13 @@ func NewReplaceSettingsRequestWithBody(server string, params *ReplaceSettingsPar
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
-		if params.XRequestID != nil {
-			var headerParam1 string
-
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam1)
-		}
-
 	}
 
 	return req, nil
 }
 
 // NewGetVersionRequest generates requests for GetVersion
-func NewGetVersionRequest(server string, params *GetVersionParams) (*http.Request, error) {
+func NewGetVersionRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -12175,21 +10743,6 @@ func NewGetVersionRequest(server string, params *GetVersionParams) (*http.Reques
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-
-		if params.XRequestID != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Request-ID", headerParam0)
-		}
-
 	}
 
 	return req, nil
@@ -12250,7 +10803,7 @@ type ClientWithResponsesInterface interface {
 	DeleteAccountWithResponse(ctx context.Context, account string, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
 
 	// GetAccountWithResponse request
-	GetAccountWithResponse(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*GetAccountResponse, error)
+	GetAccountWithResponse(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*GetAccountResponse, error)
 
 	// ReplaceAccountWithBodyWithResponse request with any body
 	ReplaceAccountWithBodyWithResponse(ctx context.Context, account string, params *ReplaceAccountParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceAccountResponse, error)
@@ -12274,7 +10827,7 @@ type ClientWithResponsesInterface interface {
 	DeleteAPITokenWithResponse(ctx context.Context, token string, params *DeleteAPITokenParams, reqEditors ...RequestEditorFn) (*DeleteAPITokenResponse, error)
 
 	// GetAPITokenWithResponse request
-	GetAPITokenWithResponse(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error)
+	GetAPITokenWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error)
 
 	// ReplaceAPITokenWithBodyWithResponse request with any body
 	ReplaceAPITokenWithBodyWithResponse(ctx context.Context, token string, params *ReplaceAPITokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceAPITokenResponse, error)
@@ -12295,7 +10848,7 @@ type ClientWithResponsesInterface interface {
 	LogoutWithResponse(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
 	// GetCurrentUserWithResponse request
-	GetCurrentUserWithResponse(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error)
+	GetCurrentUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error)
 
 	// OidcCallbackWithResponse request
 	OidcCallbackWithResponse(ctx context.Context, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error)
@@ -12480,7 +11033,7 @@ type ClientWithResponsesInterface interface {
 	StreamEventsWithResponse(ctx context.Context, params *StreamEventsParams, reqEditors ...RequestEditorFn) (*StreamEventsResponse, error)
 
 	// GetHealthWithResponse request
-	GetHealthWithResponse(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
 	// GetPrometheusMetricsWithResponse request
 	GetPrometheusMetricsWithResponse(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*GetPrometheusMetricsResponse, error)
@@ -12497,7 +11050,7 @@ type ClientWithResponsesInterface interface {
 	DeleteNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*DeleteNamespaceResponse, error)
 
 	// GetNamespaceWithResponse request
-	GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error)
+	GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error)
 
 	// UpdateNamespaceWithBodyWithResponse request with any body
 	UpdateNamespaceWithBodyWithResponse(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateNamespaceResponse, error)
@@ -12519,7 +11072,7 @@ type ClientWithResponsesInterface interface {
 	ListOperationsWithResponse(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*ListOperationsResponse, error)
 
 	// GetOperationWithResponse request
-	GetOperationWithResponse(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
+	GetOperationWithResponse(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
 
 	// CancelOperationWithResponse request
 	CancelOperationWithResponse(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*CancelOperationResponse, error)
@@ -12528,13 +11081,13 @@ type ClientWithResponsesInterface interface {
 	ListOrphanedVolumesWithResponse(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error)
 
 	// GetPermissionsWithResponse request
-	GetPermissionsWithResponse(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error)
+	GetPermissionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error)
 
 	// ListProvidersWithResponse request
-	ListProvidersWithResponse(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error)
+	ListProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error)
 
 	// GetProviderWithResponse request
-	GetProviderWithResponse(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*GetProviderResponse, error)
+	GetProviderWithResponse(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*GetProviderResponse, error)
 
 	// CheckPermissionWithBodyWithResponse request with any body
 	CheckPermissionWithBodyWithResponse(ctx context.Context, params *CheckPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CheckPermissionResponse, error)
@@ -12542,7 +11095,7 @@ type ClientWithResponsesInterface interface {
 	CheckPermissionWithResponse(ctx context.Context, params *CheckPermissionParams, body CheckPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*CheckPermissionResponse, error)
 
 	// GetRBACPolicyWithResponse request
-	GetRBACPolicyWithResponse(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error)
+	GetRBACPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error)
 
 	// ReplaceRBACPolicyWithBodyWithResponse request with any body
 	ReplaceRBACPolicyWithBodyWithResponse(ctx context.Context, params *ReplaceRBACPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRBACPolicyResponse, error)
@@ -12550,7 +11103,7 @@ type ClientWithResponsesInterface interface {
 	ReplaceRBACPolicyWithResponse(ctx context.Context, params *ReplaceRBACPolicyParams, body ReplaceRBACPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRBACPolicyResponse, error)
 
 	// GetSettingsWithResponse request
-	GetSettingsWithResponse(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error)
+	GetSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error)
 
 	// ReplaceSettingsWithBodyWithResponse request with any body
 	ReplaceSettingsWithBodyWithResponse(ctx context.Context, params *ReplaceSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceSettingsResponse, error)
@@ -12558,7 +11111,7 @@ type ClientWithResponsesInterface interface {
 	ReplaceSettingsWithResponse(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceSettingsResponse, error)
 
 	// GetVersionWithResponse request
-	GetVersionWithResponse(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*GetVersionResponse, error)
+	GetVersionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVersionResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -15364,8 +13917,8 @@ func (c *ClientWithResponses) DeleteAccountWithResponse(ctx context.Context, acc
 }
 
 // GetAccountWithResponse request returning *GetAccountResponse
-func (c *ClientWithResponses) GetAccountWithResponse(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*GetAccountResponse, error) {
-	rsp, err := c.GetAccount(ctx, account, params, reqEditors...)
+func (c *ClientWithResponses) GetAccountWithResponse(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*GetAccountResponse, error) {
+	rsp, err := c.GetAccount(ctx, account, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15442,8 +13995,8 @@ func (c *ClientWithResponses) DeleteAPITokenWithResponse(ctx context.Context, to
 }
 
 // GetAPITokenWithResponse request returning *GetAPITokenResponse
-func (c *ClientWithResponses) GetAPITokenWithResponse(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error) {
-	rsp, err := c.GetAPIToken(ctx, token, params, reqEditors...)
+func (c *ClientWithResponses) GetAPITokenWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error) {
+	rsp, err := c.GetAPIToken(ctx, token, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15511,8 +14064,8 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, params *Lo
 }
 
 // GetCurrentUserWithResponse request returning *GetCurrentUserResponse
-func (c *ClientWithResponses) GetCurrentUserWithResponse(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error) {
-	rsp, err := c.GetCurrentUser(ctx, params, reqEditors...)
+func (c *ClientWithResponses) GetCurrentUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error) {
+	rsp, err := c.GetCurrentUser(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16092,8 +14645,8 @@ func (c *ClientWithResponses) StreamEventsWithResponse(ctx context.Context, para
 }
 
 // GetHealthWithResponse request returning *GetHealthResponse
-func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
-	rsp, err := c.GetHealth(ctx, params, reqEditors...)
+func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
+	rsp, err := c.GetHealth(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16145,8 +14698,8 @@ func (c *ClientWithResponses) DeleteNamespaceWithResponse(ctx context.Context, n
 }
 
 // GetNamespaceWithResponse request returning *GetNamespaceResponse
-func (c *ClientWithResponses) GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error) {
-	rsp, err := c.GetNamespace(ctx, namespace, params, reqEditors...)
+func (c *ClientWithResponses) GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error) {
+	rsp, err := c.GetNamespace(ctx, namespace, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16215,8 +14768,8 @@ func (c *ClientWithResponses) ListOperationsWithResponse(ctx context.Context, pa
 }
 
 // GetOperationWithResponse request returning *GetOperationResponse
-func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*GetOperationResponse, error) {
-	rsp, err := c.GetOperation(ctx, operation, params, reqEditors...)
+func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*GetOperationResponse, error) {
+	rsp, err := c.GetOperation(ctx, operation, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16242,8 +14795,8 @@ func (c *ClientWithResponses) ListOrphanedVolumesWithResponse(ctx context.Contex
 }
 
 // GetPermissionsWithResponse request returning *GetPermissionsResponse
-func (c *ClientWithResponses) GetPermissionsWithResponse(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error) {
-	rsp, err := c.GetPermissions(ctx, params, reqEditors...)
+func (c *ClientWithResponses) GetPermissionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error) {
+	rsp, err := c.GetPermissions(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16251,8 +14804,8 @@ func (c *ClientWithResponses) GetPermissionsWithResponse(ctx context.Context, pa
 }
 
 // ListProvidersWithResponse request returning *ListProvidersResponse
-func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error) {
-	rsp, err := c.ListProviders(ctx, params, reqEditors...)
+func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error) {
+	rsp, err := c.ListProviders(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16260,8 +14813,8 @@ func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, par
 }
 
 // GetProviderWithResponse request returning *GetProviderResponse
-func (c *ClientWithResponses) GetProviderWithResponse(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*GetProviderResponse, error) {
-	rsp, err := c.GetProvider(ctx, provider, params, reqEditors...)
+func (c *ClientWithResponses) GetProviderWithResponse(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*GetProviderResponse, error) {
+	rsp, err := c.GetProvider(ctx, provider, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16286,8 +14839,8 @@ func (c *ClientWithResponses) CheckPermissionWithResponse(ctx context.Context, p
 }
 
 // GetRBACPolicyWithResponse request returning *GetRBACPolicyResponse
-func (c *ClientWithResponses) GetRBACPolicyWithResponse(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error) {
-	rsp, err := c.GetRBACPolicy(ctx, params, reqEditors...)
+func (c *ClientWithResponses) GetRBACPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error) {
+	rsp, err := c.GetRBACPolicy(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16312,8 +14865,8 @@ func (c *ClientWithResponses) ReplaceRBACPolicyWithResponse(ctx context.Context,
 }
 
 // GetSettingsWithResponse request returning *GetSettingsResponse
-func (c *ClientWithResponses) GetSettingsWithResponse(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error) {
-	rsp, err := c.GetSettings(ctx, params, reqEditors...)
+func (c *ClientWithResponses) GetSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error) {
+	rsp, err := c.GetSettings(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16338,8 +14891,8 @@ func (c *ClientWithResponses) ReplaceSettingsWithResponse(ctx context.Context, p
 }
 
 // GetVersionWithResponse request returning *GetVersionResponse
-func (c *ClientWithResponses) GetVersionWithResponse(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*GetVersionResponse, error) {
-	rsp, err := c.GetVersion(ctx, params, reqEditors...)
+func (c *ClientWithResponses) GetVersionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVersionResponse, error) {
+	rsp, err := c.GetVersion(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

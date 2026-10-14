@@ -27,7 +27,7 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.ListNamespaces(ctx, &p)
 	case "getNamespace":
-		return c.GetNamespace(ctx, args[0], nil)
+		return c.GetNamespace(ctx, args[0])
 	case "createNamespace":
 		return c.CreateNamespaceWithBody(ctx, nil, "application/json", bytes.NewReader(body))
 	case "updateNamespace":
@@ -141,9 +141,9 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.DeleteDatabaseUser(ctx, args[0], args[1], args[2], &p)
 	case "getAPIToken":
-		return c.GetAPIToken(ctx, args[0], nil)
+		return c.GetAPIToken(ctx, args[0])
 	case "getAccount":
-		return c.GetAccount(ctx, args[0], nil)
+		return c.GetAccount(ctx, args[0])
 	case "getBackup":
 		var p client.GetBackupParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -199,7 +199,7 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.GetClusterStatus(ctx, args[0], &p)
 	case "getCurrentUser":
-		return c.GetCurrentUser(ctx, nil)
+		return c.GetCurrentUser(ctx)
 	case "getDatabaseRole":
 		var p client.GetDatabaseRoleParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -213,7 +213,7 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.GetDatabaseUser(ctx, args[0], args[1], args[2], &p)
 	case "getHealth":
-		return root.GetHealth(ctx, nil)
+		return root.GetHealth(ctx)
 	case "getOpenAPISpec":
 		return c.GetOpenAPISpec(ctx)
 	case "getMemberLogs":
@@ -223,7 +223,7 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.GetMemberLogs(ctx, args[0], args[1], &p)
 	case "getOperation":
-		return c.GetOperation(ctx, args[0], nil)
+		return c.GetOperation(ctx, args[0])
 	case "cancelOperation":
 		var p client.CancelOperationParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -237,7 +237,7 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.GetPITRWindow(ctx, args[0], &p)
 	case "getPermissions":
-		return c.GetPermissions(ctx, nil)
+		return c.GetPermissions(ctx)
 	case "getPrometheusMetrics":
 		var p client.GetPrometheusMetricsParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -245,9 +245,9 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return root.GetPrometheusMetrics(ctx, &p)
 	case "getProvider":
-		return c.GetProvider(ctx, args[0], nil)
+		return c.GetProvider(ctx, args[0])
 	case "getRBACPolicy":
-		return c.GetRBACPolicy(ctx, nil)
+		return c.GetRBACPolicy(ctx)
 	case "getRestore":
 		var p client.GetRestoreParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -255,9 +255,9 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.GetRestore(ctx, args[0], args[1], &p)
 	case "getSettings":
-		return c.GetSettings(ctx, nil)
+		return c.GetSettings(ctx)
 	case "getVersion":
-		return c.GetVersion(ctx, nil)
+		return c.GetVersion(ctx)
 	case "listAPITokens":
 		var p client.ListAPITokensParams
 		if err = json.Unmarshal(q, &p); err != nil {
@@ -331,7 +331,7 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.ListOperations(ctx, &p)
 	case "listProviders":
-		return c.ListProviders(ctx, nil)
+		return c.ListProviders(ctx)
 	case "listRestores":
 		var p client.ListRestoresParams
 		if err = json.Unmarshal(q, &p); err != nil {

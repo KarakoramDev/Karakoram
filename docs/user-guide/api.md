@@ -180,6 +180,7 @@ Generated Go create/PUT bodies use `ClusterInputSpec` and pointer-valued optiona
 Supply the operation's declared `Content-Type`: normally `application/json`; cluster PATCH declares `application/merge-patch+json`. The current CLI and UI send that merge-patch media type; for older callers the server also interprets `application/json` on cluster PATCH as the same merge patch. Missing or unsupported media types on requests with bodies return **415** `unsupported_media_type`. Bodies exceeding **2 MiB**, including chunked bodies, return **413** `payload_too_large`. A known route with an unsupported method returns **405** `method_not_allowed` with an `Allow` header; an unknown API route stays **404**.
 
 Every API response echoes **`X-Request-ID`**. You may supply an identifier of 1–128 characters from `[A-Za-z0-9._:-]`; an absent, invalid or repeated header is replaced with a generated ID. Include this ID when reporting an error: it also appears as `request_id` in the request log. Do not include credentials or other secrets in identifiers.
+This is an optional transport header, not a generated operation parameter. Go clients can set it with `client.WithRequestEditorFn`; ordinary calls do not need an extra params argument solely for request correlation.
 
 Each Operation exposes its initiating `actor`. Desired-state writes persist attribution with the cluster generation so subsequent reconciliation and resulting operations/events retain that generation's actor. Local actors use persisted account names; OIDC actors add `(oidc: issuerURL)` from the verified account issuer. Bearer actors identify owner plus token name and ID, never its secret. Autonomous work uses system actors such as `reconciler`, `scheduler`, `system:startup` or `system` (orphan-volume janitor). See [audit attribution](../security.md#audit-attribution-and-durability).
 
@@ -360,7 +361,7 @@ func listAndWait(ctx context.Context, c *client.ClientWithResponses, operationID
     ticker := time.NewTicker(time.Second)
     defer ticker.Stop()
     for {
-        response, err := c.GetOperationWithResponse(ctx, operationID, nil)
+        response, err := c.GetOperationWithResponse(ctx, operationID)
         if err != nil {
             return err
         }

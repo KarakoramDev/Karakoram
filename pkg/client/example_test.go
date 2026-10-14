@@ -52,7 +52,7 @@ func listAndWait(ctx context.Context, c *client.ClientWithResponses, operationID
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		response, err := c.GetOperationWithResponse(ctx, operationID, nil)
+		response, err := c.GetOperationWithResponse(ctx, operationID)
 		if err != nil {
 			return err
 		}

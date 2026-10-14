@@ -248,7 +248,7 @@ func (s *suite) poll(label string, timeout time.Duration, check func() bool) {
 
 func (s *suite) provider() api.Provider {
 	var p api.Provider
-	s.expect(&p)(s.client.GetProvider(s.ctx, "psmdb", nil))
+	s.expect(&p)(s.client.GetProvider(s.ctx, "psmdb"))
 	return p
 }
 func (s *suite) version(major string) string {
@@ -358,7 +358,7 @@ func (s *suite) operation(r *http.Response, err error) {
 		s.t.Fatal("operation response omitted id")
 	}
 	s.poll("operation "+op.Id, convergenceTimeout, func() bool {
-		s.expect(&op)(s.client.GetOperation(s.ctx, op.Id, nil))
+		s.expect(&op)(s.client.GetOperation(s.ctx, op.Id))
 		s.t.Logf("operation=%s type=%s phase=%s", op.Id, op.Type, op.Phase)
 		if op.Phase == api.OperationPhaseFailed {
 			s.snapshot("operation-failed", op)

@@ -7,10 +7,7 @@ export type paths = {
     "/accounts": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -28,10 +25,7 @@ export type paths = {
     "/accounts/{account}": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 account: string;
             };
@@ -52,10 +46,7 @@ export type paths = {
     "/accounts/{account}/reset-password": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 account: string;
             };
@@ -74,10 +65,7 @@ export type paths = {
     "/api-tokens": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -95,10 +83,7 @@ export type paths = {
     "/api-tokens/{token}": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 token: string;
             };
@@ -119,10 +104,7 @@ export type paths = {
     "/auth/change-password": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -142,10 +124,7 @@ export type paths = {
     "/auth/login": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -165,10 +144,7 @@ export type paths = {
     "/auth/logout": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -188,10 +164,7 @@ export type paths = {
     "/auth/me": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -211,10 +184,7 @@ export type paths = {
     "/auth/oidc/callback": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -234,10 +204,7 @@ export type paths = {
     "/auth/oidc/login": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -254,10 +221,7 @@ export type paths = {
     "/auth/refresh": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -280,10 +244,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -304,10 +265,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 storage: string;
             };
@@ -334,10 +292,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 storage: string;
             };
@@ -359,10 +314,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -389,10 +341,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -424,10 +373,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -454,10 +400,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 backup: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -488,10 +431,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -515,10 +455,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -541,10 +478,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -571,10 +505,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -604,10 +535,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -631,10 +559,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -661,10 +586,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -687,10 +609,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -714,10 +633,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -741,10 +657,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -768,10 +681,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -794,10 +704,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -820,10 +727,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -849,10 +753,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -875,10 +776,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -901,10 +799,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -927,10 +822,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -957,10 +849,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -984,10 +873,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -1010,10 +896,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -1039,10 +922,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -1065,10 +945,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -1091,10 +968,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -1118,10 +992,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1144,10 +1015,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1180,10 +1048,7 @@ export type paths = {
     "/healthz": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1203,10 +1068,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1226,10 +1088,7 @@ export type paths = {
     "/namespaces": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1253,10 +1112,7 @@ export type paths = {
     "/namespaces/{namespace}": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
                 namespace: components["parameters"]["NamespacePath"];
@@ -1284,10 +1140,7 @@ export type paths = {
     "/namespaces/{namespace}/token": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
                 namespace: components["parameters"]["NamespacePath"];
@@ -1310,10 +1163,7 @@ export type paths = {
     "/namespaces/{namespace}/validate": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
                 namespace: components["parameters"]["NamespacePath"];
@@ -1353,10 +1203,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1376,10 +1223,7 @@ export type paths = {
     "/operations/{operation}": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 operation: string;
             };
@@ -1426,10 +1270,7 @@ export type paths = {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1449,10 +1290,7 @@ export type paths = {
     "/permissions": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1472,10 +1310,7 @@ export type paths = {
     "/providers": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1492,10 +1327,7 @@ export type paths = {
     "/providers/{provider}": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 provider: string;
             };
@@ -1514,10 +1346,7 @@ export type paths = {
     "/rbac/can": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1537,10 +1366,7 @@ export type paths = {
     "/rbac/policy": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1558,10 +1384,7 @@ export type paths = {
     "/settings": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -1579,10 +1402,7 @@ export type paths = {
     "/version": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2740,8 +2560,7 @@ export type components = {
         /** @description Invalid request, query, cursor, or resource configuration. */
         BadRequest: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2756,8 +2575,7 @@ export type components = {
          */
         Conflict: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2767,8 +2585,7 @@ export type components = {
         /** @description Authenticated caller lacks permission or the CSRF check failed. */
         Forbidden: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2778,8 +2595,7 @@ export type components = {
         /** @description Unexpected server error; response does not contain secret material. */
         InternalError: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2790,8 +2606,7 @@ export type components = {
         MethodNotAllowed: {
             headers: {
                 Allow?: string;
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2801,8 +2616,7 @@ export type components = {
         /** @description The requested resource does not exist or is not visible to the caller. */
         NotFound: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2812,8 +2626,7 @@ export type components = {
         /** @description payload_too_large: body exceeds the 2 MiB limit. */
         PayloadTooLarge: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2823,8 +2636,7 @@ export type components = {
         /** @description Missing, expired or invalid authentication. */
         Unauthorized: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2843,8 +2655,7 @@ export type components = {
         /** @description Invalid namespace token, project mismatch or duplicate project. */
         UnprocessableEntity: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2854,8 +2665,7 @@ export type components = {
         /** @description unsupported_media_type: use a Content-Type declared for the operation. */
         UnsupportedMediaType: {
             headers: {
-                /** @description Request correlation identifier. */
-                "X-Request-ID"?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2887,13 +2697,13 @@ export type components = {
         NamespacePath: components["schemas"]["NamespaceName"];
         /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
         NamespaceQuery: components["schemas"]["NamespaceName"];
-        /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-        RequestID: string;
     };
     requestBodies: never;
     headers: {
         /** @description Present and true when the stored successful response was replayed. */
         IdempotentReplayed: true;
+        /** @description Correlation identifier echoed from a valid X-Request-ID request header or generated by the server. */
+        RequestID: string;
     };
     pathItems: never;
 };
@@ -2907,10 +2717,7 @@ export interface operations {
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2955,8 +2762,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -2993,10 +2798,7 @@ export interface operations {
     getAccount: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 account: string;
             };
@@ -3032,8 +2834,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 account: string;
@@ -3074,8 +2874,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 account: string;
@@ -3110,8 +2908,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 account: string;
@@ -3152,10 +2948,7 @@ export interface operations {
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3200,8 +2993,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3238,10 +3029,7 @@ export interface operations {
     getAPIToken: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 token: string;
             };
@@ -3277,8 +3065,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 token: string;
@@ -3319,8 +3105,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 token: string;
@@ -3355,8 +3139,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3393,8 +3175,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3453,8 +3233,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3484,10 +3262,7 @@ export interface operations {
     getCurrentUser: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3521,10 +3296,7 @@ export interface operations {
                 code: string;
                 state: string;
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3559,10 +3331,7 @@ export interface operations {
                 /** @description Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root. */
                 returnTo?: string;
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3595,8 +3364,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3635,10 +3402,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3686,8 +3450,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3728,10 +3490,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 storage: string;
             };
@@ -3770,8 +3529,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 storage: string;
@@ -3815,8 +3572,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 storage: string;
@@ -3854,8 +3609,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 storage: string;
@@ -3896,10 +3649,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3947,8 +3697,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -3991,10 +3739,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4045,8 +3790,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4112,8 +3855,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4166,8 +3907,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4232,10 +3971,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4286,8 +4022,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4331,10 +4065,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 backup: string;
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4375,8 +4106,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 backup: string;
@@ -4425,10 +4154,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4468,8 +4194,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4511,10 +4235,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4556,10 +4277,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4610,8 +4328,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4654,10 +4370,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4699,8 +4412,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4747,8 +4458,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4790,10 +4499,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4844,8 +4550,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4888,10 +4592,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -4933,8 +4634,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -4981,8 +4680,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5020,10 +4717,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5060,10 +4754,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5105,10 +4796,7 @@ export interface operations {
                 process?: "mongod" | "mongos" | "pbm-agent" | "agent";
                 since?: string;
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5149,8 +4837,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5194,10 +4880,7 @@ export interface operations {
                 /** @description Positive Go duration no greater than range. The omitted default 30s is bounded to a shorter requested range. */
                 step?: string;
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5239,10 +4922,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 phase?: string;
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5279,10 +4959,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5319,10 +4996,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5362,8 +5036,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5409,8 +5081,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5453,10 +5123,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5507,8 +5174,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5552,10 +5217,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5596,8 +5258,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5639,8 +5299,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5679,10 +5337,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5719,10 +5374,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
@@ -5762,8 +5414,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
@@ -5817,10 +5467,7 @@ export interface operations {
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -5867,8 +5514,6 @@ export interface operations {
             header?: {
                 /** @description SSE reconnection cursor; used when cursor is absent. */
                 "Last-Event-ID"?: string;
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -5900,10 +5545,7 @@ export interface operations {
     getHealth: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -5937,10 +5579,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -5976,10 +5615,7 @@ export interface operations {
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6022,8 +5658,6 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -6060,10 +5694,7 @@ export interface operations {
     getNamespace: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
                 namespace: components["parameters"]["NamespacePath"];
@@ -6099,8 +5730,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
@@ -6135,8 +5764,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
@@ -6179,8 +5806,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
@@ -6223,8 +5848,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path: {
                 /** @description Project namespace name; the RBAC object is this name. */
@@ -6291,10 +5914,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 phase?: string;
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6325,10 +5945,7 @@ export interface operations {
     getOperation: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 operation: string;
             };
@@ -6396,10 +6013,7 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6428,10 +6042,7 @@ export interface operations {
     getPermissions: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6462,10 +6073,7 @@ export interface operations {
     listProviders: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6496,10 +6104,7 @@ export interface operations {
     getProvider: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path: {
                 provider: string;
             };
@@ -6535,8 +6140,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -6572,10 +6175,7 @@ export interface operations {
     getRBACPolicy: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6609,8 +6209,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -6646,10 +6244,7 @@ export interface operations {
     getSettings: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -6683,8 +6278,6 @@ export interface operations {
             header?: {
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
             };
             path?: never;
             cookie?: never;
@@ -6720,10 +6313,7 @@ export interface operations {
     getVersion: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response. */
-                "X-Request-ID"?: components["parameters"]["RequestID"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };

@@ -207,10 +207,10 @@ func testAPIWorkflow(t *testing.T) {
 	run(nil, &tokenList, "tokens", "list")
 	run(api.UpdateAPITokenRequest{Name: "cli-renamed", ExpiresAt: nil}, &tokenObject, "tokens", "set", token.Token.Id, "-f", "-")
 	bearer := s.newClient(*token.Secret, s.base+"/api/v1", nil)
-	s.expect(&identity)(bearer.GetCurrentUser(s.ctx, nil))
+	s.expect(&identity)(bearer.GetCurrentUser(s.ctx))
 	if !s.keep {
 		run(nil, nil, "tokens", "delete", token.Token.Id)
-		s.expect(nil, 401)(bearer.GetCurrentUser(s.ctx, nil))
+		s.expect(nil, 401)(bearer.GetCurrentUser(s.ctx))
 	}
 	var policy api.RBACPolicy
 	run(nil, &policy, "rbac", "policy", "get")

@@ -20,6 +20,11 @@ info:
     Namespace creation requires namespaces/create on '*'; namespace lists filter by
     namespaces/read on each namespace. Namespace actions are read/create/update/delete.
     Root /healthz and /metrics use explicit operation-level server overrides.
+    Every API response carries X-Request-ID for correlation. Clients may supply a
+    1–128-character ID using A-Z, a-z, 0-9, dot, underscore, colon or hyphen.
+    Missing, invalid or repeated values are replaced with a generated identifier.
+    This optional transport header is not an operation parameter; generated clients
+    may set it through their request editor. Do not include secrets in request IDs.
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
@@ -90,8 +95,6 @@ paths:
                 additionalProperties: true
                 description: The OpenAPI document serialized as YAML.
   /auth/login:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: login
       tags:
@@ -159,8 +162,6 @@ paths:
             schema:
               $ref: '#/components/schemas/LoginRequest'
   /auth/logout:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: logout
       tags:
@@ -196,8 +197,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /auth/refresh:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: refreshSession
       tags:
@@ -239,8 +238,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /auth/me:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getCurrentUser
       tags:
@@ -278,8 +275,6 @@ paths:
       description: 'Self-service: returns only the caller, independent of administrative
         accounts read policy.'
   /auth/change-password:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: changePassword
       tags:
@@ -322,8 +317,6 @@ paths:
             schema:
               $ref: '#/components/schemas/ChangePasswordRequest'
   /auth/oidc/login:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: oidcLogin
       tags:
@@ -362,8 +355,6 @@ paths:
           type: string
         description: Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
   /auth/oidc/callback:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: oidcCallback
       tags:
@@ -412,8 +403,6 @@ paths:
           type: string
         required: true
   /version:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getVersion
       tags:
@@ -447,8 +436,6 @@ paths:
           $ref: '#/components/responses/InternalError'
       security: []
   /healthz:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getHealth
       tags:
@@ -485,8 +472,6 @@ paths:
       - url: /
         description: Root-level control-plane endpoint, outside /api/v1.
   /settings:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getSettings
       tags:
@@ -564,8 +549,6 @@ paths:
             schema:
               $ref: '#/components/schemas/Settings'
   /permissions:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getPermissions
       tags:
@@ -603,8 +586,6 @@ paths:
       description: 'Self-service: returns permissions for the current subject and
         its OIDC groups. Lists elsewhere are filtered per object.'
   /rbac/policy:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getRBACPolicy
       tags:
@@ -682,8 +663,6 @@ paths:
             schema:
               $ref: '#/components/schemas/RBACPolicy'
   /rbac/can:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: checkPermission
       tags:
@@ -729,8 +708,6 @@ paths:
             schema:
               $ref: '#/components/schemas/CanRequest'
   /accounts:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listAccounts
       tags:
@@ -815,7 +792,6 @@ paths:
               $ref: '#/components/schemas/CreateAccountRequest'
   /accounts/{account}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - name: account
       in: path
       schema: &id006
@@ -933,7 +909,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /accounts/{account}/reset-password:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - name: account
       in: path
       schema: *id006
@@ -977,8 +952,6 @@ paths:
             schema:
               $ref: '#/components/schemas/ResetPasswordRequest'
   /api-tokens:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listAPITokens
       tags:
@@ -1063,7 +1036,6 @@ paths:
               $ref: '#/components/schemas/CreateAPITokenRequest'
   /api-tokens/{token}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - name: token
       in: path
       schema: *id006
@@ -1177,8 +1149,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /providers:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listProviders
       tags:
@@ -1215,7 +1185,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /providers/{provider}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - name: provider
       in: path
       schema: *id006
@@ -1255,8 +1224,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
   /namespaces:
-    parameters:
-    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listNamespaces
       tags: [Namespaces]
@@ -1346,7 +1313,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /namespaces/{namespace}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespacePath'
     get:
       operationId: getNamespace
@@ -1465,7 +1431,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /namespaces/{namespace}/token:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespacePath'
     put:
       operationId: rotateNamespaceToken
@@ -1517,7 +1482,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /namespaces/{namespace}/validate:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespacePath'
     post:
       operationId: validateNamespace
@@ -1558,7 +1522,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listClusters
@@ -1656,7 +1619,6 @@ paths:
               $ref: '#/components/schemas/CreateClusterRequest'
   /clusters/{cluster}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1867,7 +1829,6 @@ paths:
           default: false
   /clusters/{cluster}/resume:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -1910,7 +1871,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/restart:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -1953,7 +1913,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/raise-fcv:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -2002,7 +1961,6 @@ paths:
               $ref: '#/components/schemas/RaiseFCVRequest'
   /clusters/{cluster}/members/{member}/replace:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
@@ -2049,7 +2007,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/rotate-tls:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -2094,7 +2051,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/system-users:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2133,7 +2089,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/system-users/{user}/rotate:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: user
@@ -2180,7 +2135,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/members:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2219,7 +2173,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/members/{member}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
@@ -2262,7 +2215,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/status:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2301,7 +2253,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/connection:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2344,7 +2295,6 @@ paths:
           $ref: '#/components/responses/Unavailable'
   /clusters/{cluster}/placement:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2383,7 +2333,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/balancer:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2464,7 +2413,6 @@ paths:
               $ref: '#/components/schemas/Balancer'
   /clusters/{cluster}/database-users:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2553,7 +2501,6 @@ paths:
               $ref: '#/components/schemas/CreateDatabaseUserRequest'
   /clusters/{cluster}/database-users/{database}/{username}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: database
@@ -2674,7 +2621,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/database-roles:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2762,7 +2708,6 @@ paths:
               $ref: '#/components/schemas/DatabaseRole'
   /clusters/{cluster}/database-roles/{database}/{role}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: database
@@ -2884,7 +2829,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /orphaned-volumes:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listOrphanedVolumes
@@ -2921,7 +2865,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/backups:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -3011,7 +2954,6 @@ paths:
               $ref: '#/components/schemas/CreateBackupRequest'
   /clusters/{cluster}/backups/{backup}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: backup
@@ -3101,7 +3043,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/pitr:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -3145,7 +3086,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/restores:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -3244,7 +3184,6 @@ paths:
               $ref: '#/components/schemas/CreateRestoreRequest'
   /clusters/{cluster}/restores/{restore}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: restore
@@ -3287,7 +3226,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /backup-storages:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listBackupStorages
@@ -3375,7 +3313,6 @@ paths:
               $ref: '#/components/schemas/CreateBackupStorageRequest'
   /backup-storages/{storage}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: storage
       in: path
@@ -3492,7 +3429,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /backup-storages/{storage}/verify:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: storage
       in: path
@@ -3536,7 +3472,6 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /operations:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listOperations
@@ -3590,7 +3525,6 @@ paths:
           type: string
   /clusters/{cluster}/operations:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -3636,7 +3570,6 @@ paths:
           type: string
   /operations/{operation}:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - name: operation
       in: path
       schema: *id006
@@ -3713,7 +3646,6 @@ paths:
           $ref: '#/components/responses/InternalError'
   /events:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listEvents
@@ -3797,7 +3729,6 @@ paths:
           enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
   /events/stream:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: streamEvents
@@ -3870,7 +3801,6 @@ paths:
         description: SSE reconnection cursor; used when cursor is absent.
   /clusters/{cluster}/metrics:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -3924,7 +3854,6 @@ paths:
         description: Positive Go duration no greater than range. The omitted default 30s is bounded to a shorter requested range.
   /clusters/{cluster}/members/{member}/logs:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
@@ -3993,7 +3922,6 @@ paths:
           format: date-time
   /metrics:
     parameters:
-    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getPrometheusMetrics
@@ -4071,12 +3999,6 @@ components:
         minLength: 1
         maxLength: 255
         pattern: '^[!-~]+$'
-    RequestID:
-      name: X-Request-ID
-      in: header
-      description: 'A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.'
-      schema:
-        type: string
     NamespaceQuery:
       name: namespace
       in: query
@@ -4127,6 +4049,10 @@ components:
       description: Managed cluster name; the RBAC object is namespace/cluster.
       schema: *id007
   headers:
+    RequestID:
+      description: Correlation identifier echoed from a valid X-Request-ID request header or generated by the server.
+      schema:
+        type: string
     IdempotentReplayed:
       description: Present and true when the stored successful response was replayed.
       schema:
@@ -4140,9 +4066,7 @@ components:
           schema:
             type: string
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       content:
         application/json:
           schema:
@@ -4150,9 +4074,7 @@ components:
     PayloadTooLarge:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: 'payload_too_large: body exceeds the 2 MiB limit.'
       content:
         application/json:
@@ -4161,9 +4083,7 @@ components:
     UnsupportedMediaType:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: 'unsupported_media_type: use a Content-Type declared for the operation.'
       content:
         application/json:
@@ -4172,9 +4092,7 @@ components:
     BadRequest:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: Invalid request, query, cursor, or resource configuration.
       content:
         application/json:
@@ -4183,9 +4101,7 @@ components:
     Unauthorized:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: Missing, expired or invalid authentication.
       content:
         application/json:
@@ -4194,9 +4110,7 @@ components:
     Forbidden:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: Authenticated caller lacks permission or the CSRF check failed.
       content:
         application/json:
@@ -4205,9 +4119,7 @@ components:
     NotFound:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: The requested resource does not exist or is not visible to the
         caller.
       content:
@@ -4222,9 +4134,7 @@ components:
         different request body or invalid_state for an in-flight duplicate.
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       content:
         application/json:
           schema:
@@ -4232,9 +4142,7 @@ components:
     UnprocessableEntity:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: Invalid namespace token, project mismatch or duplicate project.
       content:
         application/json:
@@ -4249,9 +4157,7 @@ components:
     InternalError:
       headers:
         X-Request-ID:
-          description: Request correlation identifier.
-          schema:
-            type: string
+          $ref: '#/components/headers/RequestID'
       description: Unexpected server error; response does not contain secret material.
       content:
         application/json:
