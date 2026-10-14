@@ -29,7 +29,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 
 ## Requests, output and waits
 
-- `-o table` is default; nested values are summarized rather than embedded JSON. Provider tables summarize versions and preset names; status conditions appear as rows and member resources as named values. Use `-o json`/`-o yaml` for the unchanged full structured response.
+- `-o table` is default; nested values are summarized rather than embedded JSON, and numbers use decimal rather than scientific notation. Provider tables summarize versions and preset names; status conditions appear as rows and member resources as named values. Use `-o json`/`-o yaml` for the unchanged full structured response.
 - `karactl openapi > openapi.yaml` downloads the running server's authoritative OpenAPI document as raw YAML. This public endpoint does not require login.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. Use protected input for secret fields. When supplied, the file defines the request body instead of convenience body flags.
 - Cluster **create** files contain `name` and `spec`; **edit** replaces the full `spec` and can open the configured editor when no file is supplied; **patch/scale/upgrade** files have `{spec: {...}}` merge-patch shape. Arrays such as schedules are replaced, not appended.

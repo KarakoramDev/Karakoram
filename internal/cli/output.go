@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 )
@@ -70,6 +71,8 @@ func cell(v any) string {
 	}
 	if str, ok := v.(string); ok {
 		s = str
+	} else if f, ok := v.(float64); ok {
+		s = strconv.FormatFloat(f, 'f', -1, 64)
 	} else if m, ok := v.(map[string]any); ok {
 		parts := make([]string, 0, len(m))
 		for _, key := range sortedKeys(m) {

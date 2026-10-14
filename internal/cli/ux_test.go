@@ -45,6 +45,41 @@ func TestUsageExitCodesAndOfflineCompletion(t *testing.T) {
 	}
 }
 
+func TestTableNumbersUseDecimalNotation(t *testing.T) {
+	for _, tt := range []struct {
+		value any
+		want  string
+	}{
+		{float64(1234567890), "1234567890"},
+		{float64(0.00000001), "0.00000001"},
+		{float64(-1234567890.25), "-1234567890.25"},
+		{float64(0), "0"},
+		{map[string]any{"bytes": float64(1234567890)}, "bytes=1234567890"},
+		{[]any{float64(1234567890), float64(0.00000001)}, "1234567890, 0.00000001"},
+	} {
+		if got := cell(tt.value); got != tt.want {
+			t.Errorf("cell(%v)=%q want=%q", tt.value, got, tt.want)
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[{"id":1234567890,"size":1234567890.25,"fraction":0.00000001}]}`)
+	}))
+	defer server.Close()
+	code, out, stderr := runCLI(t, server.URL, "", false, "events", "list")
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	for _, want := range []string{"1234567890", "1234567890.25", "0.00000001"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table output %q missing %q", out, want)
+		}
+	}
+	if strings.Contains(out, "e+") || strings.Contains(out, "e-") {
+		t.Errorf("scientific notation in table output: %q", out)
+	}
+}
+
 func TestServerErrorExitCodesAndDetails(t *testing.T) {
 	for status, want := range map[int]int{400: 6, 401: 5, 403: 5, 404: 3, 409: 4, 422: 6, 500: 1, 504: 7} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
