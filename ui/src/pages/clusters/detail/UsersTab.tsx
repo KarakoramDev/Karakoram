@@ -5,12 +5,14 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
+import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Time } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from './ClusterDetail';
+import { assignedUsers, passwordValid } from './detail-state';
 
 type DBUser = Schemas['DatabaseUser'];
 type DBRole = Schemas['DatabaseRole'];
@@ -46,6 +48,7 @@ export function UsersTab() {
   const [deleteUser, setDeleteUser] = useState<DBUser | null>(null);
   const [deleteRole, setDeleteRole] = useState<DBRole | null>(null);
   const [rotate, setRotate] = useState<Schemas['SystemUser'] | null>(null);
+  const submission = useIdempotencyKey();
 
   const canWrite = can('update', 'database-users') || can('create', 'database-users');
   const canDelete = can('delete', 'database-users');
@@ -75,8 +78,9 @@ export function UsersTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
   const rotateUser = useMutation({
-    mutationFn: (u: Schemas['SystemUser']) => unwrap(api.POST('/clusters/{cluster}/system-users/{user}/rotate', { params: { path: { cluster: name, user: u.name }, query: { namespace } } })),
+    mutationFn: (u: Schemas['SystemUser']) => unwrap(api.POST('/clusters/{cluster}/system-users/{user}/rotate', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name, user: u.name }, query: { namespace } } })),
     onSuccess: (op) => {
+      submission.reset();
       toast.success(`Rotation started (operation ${op.id}).`);
       setRotate(null);
       invalidate();
@@ -260,13 +264,14 @@ export function UsersTab() {
       {userDialog ? <UserDialog namespace={namespace} cluster={name} existing={userDialog.mode === 'edit' ? userDialog.user : undefined} onClose={() => setUserDialog(null)} onSaved={invalidate} /> : null}
       {roleDialog ? <RoleDialog namespace={namespace} cluster={name} existing={roleDialog.mode === 'edit' ? roleDialog.role : undefined} onClose={() => setRoleDialog(null)} onSaved={invalidate} /> : null}
 
-      <ConfirmDialog open={deleteUser !== null} onClose={() => setDeleteUser(null)} onConfirm={() => deleteUser && delUser.mutate(deleteUser)} title={`Delete user ${deleteUser?.username ?? ''}`} confirmLabel="Delete" danger busy={delUser.isPending}>
+      <ConfirmDialog open={deleteUser !== null} onClose={() => { setDeleteUser(null); delUser.reset(); }} onConfirm={() => deleteUser && delUser.mutateAsync(deleteUser)} title={`Delete user ${deleteUser?.username ?? ''}`} confirmLabel="Delete" danger busy={delUser.isPending} error={delUser.error}>
         <p className="small">Open connections authenticated as this user are closed.</p>
       </ConfirmDialog>
-      <ConfirmDialog open={deleteRole !== null} onClose={() => setDeleteRole(null)} onConfirm={() => deleteRole && delRole.mutate(deleteRole)} title={`Delete role ${deleteRole?.name ?? ''}`} confirmLabel="Delete" danger busy={delRole.isPending}>
-        <p className="small">Users holding this role lose its privileges immediately.</p>
+      <ConfirmDialog open={deleteRole !== null} onClose={() => { setDeleteRole(null); delRole.reset(); }} onConfirm={() => deleteRole && delRole.mutateAsync(deleteRole)} title={`Delete role ${deleteRole?.name ?? ''}`} confirmLabel="Delete" danger busy={delRole.isPending} error={delRole.error}>
+        <p className="small">Deleting this role removes it from users holding it, and they lose its privileges immediately. Remove assignments first if the server requires it.</p>
+        {deleteRole && users.data ? <p className="small">Assigned users: {assignedUsers(users.data.items, deleteRole).join(', ') || 'none'}</p> : <p className="small">User assignments could not be loaded; review them before deleting.</p>}
       </ConfirmDialog>
-      <ConfirmDialog open={rotate !== null} onClose={() => setRotate(null)} onConfirm={() => rotate && rotateUser.mutate(rotate)} title={`Rotate ${rotate?.name ?? ''} password`} confirmLabel="Rotate" busy={rotateUser.isPending}>
+      <ConfirmDialog open={rotate !== null} onClose={() => { setRotate(null); rotateUser.reset(); submission.reset(); }} onConfirm={() => rotate && rotateUser.mutateAsync(rotate)} title={`Rotate ${rotate?.name ?? ''} password`} confirmLabel="Rotate" busy={rotateUser.isPending} error={rotateUser.error}>
         <p className="small">
           A new random password is generated and propagated to every component that uses it (agents, backup agent, monitoring). The new value is visible through Reveal credentials on the overview.
         </p>
@@ -282,21 +287,24 @@ function UserDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [password, setPassword] = useState('');
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [roles, setRoles] = useState(existing ? rolesText(existing.roles) : 'readWrite@');
+  const submission = useIdempotencyKey();
   const parsed = parseRoles(roles);
   const rolesOk = parsed.length > 0 && parsed.every((r) => r.role && r.db);
-  const valid = username.trim() && database.trim() && rolesOk && (existing || !password || password.length >= 8);
+  const valid = username.trim() && database.trim() && rolesOk && passwordValid(password);
 
   const save = useMutation({
     mutationFn: () =>
       existing
         ? unwrap(
             api.PUT('/clusters/{cluster}/database-users/{database}/{username}', {
+              headers: idempotencyHeaders(submission.key),
               params: { path: { cluster, database: existing.database, username: existing.username }, query: { namespace } },
               body: { roles: parsed, ...(password ? { password } : {}) },
             }),
           )
-        : unwrap(api.POST('/clusters/{cluster}/database-users', { params: { path: { cluster }, query: { namespace } }, body: { username: username.trim(), database: database.trim(), ...(password ? { password } : {}), roles: parsed } })),
+        : unwrap(api.POST('/clusters/{cluster}/database-users', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { username: username.trim(), database: database.trim(), ...(password ? { password } : {}), roles: parsed } })),
     onSuccess: (user) => {
+      submission.reset();
       toast.success(existing ? 'User updated.' : 'User created.');
       onSaved();
       if (!existing && 'generatedPassword' in user && typeof user.generatedPassword === 'string' && user.generatedPassword) {
@@ -325,7 +333,9 @@ function UserDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
       open
       onClose={onClose}
       title={existing ? `Edit ${existing.username}` : 'Add database user'}
-      onSubmit={() => valid && save.mutate()}
+      busy={save.isPending}
+      error={save.error}
+      onSubmit={() => valid && save.mutateAsync()}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -345,8 +355,8 @@ function UserDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
         autoComplete="new-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        minLength={existing ? undefined : 8}
-        hint={existing ? 'At least 8 characters when changing the password.' : 'Leave empty for a server-generated password shown once after creation, or supply at least 8 characters.'}
+        hint="At least 8 characters when supplied; MongoDB SASLprep supports Unicode 3.2 characters, not emoji or control characters. Leave empty to generate on creation or keep the current password when editing."
+        error={!passwordValid(password) ? 'Use at least 8 characters.' : undefined}
       />
       <TextAreaField
         label="Roles (role@database, one per line)"
@@ -367,7 +377,7 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [database, setDatabase] = useState(existing?.database ?? 'admin');
   const [privText, setPrivText] = useState(existing ? existing.privileges.map((p) => `${p.resource.anyResource ? 'anyResource' : p.resource.cluster ? 'cluster' : `${p.resource.db ?? ''}.${p.resource.collection ?? ''}`} ${p.actions.join(',')}`).join('\n') : '');
   const [inherits, setInherits] = useState(existing ? rolesText(existing.roles) : '');
-  const [error, setError] = useState<string | null>(null);
+  const submission = useIdempotencyKey();
 
   const parsePrivileges = (): Schemas['Privilege'][] | null => {
     const out: Schemas['Privilege'][] = [];
@@ -400,15 +410,15 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
     mutationFn: () => {
       const body = { privileges: privileges ?? [], roles: inherited };
       return existing
-        ? unwrap(api.PUT('/clusters/{cluster}/database-roles/{database}/{role}', { params: { path: { cluster, database: existing.database, role: existing.name }, query: { namespace } }, body }))
-        : unwrap(api.POST('/clusters/{cluster}/database-roles', { params: { path: { cluster }, query: { namespace } }, body: { name, database: database.trim(), ...body } }));
+        ? unwrap(api.PUT('/clusters/{cluster}/database-roles/{database}/{role}', { headers: idempotencyHeaders(submission.key), params: { path: { cluster, database: existing.database, role: existing.name }, query: { namespace } }, body }))
+        : unwrap(api.POST('/clusters/{cluster}/database-roles', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { name, database: database.trim(), ...body } }));
     },
     onSuccess: () => {
+      submission.reset();
       toast.success(existing ? 'Role updated.' : 'Role created.');
       onSaved();
       onClose();
     },
-    onError: (e) => setError(errorMessage(e)),
   });
 
   return (
@@ -416,8 +426,10 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
       open
       onClose={onClose}
       title={existing ? `Edit role ${existing.name}` : 'Add custom role'}
+      busy={save.isPending}
+      error={save.error}
       wide
-      onSubmit={() => valid && save.mutate()}
+      onSubmit={() => valid && save.mutateAsync()}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -427,7 +439,6 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
         </>
       }
     >
-      {error ? <Callout tone="danger">{error}</Callout> : null}
       <div className="grid-2">
         <TextField label="Role name" mono value={name} onChange={(e) => setName(e.target.value)} required disabled={Boolean(existing)} autoFocus={!existing} />
         <TextField label="Database" mono value={database} onChange={(e) => setDatabase(e.target.value)} required disabled={Boolean(existing)} />

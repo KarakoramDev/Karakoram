@@ -2,6 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Meter, Time, formatBytes, formatDuration, type Tone } from '@/components/ui/Primitives';
 import { useClusterContext } from './ClusterDetail';
 import { resourcesSummary } from '../cluster-utils';
+import { certificateDownload, colocatedGroups, credentialDatabaseLabel, generationState, knownHost, psmdbConnect } from './detail-state';
 
 type Member = Schemas['Member'];
 
@@ -23,7 +25,7 @@ const ROLE_TONE: Record<Member['role'], Tone> = {
 };
 
 export function OverviewTab() {
-  const { cluster, namespace, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
   const members = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'members'),
     queryFn: () => unwrap(api.GET('/clusters/{cluster}/members', { params: { path: { cluster: name }, query: { namespace } } })),
@@ -45,16 +47,19 @@ export function OverviewTab() {
   const spec = cluster.spec;
   const conn = cluster.status.connection;
   const pl = placement.data ?? cluster.status.placement;
-  const colocated = pl?.groups.filter((g) => g.members.length > 1) ?? [];
+  const colocated = colocatedGroups(pl?.groups);
+  const placementUnknown = !pl?.groups.length || pl.groups.some((g) => !knownHost(g.name));
+  const suspended = cluster.status.phase === 'Suspended';
 
   return (
     <div className="stack" style={{ gap: 20 }}>
+      {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
       <div className="grid-4">
         <Card flush>
           <div className="stat">
-            <span className="stat-label">Members healthy</span>
+            <span className="stat-label">{suspended ? 'Historical members (runtime suspended)' : 'Members healthy'}</span>
             <span className="stat-value">
-              {list.filter((m) => m.health).length}
+              {suspended ? '—' : list.filter((m) => m.health).length}
               <span className="faint" style={{ fontSize: 'var(--fs-md)' }}>
                 {' '}
                 / {list.length}
@@ -87,13 +92,13 @@ export function OverviewTab() {
                 / {cluster.generation}
               </span>
             </span>
-            <span className="stat-sub">{cluster.status.observedGeneration < cluster.generation ? 'reconciling changes' : 'in sync'}</span>
+            <span className="stat-sub">{generationState(cluster.status.phase, cluster.status.observedGeneration, cluster.generation)}</span>
           </div>
         </Card>
       </div>
 
-      <Callout tone={colocated.length ? 'warn' : 'info'} title={colocated.length ? 'Members share a physical host' : 'Placement is best effort'}>
-        {pl?.warning ?? 'Zerops does not guarantee that members are placed on separate physical hosts; Karakoram cannot promise tolerance to a host failure.'}
+      <Callout tone={colocated.length ? 'warn' : 'info'} title={colocated.length ? 'Members share a physical host' : placementUnknown ? 'Placement unknown until members report' : 'Placement is best effort'}>
+        {placementUnknown ? 'Host information has not been reported for every member. Co-location cannot be determined yet. Zerops does not guarantee physical-host anti-affinity.' : pl?.warning || 'Zerops does not guarantee that members are placed on separate physical hosts; Karakoram cannot promise tolerance to a host failure.'}
         {colocated.length ? (
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {colocated.map((g) => (
@@ -152,7 +157,7 @@ export function OverviewTab() {
                       </span>
                     </td>
                     <td>
-                      <Badge tone={m.health ? 'ok' : 'danger'}>{m.health ? 'healthy' : 'unhealthy'}</Badge>
+                      <Badge tone={suspended ? 'neutral' : m.health ? 'ok' : 'danger'}>{suspended ? 'historical' : m.health ? 'healthy' : 'unhealthy'}</Badge>
                     </td>
                     <td className="num small">{m.lagSeconds === undefined ? '—' : formatDuration(m.lagSeconds)}</td>
                     <td className="mono small">{m.version ?? '—'}</td>
@@ -162,8 +167,8 @@ export function OverviewTab() {
                     <td className="small">{formatDuration(m.uptime)}</td>
                     <td>
                       {m.agent ? (
-                        <Badge tone={m.agent.connected ? 'ok' : 'warn'} plain title={m.agent.lastSeenAt ? `last seen ${m.agent.lastSeenAt}` : undefined}>
-                          {m.agent.connected ? 'connected' : 'offline'}
+                        <Badge tone={suspended ? 'neutral' : m.agent.connected ? 'ok' : 'warn'} plain title={m.agent.lastSeenAt ? `last seen ${m.agent.lastSeenAt}` : undefined}>
+                          {suspended ? 'historical observation' : m.agent.connected ? 'connected' : 'offline'}
                           {m.agent.version ? ` ${m.agent.version}` : ''}
                         </Badge>
                       ) : (
@@ -199,7 +204,8 @@ export function OverviewTab() {
                 ]}
               />
               <CodeLine value={conn.uri} />
-              <CredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} />
+              {spec.provider === 'psmdb' && conn.replicaSet && Boolean(conn.publicHosts?.length) ? <Callout tone="warn">Public seeds advertise private member hostnames. External drivers must resolve and reach the discovered members. <code>directConnection=true</code> is for diagnostics only, not external HA/failover. See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/users-tls-access.md" target="_blank" rel="noreferrer">TLS and access guide</a>.</Callout> : null}
+              <CredentialsReveal namespace={namespace} name={name} base={base} provider={spec.provider} allowed={can('read', 'cluster-credentials')} />
             </div>
           ) : (
             <p className="small muted">Connection details appear once the cluster is initialized.</p>
@@ -244,8 +250,8 @@ export function OverviewTab() {
                       {c.status}
                     </Badge>
                   </td>
-                  <td className="small">{c.reason}</td>
-                  <td className="small">{c.message}</td>
+                  <td className="small">{c.reason || '—'}</td>
+                  <td className="small">{c.message || '—'}</td>
                   <td className="small">
                     <Time iso={c.lastTransitionTime} />
                   </td>
@@ -266,7 +272,7 @@ export function OverviewTab() {
   );
 }
 
-function CredentialsReveal({ namespace, name, allowed }: { namespace: string; name: string; allowed: boolean }) {
+function CredentialsReveal({ namespace, name, base, provider, allowed }: { namespace: string; name: string; base: string; provider: string; allowed: boolean }) {
   const [data, setData] = useState<Schemas['Connection'] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -301,6 +307,9 @@ function CredentialsReveal({ namespace, name, allowed }: { namespace: string; na
       </div>
     );
   }
+  const databaseLabel = credentialDatabaseLabel(provider, data.credentials);
+  const example = provider === 'psmdb' && data.credentials[0]?.uri ? psmdbConnect(data.credentials[0].uri) : null;
+  const caDownload = data.caCertificate ? certificateDownload(data.caCertificate) : null;
   return (
     <div className="stack">
       <div className="row-between">
@@ -309,28 +318,30 @@ function CredentialsReveal({ namespace, name, allowed }: { namespace: string; na
           Hide
         </Button>
       </div>
+      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/users`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
               <th>User</th>
-              <th>Auth DB</th>
+              {databaseLabel ? <th>{databaseLabel}</th> : null}
               <th>Password</th>
-              <th className="actions">URI</th>
+              <th>Endpoint / URI</th>
             </tr>
           </thead>
           <tbody>
-            {data.credentials.map((c) => (
-              <tr key={`${c.database}/${c.username}`}>
+            {data.credentials.map((c, index) => (
+              <tr key={`${c.database}/${c.username}/${index}`}>
                 <td className="mono">{c.username}</td>
-                <td className="mono">{c.database}</td>
+                {databaseLabel ? <td className="mono">{c.database}</td> : null}
                 <td>
                   <span className="row">
                     <code className="small">{c.password}</code>
                     <CopyButton value={c.password} label="Copy" />
                   </span>
                 </td>
-                <td className="actions">
+                <td>
+                  <code className="small" style={{ overflowWrap: 'anywhere' }}>{c.uri}</code>
                   <CopyButton value={c.uri} label="Copy URI" />
                 </td>
               </tr>
@@ -339,11 +350,24 @@ function CredentialsReveal({ namespace, name, allowed }: { namespace: string; na
         </table>
       </div>
       {data.caCertificate ? (
-        <details>
-          <summary className="small">CA certificate</summary>
-          <CodeLine value={data.caCertificate} />
-        </details>
+        <div className="stack" style={{ gap: 8 }}>
+          <strong className="small">CA certificate</strong>
+          <textarea className="input mono" readOnly aria-label="CA certificate PEM" rows={8} value={data.caCertificate} onFocus={(e) => e.currentTarget.select()} />
+          <div className="row">
+            <CopyButton value={data.caCertificate} label="Copy CA" />
+            {caDownload ? <a download={caDownload.filename} href={caDownload.href}>Download ca.pem</a> : null}
+          </div>
+        </div>
       ) : null}
+      {example ? <details>
+        <summary className="small">How to connect (MongoDB)</summary>
+        <p className="small">Download <code>ca.pem</code> above. Run from a host inside the project network for private endpoints. Replace these administrative credentials with a scoped application user's username, password and authentication database; URI-encode credentials.</p>
+        <strong className="small">mongosh</strong>
+        <CodeLine value={example.shell} />
+        <strong className="small">Driver URI</strong>
+        <CodeLine value={example.driver} />
+        <p className="xs faint">Keep TLS certificate verification enabled. The CA file path is relative to the client process.</p>
+      </details> : null}
     </div>
   );
 }

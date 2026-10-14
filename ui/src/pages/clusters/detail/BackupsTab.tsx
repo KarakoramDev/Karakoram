@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useBackupStorages, useProviders } from '@/api/hooks';
+import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, SelectField, Switch, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading, Menu, MenuItem, Time, formatBytes, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
-import { SchedulesEditor, validateSchedules } from '../editors/SchedulesEditor';
+import { SchedulesEditor } from '../editors/SchedulesEditor';
+import { validateSchedules } from '../wizard/schedules';
 import { BackupPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
+import { latestSuccessfulBackup } from './detail-state';
+import { fetchBackupInventory } from './backup-inventory';
 
 type BackupType = Schemas['CreateBackupRequest']['type'];
 
@@ -27,7 +31,7 @@ export function BackupsTab() {
   const providers = useProviders();
   const backups = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'backups'),
-    queryFn: () => unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster: name }, query: { namespace, limit: 200 } } })),
+    queryFn: () => fetchBackupInventory((cursor) => unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster: name }, query: { namespace, limit: 200, cursor } } }))),
     refetchInterval: 15_000,
   });
   const pitr = useQuery({
@@ -57,6 +61,7 @@ export function BackupsTab() {
   });
 
   const win = pitr.data ?? cluster.status.backup?.pitrWindow;
+  const lastSuccessful = latestSuccessfulBackup(backups.data?.items ?? []);
 
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -74,8 +79,9 @@ export function BackupsTab() {
           <div className="stat">
             <span className="stat-label">Last successful backup</span>
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
-              {cluster.status.backup?.lastBackup ?? '—'}
+              {lastSuccessful?.name ?? '—'}
             </span>
+            {lastSuccessful ? <span className="stat-sub"><Time iso={lastSuccessful.completedAt || lastSuccessful.startedAt} /></span> : null}
           </div>
         </Card>
         <Card flush>
@@ -144,7 +150,15 @@ export function BackupsTab() {
                       {b.trigger}
                       {b.schedule ? <span className="faint"> · {b.schedule}</span> : null}
                     </td>
-                    <td className="small nowrap">{b.storage}</td>
+                    <td className="small">
+                      {b.storage}
+                      <details>
+                        <summary>Backup details</summary>
+                        <div>Storage: <span className="mono">{b.storage}</span></div>
+                        {b.pbmName ? <div>Native backup identifier: <span className="mono">{b.pbmName}</span></div> : null}
+                        <div>Completed: <Time iso={b.completedAt} /></div>
+                      </details>
+                    </td>
                     <td className="small">
                       <Time iso={b.startedAt} />
                     </td>
@@ -178,7 +192,7 @@ export function BackupsTab() {
 
       {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
 
-      <ConfirmDialog open={deleteName !== null} onClose={() => setDeleteName(null)} onConfirm={() => deleteName && del.mutate(deleteName)} title={`Delete backup ${deleteName ?? ''}`} confirmLabel="Delete" danger busy={del.isPending}>
+      <ConfirmDialog open={deleteName !== null} onClose={() => { setDeleteName(null); del.reset(); }} onConfirm={() => deleteName && del.mutateAsync(deleteName)} title={`Delete backup ${deleteName ?? ''}`} confirmLabel="Delete" danger busy={del.isPending} error={del.error}>
         <p className="small">Backup data is removed from object storage. If PITR depends on this base backup, the restorable window shrinks accordingly.</p>
       </ConfirmDialog>
     </div>
@@ -191,9 +205,11 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
   const [name, setName] = useState(() => `manual-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
   const [storage, setStorage] = useState(defaultStorage ?? storages[0] ?? '');
   const [type, setType] = useState<BackupType>(backupTypes[0] ?? 'logical');
+  const submission = useIdempotencyKey();
   const create = useMutation({
-    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/backups', { params: { path: { cluster }, query: { namespace } }, body: { name, storage, type } })),
+    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/backups', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { name, storage, type } })),
     onSuccess: (b) => {
+      submission.reset();
       toast.success(`Backup ${b.name} queued.`);
       void queryClient.invalidateQueries({ queryKey: keys.clusterSub(namespace, cluster, 'backups') });
       onClose();
@@ -206,7 +222,9 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
       open
       onClose={onClose}
       title="Create backup"
-      onSubmit={() => valid && create.mutate()}
+      busy={create.isPending}
+      error={create.error}
+      onSubmit={() => valid && create.mutateAsync()}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -250,6 +268,8 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
   const [span, setSpan] = useState(persisted.pitr?.oplogSpanMinutes ?? 10);
   const persistedKey = JSON.stringify(persisted);
   const [seed, setSeed] = useState(persistedKey);
+  const submission = useIdempotencyKey();
+  const saving = useRef(false);
   useEffect(() => {
     if (persistedKey !== seed) {
       setStorage(persisted.storage ?? '');
@@ -270,11 +290,13 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     mutationFn: () =>
       unwrap(
         api.PATCH('/clusters/{cluster}', {
+          headers: idempotencyHeaders(submission.key),
           params: { path: { cluster: name }, query: { namespace } },
           body: { spec: { backup: { storage: storage || null, schedules, pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } } },
         }),
       ),
     onSuccess: (c) => {
+      submission.reset();
       queryClient.setQueryData(keys.cluster(namespace, name), c);
       toast.success('Backup policy updated.');
     },
@@ -290,7 +312,10 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
             {dirty ? (
               <Button
                 size="sm"
+                disabled={save.isPending}
                 onClick={() => {
+                  save.reset();
+                  submission.reset();
                   setStorage(persisted.storage ?? '');
                   setSchedules(persisted.schedules ?? []);
                   setPitrEnabled(persisted.pitr?.enabled ?? false);
@@ -300,14 +325,20 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
                 Discard
               </Button>
             ) : null}
-            <Button size="sm" variant="primary" disabled={!dirty || errors.length > 0} loading={save.isPending} onClick={() => save.mutate()}>
+            <Button size="sm" variant="primary" disabled={!dirty || errors.length > 0} loading={save.isPending} onClick={() => {
+              if (saving.current) return;
+              saving.current = true;
+              void save.mutateAsync().finally(() => { saving.current = false; }).catch(() => {});
+            }}>
               Save policy
             </Button>
           </>
         ) : null
       }
     >
-      <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
+      {!editable ? <Callout tone="info">Backup policy is read-only. You need the cluster update permission to save changes.</Callout> : null}
+      {save.error ? <ErrorBlock error={save.error} /> : null}
+      <fieldset disabled={!editable || save.isPending} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
         {storageNames.length === 0 ? (
           <Callout tone="warn">
             No backup storages exist in namespace <span className="mono">{namespace}</span>. <Link to={`/settings/backup-storages?namespace=${encodeURIComponent(namespace)}`}>Create one in Settings</Link>.

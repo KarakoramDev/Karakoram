@@ -11,6 +11,7 @@ import { LinkButton } from '@/components/ui/Button';
 import { Badge, Card, Empty, ErrorBlock, Loading, PageHeader, Time } from '@/components/ui/Primitives';
 import { BackupSummary, HealthSummary, PhaseBadge, topologySummary } from './cluster-utils';
 import { clusterPath } from './detail/ClusterDetail';
+import { clusterEmptyCopy, colocatedGroups, observedVersion } from './detail/detail-state';
 
 export function ClustersListPage() {
   const auth = useAuth();
@@ -19,6 +20,7 @@ export function ClustersListPage() {
   const [filter, setFilter] = useState('');
   const allNamespaces = !namespace && spansNamespaces(clusters.data?.items ?? []);
   const newClusterTo = namespace ? `/clusters/new?namespace=${encodeURIComponent(namespace)}` : '/clusters/new';
+  const empty = clusterEmptyCopy(auth.can('clusters', 'create'));
 
   const items = useMemo(() => {
     const all = clusters.data?.items ?? [];
@@ -30,7 +32,7 @@ export function ClustersListPage() {
     const all = clusters.data?.items ?? [];
     const ready = all.filter((c) => c.status.phase === 'Ready').length;
     const attention = all.filter((c) => c.status.phase === 'Degraded' || c.status.phase === 'Error').length;
-    const placement = all.filter((c) => c.status.placement?.groups.some((g) => g.members.length > 1)).length;
+    const placement = all.filter((c) => colocatedGroups(c.status.placement?.groups).length > 0).length;
     return { total: all.length, ready, attention, placement };
   }, [clusters.data]);
 
@@ -106,8 +108,8 @@ export function ClustersListPage() {
             <ErrorBlock error={clusters.error} retry={() => clusters.refetch()} />
           </div>
         ) : items.length === 0 ? (
-          <Empty title={filter ? 'No clusters match' : 'No clusters yet'} action={!filter && auth.can('clusters', 'create') ? <LinkButton to={newClusterTo} variant="primary">Create your first cluster</LinkButton> : null}>
-            {filter ? 'Try a different filter.' : 'Create a replica set or sharded cluster to get started.'}
+          <Empty title={filter ? 'No clusters match' : empty.title} action={!filter && auth.can('clusters', 'create') ? <LinkButton to={newClusterTo} variant="primary">Create your first cluster</LinkButton> : null}>
+            {filter ? 'Try a different filter.' : empty.message}
           </Empty>
         ) : (
           <div className="table-wrap">
@@ -127,7 +129,7 @@ export function ClustersListPage() {
               </thead>
               <tbody>
                 {items.map((c) => {
-                  const colocated = c.status.placement?.groups.some((g) => g.members.length > 1);
+                  const colocated = colocatedGroups(c.status.placement?.groups).length > 0;
                   const ns = c.namespace || DEFAULT_NAMESPACE;
                   return (
                     <tr key={`${ns}/${c.name}`}>
@@ -141,8 +143,8 @@ export function ClustersListPage() {
                         <PhaseBadge phase={c.status.phase} message={c.status.message} />
                       </td>
                       <td className="mono">
-                        {c.status.version ?? c.spec.version}
-                        {c.status.version && c.status.version !== c.spec.version ? <span className="faint"> → {c.spec.version}</span> : null}
+                        {observedVersion(c.status) || 'not yet observed'}
+                        <span className="faint"> · desired {c.spec.version}</span>
                       </td>
                       <td className="small">{topologySummary(c)}</td>
                       <td>
