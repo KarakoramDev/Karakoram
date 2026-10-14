@@ -49,8 +49,8 @@ retain the original member/version and recheck disruption safety; rolling
 operation checkpoints cannot advance past a pending platform action or retry.
 
 Provider saves merge owned keys into the existing JSON object. PBM's
-pbmCleanup, pbmMaintenance and pbmStopped fields, and freshBaseBackupPending /
-freshBaseBackupName, therefore survive every provider save. All passwords,
+pbmCleanup, pbmMaintenance and pbmStopped fields, and the freshBaseBackup*
+gate, freshness boundary and retry state, survive every provider save. All passwords,
 CA keys, certificate bundles and agent tokens live in the encrypted secret
 store, not Internal or operation checkpoints. Certificate and key material
 for one node is written as one atomic combined-PEM secret. Per-node backup
@@ -124,9 +124,11 @@ WiredTiger cache is max(0.25, 0.5*(maxRAM-0.5)) GB.
 
 Backup/PITR configuration uses PBM EnsureConfig with its applied hash. A
 post-restore fresh base backup is uniquely enqueued, and PITR remains disabled
-until that new snapshot succeeds. Optional public routing requires CIDRs;
-ports are reserved project-wide from 27017 using persisted cluster plans, a
-process-local mutex, and every project's existing platform public-port route.
+until it or a later snapshot on primary storage succeeds. Failed, cancelled or
+missing bases receive at most three replacement attempts with warning events;
+exhaustion leaves PITR gated, not cluster convergence, until a manual base succeeds.
+Optional public routing requires CIDRs; ports are reserved project-wide from 27017
+using persisted cluster plans, a process-local mutex, and every project's existing platform public-port route.
 IPv6 connection hosts use bracketed addresses. Sharded clusters publish only
 mongos services and remove obsolete shard/config routes.
 Public and localhost IPs are issued certificate SANs. External replica-set discovery still requires clients to map

@@ -15,7 +15,29 @@ import (
 
 // CanCancelOperation refuses any checkpoint that may already have changed data.
 // FCV executes atomically in one call; cancellation is honored before that call.
-func (*Provider) CanCancelOperation(op *domain.Operation) error {
+func (p *Provider) CanCancelOperation(op *domain.Operation) error {
+	if op.Kind == domain.OperationBackup {
+		var payload struct {
+			Backup  string `json:"backup"`
+			Trigger string `json:"trigger"`
+		}
+		if err := decodeJSON(op.Payload, &payload); err != nil {
+			return err
+		}
+		trigger := payload.Trigger
+		// Existing queued bases predate the payload marker; consult inventory
+		// so they receive the same protection as newly enqueued backups.
+		if trigger == "" && payload.Backup != "" && p.options.Store != nil {
+			backup, err := p.options.Store.GetBackup(context.Background(), domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}, payload.Backup)
+			if err != nil {
+				return err
+			}
+			trigger = backup.Trigger
+		}
+		if trigger == "restore" {
+			return fmt.Errorf("Operation %s cannot be cancelled: this post-restore base backup protects PITR continuity; PITR stays disabled until a fresh snapshot succeeds", op.ID)
+		}
+	}
 	var cp struct {
 		Step       string `json:"step"`
 		Stage      string `json:"stage"`

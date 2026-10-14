@@ -137,19 +137,24 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			// Every successful restore needs a new base when the target desires
 			// PITR, regardless of the temporarily disabled source configuration.
 			if rc.Cluster.Spec.Backup.PITR.Enabled {
-				if e = setInternal(rc.Cluster, "freshBaseBackupPending", true); e != nil {
-					return result, e
-				}
 				name := "restore-base-" + secrets.Hash(op.ID)[:12]
-				payload, _ := json.Marshal(map[string]string{"backup": name})
+				payload, _ := json.Marshal(map[string]string{"backup": name, "trigger": "restore"})
 				base := &domain.Operation{Namespace: rc.Cluster.Ref().Namespace, ID: op.ID + "-base", Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Payload: payload, Phase: domain.PhasePending}
 				if _, e = rc.Store.GetOperation(ctx, base.ID); missing(e) {
-					e = rc.Store.EnqueueBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: name, Cluster: rc.Cluster.Name, Storage: rc.Cluster.Spec.Backup.Storage, Type: "logical", Trigger: "restore", Phase: domain.PhasePending}, base)
+					e = rc.Store.EnqueueBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: name, Cluster: rc.Cluster.Name, Storage: rc.Cluster.Spec.Backup.Storage, Type: "logical", Trigger: "restore", Phase: domain.PhasePending, CreatedAt: now(rc)}, base)
 				}
 				if e != nil {
 					return result, e
 				}
-				if e = setInternal(rc.Cluster, "freshBaseBackupName", name); e != nil {
+				// Preserve the original freshness boundary when completion is replayed.
+				var fresh freshBaseState
+				if e = decodeJSON(rc.Cluster.Internal, &fresh); e != nil {
+					return result, e
+				}
+				if fresh.Root != name {
+					fresh = freshBaseState{Pending: true, Name: name, Root: name, RequiredAt: now(rc)}
+				}
+				if e = fresh.save(rc.Cluster); e != nil {
 					return result, e
 				}
 			}
@@ -427,29 +432,104 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 	return opResult(cp, false, "member-restarted")
 }
 
-// RefreshFreshBase clears the PITR gate only after the newly queued base snapshot succeeds.
+const freshBaseRetryLimit = 3
+
+type freshBaseState struct {
+	Pending    bool      `json:"freshBaseBackupPending"`
+	Name       string    `json:"freshBaseBackupName"`
+	Root       string    `json:"freshBaseBackupRoot"`
+	Retries    int       `json:"freshBaseBackupRetries"`
+	RequiredAt time.Time `json:"freshBaseBackupRequiredAt"`
+	Exhausted  bool      `json:"freshBaseBackupExhausted"`
+}
+
+func (s freshBaseState) save(c *domain.Cluster) error {
+	raw, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	var fresh map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &fresh); err != nil {
+		return err
+	}
+	fields := map[string]json.RawMessage{}
+	if err = decodeJSON(c.Internal, &fields); err != nil {
+		return err
+	}
+	for key, value := range fresh {
+		fields[key] = value
+	}
+	c.Internal, err = json.Marshal(fields)
+	return err
+}
+
+// refreshFreshBase keeps PITR gated, but never wedges convergence on a lost base.
 func refreshFreshBase(ctx context.Context, rc *engine.Context) error {
-	var raw struct {
-		Pending bool   `json:"freshBaseBackupPending"`
-		Name    string `json:"freshBaseBackupName"`
+	var fresh freshBaseState
+	if err := decodeJSON(rc.Cluster.Internal, &fresh); err != nil {
+		return err
 	}
-	if e := decodeJSON(rc.Cluster.Internal, &raw); e != nil {
-		return e
-	}
-	if !raw.Pending {
+	if !fresh.Pending {
 		return nil
 	}
-	backup, e := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), raw.Name)
-	if e != nil {
-		return e
+	backup, err := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), fresh.Name)
+	if err != nil && !missing(err) {
+		return err
 	}
-	if backup.Phase == domain.PhaseSucceeded {
-		return setInternal(rc.Cluster, "freshBaseBackupPending", false)
+	if fresh.Root == "" {
+		fresh.Root = fresh.Name
 	}
-	if backup.Phase == domain.PhaseFailed {
-		return fmt.Errorf("fresh PITR base backup failed: %s", strings.TrimSpace(backup.Error))
+	if fresh.RequiredAt.IsZero() {
+		// Older pending gates have no boundary. A known base was enqueued after
+		// restore; without its record, only snapshots queued from now are safe.
+		fresh.RequiredAt = now(rc)
+		if backup != nil && !backup.CreatedAt.IsZero() {
+			fresh.RequiredAt = backup.CreatedAt
+		}
 	}
-	return nil
+	all, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return err
+	}
+	for _, candidate := range all {
+		if candidate.Phase == domain.PhaseSucceeded && candidate.Storage == rc.Cluster.Spec.Backup.Storage &&
+			(candidate.Name == fresh.Name || !candidate.CreatedAt.Before(fresh.RequiredAt)) {
+			fresh.Pending = false
+			return fresh.save(rc.Cluster)
+		}
+	}
+	if backup != nil && backup.Phase != domain.PhaseFailed && backup.Phase != domain.PhaseCancelled {
+		return fresh.save(rc.Cluster)
+	}
+	reason, message := "FreshBaseBackupRetry", ""
+	if fresh.Retries >= freshBaseRetryLimit {
+		if fresh.Exhausted {
+			return nil
+		}
+		fresh.Exhausted = true
+		reason = "FreshBaseBackupRequired"
+		message = fmt.Sprintf("PITR remains disabled after %d automatic base backup retries; take a successful backup on primary storage %q to resume PITR. Cluster convergence continues.", freshBaseRetryLimit, rc.Cluster.Spec.Backup.Storage)
+	} else {
+		attempt := fresh.Retries + 1
+		name := fmt.Sprintf("%s-retry-%d", fresh.Root, attempt)
+		id := rc.Cluster.Ref().Key() + "-" + name
+		payload, _ := json.Marshal(map[string]string{"backup": name, "trigger": "restore"})
+		message = fmt.Sprintf("Post-restore base backup %q failed, was cancelled or is missing; queued %q (retry %d/%d). PITR remains disabled until a fresh primary-storage snapshot succeeds.", fresh.Name, name, attempt, freshBaseRetryLimit)
+		op := &domain.Operation{Namespace: rc.Cluster.Ref().Namespace, ID: id, Cluster: rc.Cluster.Name, Kind: domain.OperationBackup, Payload: payload, Phase: domain.PhasePending, Message: message}
+		if _, err = rc.Store.GetOperation(ctx, id); missing(err) {
+			err = rc.Store.EnqueueBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: name, Cluster: rc.Cluster.Name, Storage: rc.Cluster.Spec.Backup.Storage, Type: "logical", Trigger: "restore", Phase: domain.PhasePending, CreatedAt: now(rc)}, op)
+		}
+		if err != nil {
+			return err
+		}
+		fresh.Name, fresh.Retries = name, attempt
+	}
+	if rc.Events != nil {
+		if err = rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: reason, Message: message, CreatedAt: now(rc)}); err != nil {
+			return err
+		}
+	}
+	return fresh.save(rc.Cluster)
 }
 
 // SyncDuringOperation permits only the convergence explicitly required by
