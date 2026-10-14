@@ -104,7 +104,7 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
           />
           {coversAllAddresses(value) ? (
             <Callout tone="danger" title="All internet addresses are allowed">
-              A /0 CIDR removes the source-address restriction for its entire IP family. Anyone on the internet can reach the public service.
+              The allowlist covers an entire IP family, whether through a /0 CIDR or combined ranges. Anyone on the internet can reach the public service.
               <Checkbox label="I understand and explicitly allow access from all addresses" checked={allAddressesConfirmed} onChange={(e) => {
                 onAllAddressesConfirmedChange(e.target.checked);
                 onChange(wireExposure(value, e.target.checked));

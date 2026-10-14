@@ -285,7 +285,11 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.TLS.CA != "selfSigned" && s.TLS.CA != "userProvided" {
 		return invalid("invalid TLS CA source")
 	}
-	if err := domain.ValidateExposure(s.Exposure); err != nil {
+	var previousExposure *domain.Exposure
+	if old != nil {
+		previousExposure = &old.Spec.Exposure
+	}
+	if err := domain.ValidateExposureUpdate(previousExposure, s.Exposure); err != nil {
 		if field, ok := err.(*domain.FieldError); ok {
 			field.Err = engine.ErrInvalid
 		}

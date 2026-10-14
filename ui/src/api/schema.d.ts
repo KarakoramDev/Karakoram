@@ -1913,7 +1913,7 @@ export type components = {
             nextCursor?: string;
         };
         Exposure: {
-            /** @description Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean;
             allowlist?: string[];
             /**
@@ -1925,7 +1925,7 @@ export type components = {
             public: boolean;
         };
         ExposureInput: {
-            /** @description Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean;
             allowlist?: string[];
             /**
@@ -1937,7 +1937,7 @@ export type components = {
             public: boolean;
         };
         ExposurePatch: {
-            /** @description Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean | null;
             allowlist?: string[] | null;
             /**

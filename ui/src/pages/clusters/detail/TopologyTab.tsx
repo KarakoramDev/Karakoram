@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
+import { api, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useClusters, useProviders } from '@/api/hooks';
 import { idempotencyHeaders } from '@/api/idempotency';
@@ -21,81 +21,10 @@ import { resourceMinimums, validateResources } from '../wizard/resources';
 import { memberChoices } from '../wizard/validation';
 import { validateExposure, validateTLS } from '../wizard/access';
 import { useSubmissionKey } from './use-submission-key';
+import { buildPatch, draftFrom, type Draft } from './topology';
 
-type Spec = Schemas['ClusterSpec'];
 const RS_SIZES = [1, 3, 5, 7];
 
-interface Draft {
-  engineReplicas: number;
-  engineResources: Schemas['Resources'];
-  shards: number;
-  configReplicas: number;
-  configResources: Schemas['Resources'] | undefined;
-  routerReplicas: number;
-  routerResources: Schemas['Resources'] | undefined;
-  tls: Schemas['TLS'];
-  exposure: Schemas['Exposure'];
-  monitoring: boolean;
-  engineConfig: string;
-}
-
-function draftFrom(spec: Spec): Draft {
-  return {
-    engineReplicas: spec.components.engine.replicas,
-    engineResources: { ...spec.components.engine.resources },
-    shards: spec.topology.shards ?? 0,
-    configReplicas: spec.components.configServer?.replicas ?? 0,
-    configResources: spec.components.configServer ? { ...spec.components.configServer.resources } : undefined,
-    routerReplicas: spec.components.router?.replicas ?? 0,
-    routerResources: spec.components.router ? { ...spec.components.router.resources } : undefined,
-    tls: { mode: spec.tls?.mode ?? 'requireTLS', ca: spec.tls?.ca ?? 'selfSigned' },
-    exposure: { public: spec.exposure?.public ?? false, ipType: spec.exposure?.ipType ?? 'IPV6', allowlist: [...(spec.exposure?.allowlist ?? [])] },
-    monitoring: spec.monitoring?.enabled ?? true,
-    engineConfig: spec.engineConfig ?? '',
-  };
-}
-
-/** Build an RFC 7396 merge patch containing only what changed. */
-function buildPatch(spec: Spec, d: Draft): Record<string, unknown> {
-  const patch: Record<string, unknown> = {};
-  const sharded = spec.topology.type === 'sharded';
-  const components: Record<string, unknown> = {};
-  const engine: Record<string, unknown> = {};
-  if (d.engineReplicas !== spec.components.engine.replicas) engine.replicas = d.engineReplicas;
-  if (JSON.stringify(d.engineResources) !== JSON.stringify(spec.components.engine.resources)) engine.resources = d.engineResources;
-  if (Object.keys(engine).length) components.engine = engine;
-  if (sharded) {
-    if (d.shards !== (spec.topology.shards ?? 0)) patch.topology = { shards: d.shards };
-    const cfg: Record<string, unknown> = {};
-    if (d.configReplicas !== (spec.components.configServer?.replicas ?? 0)) cfg.replicas = d.configReplicas;
-    if (d.configResources && JSON.stringify(d.configResources) !== JSON.stringify(spec.components.configServer?.resources)) cfg.resources = d.configResources;
-    if (Object.keys(cfg).length) components.configServer = cfg;
-    const router: Record<string, unknown> = {};
-    if (d.routerReplicas !== (spec.components.router?.replicas ?? 0)) router.replicas = d.routerReplicas;
-    if (d.routerResources && JSON.stringify(d.routerResources) !== JSON.stringify(spec.components.router?.resources)) router.resources = d.routerResources;
-    if (Object.keys(router).length) components.router = router;
-  }
-  if (Object.keys(components).length) patch.components = components;
-
-  const tls: Record<string, unknown> = {};
-  if (d.tls.mode !== (spec.tls?.mode ?? 'requireTLS')) tls.mode = d.tls.mode;
-  if (d.tls.ca !== (spec.tls?.ca ?? 'selfSigned')) tls.ca = d.tls.ca;
-  if (d.tls.ca === 'userProvided') {
-    if (d.tls.caCertificate?.trim()) tls.caCertificate = d.tls.caCertificate;
-    if (d.tls.caPrivateKey?.trim()) tls.caPrivateKey = d.tls.caPrivateKey;
-    if (d.tls.certificate?.trim()) tls.certificate = d.tls.certificate;
-    if (d.tls.privateKey?.trim()) tls.privateKey = d.tls.privateKey;
-  }
-  if (Object.keys(tls).length) patch.tls = tls;
-
-  const curExp = spec.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] };
-  if (d.exposure.public !== curExp.public || d.exposure.ipType !== curExp.ipType || JSON.stringify(d.exposure.allowlist ?? []) !== JSON.stringify(curExp.allowlist ?? [])) {
-    patch.exposure = { public: d.exposure.public, ipType: d.exposure.ipType, allowlist: d.exposure.public ? d.exposure.allowlist ?? [] : [] };
-  }
-  if (d.monitoring !== (spec.monitoring?.enabled ?? true)) patch.monitoring = { enabled: d.monitoring };
-  if (d.engineConfig !== (spec.engineConfig ?? '')) patch.engineConfig = d.engineConfig || null;
-  return patch;
-}
 
 export function TopologyTab() {
   const { cluster, namespace, name, can } = useClusterContext();
@@ -145,7 +74,8 @@ export function TopologyTab() {
     if (draft.configResources) errors.push(...validateResources(draft.configResources, cluster.spec.components.configServer?.resources, false, minimums.configServer).map((e) => `Config servers: ${e}`));
     if (draft.routerResources) errors.push(...validateResources(draft.routerResources, undefined, true, minimums.router).map((e) => `Routers: ${e}`));
   }
-  errors.push(...validateTLS(draft.tls, true), ...validateExposure(draft.exposure, !patch.exposure || allAddressesConfirmed));
+  errors.push(...validateTLS(draft.tls, true));
+  if (patch.exposure) errors.push(...validateExposure(draft.exposure, allAddressesConfirmed));
 
   const save = useMutation({
     mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),

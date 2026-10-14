@@ -241,7 +241,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			next.Spec.DataSource.Namespace = namespaceOrDefaultSource(next.Spec.DataSource.Namespace, c.Namespace)
 		}
 		p.ApplyDefaults(&next.Spec)
-		if err = domain.ValidateExposure(next.Spec.Exposure); err != nil {
+		if err = domain.ValidateExposureUpdate(&c.Spec.Exposure, next.Spec.Exposure); err != nil {
 			return s.failure(err)
 		}
 		if err = p.Validate(ctx, c, &next); err != nil {

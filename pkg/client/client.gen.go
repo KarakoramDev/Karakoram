@@ -1026,7 +1026,7 @@ type EventList struct {
 
 // Exposure defines model for Exposure.
 type Exposure struct {
-	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure.
 	AllowAllAddresses *bool           `json:"allowAllAddresses,omitempty"`
 	Allowlist         *[]string       `json:"allowlist,omitempty"`
 	IpType            *ExposureIpType `json:"ipType,omitempty"`
@@ -1038,7 +1038,7 @@ type ExposureIpType string
 
 // ExposureInput defines model for ExposureInput.
 type ExposureInput struct {
-	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure.
 	AllowAllAddresses *bool                `json:"allowAllAddresses,omitempty"`
 	Allowlist         *[]string            `json:"allowlist,omitempty"`
 	IpType            *ExposureInputIpType `json:"ipType,omitempty"`
@@ -1050,7 +1050,7 @@ type ExposureInputIpType string
 
 // ExposurePatch defines model for ExposurePatch.
 type ExposurePatch struct {
-	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure.
 	AllowAllAddresses *bool                `json:"allowAllAddresses"`
 	Allowlist         *[]string            `json:"allowlist"`
 	IpType            *ExposurePatchIpType `json:"ipType"`

@@ -191,6 +191,68 @@ func TestDefaultsRoundTripAndExposureAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestLegacyExposureUnrelatedUpdates(t *testing.T) {
+	for _, exposure := range []domain.Exposure{
+		{Public: true, IPType: "IPV4", Allowlist: []string{"0.0.0.0/0"}},
+		{Public: true, IPType: "IPV6", Allowlist: []string{"::/0"}},
+		{Public: true, IPType: "IPV6", Allowlist: []string{"192.0.2.0/24"}},
+	} {
+		t.Run(exposure.IPType+exposure.Allowlist[0], func(t *testing.T) {
+			s, _, token := testServer(t)
+			ref := domain.ClusterRef{Namespace: "default", Name: "prod"}
+			c, err := s.Store.GetCluster(t.Context(), ref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Spec.Exposure = exposure
+			if err := s.Store.UpdateClusterSpec(t.Context(), ref, c.Spec); err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "PATCH", "/api/v1/clusters/prod", `{"spec":{"version":"8.0.1"}}`, token)
+			if w.Code != 200 {
+				t.Fatalf("version-only update: %d %s", w.Code, w.Body.String())
+			}
+			c, err = s.Store.GetCluster(t.Context(), ref)
+			if err != nil || c.Spec.Version != "8.0.1" || c.Spec.Exposure.Allowlist[0] != exposure.Allowlist[0] {
+				t.Fatal(c, err)
+			}
+			c.Spec.Components.Engine.Replicas = 5
+			body, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w = call(s, "PUT", "/api/v1/clusters/prod", string(body), token)
+			if w.Code != 200 {
+				t.Fatalf("scaling replacement: %d %s", w.Code, w.Body.String())
+			}
+			w = call(s, "PATCH", "/api/v1/clusters/prod", `{"spec":{"exposure":{"public":true,"ipType":"IPV4","allowlist":["0.0.0.0/0","192.0.2.0/24"]}}}`, token)
+			if w.Code != 400 || !strings.Contains(w.Body.String(), "allowAllAddresses") {
+				t.Fatalf("changed allowlist needs acknowledgement: %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestSplitAllowlistRequiresAcknowledgement(t *testing.T) {
+	for _, allowlist := range []string{`["0.0.0.0/1","128.0.0.0/1"]`, `["::/1","8000::/1"]`} {
+		s, _, token := testServer(t)
+		ipType := "IPV4"
+		if strings.Contains(allowlist, ":") {
+			ipType = "IPV6"
+		}
+		body := `{"spec":{"exposure":{"public":true,"ipType":"` + ipType + `","allowlist":` + allowlist + `}}}`
+		w := call(s, "PATCH", "/api/v1/clusters/prod", body, token)
+		if w.Code != 400 || !strings.Contains(w.Body.String(), "allowAllAddresses") {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		body = `{"spec":{"exposure":{"public":true,"ipType":"` + ipType + `","allowlist":` + allowlist + `,"allowAllAddresses":true}}}`
+		w = call(s, "PATCH", "/api/v1/clusters/prod", body, token)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+}
+
 func TestClosedSchemasAndCompositions(t *testing.T) {
 	doc, err := apispec.Load()
 	if err != nil {
