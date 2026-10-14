@@ -52,6 +52,14 @@ Use **Settings → Backup storages → Edit**, or `karactl storages set archive 
 
 Registration saves configuration, not proof of S3 access. A verification failure still returns **HTTP 200**, with `verified: false`, `failureReason` and a secret-free message; success omits `failureReason`. The probe checks put/get/delete from the control plane, not connectivity from every database member.
 
+The UI separates **Options** (HTTP without TLS, or HTTPS with certificate
+verification on/off) from **Verification** (not checked in this session,
+checking, successful or failed). A failed result shows its category, message and
+check time; a later configuration change asks you to verify again. Results are
+kept for the current page session, not a durable history. HTTPS/certificate
+verification settings alone do not prove credentials or bucket access, and a
+successful probe does not make plaintext HTTP safe.
+
 | `failureReason` | What to check |
 | --- | --- |
 | `access_denied` | Access key/secret pair and bucket read, write and delete permissions; expired credentials or a signature/region mismatch |
@@ -82,6 +90,13 @@ Both types execute on nodes via PBM; physical snapshots require PSMDB. A create 
 
 Backup and restore responses always identify their operation as `operationId`, also returned in `Karakoram-Operation-Id`; use `karactl operations wait ID`. Inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
 
+Accepted backup/restore actions in the UI include **View operation** links in
+their success toasts. Follow the linked [operation detail page](web-ui.md#operation-details-and-cancellation),
+then inspect the inventory's final outcome. For catalog upgrades marked
+`requiresBackup`, only a Succeeded backup completed within 24 hours and no
+earlier than the last known convergence to the current version qualifies;
+see [the server-enforced gate](scaling-and-upgrades.md#required-pre-upgrade-backups).
+
 Manual backup requests require a formed, active cluster with its current generation observed. Creating, suspended, deleting or otherwise unconverged clusters return **409** naming the phase instead of leaving a Pending record. If an operation fails, expires, is cancelled or is retired by cluster deletion, its unfinished backup inventory becomes Failed with the same message. Failed records without a started PBM snapshot, and never-started records without active work, can be deleted immediately and their name reused; snapshots that did start still need asynchronous backend cleanup. Backups have a 20-failure/two-hour operation limit; restores have a six-hour deadline. See the [API async contract](api.md#declarative-updates-and-asynchronous-work) for configuration and safe cancellation checkpoints.
 
 After full cluster removal, deleting a retained Failed/never-started record without a PBM snapshot is synchronous (**204**) and does not require reachable storage. An active matching operation still blocks deletion until it is cancelled or terminal. Removal also deletes the record's protected recovery credential. Cleanup of a cluster that never configured PBM removes never-started owned records without waiting for nonexistent database agents; ambiguous durable start receipts remain subject to remote snapshot cleanup instead.
@@ -93,6 +108,10 @@ Missing storage dependencies return **404** with `details.resource: backupStorag
 Active work is matched to the operation's recorded backup target. When it blocks deletion, the **409** error retains `details.resource: backup`, the backup name and its current `details.state`, and directs you to cancel the operation first.
 
 ## Schedules and count retention
+
+Without cluster-update permission, the UI's backup policy is read-only, even
+when you can read backup inventory. Saving schedules, storage or PITR settings
+requires that permission; backup creation/deletion have their own permissions.
 
 Cluster `spec.backup.storage` is the primary destination. Schedules may select another registered storage. Configure them in the UI or submit a cluster merge patch:
 

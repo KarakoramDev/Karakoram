@@ -186,7 +186,45 @@ Each Operation exposes its initiating `actor`. Desired-state writes persist attr
 
 Network disconnect or client wait timeout does not cancel server work. Retain the returned operation ID and resume observation with `karactl operations wait ID`; do not resubmit create/restore merely because waiting stopped. Node receipts may intentionally report ambiguous initiation requiring observation/operator recovery.
 
-`POST /api/v1/operations/{id}/cancel` (or `karactl operations cancel ID`) requires **clusters/update** on the operation's persisted namespace/cluster object. It returns **202 Operation** plus `Karakoram-Operation-Id`. Pending work becomes Cancelled immediately; cancelling Pending tracking does **not** undo accepted desired state. Running cancellation is cooperative (`cancelRequested: true`) and remains Running until safe cleanup completes. PSMDB supports backup cancellation, FCV while waiting for prerequisites (not once applying FCV), and restore before data mutation, including waiting for PBM source inventory. A restore already initiating/applying data, deletion, Running desired-state tracking, restart/replacement/rotation and unsupported-provider work cannot be safely aborted; they return **409 `conflict` with `details.reason: invalid_state`** and a checkpoint-specific explanation. Terminal operations also return that conflict. Inspect a changed checkpoint before retrying a racing cancellation. A cancelled backup/restore inventory entry is Failed with the cancellation summary. There is no universal cancel/rollback or exactly-once mutation guarantee.
+### Cancel an operation
+
+`POST /api/v1/operations/{id}/cancel` (or `karactl operations cancel ID`)
+requires **clusters/update** on the operation's persisted namespace/cluster
+object. The ID resolves that scope; no namespace override is needed. An accepted
+request returns **202 Operation** plus **`Karakoram-Operation-Id`**:
+
+- **Pending:** becomes **Cancelled** immediately. Cancelling Pending tracking
+  does **not** undo accepted desired state.
+- **Running:** only provider-supported safe checkpoints are cancellable.
+  Acceptance sets **`cancelRequested: true`**; the operation remains Running
+  until cooperative cleanup completes. Poll the same ID to a terminal phase,
+  rather than treating HTTP 202 as completed cancellation.
+- **Terminal or unsafe/unsupported Running work:** returns **409 `conflict`**
+  with **`details.reason: invalid_state`**, `resource: operation`, its ID as
+  `name`, and a state/checkpoint explanation. A checkpoint can change between
+  reading an operation and cancelling it; inspect the new state before retrying.
+
+PSMDB supports backup cancellation, FCV before the `apply-fcv` checkpoint, and
+restore before data mutation (including PBM source inventory waits). A restore
+already initiating/applying data, deletion, Running desired-state tracking,
+restart/replacement/rotation and unsupported-provider work cannot be safely
+aborted. A cancelled backup/restore inventory entry is **Failed** with the
+cancellation summary. Cancellation is not rollback and does not undo work
+already performed.
+
+With the bearer token/origin from the [curl bootstrap](#copyable-curl-bootstrap):
+
+```sh
+OPERATION_ID='the-operation-id'
+curl --fail-with-body --silent --show-error -X POST \
+  -H "Authorization: Bearer $KARAKORAM_TOKEN" \
+  "$SERVER/api/v1/operations/$OPERATION_ID/cancel"
+karactl operations wait "$OPERATION_ID"
+```
+
+`operations wait` reports Cancelled as a non-successful terminal result. There
+is no universal cancel/rollback or exactly-once mutation guarantee; operation
+retry/deadline budgets above still bound ownership while cleanup is pending.
 
 ## Safe retries with Idempotency-Key
 

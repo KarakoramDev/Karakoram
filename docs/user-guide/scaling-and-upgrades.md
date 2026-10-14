@@ -25,6 +25,21 @@ karactl clusters scale demo --members 5 --wait
 
 Convenience scaling flags patch only settings explicitly supplied. `--component` selects `engine` (default), `configServer` or `router`; `--config-servers` and `--routers` change their replica counts. Engine resources/replicas apply to every shard set in a sharded cluster. [Sharding](sharding.md) explains shard count and router scaling.
 
+In the Web UI's **Topology** tab, **Review & apply** shows **What will change**
+for the actual merge patch, not a generic warning about all scaling:
+
+- **Membership:** added data members complete initial sync and voting promotion;
+  removals preserve a voting majority. Router-count changes update router capacity,
+  not voting membership. Adding shards retains existing shard sets.
+- **Resources:** changed bounds are applied one member at a time with rolling
+  restart precautions; changed disk bounds update the existing data volume.
+- **CPU-only:** changes limited to `cpuMode`, `minCpu`, `maxCpu` or `startCpu`
+  do not move data. Platform updates still use per-member disruption safety
+  checks, and a platform restart may occur; this is not a no-downtime promise.
+
+Expand **Merge patch to be sent** to inspect the exact `{spec: {...}}` body.
+Unchanged component replicas/settings are not independent scaling requests.
+
 Persistent capacity is configured on the **volume service**; volume `maxDisk` determines mounted capacity. Runtime root disk is disposable and does not resize the database volume. **Disk shrinking is rejected**, including reducing either desired min/max disk bound. Plan headroom and inspect used/total disk in member status. A resource configuration Process finishing does not guarantee observed container allocation changed instantaneously.
 
 Member status distinguishes **`autoscaling`** (the effective runtime bounds read back from Zerops service configuration, including CPU mode/start CPU) from **`resources`** (the container's current hardware allocation). Neither is a copy of the desired cluster spec. `Ready` plus the matching observed generation means Karakoram completed its resource/configuration work; it is not an allocation-convergence SLA. Do not infer a hard allocated-memory cap from desired bounds or force simultaneous infrastructure restarts. The UI's member “Platform resources” detail shows both observations; `autoscaling` disk bounds describe the disposable runtime root disk, while `diskTotalBytes` describes the mounted database volume.
@@ -73,6 +88,10 @@ If no qualifying backup exists, the API rejects the version change with **409
 There is **no bypass flag**. Paths without `requiresBackup` do not enforce this
 gate, but a tested recovery point is still recommended before every upgrade.
 
+The UI names the last recorded successful backup but does not itself establish
+that it meets the full age/version cutoff. A visible or enabled **Upgrade…**
+button is not proof that the gate will pass; the server checks on submission.
+
 ## Rolling binary upgrade
 
 1. Take a successful backup and check storage access. Test recovery and application/driver compatibility with the target version.
@@ -95,6 +114,12 @@ gate, but a tested recovery point is still recommended before every upgrade.
 Secondaries are deployed before primary stepdown/upgrading the former primary. The provider waits for actual pinned binary version and replication convergence after each deployment. For sharding, config servers precede shard sets and then routers; the balancer's prior state is saved/stopped/restored around binary cutover. An unhealthy member or lost quorum pauses progression rather than making simultaneous changes.
 
 A singleton has downtime. Rolling order reduces disruption but is not a universal zero-failed-write guarantee: applications still need appropriate driver retry/read/write-concern handling, and Zerops placement is not guaranteed.
+
+The UI's **Running version** comes from observed non-router member versions and
+can show multiple versions during a rollout; **Desired version** is the requested
+specification. No observed member version means **not yet observed**, not that
+the desired version is running. Upgrade/restart dialogs repeat the availability
+warning, including explicit singleton downtime.
 
 ## Explicit FCV promotion
 
