@@ -459,8 +459,9 @@ Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/
 
 `make openapi-check` regenerates/diffs the Go API/client/RBAC paths; it is not a TypeScript-drift or live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.
 
-For consumers whose YAML parser limits alias expansion, maintainers can normalize
-the source without changing its OpenAPI meaning:
+The checked-in specification has no YAML anchors or aliases, so consumers can
+use parsers with conservative alias-expansion limits. After editing a document
+that introduces aliases, normalize it without changing its OpenAPI meaning:
 
 ```sh
 go run ./internal/tools/specnoalias
@@ -470,6 +471,7 @@ go generate ./api/...
 ```
 
 The tool preserves existing `#/components/responses/...` references rather than
-copying error schemas. `-check` exits nonzero if any YAML anchor or alias remains,
-so it can guard a normalized specification in CI.
+copying error schemas. `-check` exits nonzero if any YAML anchor or alias remains.
+The repository regression test checks the published source and fails if aliases
+are reintroduced.
 
