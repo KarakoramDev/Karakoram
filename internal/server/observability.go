@@ -67,18 +67,32 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 			}
 			limit = n
 		}
-		since, err := eventCursor(q.Get("cursor"))
+		position, err := eventCursor(q.Get("cursor"))
 		if err != nil {
+			return invalid()
+		}
+		descending := false
+		switch q.Get("order") {
+		case "", "asc":
+		case "desc":
+			descending = true
+		default:
 			return invalid()
 		}
 		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
 		for {
-			items, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: namespaceFilter(ctx), Cluster: q.Get("cluster"), Type: q.Get("type"), Actor: q.Get("actor"), Resource: q.Get("resource"), Limit: 1000, SinceID: since})
+			filter := store.EventFilter{Namespace: namespaceFilter(ctx), Cluster: q.Get("cluster"), Type: q.Get("type"), Actor: q.Get("actor"), Resource: q.Get("resource"), Limit: 1000}
+			if descending {
+				filter.Descending, filter.BeforeID = true, position
+			} else {
+				filter.SinceID = position
+			}
+			items, err := s.Store.ListEvents(ctx, filter)
 			if err != nil {
 				return s.failure(err)
 			}
 			for _, e := range items {
-				since = e.ID
+				position = e.ID
 				if !s.eventAllowed(ctx, e) {
 					continue
 				}

@@ -4539,6 +4539,8 @@ export interface operations {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
+                /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
+                order?: "asc" | "desc";
                 /** @description Exact resource category, such as clusters, accounts, auth or rbac. */
                 resource?: string;
                 type?: string;

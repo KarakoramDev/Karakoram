@@ -2592,6 +2592,15 @@ paths:
       parameters:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
+      - name: order
+        in: query
+        description: Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order.
+        schema:
+          type: string
+          enum:
+          - asc
+          - desc
+          default: asc
       - &id008
         name: cluster
         in: query

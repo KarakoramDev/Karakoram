@@ -250,6 +250,12 @@ const (
 	PbmAgent GetMemberLogsParamsProcess = "pbm-agent"
 )
 
+// Defines values for ListEventsParamsOrder.
+const (
+	Asc  ListEventsParamsOrder = "asc"
+	Desc ListEventsParamsOrder = "desc"
+)
+
 // APIToken Only metadata and a non-sensitive identifying prefix; the token value is never returned here.
 type APIToken struct {
 	CreatedAt  time.Time  `json:"createdAt"`
@@ -1875,10 +1881,13 @@ type ListEventsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Cursor Opaque cursor returned by the preceding page.
-	Cursor      *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Cluster     *string `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Type        *string `form:"type,omitempty" json:"type,omitempty"`
-	OperationId *string `form:"operationId,omitempty" json:"operationId,omitempty"`
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Order Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order.
+	Order       *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+	Cluster     *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
+	Type        *string                `form:"type,omitempty" json:"type,omitempty"`
+	OperationId *string                `form:"operationId,omitempty" json:"operationId,omitempty"`
 
 	// Actor Exact actor identity, including token name and ID when applicable.
 	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
@@ -1889,6 +1898,9 @@ type ListEventsParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
+
+// ListEventsParamsOrder defines parameters for ListEvents.
+type ListEventsParamsOrder string
 
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
@@ -6085,6 +6097,14 @@ func (siw *ServerInterfaceWrapper) ListEvents(w http.ResponseWriter, r *http.Req
 	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "order" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "order", r.URL.Query(), &params.Order)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
 		return
 	}
 
