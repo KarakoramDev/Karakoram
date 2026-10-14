@@ -283,6 +283,69 @@ func TestExposureAcknowledgementDoesNotSurviveNarrowing(t *testing.T) {
 	}
 }
 
+func TestPSMDBPrivateExposureDoesNotRequireAcknowledgement(t *testing.T) {
+	for _, tc := range []struct {
+		name, ip, allowlist string
+	}{
+		{"all IPv4", "IPV4", `["0.0.0.0/0"]`},
+		{"all IPv6", "IPV6", `["::/0"]`},
+		{"IPv4 halves", "IPV4", `["0.0.0.0/1","128.0.0.0/1"]`},
+		{"IPv6 halves", "IPV6", `["::/1","8000::/1"]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			var err error
+			s.Registry, err = engine.NewRegistry(psmdb.New(psmdb.Options{Store: s.Store}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := `{"name":"sample","spec":{"provider":"psmdb","exposure":{"public":true,"ipType":"` + tc.ip + `","allowlist":` + tc.allowlist + `,"allowAllAddresses":true}}}`
+			w := call(s, "POST", "/api/v1/clusters", body, token)
+			if w.Code != 201 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			ref := domain.ClusterRef{Namespace: "default", Name: "sample"}
+			for _, step := range []struct {
+				body   string
+				status int
+				public bool
+			}{
+				{`{"spec":{"exposure":{"public":false}}}`, 200, false},
+				{`{"spec":{"exposure":{"public":true}}}`, 400, false},
+				{`{"spec":{"exposure":{"public":true,"allowAllAddresses":true}}}`, 200, true},
+				{`{"spec":{"exposure":{"public":false,"allowAllAddresses":true}}}`, 200, false},
+			} {
+				w = call(s, "PATCH", "/api/v1/clusters/sample", step.body, token)
+				if w.Code != step.status {
+					t.Fatalf("%s: %d %s", step.body, w.Code, w.Body.String())
+				}
+				if step.status == 400 && !strings.Contains(w.Body.String(), "allowAllAddresses") {
+					t.Fatalf("expected acknowledgement error: %s", w.Body.String())
+				}
+				c, err := s.Store.GetCluster(t.Context(), ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if c.Spec.Exposure.Public != step.public || c.Spec.Exposure.AllowAllAddresses != step.public || !domain.ExposureCoversFamily(c.Spec.Exposure) {
+					t.Fatalf("%s: unexpected stored exposure: %+v", step.body, c.Spec.Exposure)
+				}
+			}
+			body = `{"name":"private","spec":{"provider":"psmdb","exposure":{"public":false,"ipType":"` + tc.ip + `","allowlist":` + tc.allowlist + `}}}`
+			w = call(s, "POST", "/api/v1/clusters", body, token)
+			if w.Code != 201 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Namespace: "default", Name: "private"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Spec.Exposure.Public || c.Spec.Exposure.AllowAllAddresses || !domain.ExposureCoversFamily(c.Spec.Exposure) {
+				t.Fatalf("unexpected private creation exposure: %+v", c.Spec.Exposure)
+			}
+		})
+	}
+}
+
 func TestExposureAcknowledgementNormalizedOnCreateAndReplace(t *testing.T) {
 	s, _, token := testServer(t)
 	w := call(s, "POST", "/api/v1/clusters", `{"name":"sample","spec":{"provider":"fake","exposure":{"public":true,"ipType":"IPV4","allowlist":["203.0.113.0/24"],"allowAllAddresses":true}}}`, token)

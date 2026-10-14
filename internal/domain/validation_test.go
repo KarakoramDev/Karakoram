@@ -41,6 +41,35 @@ func TestExposureValidation(t *testing.T) {
 	}
 }
 
+func TestPrivateExposureDoesNotRequireAcknowledgement(t *testing.T) {
+	for _, tc := range []struct {
+		name, ip string
+		cidrs    []string
+	}{
+		{"all IPv4", "IPV4", []string{"0.0.0.0/0"}},
+		{"all IPv6", "IPV6", []string{"::/0"}},
+		{"IPv4 halves", "IPV4", []string{"0.0.0.0/1", "128.0.0.0/1"}},
+		{"IPv6 halves", "IPV6", []string{"::/1", "8000::/1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			private := Exposure{IPType: tc.ip, Allowlist: tc.cidrs}
+			if err := ValidateExposure(private); err != nil {
+				t.Fatalf("private creation: %v", err)
+			}
+			public := private
+			public.Public = true
+			public.AllowAllAddresses = true
+			if err := ValidateExposureUpdate(&public, private); err != nil {
+				t.Fatalf("disabling exposure: %v", err)
+			}
+			public.AllowAllAddresses = false
+			if err := ValidateExposureUpdate(&private, public); err == nil {
+				t.Fatal("publishing full-family coverage requires a fresh acknowledgement")
+			}
+		})
+	}
+}
+
 func TestExposureUnionCoverage(t *testing.T) {
 	for _, tc := range []struct {
 		name, ip string

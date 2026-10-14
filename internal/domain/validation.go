@@ -75,8 +75,9 @@ func ValidateExposure(exposure Exposure) error {
 	if exposure.Public && len(exposure.Allowlist) == 0 {
 		return InvalidField("spec.exposure.allowlist", ReasonRequired, "spec.exposure.allowlist requires at least one CIDR for public exposure")
 	}
+	requiresAcknowledgement := exposure.Public && !exposure.AllowAllAddresses
 	var prefixes []netip.Prefix
-	if !exposure.AllowAllAddresses {
+	if requiresAcknowledgement {
 		prefixes = make([]netip.Prefix, 0, len(exposure.Allowlist))
 	}
 	for i, cidr := range exposure.Allowlist {
@@ -88,14 +89,14 @@ func ValidateExposure(exposure Exposure) error {
 		if prefix.Addr().Is4() != (ipType == "IPV4") {
 			return InvalidField(field, ReasonInvalid, "%s must use the %s address family selected by spec.exposure.ipType", field, ipType)
 		}
-		if prefix.Bits() == 0 && !exposure.AllowAllAddresses {
+		if prefix.Bits() == 0 && requiresAcknowledgement {
 			return InvalidField(field, ReasonRequired, "%s covers every address; explicitly acknowledge it with spec.exposure.allowAllAddresses: true", field)
 		}
-		if !exposure.AllowAllAddresses {
+		if requiresAcknowledgement {
 			prefixes = append(prefixes, prefix.Masked())
 		}
 	}
-	if prefixesCoverFamily(prefixes) {
+	if requiresAcknowledgement && prefixesCoverFamily(prefixes) {
 		return InvalidField("spec.exposure.allowlist", ReasonRequired, "spec.exposure.allowlist covers every address; explicitly acknowledge it with spec.exposure.allowAllAddresses: true")
 	}
 	return nil
