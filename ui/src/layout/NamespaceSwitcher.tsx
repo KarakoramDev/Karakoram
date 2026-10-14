@@ -54,9 +54,6 @@ export function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
   }, [open]);
 
   const items = namespaces.data?.items ?? [];
-  // Without a readable namespace list the installation is a single project; the
-  // control still lets a shared `?namespace=` link be shown and cleared.
-  if (items.length <= 1 && !namespace) return null;
 
   const current = items.find((n) => n.name === namespace);
   const currentHealth = current ? namespaceHealth(current) : null;
@@ -68,7 +65,7 @@ export function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
     const onDetail = /^\/clusters\/[^/]+\/[^/]+/.test(location.pathname) && !location.pathname.startsWith('/clusters/new');
     if (onDetail) {
       rememberNamespace(next);
-      navigate(next ? `/clusters?namespace=${encodeURIComponent(next)}` : '/clusters');
+      navigate(`/clusters?${new URLSearchParams({ namespace: next ?? '' })}`);
       return;
     }
     setNamespace(next);

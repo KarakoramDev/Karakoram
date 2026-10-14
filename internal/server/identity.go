@@ -5,16 +5,25 @@ package server
 
 import (
 	"context"
+	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/version"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
 func accountAPI(a domain.Account) api.Account {
-	return api.Account{Name: a.Name, Enabled: !a.Disabled, MustChangePassword: a.MustChangePassword, CreatedAt: a.CreatedAt, UpdatedAt: a.PasswordChangedAt}
+	updated := a.UpdatedAt
+	if updated.IsZero() {
+		updated = a.PasswordChangedAt
+	}
+	if updated.IsZero() {
+		updated = a.CreatedAt
+	}
+	return api.Account{Name: a.Name, Enabled: !a.Disabled, MustChangePassword: a.MustChangePassword, CreatedAt: a.CreatedAt, UpdatedAt: updated}
 }
 func tokenAPI(t domain.ApiToken) api.APIToken {
 	return api.APIToken{Id: t.ID, Name: t.Name, Owner: t.Owner, CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt, LastUsedAt: t.LastUsedAt, Prefix: "kk_"}
@@ -43,6 +52,11 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 		return response{noStore: true, serve: func(w http.ResponseWriter) error {
 			si, err := s.Auth.LoginHTTP(w, request(ctx), b.Username, value(b.Password))
 			if err != nil {
+				var limited *auth.RateLimitError
+				if errors.As(err, &limited) {
+					w.Header().Set("Retry-After", strconv.Itoa(limited.RetryAfterSeconds))
+					return failDetails(429, "rate_limited", "Login temporarily throttled; wait before trying again", map[string]any{"retryAfterSeconds": limited.RetryAfterSeconds}).write(w)
+				}
 				return fail(401, "unauthorized", "Invalid credentials").write(w)
 			}
 			return ok(sessionAPI(si)).write(w)
@@ -73,7 +87,7 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 	case "ChangePassword":
 		b := in.Body.(*api.ChangePasswordRequest)
 		if err := s.Auth.ChangePassword(ctx, p.Account, value(b.CurrentPassword), value(b.NewPassword)); err != nil {
-			return fail(400, "invalid_request", "Password change rejected")
+			return s.failure(err)
 		}
 		return response{status: 204, noStore: true}
 	case "GetCurrentUser":
@@ -215,7 +229,7 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 	case "ReplaceRBACPolicy":
 		b := in.Body.(*api.RBACPolicy)
 		if err := s.RBAC.ReplacePolicy(ctx, b.Policy); err != nil {
-			return invalid()
+			return s.failure(err)
 		}
 		return ok(api.RBACPolicy{Policy: s.RBAC.Policy()})
 	case "GetSettings":
@@ -254,12 +268,12 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		enabled := cfg.IssuerURL != ""
-		return ok(api.Version{Version: version.Version, Commit: &version.Commit, BuildDate: &version.BuildDate, ApiVersion: "v1", OidcEnabled: &enabled})
+		return ok(api.Version{Version: version.VersionLabel(), Commit: ptr(version.CommitLabel()), BuildDate: &version.BuildDate, ApiVersion: "v1", OidcEnabled: &enabled})
 	}
 	return fail(500, "internal_error", "Unknown identity operation")
 }
 func (s *Server) settingsAPI(c auth.OIDCSettings) api.Settings {
 	enabled := c.IssuerURL != ""
 	redirect := strings.TrimRight(s.PublicURL, "/") + "/api/v1/auth/oidc/callback"
-	return api.Settings{Oidc: api.OIDCConfig{Enabled: enabled, IssuerURL: &c.IssuerURL, ClientId: &c.ClientID, GroupsClaim: &c.GroupsClaim, Scopes: &c.Scopes, RedirectURL: &redirect}}
+	return api.Settings{Oidc: api.OIDCConfig{Enabled: enabled, IssuerURL: &c.IssuerURL, ClientId: &c.ClientID, GroupsClaim: &c.GroupsClaim, Scopes: ptr(nonNil(c.Scopes)), RedirectURL: &redirect}}
 }

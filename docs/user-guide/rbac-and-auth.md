@@ -8,6 +8,10 @@ Karakoram identities are distinct from Zerops integration tokens and MongoDB dat
 
 On an empty account store Karakoram creates `admin` from `KARAKORAM_ADMIN_PASSWORD`; if no bootstrap password is supplied it generates one and logs it once. The installer supplies a generated secret, avoiding that logging path. The initial account is marked **must change password**. Sign in at the HTTPS UI, change the password, then sign in again before using ordinary privileged workflows or creating tokens. Changing the environment's bootstrap password later does not reset an existing account.
 
+All new/reset passwords require **at least 12 Unicode characters and at most 1024 UTF-8 bytes**. A change or reset must use a password different from the current one. Reuse returns HTTP 400 with `details.field: newPassword` and `details.reason: reused`, and does not clear a required-change flag. An incorrect current password identifies `currentPassword` with reason `invalid`; a short new password identifies `newPassword` with reason `out_of_range`.
+
+After five failed logins from an account/source pair, exponential backoff starts at one second and doubles up to fifteen minutes. During that delay, both correct and incorrect passwords receive HTTP **429 `rate_limited`**, with `Retry-After` (seconds) and `details.retryAfterSeconds`. Wait before trying again; the sign-in page displays the delay. This does not disclose whether a submitted password is correct.
+
 Passwords are Argon2id hashes. Password changes/reset, account disabling/deletion and token revocation invalidate authority through persisted state, not only eventual JWT expiry. New/reset local users can require password change. Use **Settings → Accounts**, or:
 
 ```yaml
@@ -25,7 +29,9 @@ karactl accounts get analyst
 
 Use a private request file/secret manager; the password above is only a placeholder. `accounts set NAME -f FILE` updates enabled/forced-change state, `accounts reset-password NAME -f FILE` resets a local password, and `accounts delete NAME` removes the account. Grant roles through policy bindings, not by adding undocumented fields to the account API.
 
-Self-service password changes use `/api/v1/auth/change-password` (`currentPassword`, `newPassword`) or the UI; `karactl accounts change-password -f FILE` submits that same shape. A forced-change account cannot complete normal CLI login's token creation until the password is changed. Lost-admin recovery supports a startup service-secret update or the stopped-writer offline `karakoram admin reset-password ACCOUNT` procedure; see [operations](../operations.md#recovering-local-admin-access).
+Account names are 1–64 characters, start with a letter, and contain only letters, digits, `_`, `.`, `@` or `-`. Create errors identify `name` or `password`; duplicate account names return 409 `already_exists` naming the existing account. Every enabled/disabled or forced-change update returns a fresh `updatedAt`, independently of the last password change.
+
+Self-service password changes are available from **the sidebar user menu → Change password**, or directly at **`/change-password`**. The API is `/api/v1/auth/change-password` (`currentPassword`, `newPassword`); `karactl accounts change-password -f FILE` submits that same shape. Successful changes return to sign-in with confirmation to use the new password. A forced-change account cannot complete normal CLI login's token creation until the password is changed. Lost-admin recovery supports a startup service-secret update or the stopped-writer offline `karakoram admin reset-password ACCOUNT` procedure; see [operations](../operations.md#recovering-local-admin-access).
 
 ## Default roles
 
@@ -90,6 +96,10 @@ karactl permissions
 
 `policy set` reads raw CSV, not a YAML wrapper; it replaces the **entire** policy after validation. Retain a protected copy and a tested administrator rule to avoid lockout. `rbac can` checks effective authorization; do not interpret a returned allow rule in isolation from denies. List responses, logs/events/streams and monitoring filter/check the actual cluster object, not just the route. Some current-self/owner token operations have ownership rules in addition to general policy; inspect the API contract rather than assuming viewer has token-administration permission.
 
+The policy editor warns and asks for explicit confirmation when a draft has no user/group assignment to `role:admin` (including inherited assignments). Confirmation is **not** a lockout override: the server independently rejects a policy unless it can verify an enabled account or currently verified OIDC group identity retains unrestricted administrative rights without denies. Retain a local break-glass administrator when OIDC is used. Malformed policy errors identify `policy` and the CSV line; a rejected replacement leaves the previous policy intact.
+
+Authorization denials identify the requested resource/action/object and advise contacting an administrator for a grant. A 403 does not indicate a missing account/resource; inspect the requested permission and any explicit denies before retrying.
+
 ## OIDC setup and groups
 
 1. Register a confidential OIDC client with your identity provider. Use the exact redirect URL `https://YOUR-ORIGIN/api/v1/auth/oidc/callback`.
@@ -129,7 +139,13 @@ Build with `go build ./test/oidc-issuer`. Supply HTTPS `OIDC_ISSUER_URL` and `OI
 
 Browser sessions use HttpOnly access/refresh cookies, SameSite=Strict and CSRF on unsafe methods. The short-lived access JWT expires after five minutes by default; refresh families last thirty days and rotate on refresh. The UI performs refresh and sends `X-Karakoram-CSRF`; do not copy its cookies into normal automation.
 
+Reloading with an expired/missing access cookie restores the session using the valid refresh cookie and CSRF token. Network failures and 5xx responses do **not** clear the session: the UI reports temporary unavailability, offers Retry, and retries identity loading automatically. Ordinary UI API requests time out after 30 seconds; long-lived SSE streams are excluded. If authentication is still rejected after one successful refresh, or a new request receives 401 within ten seconds of that refresh, the UI signs out rather than repeatedly rotating and flooding audit history.
+
 API tokens have prefix `kk_`, are returned only once and are stored as SHA-256 hashes. Optional `expiresAt` is RFC3339. They act as their owner's current permissions; disabled/deleted accounts and forced password changes cannot keep ordinary token authority. Every authenticated, password-current account can create, list, read, update and revoke its **own** tokens without an `api-tokens` policy grant. Global `api-tokens` read/update/delete grants additionally permit the corresponding administration of other owners' tokens; self-service lists otherwise contain only the caller's tokens. Creation always binds the token to the caller, never an arbitrary owner.
+
+Token `name` is required, trimmed, non-blank and limited to **1–128 characters**. Duplicate names are intentionally allowed; use the unique token ID (shown in the UI table) to select a revoke target. Long names wrap instead of expanding the table. On both creation and update, `expiresAt` must be a valid RFC 3339 timestamp **strictly in the future**; errors identify `expiresAt` with `invalid` for malformed timestamps or `out_of_range` for past/current times. Updating with null removes expiry.
+
+The token-creation dialog sends an `Idempotency-Key` for each submission and reuses it when retrying the same body, while synchronously preventing a double click from submitting twice. After creation, its one-time-secret panel provides working `KARAKORAM_SERVER`/`KARAKORAM_TOKEN` CLI commands and links to [the running API reference](/api/v1/openapi.yaml). Avoid pasting secret-bearing commands into shared logs or shell history; prefer injecting the token from a secret manager.
 
 ```yaml
 name: nightly-automation

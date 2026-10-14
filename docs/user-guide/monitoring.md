@@ -21,11 +21,38 @@ Member status/roles/lag and agent connectivity remain separate from charts. Moni
 
 Disable collection using an API-shaped merge patch (`spec.monitoring.enabled: false`). Historical samples persist until retention prunes them; do not expect disabling monitoring to delete all history instantly. Control-plane unavailability interrupts scraping/aggregation even while databases continue.
 
+## Query metrics from the Go SDK
+
+Install and authenticate the public Go client using the [Clients/SDK walkthrough](api.md#clientssdk). Reuse its `/api/v1` client, `context.Context` and `responseError` helper. The following function requests **`GET /api/v1/clusters/demo/metrics?namespace=default&range=1h&step=30s`** and returns decoded historical series:
+
+```go
+func clusterMetrics(ctx context.Context, c *client.ClientWithResponses) (*client.ClusterMetrics, error) {
+    namespace, lookback, step := "default", "1h", "30s"
+    response, err := c.GetClusterMetricsWithResponse(ctx, "demo", &client.GetClusterMetricsParams{
+        Namespace: &namespace, Range: &lookback, Step: &step,
+    })
+    if err != nil {
+        return nil, err
+    }
+    if err := responseError(response.StatusCode(), response.Body); err != nil {
+        return nil, err
+    }
+    if response.JSON200 == nil {
+        return nil, fmt.Errorf("unexpected metrics response: %s", response.Status())
+    }
+    return response.JSON200, nil
+}
+```
+
+Replace `demo` and `default` with the cluster and namespace you are authorized to monitor. Iterate the returned `Series` and their `Points`; an empty result is not proof of health. Keep range within the retained 24 hours and step no greater than range. This JSON API differs from root `/metrics`, which returns Prometheus text; the SDK's generated root endpoint method requires a separate client with the origin as its base URL. The metrics example is also compiled in [`pkg/client/example_test.go`](../../pkg/client/example_test.go).
+
 ## Prometheus scraping
 
 The public endpoint is **`GET /metrics` at the installation root**, not `/api/v1/metrics`. It exports Prometheus text with authoritative `namespace`, `cluster` and `member` labels. Obtain a Karakoram API token for an account permitted to `read` `monitoring`; the server filters individual `<namespace>/<cluster>` objects by the same policy. It is not a Zerops integration token.
 
 Without a `namespace` query parameter the endpoint includes all authorized namespaces. Set `?namespace=<name>` to restrict the scrape to one namespace.
+
+A signed-in browser's `karakoram_access` cookie also authenticates this read-only endpoint, with the same monitoring permissions and filtering. Bearer tokens are recommended for Prometheus and other unattended scrapers; do not copy expiring browser cookies into scraper configuration.
 
 ```yaml
 scrape_configs:
@@ -80,5 +107,22 @@ Use `rate(karakoram_opcounters_total[5m])` for operation throughput in Prometheu
 - **Remote scrape/config pull failed:** inspect [relay health](namespaces.md#relay-health), public-origin reachability and namespace-qualified agent routing. Relay platform readiness proves only its private listener, not the tunnel; do not disable CA/hostname verification.
 - **PBM up but no backups:** the metric indicates a supervised process only; inspect PBM registration and backup/error records.
 - **Memory near bound:** RSS excludes other processes; inspect Zerops allocation/runtime logs before concluding the complete container fits.
+
+## Event streams
+
+`GET /api/v1/events/stream` sends stored event categories, normally `Normal`,
+`Warning` or `Audit`, in `event:`. Lifecycle details such as `OperationFailed`
+are in the JSON `reason`; `type=Warning` filters warning events, whereas
+`type=operation.updated` is not a lifecycle filter. Example:
+
+```text
+id: 42
+event: Warning
+data: {"id":42,"cluster":"demo","type":"Warning","reason":"OperationFailed","message":"Backup failed","createdAt":"2026-01-01T00:00:00Z"}
+
+```
+
+Use persisted operations/status for authoritative progress and preserve the SSE
+ID and filters when reconnecting. See the [API event contract](api.md#pagination-and-events).
 
 See [operations](../operations.md), [RBAC](rbac-and-auth.md) and [backups/PITR](backups-and-restore.md).

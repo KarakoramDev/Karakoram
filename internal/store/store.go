@@ -137,6 +137,24 @@ func typed(err error) error {
 	return err
 }
 
+func resourceError(kind, name string, err error) error {
+	resource := kind
+	switch kind {
+	case "backup", "restore":
+	case "storage":
+		resource = "backupStorage"
+	default:
+		return err
+	}
+	if errors.Is(err, ErrNotFound) {
+		return domain.NotFound(resource, name, err)
+	}
+	if errors.Is(err, ErrConflict) {
+		return domain.Conflict(resource, name, domain.ReasonAlreadyExists, err, "%s %q already exists", resource, name)
+	}
+	return err
+}
+
 type executor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
@@ -152,14 +170,14 @@ func put(ctx context.Context, db executor, kind, scope, key string, value any, s
 		q += " ON CONFLICT(kind,scope,key) DO UPDATE SET data=excluded.data,secret=excluded.secret,hash=excluded.hash,phase=excluded.phase,updated=excluded.updated"
 	}
 	_, err = db.ExecContext(ctx, q, kind, scope, key, data, secret, hash, phase, now, now)
-	return typed(err)
+	return resourceError(kind, key, typed(err))
 }
 func (s *Store) get(ctx context.Context, kind, scope, key string, out any) (string, string, error) {
 	var data []byte
 	var secret, hash string
 	err := s.reader.QueryRowContext(ctx, "SELECT data,secret,hash FROM records WHERE kind=? AND scope=? AND key=?", kind, scope, key).Scan(&data, &secret, &hash)
 	if err != nil {
-		return "", "", typed(err)
+		return "", "", resourceError(kind, key, typed(err))
 	}
 	return secret, hash, json.Unmarshal(data, out)
 }
@@ -228,7 +246,7 @@ func (s *Store) remove(ctx context.Context, kind, scope, key string) error {
 	}
 	n, err := result.RowsAffected()
 	if err == nil && n == 0 {
-		return ErrNotFound
+		return resourceError(kind, key, ErrNotFound)
 	}
 	return err
 }
@@ -243,7 +261,7 @@ func (s *Store) update(ctx context.Context, kind, scope, key string, value any, 
 	}
 	n, err := r.RowsAffected()
 	if err == nil && n == 0 {
-		return ErrNotFound
+		return resourceError(kind, key, ErrNotFound)
 	}
 	return err
 }

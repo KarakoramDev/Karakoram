@@ -6,7 +6,7 @@
 package e2e
 
 import (
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 	"io"
 	"strings"
 	"testing"

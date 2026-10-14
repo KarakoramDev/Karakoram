@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
+import { api, ApiError, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { useBackupStorages, useNamespaceOptions } from '@/api/hooks';
 import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
@@ -12,9 +12,12 @@ import { spansNamespaces, useNamespace } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
-import { Badge, Callout, Card, ErrorBlock, Loading, Menu, MenuItem, Time } from '@/components/ui/Primitives';
+import { Badge, Card, ErrorBlock, Loading, Menu, MenuItem, Time } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 
+import { storageTransport } from '@/components/ui/presentation';
+import { deleteWithReconciliation } from './storage-outcome';
+import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
 type Storage = Schemas['BackupStorage'];
 
 export function BackupStoragesPage() {
@@ -39,7 +42,10 @@ export function BackupStoragesPage() {
     onError: (e, s) => setVerifications((v) => ({ ...v, [storageKey(s)]: { verified: false, message: errorMessage(e), checkedAt: new Date().toISOString() } })),
   });
   const remove = useMutation({
-    mutationFn: (s: Storage) => unwrap(api.DELETE('/backup-storages/{storage}', { params: { path: { storage: s.name }, query: { namespace: s.namespace || DEFAULT_NAMESPACE } } })),
+    mutationFn: (s: Storage) => {
+      const params = { path: { storage: s.name }, query: { namespace: s.namespace || DEFAULT_NAMESPACE } };
+      return deleteWithReconciliation(() => unwrap(api.DELETE('/backup-storages/{storage}', { params })), () => unwrap(api.GET('/backup-storages/{storage}', { params })), (error) => error instanceof ApiError && error.status === 404);
+    },
     onSuccess: () => {
       toast.success('Storage deleted.');
       setDel(null);
@@ -90,12 +96,12 @@ export function BackupStoragesPage() {
                   const v = verifications[storageKey(s)];
                   return (
                     <tr key={storageKey(s)}>
-                      <td className="mono">
+                      <td className="mono" title={s.name}>
                         {s.name}
                         {s.description ? <div className="xs faint">{s.description}</div> : null}
                       </td>
                       {showNamespace ? <td className="mono small">{s.namespace || DEFAULT_NAMESPACE}</td> : null}
-                      <td className="mono small">{s.endpointURL}</td>
+                      <td className="mono small" title={s.endpointURL}>{s.endpointURL}</td>
                       <td className="mono small">
                         {s.bucket}
                         {s.prefix ? `/${s.prefix}` : ''}
@@ -104,7 +110,7 @@ export function BackupStoragesPage() {
                       <td className="small">
                         <span className="row wrap" style={{ gap: 4 }}>
                           {s.forcePathStyle ? <Badge plain>path-style</Badge> : null}
-                          {s.verifyTLS ? <Badge plain tone="ok">TLS verified</Badge> : <Badge plain tone="warn">TLS unverified</Badge>}
+                          <Badge plain tone={s.endpointURL.startsWith('https://') && s.verifyTLS ? 'neutral' : 'warn'}>{storageTransport(s.endpointURL, s.verifyTLS ?? true)}</Badge>
                           {s.credentialsConfigured ? null : <Badge plain tone="danger">no credentials</Badge>}
                         </span>
                       </td>
@@ -115,21 +121,21 @@ export function BackupStoragesPage() {
                           </span>
                         ) : v ? (
                           <Badge tone={v.verified ? 'ok' : 'danger'} title={v.message}>
-                            {v.verified ? 'OK' : 'Failed'}
+                            {v.verified ? 'Last check passed' : 'Last check failed'}
                           </Badge>
                         ) : (
                           <Button size="sm" onClick={() => verify.mutate(s)} disabled={!canOn(s, 'update')}>
                             Verify
                           </Button>
                         )}
-                        {v && v !== 'pending' ? <div className="xs faint">{v.message}</div> : null}
+                        {v && v !== 'pending' ? <div className="xs faint">{v.message}<div>Checked <Time iso={v.checkedAt} /></div>{s.updatedAt && Date.parse(s.updatedAt) > Date.parse(v.checkedAt) ? <div>Configuration changed since this check. Verify again.</div> : null}</div> : !v ? <div className="xs faint">Not checked in this session.</div> : null}
                       </td>
                       <td className="small">
                         <Time iso={s.updatedAt} />
                       </td>
                       <td className="actions">
                         <Menu>
-                          <MenuItem onClick={() => verify.mutate(s)} disabled={!canOn(s, 'update')}>
+                          <MenuItem onClick={() => verify.mutate(s)} disabled={!canOn(s, 'update') || v === 'pending'}>
                             Verify access
                           </MenuItem>
                           <MenuItem onClick={() => setDialog({ mode: 'edit', storage: s })} disabled={!canOn(s, 'update')}>
@@ -149,7 +155,7 @@ export function BackupStoragesPage() {
         )}
       </Card>
       {dialog ? <StorageDialog existing={dialog.mode === 'edit' ? dialog.storage : undefined} namespaces={namespaceOptions} defaultNamespace={namespace} onClose={() => setDialog(null)} /> : null}
-      <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del)} title={`Delete storage ${del?.name ?? ''}`} confirmLabel="Delete" danger busy={remove.isPending}>
+      <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del ? remove.mutateAsync(del) : false} title={`Delete storage ${del?.name ?? ''}`} confirmLabel="Delete" danger busy={remove.isPending} error={remove.error}>
         <p className="small">Only unused storages can be deleted; the server refuses while clusters, backups or restores reference it. Data in the bucket is not touched.</p>
       </ConfirmDialog>
     </>
@@ -159,6 +165,7 @@ export function BackupStoragesPage() {
 function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { existing?: Storage; namespaces: string[]; defaultNamespace: string | undefined; onClose: () => void }) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const attempt = useIdempotencyKey();
   const [form, setForm] = useState({
     namespace: existing?.namespace || defaultNamespace || (namespaces.length === 1 ? namespaces[0]! : ''),
     name: existing?.name ?? '',
@@ -172,8 +179,11 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
     accessKeyId: '',
     secretAccessKey: '',
   });
-  const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  const [error, setError] = useState<unknown>(null);
+  const set = (patch: Partial<typeof form>) => {
+    if (error) { attempt.reset(); setError(null); }
+    setForm((f) => ({ ...f, ...patch }));
+  };
   const credsGiven = form.accessKeyId !== '' || form.secretAccessKey !== '';
   const valid = form.namespace && /^[a-z][a-z0-9-]{1,62}$/.test(form.name) && /^https?:\/\//.test(form.endpointURL) && form.bucket && form.region && (existing ? !credsGiven || (form.accessKeyId && form.secretAccessKey) : form.accessKeyId && form.secretAccessKey);
 
@@ -192,15 +202,16 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
       const credentials = { accessKeyId: form.accessKeyId, secretAccessKey: form.secretAccessKey };
       const namespace = form.namespace || DEFAULT_NAMESPACE;
       return existing
-        ? unwrap(api.PUT('/backup-storages/{storage}', { params: { path: { storage: existing.name }, query: { namespace } }, body: { ...common, ...(credsGiven ? { credentials } : {}) } }))
-        : unwrap(api.POST('/backup-storages', { params: { query: { namespace } }, body: { ...common, name: form.name, credentials } }));
+        ? unwrap(api.PUT('/backup-storages/{storage}', { headers: idempotencyHeaders(attempt.key), params: { path: { storage: existing.name }, query: { namespace } }, body: { ...common, ...(credsGiven ? { credentials } : {}) } }))
+        : unwrap(api.POST('/backup-storages', { headers: idempotencyHeaders(attempt.key), params: { query: { namespace } }, body: { ...common, name: form.name, credentials } }));
     },
     onSuccess: () => {
+      attempt.reset();
       toast.success(existing ? 'Storage updated.' : 'Storage created. Run Verify to check access.');
       void queryClient.invalidateQueries({ queryKey: keys.backupStorages });
       onClose();
     },
-    onError: (e) => setError(errorMessage(e)),
+    onError: (e) => setError(e),
   });
 
   return (
@@ -209,7 +220,9 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
       onClose={onClose}
       title={existing ? `Edit ${existing.name}` : 'Add backup storage'}
       wide
-      onSubmit={() => valid && save.mutate()}
+      busy={save.isPending}
+      error={error}
+      onSubmit={() => valid ? save.mutateAsync() : false}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -219,7 +232,6 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
         </>
       }
     >
-      {error ? <Callout tone="danger">{error}</Callout> : null}
       {existing || namespaces.length === 1 ? null : (
         <SelectField label="Namespace" required value={form.namespace} onChange={(e) => set({ namespace: e.target.value })} hint="Storages belong to one namespace; only clusters in that namespace can use them.">
           <option value="">Choose…</option>
@@ -231,7 +243,7 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
         </SelectField>
       )}
       <div className="grid-2">
-        <TextField label="Name" mono required value={form.name} onChange={(e) => set({ name: e.target.value.toLowerCase() })} disabled={Boolean(existing)} hint={`Lowercase, unique within namespace ${form.namespace || '…'}; referenced by clusters and schedules.`} autoFocus={!existing} />
+        <TextField label="Name" mono required value={form.name} onChange={(e) => set({ name: e.target.value })} disabled={Boolean(existing)} hint={`2–63 lowercase letters, digits or hyphens, starting with a letter. No / or : characters; unique within namespace ${form.namespace || '…'}.`} error={form.name && !/^[a-z][a-z0-9-]{1,62}$/.test(form.name) ? 'Use 2–63 lowercase letters, digits or hyphens, starting with a letter.' : undefined} autoFocus={!existing} />
         <TextField label="Description" value={form.description} onChange={(e) => set({ description: e.target.value })} />
       </div>
       <TextField label="Endpoint URL" mono required value={form.endpointURL} onChange={(e) => set({ endpointURL: e.target.value })} placeholder="https://s3.example.com" hint="S3-compatible endpoint. Zerops Object Storage: https://storage-<region>.zerops.io" />

@@ -39,6 +39,9 @@ func (s *Server) eventAllowed(ctx context.Context, e domain.Event) bool {
 }
 func (s *Server) observability(ctx context.Context, name string, in input) response {
 	q := request(ctx).URL.Query()
+	if failure := s.validateObservationFilters(ctx, name); failure != nil {
+		return *failure
+	}
 	switch name {
 	case "ListOperations":
 		items, err := s.Store.ListOperations(ctx, domain.ClusterRef{Namespace: namespaceFilter(ctx)})

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { API_BASE, type Schemas } from './client';
 import { keys } from './keys';
 import { DEFAULT_NAMESPACE } from '@/auth/permissions';
+import { backgroundDataStale } from '@/components/ui/submission';
 
 export type KEvent = Schemas['Event'];
 
@@ -126,4 +127,13 @@ export function useLiveUpdates(enabled: boolean, onEvent?: (e: KEvent) => void, 
     }, onState);
     return stop;
   }, [enabled, queryClient, onEvent, onState]);
+}
+
+/** A successful stream does not make failed background API reads fresh. */
+export function useBackgroundConnectionLost(): boolean {
+  const client = useQueryClient();
+  const cache = client.getQueryCache();
+  const subscribe = useCallback((notify: () => void) => cache.subscribe(notify), [cache]);
+  const snapshot = useCallback(() => cache.getAll().some((query) => query.getObserversCount() > 0 && backgroundDataStale(query.state)), [cache]);
+  return useSyncExternalStore(subscribe, snapshot, () => false);
 }

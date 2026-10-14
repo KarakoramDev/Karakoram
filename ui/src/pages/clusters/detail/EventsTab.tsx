@@ -2,6 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, API_BASE, unwrap, type Schemas } from '@/api/client';
 import type { operations } from '@/api/schema';
@@ -11,11 +12,13 @@ import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 import { namespaceQuery } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
-import { Badge, Card, ErrorBlock, Loading, formatTime } from '@/components/ui/Primitives';
-import { useClusterContext } from './ClusterDetail';
+import { Badge, Card, ErrorBlock, Loading, Time } from '@/components/ui/Primitives';
+import { clusterPath, useClusterContext } from './ClusterDetail';
+import { EventFilters, useEventFilters } from '@/components/EventFilters';
 
 type KEvent = Schemas['Event'];
 type Process = NonNullable<NonNullable<operations['getMemberLogs']['parameters']['query']>['process']>;
+type EventQuery = NonNullable<operations['listEvents']['parameters']['query']>;
 
 export function EventTable({ items, showCluster, showNamespace, showResource }: { items: KEvent[]; showCluster?: boolean; showNamespace?: boolean; showResource?: boolean }) {
   const extra = (showNamespace ? 1 : 0) + (showCluster ? 1 : 0) + (showResource ? 2 : 0);
@@ -37,9 +40,9 @@ export function EventTable({ items, showCluster, showNamespace, showResource }: 
         <tbody>
           {items.map((e) => (
             <tr key={e.id}>
-              <td className="small nowrap">{formatTime(e.createdAt)}</td>
+              <td className="small"><Time iso={e.createdAt} exact /></td>
               {showNamespace ? <td className="mono small">{e.namespace || (e.cluster ? DEFAULT_NAMESPACE : '—')}</td> : null}
-              {showCluster ? <td className="mono small">{e.cluster || '—'}</td> : null}
+              {showCluster ? <td className="mono small" title={e.cluster}>{e.cluster ? <Link to={clusterPath(e.namespace || DEFAULT_NAMESPACE, e.cluster)}>{e.cluster}</Link> : '—'}</td> : null}
               {showResource ? <><td className="mono small">{e.resource || '—'}</td><td className="mono small">{e.target || '—'}</td></> : null}
               <td>
                 <Badge plain tone={e.type.includes('fail') || e.type.includes('error') ? 'danger' : e.type.includes('warn') ? 'warn' : 'neutral'}>
@@ -49,14 +52,15 @@ export function EventTable({ items, showCluster, showNamespace, showResource }: 
               <td className="small">
                 {e.message}
                 {e.reason ? <span className="faint"> ({e.reason})</span> : null}
+                <details><summary>Event details</summary><pre className="code" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxWidth: '40rem' }}>{JSON.stringify(e, null, 2)}</pre></details>
               </td>
               <td className="small mono">{e.actor || '—'}</td>
-              <td className="small mono">{e.operationId ?? ''}</td>
+              <td className="small mono" title={e.operationId}>{e.operationId ? <Link to={`/operations/${encodeURIComponent(e.operationId)}`}>{e.operationId}</Link> : '—'}</td>
             </tr>
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={5 + extra} className="table-empty">
+              <td colSpan={6 + extra} className="table-empty">
                 No events.
               </td>
             </tr>
@@ -68,13 +72,15 @@ export function EventTable({ items, showCluster, showNamespace, showResource }: 
 }
 
 /** Merges the durable event list with live frames using the same exact filters. */
-export function useLiveEvents(scope: { namespace?: string; cluster?: string; actor?: string; resource?: string }, enabled: boolean) {
-  const { namespace, cluster, actor, resource } = scope;
-  const query = { ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace), ...(actor ? { actor } : {}), ...(resource ? { resource } : {}) };
+export function useLiveEvents(scope: { namespace?: string; cluster?: string; actor?: string; resource?: string; type?: string }, enabled: boolean) {
+  const { namespace, cluster, actor, resource, type } = scope;
+  // Keep URL filters intact so the API can report unsupported values.
+  const query: EventQuery = { ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace), ...(actor ? { actor } : {}), ...(resource ? { resource: resource as EventQuery['resource'] } : {}), ...(type ? { type: type as EventQuery['type'] } : {}) };
   const list = useQuery({
-    queryKey: [...(cluster ? keys.clusterSub(namespace ?? DEFAULT_NAMESPACE, cluster, 'events') : keys.eventList(namespace)), actor ?? '', resource ?? ''],
+    queryKey: [...(cluster ? keys.clusterSub(namespace ?? DEFAULT_NAMESPACE, cluster, 'events') : keys.eventList(namespace)), actor ?? '', resource ?? '', type ?? ''],
     queryFn: () => unwrap(api.GET('/events', { params: { query: { ...query, limit: 200, order: 'desc' } } })),
     enabled,
+    refetchInterval: 15_000,
   });
   const [live, setLive] = useState<KEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -85,13 +91,14 @@ export function useLiveEvents(scope: { namespace?: string; cluster?: string; act
     if (cluster) query.set('cluster', cluster);
     if (actor) query.set('actor', actor);
     if (resource) query.set('resource', resource);
+    if (type) query.set('type', type);
     const url = `${API_BASE}/events/stream${query.size ? `?${query}` : ''}`;
     return subscribeSSE(
       url,
       (f) => {
         try {
           const ev = JSON.parse(f.data) as KEvent;
-          if ((!namespace || ev.namespace === namespace || (!ev.namespace && ev.cluster && namespace === DEFAULT_NAMESPACE)) && (!cluster || ev.cluster === cluster) && (!actor || ev.actor === actor) && (!resource || ev.resource === resource)) {
+          if ((!namespace || ev.namespace === namespace || (!ev.namespace && ev.cluster && namespace === DEFAULT_NAMESPACE)) && (!cluster || ev.cluster === cluster) && (!actor || ev.actor === actor) && (!resource || ev.resource === resource) && (!type || ev.type === type)) {
             setLive((xs) => (xs.some((x) => x.id === ev.id) ? xs : [ev, ...xs].slice(0, 500)));
           }
         } catch {
@@ -100,17 +107,18 @@ export function useLiveEvents(scope: { namespace?: string; cluster?: string; act
       },
       setConnected,
     );
-  }, [namespace, cluster, enabled, actor, resource]);
+  }, [namespace, cluster, enabled, actor, resource, type]);
   const ids = new Set(live.map((e) => e.id));
   const merged = [...live, ...(list.data?.items ?? []).filter((e) => !ids.has(e.id))]
-    .filter((e) => (!namespace || e.namespace === namespace || (!e.namespace && e.cluster && namespace === DEFAULT_NAMESPACE)) && (!cluster || e.cluster === cluster) && (!actor || e.actor === actor) && (!resource || e.resource === resource))
+    .filter((e) => (!namespace || e.namespace === namespace || (!e.namespace && e.cluster && namespace === DEFAULT_NAMESPACE)) && (!cluster || e.cluster === cluster) && (!actor || e.actor === actor) && (!resource || e.resource === resource) && (!type || e.type === type))
     .sort((a, b) => b.id - a.id);
-  return { list, items: merged, connected };
+  return { list, items: merged, connected, stale: list.isError || list.failureCount > 0 };
 }
 
 export function EventsTab() {
   const { cluster, namespace, name, can } = useClusterContext();
-  const events = useLiveEvents({ namespace, cluster: name }, can('read', 'events') || can('read', 'audit'));
+  const filters = useEventFilters();
+  const events = useLiveEvents({ ...filters, namespace, cluster: name }, can('read', 'events') || can('read', 'audit'));
   const members = cluster.status.members;
   const [member, setMember] = useState(members[0]?.name ?? '');
   const [process, setProcess] = useState<Process>('mongod');
@@ -141,12 +149,13 @@ export function EventsTab() {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
+      <Card title="Event filters"><EventFilters audit={can('read', 'audit')} /><p className="xs muted">Filters are saved in this page's URL. Only authorized activity is shown.</p></Card>
       <Card
         title="Events"
         flush
         actions={
-          <Badge tone={events.connected ? 'ok' : 'warn'} plain>
-            {events.connected ? 'live' : 'polling'}
+          <Badge tone={events.connected && !events.stale ? 'ok' : 'warn'} plain>
+            {events.stale ? 'connection lost — data may be stale' : events.connected ? 'live' : 'reconnecting — data may be stale'}
           </Badge>
         }
       >

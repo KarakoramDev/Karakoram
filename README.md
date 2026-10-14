@@ -50,7 +50,7 @@ See the [installation guide](docs/install.md) for prerequisites, secret handling
 
 ## Build from source
 
-Use Go **1.24 or newer**, Node **20 or newer**, npm and Make:
+Use Go **1.24 or newer**, Node **22.6 or newer**, npm and Make:
 
 ```sh
 make build-all             # build the web UI and both Go executables
@@ -62,6 +62,11 @@ go test -tags integration -count=1 -timeout 30m ./...
 A Go-only `make build` without built UI assets serves a “UI not built” page. See [UI development](ui/README.md), the [verification guide](docs/verification.md) and the [end-to-end suite guide](test/e2e/README.md) for additional checks. End-to-end tests run against your own disposable Zerops deployment, create real resources and incur costs.
 
 ## Documentation index
+
+These guides belong to a complete repository checkout. Keep `docs/` beside
+`api/`, `ui/` and this root README when copying them: relative links to the
+OpenAPI specification, architecture decisions and UI development instructions
+are repository paths, not a standalone documentation-bundle layout.
 
 - [Installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
 - [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)

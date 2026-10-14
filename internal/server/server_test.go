@@ -23,7 +23,7 @@ func call(s *Server, method, path, body, token string) *httptest.ResponseRecorde
 		r.Header.Set("Authorization", "Bearer "+token)
 	}
 	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, r)
+	testHandler(s).ServeHTTP(w, r)
 	return w
 }
 func TestCookieCSRFAndAPITokenFlows(t *testing.T) {
@@ -52,7 +52,7 @@ func TestCookieCSRFAndAPITokenFlows(t *testing.T) {
 			r.Header.Set("X-Karakoram-CSRF", csrf)
 		}
 		out := httptest.NewRecorder()
-		s.Handler().ServeHTTP(out, r)
+		testHandler(s).ServeHTTP(out, r)
 		return out
 	}
 	if got := send("/api/v1/api-tokens", ""); got.Code != 403 {
@@ -158,7 +158,7 @@ func TestMustChangePasswordRestrictedToRecovery(t *testing.T) {
 			r.AddCookie(c)
 		}
 		out := httptest.NewRecorder()
-		s.Handler().ServeHTTP(out, r)
+		testHandler(s).ServeHTTP(out, r)
 		if out.Code != 403 {
 			t.Fatal(path, out.Code)
 		}
@@ -169,7 +169,7 @@ func TestMustChangePasswordRestrictedToRecovery(t *testing.T) {
 	}
 	r.Header.Set("X-Karakoram-CSRF", *si.CsrfToken)
 	out := httptest.NewRecorder()
-	s.Handler().ServeHTTP(out, r)
+	testHandler(s).ServeHTTP(out, r)
 	if out.Code != 204 {
 		t.Fatal(out.Code, out.Body.String())
 	}
@@ -241,7 +241,7 @@ func TestSSEReplayLiveFilteringAndCancellation(t *testing.T) {
 	if err := s.Context.Events.Record(ctx, domain.Event{Cluster: "prod", Type: "cluster.updated", Message: "replayed"}); err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(s.Handler())
+	ts := httptest.NewServer(testHandler(s))
 	defer ts.Close()
 	reqCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

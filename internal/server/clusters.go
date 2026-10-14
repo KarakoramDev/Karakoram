@@ -9,12 +9,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"strconv"
+	"strings"
 )
 
 func mergePatch(target, patch any) any {
@@ -138,7 +140,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 					return *failure
 				}
 				if _, err := s.Store.GetBackup(ctx, source, d.Backup); err != nil {
-					return s.failure(err)
+					return s.backupDependencyFailure(err, source, d.Backup)
 				}
 			}
 		}
@@ -282,8 +284,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "rotate-tls", map[string]string{})
 	case "RaiseClusterFCV":
 		b := in.Body.(*api.RaiseFCVRequest)
-		if b.Version == "" {
-			return invalid()
+		if validator, yes := p.(engine.FCVValidator); yes {
+			if err := validator.ValidateFCV(ctx, rc, b.Version); err != nil {
+				return s.failure(err)
+			}
+		} else if b.Version == "" {
+			return invalidField("version", domain.ReasonRequired, "version is required")
 		}
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "raise-fcv", map[string]string{"version": b.Version})
 	case "ReplaceClusterMember":
@@ -336,8 +342,19 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return ok(backupAPI(*b))
 	case "CreateBackup":
 		b := in.Body.(*api.CreateBackupRequest)
-		if b.Name == "" || (b.Type != "logical" && b.Type != "physical") {
-			return invalid()
+		if b.Name == "" {
+			return invalidField("name", domain.ReasonRequired, "name is required")
+		}
+		supported := p.Describe().BackupTypes
+		accepted := false
+		for _, kind := range supported {
+			if string(b.Type) == kind {
+				accepted = true
+				break
+			}
+		}
+		if !accepted {
+			return invalidField("type", domain.ReasonUnsupported, "type is not supported by "+p.Describe().DisplayName+"; supported backup types: "+strings.Join(supported, ", "))
 		}
 		if _, err = s.Store.GetBackupStorage(ctx, c.Namespace, b.Storage); err != nil {
 			return s.failure(err)
@@ -375,7 +392,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return ok(restoreAPI(*r))
 	case "CreateRestore":
 		b := in.Body.(*api.CreateRestoreRequest)
-		source := b.Source.SourceCluster
+		source := value(b.Source.SourceCluster)
 		if source == "" {
 			source = c.Name
 		}
@@ -383,18 +400,53 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if failure := s.restorePermission(ctx, c.Namespace, sourceRef); failure != nil {
 			return *failure
 		}
-		if b.Name == "" || (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
-			return invalid()
+		if b.Name == "" {
+			return invalidField("name", domain.ReasonRequired, "name is required")
+		}
+		if (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
+			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime")
 		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
 				return *failure
 			}
 			if _, err = s.Store.GetBackup(ctx, sourceRef, *b.Source.Backup); err != nil {
-				return s.failure(err)
+				return s.backupDependencyFailure(err, sourceRef, *b.Source.Backup)
 			}
 		}
-		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: b.Source.SourceCluster}, Phase: domain.PhasePending}
+		if b.Source.PitrTime != nil {
+			sourceRC, sourceProvider, err := s.context(ctx, sourceRef)
+			if err != nil {
+				return s.failure(err)
+			}
+			if failure := s.providerContext(sourceRC); failure != nil {
+				return *failure
+			}
+			if validator, yes := sourceProvider.(engine.PITRRestoreValidator); yes {
+				windows, err := validator.ValidatePITRRestore(ctx, sourceRC, *b.Source.PitrTime)
+				if err != nil {
+					var field *domain.FieldError
+					if errors.As(err, &field) {
+						details := map[string]any{"field": field.Field, "reason": field.Reason}
+						if len(windows) > 0 {
+							earliest, latest := windows[0].Start, windows[0].End
+							for _, w := range windows[1:] {
+								if w.Start.Before(earliest) {
+									earliest = w.Start
+								}
+								if w.End.After(latest) {
+									latest = w.End
+								}
+							}
+							details["earliest"], details["latest"] = earliest, latest
+						}
+						return failDetails(400, "invalid_request", field.Message, details)
+					}
+					return s.failure(err)
+				}
+			}
+		}
+		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: source}, Phase: domain.PhasePending}
 		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
 		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
 			return s.failure(err)
@@ -444,6 +496,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "GetPITRWindow":
 		windows, err := dp.PITRWindow(ctx, rc)
 		if err != nil {
+			if errors.Is(err, engine.ErrNotSupported) {
+				return invalidField("source.pitrTime", domain.ReasonUnsupported, p.Describe().DisplayName+" does not support PITR for cluster "+c.Name)
+			}
 			return s.failure(err)
 		}
 		if len(windows) == 0 {
@@ -497,6 +552,9 @@ func namespaceOrDefaultSource(source, target string) string {
 }
 
 func (s *Server) restorePermission(ctx context.Context, targetNamespace string, source domain.ClusterRef) *response {
+	if failure := s.requireNamespace(ctx, source.Namespace); failure != nil {
+		return failure
+	}
 	if err := source.Validate(); err != nil || domain.ValidateClusterName(source.Name) != nil {
 		r := invalid()
 		return &r
@@ -531,11 +589,19 @@ func (s *Server) validateStorages(ctx context.Context, c *domain.Cluster) error 
 	return nil
 }
 
+func (s *Server) backupDependencyFailure(err error, source domain.ClusterRef, name string) response {
+	if errors.Is(err, store.ErrNotFound) {
+		return failDetails(404, "not_found", fmt.Sprintf("backup %q not found in source cluster %q, namespace %q", name, source.Name, source.Namespace),
+			map[string]any{"resource": "backup", "name": name, "reason": domain.ReasonNotFound, "cluster": source.Name, "namespace": source.Namespace})
+	}
+	return s.failure(err)
+}
+
 func (s *Server) crossNamespaceRestoreEvents(ctx context.Context, target, source domain.ClusterRef, kind, operation string) error {
 	actor := principal(ctx).Actor()
 	message := "Cross-namespace " + kind + " from " + clusterObject(source.Namespace, source.Name) + " to " + clusterObject(target.Namespace, target.Name)
 	for _, ref := range []domain.ClusterRef{target, source} {
-		if err := s.recordAudit(ctx, domain.Event{Namespace: ref.Namespace, Cluster: ref.Name, Resource: "restores", Target: clusterObject(target.Namespace, target.Name), Type: "CrossNamespaceRestore", Message: message, Actor: actor, Operation: operation}); err != nil {
+		if err := s.recordAudit(ctx, domain.Event{Namespace: ref.Namespace, Cluster: ref.Name, Resource: "restores", Target: clusterObject(target.Namespace, target.Name), Type: "Audit", Reason: "CrossNamespaceRestore", Message: message, Actor: actor, Operation: operation}); err != nil {
 			return err
 		}
 	}

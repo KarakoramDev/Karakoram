@@ -8,12 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/KarakoramDev/Karakoram/internal/apiclient"
+	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"net/http"
 )
 
 // dispatch uses only generated request methods; root endpoints use a separate base client.
-func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []string, query map[string]any, body []byte) (*http.Response, error) {
+func dispatch(ctx context.Context, c, root *client.Client, op string, args []string, query map[string]any, body []byte) (*http.Response, error) {
 	q, err := json.Marshal(query)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	_ = q
 	switch op {
 	case "listNamespaces":
-		var p apiclient.ListNamespacesParams
+		var p client.ListNamespacesParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -39,103 +39,103 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "deleteNamespace":
 		return c.DeleteNamespace(ctx, args[0], nil)
 	case "changePassword":
-		var p apiclient.ChangePasswordParams
+		var p client.ChangePasswordParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ChangePasswordWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "checkPermission":
-		var p apiclient.CheckPermissionParams
+		var p client.CheckPermissionParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CheckPermissionWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "createAPIToken":
-		var p apiclient.CreateAPITokenParams
+		var p client.CreateAPITokenParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateAPITokenWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "createAccount":
-		var p apiclient.CreateAccountParams
+		var p client.CreateAccountParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateAccountWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "createBackup":
-		var p apiclient.CreateBackupParams
+		var p client.CreateBackupParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateBackupWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "createBackupStorage":
-		var p apiclient.CreateBackupStorageParams
+		var p client.CreateBackupStorageParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateBackupStorageWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "createCluster":
-		var p apiclient.CreateClusterParams
+		var p client.CreateClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateClusterWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "createDatabaseRole":
-		var p apiclient.CreateDatabaseRoleParams
+		var p client.CreateDatabaseRoleParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateDatabaseRoleWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "createDatabaseUser":
-		var p apiclient.CreateDatabaseUserParams
+		var p client.CreateDatabaseUserParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateDatabaseUserWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "createRestore":
-		var p apiclient.CreateRestoreParams
+		var p client.CreateRestoreParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.CreateRestoreWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "deleteAPIToken":
-		var p apiclient.DeleteAPITokenParams
+		var p client.DeleteAPITokenParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.DeleteAPIToken(ctx, args[0], &p)
 	case "deleteAccount":
-		var p apiclient.DeleteAccountParams
+		var p client.DeleteAccountParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.DeleteAccount(ctx, args[0], &p)
 	case "deleteBackup":
-		var p apiclient.DeleteBackupParams
+		var p client.DeleteBackupParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.DeleteBackup(ctx, args[0], args[1], &p)
 	case "deleteBackupStorage":
-		var p apiclient.DeleteBackupStorageParams
+		var p client.DeleteBackupStorageParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.DeleteBackupStorage(ctx, args[0], &p)
 	case "deleteCluster":
-		var p apiclient.DeleteClusterParams
+		var p client.DeleteClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.DeleteCluster(ctx, args[0], &p)
 	case "deleteDatabaseRole":
-		var p apiclient.DeleteDatabaseRoleParams
+		var p client.DeleteDatabaseRoleParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.DeleteDatabaseRole(ctx, args[0], args[1], args[2], &p)
 	case "deleteDatabaseUser":
-		var p apiclient.DeleteDatabaseUserParams
+		var p client.DeleteDatabaseUserParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -145,55 +145,55 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getAccount":
 		return c.GetAccount(ctx, args[0])
 	case "getBackup":
-		var p apiclient.GetBackupParams
+		var p client.GetBackupParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetBackup(ctx, args[0], args[1], &p)
 	case "getBackupStorage":
-		var p apiclient.GetBackupStorageParams
+		var p client.GetBackupStorageParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetBackupStorage(ctx, args[0], &p)
 	case "getCluster":
-		var p apiclient.GetClusterParams
+		var p client.GetClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetCluster(ctx, args[0], &p)
 	case "getClusterBalancer":
-		var p apiclient.GetClusterBalancerParams
+		var p client.GetClusterBalancerParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetClusterBalancer(ctx, args[0], &p)
 	case "getClusterConnection":
-		var p apiclient.GetClusterConnectionParams
+		var p client.GetClusterConnectionParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetClusterConnection(ctx, args[0], &p)
 	case "getClusterMember":
-		var p apiclient.GetClusterMemberParams
+		var p client.GetClusterMemberParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetClusterMember(ctx, args[0], args[1], &p)
 	case "getClusterMetrics":
-		var p apiclient.GetClusterMetricsParams
+		var p client.GetClusterMetricsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetClusterMetrics(ctx, args[0], &p)
 	case "getClusterPlacement":
-		var p apiclient.GetClusterPlacementParams
+		var p client.GetClusterPlacementParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetClusterPlacement(ctx, args[0], &p)
 	case "getClusterStatus":
-		var p apiclient.GetClusterStatusParams
+		var p client.GetClusterStatusParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -201,21 +201,23 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getCurrentUser":
 		return c.GetCurrentUser(ctx)
 	case "getDatabaseRole":
-		var p apiclient.GetDatabaseRoleParams
+		var p client.GetDatabaseRoleParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetDatabaseRole(ctx, args[0], args[1], args[2], &p)
 	case "getDatabaseUser":
-		var p apiclient.GetDatabaseUserParams
+		var p client.GetDatabaseUserParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.GetDatabaseUser(ctx, args[0], args[1], args[2], &p)
 	case "getHealth":
 		return root.GetHealth(ctx)
+	case "getOpenAPISpec":
+		return c.GetOpenAPISpec(ctx)
 	case "getMemberLogs":
-		var p apiclient.GetMemberLogsParams
+		var p client.GetMemberLogsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -223,7 +225,7 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getOperation":
 		return c.GetOperation(ctx, args[0])
 	case "getPITRWindow":
-		var p apiclient.GetPITRWindowParams
+		var p client.GetPITRWindowParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -231,7 +233,7 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getPermissions":
 		return c.GetPermissions(ctx)
 	case "getPrometheusMetrics":
-		var p apiclient.GetPrometheusMetricsParams
+		var p client.GetPrometheusMetricsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -241,7 +243,7 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getRBACPolicy":
 		return c.GetRBACPolicy(ctx)
 	case "getRestore":
-		var p apiclient.GetRestoreParams
+		var p client.GetRestoreParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -251,73 +253,73 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "getVersion":
 		return c.GetVersion(ctx)
 	case "listAPITokens":
-		var p apiclient.ListAPITokensParams
+		var p client.ListAPITokensParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListAPITokens(ctx, &p)
 	case "listAccounts":
-		var p apiclient.ListAccountsParams
+		var p client.ListAccountsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListAccounts(ctx, &p)
 	case "listBackupStorages":
-		var p apiclient.ListBackupStoragesParams
+		var p client.ListBackupStoragesParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListBackupStorages(ctx, &p)
 	case "listBackups":
-		var p apiclient.ListBackupsParams
+		var p client.ListBackupsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListBackups(ctx, args[0], &p)
 	case "listClusterMembers":
-		var p apiclient.ListClusterMembersParams
+		var p client.ListClusterMembersParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListClusterMembers(ctx, args[0], &p)
 	case "listClusterOperations":
-		var p apiclient.ListClusterOperationsParams
+		var p client.ListClusterOperationsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListClusterOperations(ctx, args[0], &p)
 	case "listClusters":
-		var p apiclient.ListClustersParams
+		var p client.ListClustersParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListClusters(ctx, &p)
 	case "listDatabaseRoles":
-		var p apiclient.ListDatabaseRolesParams
+		var p client.ListDatabaseRolesParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListDatabaseRoles(ctx, args[0], &p)
 	case "listDatabaseUsers":
-		var p apiclient.ListDatabaseUsersParams
+		var p client.ListDatabaseUsersParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListDatabaseUsers(ctx, args[0], &p)
 	case "listEvents":
-		var p apiclient.ListEventsParams
+		var p client.ListEventsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListEvents(ctx, &p)
 	case "listOrphanedVolumes":
-		var p apiclient.ListOrphanedVolumesParams
+		var p client.ListOrphanedVolumesParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListOrphanedVolumes(ctx, &p)
 	case "listOperations":
-		var p apiclient.ListOperationsParams
+		var p client.ListOperationsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
@@ -325,157 +327,157 @@ func dispatch(ctx context.Context, c, root *apiclient.Client, op string, args []
 	case "listProviders":
 		return c.ListProviders(ctx)
 	case "listRestores":
-		var p apiclient.ListRestoresParams
+		var p client.ListRestoresParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListRestores(ctx, args[0], &p)
 	case "listSystemUsers":
-		var p apiclient.ListSystemUsersParams
+		var p client.ListSystemUsersParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ListSystemUsers(ctx, args[0], &p)
 	case "login":
-		var p apiclient.LoginParams
+		var p client.LoginParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.LoginWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "logout":
-		var p apiclient.LogoutParams
+		var p client.LogoutParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.Logout(ctx, &p)
 	case "oidcCallback":
-		var p apiclient.OidcCallbackParams
+		var p client.OidcCallbackParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.OidcCallback(ctx, &p)
 	case "oidcLogin":
-		var p apiclient.OidcLoginParams
+		var p client.OidcLoginParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.OidcLogin(ctx, &p)
 	case "patchCluster":
-		var p apiclient.PatchClusterParams
+		var p client.PatchClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.PatchClusterWithBody(ctx, args[0], &p, "application/merge-patch+json", bytes.NewReader(body))
 	case "raiseClusterFCV":
-		var p apiclient.RaiseClusterFCVParams
+		var p client.RaiseClusterFCVParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.RaiseClusterFCVWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "refreshSession":
-		var p apiclient.RefreshSessionParams
+		var p client.RefreshSessionParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.RefreshSession(ctx, &p)
 	case "replaceAPIToken":
-		var p apiclient.ReplaceAPITokenParams
+		var p client.ReplaceAPITokenParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceAPITokenWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "replaceAccount":
-		var p apiclient.ReplaceAccountParams
+		var p client.ReplaceAccountParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceAccountWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "replaceBackupStorage":
-		var p apiclient.ReplaceBackupStorageParams
+		var p client.ReplaceBackupStorageParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceBackupStorageWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "replaceCluster":
-		var p apiclient.ReplaceClusterParams
+		var p client.ReplaceClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceClusterWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "replaceClusterBalancer":
-		var p apiclient.ReplaceClusterBalancerParams
+		var p client.ReplaceClusterBalancerParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceClusterBalancerWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "replaceClusterMember":
-		var p apiclient.ReplaceClusterMemberParams
+		var p client.ReplaceClusterMemberParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceClusterMember(ctx, args[0], args[1], &p)
 	case "replaceDatabaseRole":
-		var p apiclient.ReplaceDatabaseRoleParams
+		var p client.ReplaceDatabaseRoleParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceDatabaseRoleWithBody(ctx, args[0], args[1], args[2], &p, "application/json", bytes.NewReader(body))
 	case "replaceDatabaseUser":
-		var p apiclient.ReplaceDatabaseUserParams
+		var p client.ReplaceDatabaseUserParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceDatabaseUserWithBody(ctx, args[0], args[1], args[2], &p, "application/json", bytes.NewReader(body))
 	case "replaceRBACPolicy":
-		var p apiclient.ReplaceRBACPolicyParams
+		var p client.ReplaceRBACPolicyParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceRBACPolicyWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "replaceSettings":
-		var p apiclient.ReplaceSettingsParams
+		var p client.ReplaceSettingsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ReplaceSettingsWithBody(ctx, &p, "application/json", bytes.NewReader(body))
 	case "resetAccountPassword":
-		var p apiclient.ResetAccountPasswordParams
+		var p client.ResetAccountPasswordParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ResetAccountPasswordWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "restartCluster":
-		var p apiclient.RestartClusterParams
+		var p client.RestartClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.RestartCluster(ctx, args[0], &p)
 	case "resumeCluster":
-		var p apiclient.ResumeClusterParams
+		var p client.ResumeClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.ResumeCluster(ctx, args[0], &p)
 	case "rotateClusterTLS":
-		var p apiclient.RotateClusterTLSParams
+		var p client.RotateClusterTLSParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.RotateClusterTLS(ctx, args[0], &p)
 	case "rotateSystemUser":
-		var p apiclient.RotateSystemUserParams
+		var p client.RotateSystemUserParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.RotateSystemUser(ctx, args[0], args[1], &p)
 	case "streamEvents":
-		var p apiclient.StreamEventsParams
+		var p client.StreamEventsParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}
 		return c.StreamEvents(ctx, &p)
 	case "verifyBackupStorage":
-		var p apiclient.VerifyBackupStorageParams
+		var p client.VerifyBackupStorageParams
 		if err = json.Unmarshal(q, &p); err != nil {
 			return nil, err
 		}

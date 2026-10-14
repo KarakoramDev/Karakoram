@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Backups, PITR, restore and clone
 
-Karakoram uses PBM for consistent MongoDB recovery, for both replica sets and sharded clusters. Zerops Local Storage live archives are **not** consistent MongoDB backups. PBM backup objects are independent of [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
+Backup types and recovery capabilities come from the cluster's provider catalog (`backupTypes`). The MongoDB provider uses PBM for consistent replica-set and sharded recovery; the MongoDB/PBM workflows below apply to that provider. Zerops Local Storage live archives are **not** consistent database backups. Engine backup objects are independent of [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
 
 ## Register S3 storage
 
@@ -14,9 +14,11 @@ backup settings and schedules resolve storage names in their own namespace.
 Verification runs from the control plane's network, while backup payloads go
 directly between members and S3, not through the relay.
 
-New storage names must not contain `:` or `/`. Existing storages in namespace
-`default` with either character in their name remain readable and updatable;
-this creation-only restriction does not rename or invalidate legacy storages.
+New storage names must contain 1–128 characters, must not be blank, and must not
+contain `:` or `/`; violations return **400** naming `name` and the rule.
+Existing storages in namespace `default` with either character remain readable
+and updatable. Missing configuration or credential fields return **400** with
+the specific field; an existing storage name returns **409** `already_exists`.
 
 For the CLI, prepare a protected API-shaped YAML/JSON request and pass it with `-f`:
 
@@ -44,6 +46,22 @@ karactl storages get archive
 
 Verification performs a temporary put/get/delete under the prefix; read-only S3 credentials cannot pass or support normal recovery-object lifecycle. Storage reads return metadata and `credentialsConfigured`, never keys. The effective PBM prefix adds a stable per-cluster UID namespace, avoiding collisions among clusters sharing the bucket. Preserve storage configuration/credentials and control-plane state (with its encryption key) as part of recovery.
 
+### Edit storage and replace credentials
+
+Use **Settings → Backup storages → Edit**, or `karactl storages set archive -f storage-update.yaml`. The update file contains the full configuration (`type`, `endpointURL`, `region`, `bucket`, `forcePathStyle`, `verifyTLS`, plus optional prefix/description); omit `name`. Omit the entire `credentials` object to retain the existing encrypted pair. To rotate credentials, include both `credentials.accessKeyId` and `credentials.secretAccessKey`, using a protected file as for creation. Verify after every edit or rotation before revoking the old keys.
+
+Registration saves configuration, not proof of S3 access. A verification failure still returns **HTTP 200**, with `verified: false`, `failureReason` and a secret-free message; success omits `failureReason`. The probe checks put/get/delete from the control plane, not connectivity from every database member.
+
+| `failureReason` | What to check |
+| --- | --- |
+| `access_denied` | Access key/secret pair and bucket read, write and delete permissions; expired credentials or a signature/region mismatch |
+| `bucket_not_found` | Existing bucket name, regional endpoint and signing region |
+| `endpoint_not_allowed` | HTTP(S) origin only; no credentials, non-root path, query, fragment or redirects. Loopback/metadata destinations are forbidden; private addresses and nonstandard ports need the operator allowlist below |
+| `tls_error` | Endpoint hostname, certificate chain and TLS handshake; repair certificates rather than disabling verification |
+| `unreachable` | DNS, endpoint port, network routes and firewall from the control plane |
+| `timeout` | Endpoint responsiveness and network connectivity; retry after the service is reachable |
+| `unknown` | Endpoint/region/bucket configuration and read/write/delete access; inspect storage-service diagnostics without publishing credentials |
+
 ### Endpoint verification policy
 
 The verification endpoint must be an HTTP(S) origin without embedded credentials, a non-root path, query or fragment. Public global-unicast destinations on **80/443** are permitted by default. For a private S3 server or nonstandard port, configure the **control-plane service** environment `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` with comma-separated exact `host` or `host:port` entries, then restart/redeploy that service. Host-only entries allow ports 80/443; host:port allows that exact port. `storage-prg1.zerops.io` on 80/443 is already trusted for Zerops storage's private addresses.
@@ -63,6 +81,10 @@ karactl operations cluster demo
 Both types execute on nodes via PBM; physical snapshots require PSMDB. A create request returns acceptance, not completion. Watch Backup phase (`Pending`, `Running`, `Succeeded`, `Failed`) and the matching Operation. The inventory carries PBM name, storage, type, timestamps, last-write time, size and error. Only a successful backup is a recovery base.
 
 If a mutation returns an Operation ID, use `karactl operations wait ID`. For backups/restores, inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
+
+For applications outside this repository, see the [Go client installation and usage walkthrough](api.md#clientssdk), including bearer authentication, structured errors and operation polling. The public client exposes backup, PITR-window, restore and clone request methods from the same OpenAPI contract; after polling, inspect the recovery resource and validate the recovered data as described above.
+
+Missing storage dependencies return **404** with `details.resource: backupStorage` and the requested name. A duplicate backup name returns **409** `already_exists`; state conflicts identify the backup and its current state. Unsupported `type` returns **400** naming the field and listing the provider's supported types; do not assume every engine supports logical/physical backups. A PITR-window request for an engine without PITR returns an explicit unsupported-capability error naming that engine.
 
 ## Schedules and count retention
 
@@ -108,6 +130,8 @@ PITR records oplog slices into the cluster's primary backup destination. It need
 
 4. Select a UTC RFC3339 time **inside** the advertised continuous window. Do not assume that every timestamp between cluster creation and now is recoverable.
 
+The API validates `source.pitrTime` **before accepting** a restore. A future time, a time before/after the observed coverage, or a gap between continuous windows returns HTTP **400** with `details.field: source.pitrTime`, `reason: out_of_range`, and UTC `earliest`/`latest` bounds for the current coverage. Those bounds do not imply that intervening gaps are recoverable. A source that is initializing or has no coverage returns **409** with reason `invalid_state` and explains the base-snapshot/oplog prerequisite; the PITR-window endpoint also reports initialization as a state conflict, not an internal error. Refresh the window and select a covered time once prerequisites complete. Coverage is checked again during execution; a permanently invalid target fails its Restore and Operation with a reason rather than retrying forever.
+
 Enabling PITR alone does not create proof of a usable window. Gaps, quota exhaustion, failed slicing, base deletion or storage changes can remove recovery coverage. After restore Karakoram holds PITR disabled until its required fresh base snapshot succeeds; check that backup and the new timeline before trusting recovery coverage again.
 
 ## In-place restore
@@ -124,6 +148,8 @@ karactl operations cluster demo
 ```
 
 The timestamp is illustrative; replace it with a real point in your reported window. Exactly one of backup or time is required. Restore requests accept a source cluster, with the target used by default. Use matching topology/engine major and a successful snapshot; physical restores especially depend on binary/data compatibility.
+
+REST uses `source.backup` or `source.pitrTime`: set exactly one. Both selectors or neither return **400**, `details.field: source`, reason `conflict`. A nonexistent backup returns **404** with its name and source cluster/namespace; the same dependency context is returned for clone creation. Duplicate restore names return **409** `already_exists`. These errors are synchronous: no restore operation is accepted.
 
 Karakoram serializes disruptive cluster work. It disables PITR and, for sharding, coordinates balancer/router holds. Physical restore suppresses automatic mongod/PBM restart on all relevant nodes. Mongod may be offline and PBM may exit successfully as part of recovery; progress is read with PBM storage configuration while MongoDB is unavailable. Karakoram then starts mongod/PBM, releases maintenance, restores system users, resyncs target storage and restores router/balancer state. Logical restores do not use the offline physical lifecycle.
 
@@ -186,6 +212,90 @@ karactl backups list demo
 ```
 
 For a live cluster, deletion is asynchronous and observes PBM inventory absence before removing the record. PBM backup deletion is not reversible. Review PITR dependencies first. Cluster deletion removes owned backup/PITR history unless `--keep-backups` is explicitly selected; `--keep-volumes` is a separate choice.
+
+### Recover when cluster deletion stays pending
+
+Deletion is server-side reconciliation, not a foreground CLI job. A wait timeout
+or lost HTTP reply does not undo it. Do not recreate the same cluster name,
+manually erase its Karakoram state, or delete database volumes just to make the
+inventory disappear.
+
+1. Inspect the cluster and the accepted deletion operation in the **same
+   namespace**, then inspect recent events:
+
+   ```sh
+   karactl -n default clusters get demo -o json
+   karactl -n default clusters status demo
+   karactl -n default operations cluster demo
+   karactl -n default events list --cluster demo
+   # Use the ID returned by deletion or found in the cluster's operations.
+   karactl operations get OPERATION_ID -o json
+   ```
+
+   Read phase, message, conditions, operation target and event diagnostics rather
+   than treating `Deleting` as progress by itself. The deletion response exposes
+   its Operation and `Karakoram-Operation-Id` header. If a client lost the
+   response, find the operation through the cluster operation list; do not
+   initiate unrelated recovery work. Use API event pagination (`nextCursor`) or
+   newest-first `order=desc` when investigating a long history.
+
+2. Repair the specific prerequisite: an unavailable namespace needs a valid
+   project token/connected relay; failed S3 cleanup needs the recorded bucket,
+   prefix and write/delete credentials; a blocked Zerops process needs platform
+   diagnosis. For an unformed cluster, PBM may never have become reachable:
+   inspect the failed cleanup step instead of waiting for database readiness
+   after deletion has begun. The control plane retries transient platform
+   failures with backoff; let an already-running platform process finish before
+   retrying the mutation.
+
+3. After repairing the cause, observe the existing operation with
+   `karactl operations wait OPERATION_ID`. If deletion failed or the original
+   request was not accepted, repeat deletion **with the same intentional
+   retention choices** and follow the returned operation:
+
+   ```sh
+   # Destructive retry: removes volumes and owned backups.
+   karactl -n default clusters delete demo --wait
+   ```
+
+   Do not repeatedly submit DELETE while a deletion operation is still active.
+   Check whether the cluster is already absent before retrying after response
+   loss. A missing cluster is not proof that every orphaned volume is gone.
+
+4. Decide retention before deleting, not as a blind workaround for failed
+   cleanup. To suspend a cluster while keeping both live data and recovery
+   objects, use:
+
+   ```sh
+   karactl -n default clusters delete demo --keep-volumes --keep-backups --wait
+   # Only a completed retained-volume suspension can be resumed.
+   karactl -n default clusters resume demo --wait
+   ```
+
+   `--keep-volumes` retains volume identity/secrets and results in `Suspended`;
+   `--keep-backups` separately preserves backup objects/records. Neither can
+   recover data already deleted or reverse a submitted platform deletion.
+   Backup records marked Failed are not usable recovery bases. Keep the storage
+   registered until retained records have been dealt with.
+
+5. Inspect **Settings → Orphaned volumes** or
+   `karactl -n default orphaned-volumes list -o json`. An orphan record means the
+   runtime was removed but Zerops refused the volume deletion. Karakoram retries
+   automatically; the retained disk can still consume capacity and incur charges.
+   Manual removal requires access to the **database namespace's Zerops project**
+   outside Karakoram: delete the recorded volume in the Zerops GUI or run
+   `zcli service delete <hostname>` with zcli authenticated for that project.
+   Confirm the recorded service ID and that no runtime needs the volume before
+   removing it. If Zerops still refuses deletion, give its support the volume
+   service ID and failing delete Process ID. Karakoram cannot bypass platform
+   mount/process restrictions.
+
+After deletion completes, check cluster absence (or `Suspended` if retaining
+volumes), retained backup inventory and the orphan inventory separately. See
+[orphan cleanup and retry timing](../operations.md#orphaned-platform-volumes)
+and [troubleshooting](../operations.md#troubleshooting-by-symptom). Do not remove
+the namespace token/relay until owned-resource cleanup is complete.
+
 
 ### Retained backups after full cluster deletion
 

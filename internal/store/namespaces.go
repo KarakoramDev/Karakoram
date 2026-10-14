@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -25,7 +26,11 @@ func (s *Store) GetNamespaceForUpdate(ctx context.Context, name string) (*domain
 func getNamespace(ctx context.Context, db *sql.DB, name string) (*domain.Namespace, error) {
 	var data []byte
 	if err := db.QueryRowContext(ctx, "SELECT data FROM namespaces WHERE name=?", name).Scan(&data); err != nil {
-		return nil, typed(err)
+		err = typed(err)
+		if err == ErrNotFound {
+			return nil, domain.NotFound("namespace", name, err)
+		}
+		return nil, err
 	}
 	var n domain.Namespace
 	if err := json.Unmarshal(data, &n); err != nil {
@@ -73,7 +78,11 @@ func writeNamespace(ctx context.Context, db executor, n *domain.Namespace, creat
 	}
 	if create {
 		_, err = db.ExecContext(ctx, "INSERT INTO namespaces(name,data,updated_at) VALUES(?,?,?)", n.Name, data, n.UpdatedAt.UTC().Format(time.RFC3339Nano))
-		return typed(err)
+		err = typed(err)
+		if err != nil && errors.Is(err, ErrConflict) {
+			return domain.Conflict("namespace", n.Name, domain.ReasonAlreadyExists, err, "namespace %q already exists", n.Name)
+		}
+		return err
 	}
 	result, err := db.ExecContext(ctx, "UPDATE namespaces SET data=?,updated_at=? WHERE name=? AND json_extract(data,'$.createdAt')=? AND (json_extract(data,'$.phase')!='Deleting' OR ?='Deleting')", data, n.UpdatedAt.UTC().Format(time.RFC3339Nano), n.Name, n.CreatedAt.Format(time.RFC3339Nano), n.Phase)
 	if err != nil {

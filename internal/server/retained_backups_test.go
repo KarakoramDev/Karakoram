@@ -127,7 +127,7 @@ func TestRetainedBackupLifecycle(t *testing.T) {
 	if err := s.Store.CreateBackupStorage(ctx, &storage); err != nil {
 		t.Fatal(err)
 	}
-	backup := domain.Backup{Name: "saved", Cluster: "deleted", Storage: storage.Name, Type: "physical", PBMName: snapshot, PBMPrefix: prefix, SourceTopology: domain.Topology{Type: "replicaSet"}, SourceVersion: "8.0", RecoveryIdentity: "backup-recovery", Phase: domain.PhaseSucceeded}
+	backup := domain.Backup{Name: "saved", Cluster: "deleted", Storage: storage.Name, Type: "physical", Trigger: "manual", PBMName: snapshot, PBMPrefix: prefix, SourceTopology: domain.Topology{Type: "replicaSet"}, SourceVersion: "8.0", RecoveryIdentity: "backup-recovery", Phase: domain.PhaseSucceeded}
 	if err := s.Store.CreateBackup(ctx, &backup); err != nil {
 		t.Fatal(err)
 	}

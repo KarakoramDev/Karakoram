@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, errorMessage, unwrap } from '@/api/client';
 import { useAuth } from '@/auth/session';
+import { passwordError } from '@/auth/validation';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { Callout } from '@/components/ui/Primitives';
@@ -21,19 +22,17 @@ export function ChangePasswordPage() {
   const [busy, setBusy] = useState(false);
 
   const mismatch = confirm.length > 0 && next !== confirm;
-  const tooShort = next.length > 0 && next.length < 12;
+  const passwordProblem = next.length > 0 ? passwordError(next, current) : undefined;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (mismatch || tooShort) return;
+    if (mismatch || passwordError(next, current)) return;
     setBusy(true);
     setError(null);
     try {
       await unwrap(api.POST('/auth/change-password', { body: { currentPassword: current, newPassword: next } }));
-      // The server may invalidate the current session; re-read identity and
-      // fall back to login when needed.
-      await auth.refresh();
-      navigate('/clusters', { replace: true });
+      auth.endSession();
+      navigate('/login?passwordChanged=1', { replace: true });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -65,9 +64,8 @@ export function ChangePasswordPage() {
             value={next}
             onChange={(e) => setNext(e.target.value)}
             required
-            minLength={12}
-            hint="At least 12 characters."
-            error={tooShort ? 'Use at least 12 characters.' : undefined}
+            hint="At least 12 characters and at most 1024 bytes; different from the current password."
+            error={passwordProblem}
           />
           <TextField
             label="Confirm new password"
@@ -94,7 +92,7 @@ export function ChangePasswordPage() {
                 Cancel
               </Button>
             )}
-            <Button type="submit" variant="primary" loading={busy} disabled={mismatch || tooShort}>
+            <Button type="submit" variant="primary" loading={busy} disabled={mismatch || !!passwordError(next, current)}>
               Update password
             </Button>
           </div>

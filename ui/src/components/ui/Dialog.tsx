@@ -4,6 +4,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from './Button';
 import { TextField } from './Field';
+import { ErrorBlock } from './Primitives';
+import { beginSubmission } from './submission';
 
 export interface DialogProps {
   open: boolean;
@@ -13,16 +15,26 @@ export interface DialogProps {
   footer?: ReactNode;
   wide?: boolean;
   /** When set, the body is wrapped in a form and submit triggers this. */
-  onSubmit?: (e: FormEvent<HTMLFormElement>) => void;
+  onSubmit?: (e: FormEvent<HTMLFormElement>) => unknown;
+  busy?: boolean;
+  error?: unknown;
 }
 
 /**
  * Accessible modal built on the native <dialog> element: focus trapping,
  * Escape handling and inert background come from the platform.
  */
-export function Dialog({ open, onClose, title, children, footer, wide, onSubmit }: DialogProps) {
+export function Dialog({ open, onClose, title, children, footer, wide, onSubmit, busy = false, error }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const latch = useRef({ locked: false });
+  const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    if (!open || !busy) {
+      latch.current.locked = false;
+      setSubmitting(false);
+    }
+  }, [open, busy]);
 
   useEffect(() => {
     const el = ref.current;
@@ -36,21 +48,21 @@ export function Dialog({ open, onClose, title, children, footer, wide, onSubmit 
     if (!el) return;
     const onCancel = (e: Event) => {
       e.preventDefault();
-      onClose();
+      if (!busy && !latch.current.locked) onClose();
     };
     el.addEventListener('cancel', onCancel);
     return () => el.removeEventListener('cancel', onCancel);
-  }, [onClose]);
+  }, [onClose, busy]);
 
   const inner = (
     <>
       <div className="dialog-head">
         <h3 id={titleId}>{title}</h3>
-        <Button variant="ghost" size="sm" icon aria-label="Close" onClick={onClose}>
+        <Button variant="ghost" size="sm" icon aria-label="Close" disabled={busy || submitting} onClick={onClose}>
           <CloseIcon />
         </Button>
       </div>
-      <div className="dialog-body">{children}</div>
+      <div className="dialog-body">{error ? <ErrorBlock error={error} /> : null}{children}</div>
       {footer ? <div className="dialog-foot">{footer}</div> : null}
     </>
   );
@@ -62,7 +74,7 @@ export function Dialog({ open, onClose, title, children, footer, wide, onSubmit 
       aria-labelledby={titleId}
       onClick={(e) => {
         // Click on the backdrop (outside the content box) closes.
-        if (e.target === ref.current) onClose();
+        if (e.target === ref.current && !busy && !latch.current.locked) onClose();
       }}
     >
       {onSubmit ? (
@@ -70,10 +82,32 @@ export function Dialog({ open, onClose, title, children, footer, wide, onSubmit 
           className="dialog-form"
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit(e);
+            if (!beginSubmission(latch.current, busy)) return;
+            setSubmitting(true);
+            // Disable the actual controls before React commits pending state.
+            const controls = e.currentTarget.querySelector('fieldset');
+            if (controls) controls.disabled = true;
+            try {
+              const result = onSubmit(e);
+              if (result === false) {
+                latch.current.locked = false;
+                setSubmitting(false);
+                if (controls) controls.disabled = busy;
+              }
+              if (result instanceof Promise) {
+                void result.finally(() => {
+                  latch.current.locked = false;
+                  setSubmitting(false);
+                }).catch(() => {});
+              }
+            } catch (error) {
+              latch.current.locked = false;
+              setSubmitting(false);
+              throw error;
+            }
           }}
         >
-          {inner}
+          <fieldset className="dialog-controls" disabled={busy || submitting}>{inner}</fieldset>
         </form>
       ) : (
         <div className="dialog-form">{inner}</div>
@@ -101,6 +135,7 @@ export interface ConfirmDialogProps {
   /** Require typing this exact string before confirming. */
   typeToConfirm?: string;
   busy?: boolean;
+  error?: unknown;
 }
 
 export function ConfirmDialog({
@@ -113,6 +148,7 @@ export function ConfirmDialog({
   danger,
   typeToConfirm,
   busy,
+  error,
 }: ConfirmDialogProps) {
   const [typed, setTyped] = useState('');
   useEffect(() => {
@@ -124,15 +160,18 @@ export function ConfirmDialog({
       open={open}
       onClose={onClose}
       title={title}
+      busy={busy}
+      error={error}
       onSubmit={() => {
-        if (ok) void onConfirm();
+        if (ok) return onConfirm();
+        return false;
       }}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="submit" variant={danger ? 'danger' : 'primary'} disabled={!ok} loading={busy}>
+          <Button type="submit" variant={danger ? 'danger' : 'primary'} disabled={!ok || busy} loading={busy}>
             {confirmLabel}
           </Button>
         </>

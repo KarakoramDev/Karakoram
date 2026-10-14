@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,8 +16,5 @@ import (
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := cli.NewCommand(cli.Options{}).ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "karactl:", err)
-		os.Exit(1)
-	}
+	os.Exit(cli.Run(ctx, cli.Options{}, nil))
 }

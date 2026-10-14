@@ -14,6 +14,21 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
 )
 
+// requireNamespace checks registration, not relay health: unavailable namespaces
+// still have readable inventory. Single-project installations have an implicit default.
+func (s *Server) requireNamespace(ctx context.Context, name string) *response {
+	if _, err := s.Store.GetNamespace(ctx, name); err != nil {
+		if name == domain.DefaultNamespace && errors.Is(err, namespaces.ErrNotFound) {
+			if _, registered := s.namespaces.(*namespaces.Registry); !registered {
+				return nil
+			}
+		}
+		r := s.failure(err)
+		return &r
+	}
+	return nil
+}
+
 func namespaceAPI(n *domain.Namespace, count int) api.Namespace {
 	optionalString := func(v string) *string {
 		if v == "" {
@@ -37,6 +52,15 @@ func (s *Server) namespaceRegistry() (*namespaces.Registry, error) {
 	return r, nil
 }
 func (s *Server) namespaceFailure(err error) response {
+	var unavailable *namespaces.PlatformUnavailableError
+	if errors.As(err, &unavailable) {
+		return fail(http.StatusInternalServerError, "internal_error", unavailable.Error())
+	}
+	var fieldErr *domain.FieldError
+	var resourceErr *domain.ResourceError
+	if errors.As(err, &fieldErr) || errors.As(err, &resourceErr) {
+		return s.failure(err)
+	}
 	switch {
 	case errors.Is(err, namespaces.ErrInvalid):
 		return fail(422, "invalid_namespace", err.Error())
@@ -121,7 +145,7 @@ func (s *Server) namespaceMutation(ctx context.Context, name string, in input) r
 	case "CreateNamespace":
 		b := in.Body.(*api.CreateNamespaceJSONRequestBody)
 		if b == nil || b.Token == nil {
-			return invalid()
+			return invalidField("token", domain.ReasonRequired, "token is required")
 		}
 		n, err = r.Create(ctx, b.Name, b.ProjectId, *b.Token, value(b.Description))
 		status = 201
@@ -134,7 +158,7 @@ func (s *Server) namespaceMutation(ctx context.Context, name string, in input) r
 	case "RotateNamespaceToken":
 		b := in.Body.(*api.RotateNamespaceTokenJSONRequestBody)
 		if b == nil || b.Token == nil {
-			return invalid()
+			return invalidField("token", domain.ReasonRequired, "token is required")
 		}
 		n, err = r.RotateToken(ctx, in.Namespace, *b.Token)
 	case "ValidateNamespace":

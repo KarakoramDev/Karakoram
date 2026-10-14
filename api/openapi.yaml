@@ -67,12 +67,37 @@ tags:
 - name: Monitoring
   description: JSON time series, member logs and Prometheus scraping.
 paths:
+  /openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      tags:
+      - General
+      summary: Download this server's authoritative OpenAPI specification
+      x-karakoram-rbac: public
+      security: []
+      responses:
+        '200':
+          description: Embedded OpenAPI YAML; publicly cacheable for five minutes.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ["public, max-age=300"]
+          content:
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: true
+                description: The OpenAPI document serialized as YAML.
   /auth/login:
     post:
       operationId: login
       tags:
       - Auth
       summary: Create a local-account cookie session
+      description: After five failed attempts, account/source backoff starts at one second
+        and doubles to fifteen minutes. While throttled, correct and incorrect
+        passwords receive the same 429 response and retry delay.
       x-karakoram-rbac: public
       responses:
         '400': &id001
@@ -85,6 +110,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409': &id005
           $ref: '#/components/responses/Conflict'
+        '429':
+          description: Login temporarily throttled. Wait for the indicated delay before retrying.
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: rate_limited
+                message: Login temporarily throttled; wait before trying again
+                details:
+                  retryAfterSeconds: 1
         '200':
           description: Successful response.
           content:
@@ -99,6 +141,18 @@ paths:
                 type: string
         '500':
           $ref: '#/components/responses/InternalError'
+        '413':
+          description: Request exceeds the 2 MiB body limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Login requires application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       security: []
       parameters:
       - $ref: '#/components/parameters/CSRF'
@@ -247,13 +301,15 @@ paths:
                 format: uri
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       security: []
       parameters:
       - name: returnTo
         in: query
         schema:
           type: string
-        description: Same-origin relative UI path after login; external URLs are rejected.
+        description: Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
   /auth/oidc/callback:
     get:
       operationId: oidcCallback
@@ -271,7 +327,7 @@ paths:
           description: Successful response.
           headers:
             Location:
-              description: Validated same-origin post-login UI path.
+              description: Installation root after successful authentication.
               schema:
                 type: string
             Set-Cookie:
@@ -280,6 +336,8 @@ paths:
                 type: string
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       description: Validates the state cookie, nonce, issuer and PKCE verifier before
         setting session cookies.
       security: []
@@ -555,6 +613,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -563,6 +624,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -730,6 +792,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -738,6 +803,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -909,11 +975,14 @@ paths:
       tags: [Namespaces]
       summary: Register a project namespace and deploy its relay
       description: Requires namespaces/create on '*'. Validates the token and project
-        synchronously, then starts relay deployment asynchronously. The name default
-        is reserved and each project may belong to only one namespace.
+        synchronously, then starts relay deployment asynchronously. Missing fields and
+        invalid name syntax return 400 with field and reason. Reserved default and
+        duplicate names return 409 conflict with reason already_exists. Each project
+        may belong to only one namespace.
       x-karakoram-rbac: {resource: namespaces, action: create, object: '*'}
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -923,6 +992,9 @@ paths:
       responses:
         '201':
           description: Registered; relay deployment continues asynchronously.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1137,8 +1209,13 @@ paths:
         '403': *id003
         '404': *id004
         '409': *id005
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1152,6 +1229,7 @@ paths:
         by the handler rather than route metadata.
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1202,6 +1280,9 @@ paths:
         '409': *id005
         '200':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1210,6 +1291,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1233,6 +1315,9 @@ paths:
         '409': *id005
         '200':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1241,6 +1326,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1617,6 +1703,8 @@ paths:
               description: Credentials must not be cached.
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /clusters/{cluster}/placement:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
@@ -1750,6 +1838,8 @@ paths:
         '201':
           description: Successful response.
           headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
             Cache-Control:
               description: Generated credentials must not be cached.
               schema:
@@ -1764,6 +1854,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1905,6 +1996,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1913,6 +2007,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1990,6 +2085,7 @@ paths:
       tags:
       - DatabaseRoles
       summary: Delete a custom database role
+      description: Rejects with 409 invalid_state while the role is assigned to users or inherited by custom roles. Remove those references explicitly before deletion; assignments are never silently stripped.
       x-karakoram-rbac:
         resource: database-users
         action: delete
@@ -2021,6 +2117,8 @@ paths:
         object: '*'
       responses:
         '401': *id002
+        '400': *id001
+        '404': *id004
         '200':
           description: Orphaned volumes, including an empty items array when none are visible.
           content:
@@ -2077,6 +2175,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -2085,6 +2186,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2160,6 +2262,11 @@ paths:
       tags:
       - Backups
       summary: Read the continuous restorable PITR window
+      description: >-
+        Returns the latest continuous backed interval; an initializing cluster returns
+        409 invalid_state with PITR prerequisite guidance instead of an internal error.
+        Engines without PITR return 400 invalid_request with reason unsupported and a
+        message naming the engine capability.
       x-karakoram-rbac:
         resource: backups
         action: read
@@ -2225,6 +2332,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -2237,8 +2347,13 @@ paths:
         Requires backups/read on the source namespace/cluster. Cross-namespace restores
         additionally require backups/export on that source object, checked by the
         handler rather than route metadata.
+        PITR targets are checked before acceptance. Outside continuous coverage or in
+        the future returns 400 with field source.pitrTime, reason out_of_range and
+        earliest/latest UTC bounds; an initializing source or no coverage returns
+        409 invalid_state. Coverage is checked again during execution.
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2320,8 +2435,13 @@ paths:
         '403': *id003
         '404': *id004
         '409': *id005
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -2330,6 +2450,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2608,8 +2729,10 @@ paths:
       - &id009
         name: type
         in: query
+        description: Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type.
         schema:
           type: string
+          enum: [Normal, Warning, Audit]
       - &id010
         name: operationId
         in: query
@@ -2624,9 +2747,10 @@ paths:
       - &eventResource
         name: resource
         in: query
-        description: Exact resource category, such as clusters, accounts, auth or rbac.
+        description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
         schema:
           type: string
+          enum: [accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
   /events/stream:
     parameters:
     - $ref: '#/components/parameters/NamespaceQuery'
@@ -2657,13 +2781,21 @@ paths:
                 type: string
         '500':
           $ref: '#/components/responses/InternalError'
-      description: 'SSE frames: id is the durable event ID, event is the event type,
-        data is a JSON Event. Replays after the requested cursor then streams live
-        events. Heartbeat comment frames keep the connection alive. Authorization
-        uses events:read or audit:read on namespace/cluster for cluster entries,
-        audit:read on the namespace for namespace-level entries, and audit:read on
-        "*" for global entries. Namespace, actor and resource filters compose;
-        actor and resource filters are exact matches.'
+      description: |
+        SSE frames use the durable ID as id, the stored type (normally Normal,
+        Warning or Audit) verbatim as event, and a JSON Event as data. Lifecycle
+        details are in reason, not dot-qualified event names. For example:
+
+        id: 42
+        event: Warning
+        data: {"id":42,"cluster":"demo","type":"Warning","reason":"OperationFailed","message":"Backup failed","createdAt":"2026-01-01T00:00:00Z"}
+
+        Replays after the requested cursor then streams live events. Heartbeat
+        comments keep the connection alive. Authorization uses events:read or
+        audit:read on namespace/cluster for cluster entries, audit:read on the
+        namespace for namespace-level entries, and audit:read on "*" for global
+        entries. Namespace, actor and resource filters compose; actor and resource
+        filters are exact matches.
       parameters:
       - *id008
       - *id009
@@ -2805,14 +2937,15 @@ paths:
                 type: string
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Root endpoint requires a bearer API token and monitoring read authorization;
-        cookie sessions are not accepted by scrapers. Only authorized clusters are
-        included.
+      description: Root endpoint accepts bearer API tokens (recommended for scrapers)
+        or a signed-in browser cookie session. Both require monitoring read
+        authorization; only authorized clusters are included.
       servers:
       - url: /
         description: Root-level control-plane endpoint, outside /api/v1.
       security:
       - bearerAuth: []
+      - cookieSession: []
 components:
   securitySchemes:
     bearerAuth:
@@ -2828,6 +2961,24 @@ components:
         rotating HttpOnly karakoram_refresh cookie at /auth/refresh. X-Karakoram-CSRF
         is required on unsafe methods.
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Optional retry key scoped to the authenticated account or token identity,
+        method, route, namespace and path parameters. Retained for 24 hours after
+        a successful response. The same key and canonical JSON body replay the
+        original status, body and relevant headers, including one-time secrets
+        and Karakoram-Operation-Id when present. Different bodies conflict with
+        HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+        in-flight duplicates return 409 with reason invalid_state. Only 2xx
+        responses are retained. Use a fresh key for each new intended mutation.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: '^[!-~]+$'
     NamespaceQuery:
       name: namespace
       in: query
@@ -2836,6 +2987,8 @@ components:
         routes and creation. On collection routes (/clusters, /operations, /events,
         /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence
         includes all authorized namespaces and a value filters to that namespace.
+        A nonexistent explicit namespace returns 404 not_found with resource namespace
+        and its name, including on list and sub-resource routes.
       schema:
         $ref: '#/components/schemas/NamespaceName'
     NamespacePath:
@@ -2875,6 +3028,12 @@ components:
       required: true
       description: Managed cluster name; the RBAC object is namespace/cluster.
       schema: *id007
+  headers:
+    IdempotentReplayed:
+      description: Present and true when the stored successful response was replayed.
+      schema:
+        type: boolean
+        enum: [true]
   responses:
     BadRequest:
       description: Invalid request, query, cursor, or resource configuration.
@@ -2902,14 +3061,23 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Conflict:
-      description: Conflicting resource state, unsafe topology change, unsupported
-        action, or unavailable replay cursor.
+      description: |
+        Conflicting resource state, unsafe topology change, unsupported action,
+        or unavailable replay cursor. On operations accepting Idempotency-Key,
+        details.field is Idempotency-Key and details.reason is conflict for a
+        different request body or invalid_state for an in-flight duplicate.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     UnprocessableEntity:
       description: Invalid namespace token, project mismatch or duplicate project.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: Authentication or namespace runtime is temporarily unavailable.
       content:
         application/json:
           schema:
@@ -2924,7 +3092,9 @@ components:
     NamespaceName:
       type: string
       pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'
-      description: Project namespace name, 2–32 lowercase letters, digits or hyphens.
+      minLength: 2
+      maxLength: 32
+      description: Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
     TokenStatus:
       type: object
       description: Secret-safe token health; never contains a token or fingerprint.
@@ -3065,6 +3235,11 @@ components:
       required: [items]
     Error:
       type: object
+      description: |
+        Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+        `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+        `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+        `message` is a human-readable explanation that names the rejected field or resource.
       properties:
         code:
           type: string
@@ -3073,8 +3248,14 @@ components:
         details:
           type: object
           additionalProperties: true
-          description: Structured validation or conflict details; never contains secrets.
-          nullable: true
+          description: |
+            Structured, secret-free context; omitted when there is nothing to add. Validation
+            errors carry `field` (JSON path such as `spec.components.engine.replicas`, or a
+            query/path parameter name) and `reason` (`required`, `unknown_field`, `invalid`,
+            `out_of_range`, `unsupported`, `conflict`, `reused`). Missing or conflicting
+            resources carry `resource`, `name` and `reason` (`not_found`, `already_exists`,
+            `invalid_state`, `protected`) and, for `invalid_state`, the current `state`.
+            Other keys may be added; clients must ignore unknown keys.
       required:
       - code
       - message
@@ -3083,8 +3264,10 @@ components:
       properties:
         version:
           type: string
+          description: Release/source label, or "unknown (built without git metadata)" when not supplied.
         commit:
           type: string
+          description: Source revision supplied at build time, or "unknown (built without git metadata)".
         buildDate:
           type: string
         apiVersion:
@@ -3130,7 +3313,7 @@ components:
           type: string
           readOnly: true
         expiresAt: *id011
-      description: Sets HttpOnly Secure SameSite=Strict karakoram_session and rotating
+      description: Sets HttpOnly Secure SameSite=Strict karakoram_access and rotating
         karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON.
       required:
       - account
@@ -3161,14 +3344,16 @@ components:
       type: object
       properties:
         currentPassword: *id012
-        newPassword: *id012
+        newPassword:
+          $ref: '#/components/schemas/AccountPassword'
       required:
       - currentPassword
       - newPassword
     ResetPasswordRequest:
       type: object
       properties:
-        password: *id012
+        password:
+          $ref: '#/components/schemas/AccountPassword'
         mustChangePassword:
           type: boolean
           default: true
@@ -3248,7 +3433,9 @@ components:
         policy:
           type: string
           description: 'Casbin CSV: p, subject, resource, action, object, allow|deny;
-            g, subject, role. Built-in roles remain installed.'
+            g, subject, role. Built-in roles remain installed. Validation errors name
+            policy and the line. Replacement must preserve unrestricted administration
+            for an enabled account or verified active OIDC group identity without denies.'
       required:
       - policy
     CanRequest:
@@ -3298,11 +3485,35 @@ components:
       - mustChangePassword
       - createdAt
       - updatedAt
+    AccountName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[a-zA-Z][a-zA-Z0-9_.@-]{0,63}$'
+      description: Start with a letter; use only letters, digits, underscore, dot, @ or dash.
+    AccountPassword:
+      type: string
+      format: password
+      writeOnly: true
+      minLength: 12
+      maxLength: 1024
+      description: At least 12 Unicode characters and at most 1024 UTF-8 bytes.
+        Password changes and resets must differ from the current password; rejected
+        changes retain the mandatory-change flag.
+    APITokenName:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '\S'
+      description: Required non-blank name, trimmed before storage, 1–128 characters.
+        Duplicate names are allowed; identify tokens by their unique ID.
     CreateAccountRequest:
       type: object
       properties:
-        name: *id006
-        password: *id012
+        name:
+          $ref: '#/components/schemas/AccountName'
+        password:
+          $ref: '#/components/schemas/AccountPassword'
         enabled:
           type: boolean
           default: true
@@ -3344,18 +3555,24 @@ components:
     CreateAPITokenRequest:
       type: object
       properties:
-        name: *id006
-        expiresAt: *id011
+        name:
+          $ref: '#/components/schemas/APITokenName'
+        expiresAt:
+          type: string
+          format: date-time
+          description: Optional RFC 3339 timestamp, strictly in the future.
       required:
       - name
     UpdateAPITokenRequest:
       type: object
       properties:
-        name: *id006
+        name:
+          $ref: '#/components/schemas/APITokenName'
         expiresAt:
           type: string
           format: date-time
           nullable: true
+          description: RFC 3339 timestamp strictly in the future, or null to remove expiry.
       required:
       - name
     CreatedAPIToken:
@@ -3366,8 +3583,8 @@ components:
         secret:
           type: string
           readOnly: true
-          description: kk_ prefixed bearer token, returned exactly once by creation.
-            Store securely; later GETs cannot recover it.
+          description: kk_ prefixed bearer token, returned by creation and matching
+            Idempotency-Key replays within 24 hours. Store securely; later GETs cannot recover it.
       required:
       - token
       - secret
@@ -3576,7 +3793,10 @@ components:
           enum:
           - logical
           - physical
-        storage: *id006
+        storage:
+          allOf:
+          - *id006
+          description: Optional override; when omitted, use backup.storage.
         retainCount:
           type: integer
           minimum: 1
@@ -3587,7 +3807,6 @@ components:
       - name
       - cron
       - type
-      - storage
       - retainCount
       - enabled
     PITRSpec:
@@ -4035,6 +4254,8 @@ components:
       properties:
         version:
           type: string
+          pattern: '^[0-9]+\.[0-9]+$'
+          description: Deployed engine major form, for example 8.0 (not 8.0.32-14). All members must finish the binary rollout before promotion.
       required:
       - version
     Balancer:
@@ -4098,7 +4319,7 @@ components:
       - roles
     CreatedDatabaseUser:
       type: object
-      description: Application user creation result. Any generated password is returned exactly once and never included in subsequent reads.
+      description: Application user creation result. Generated passwords are returned by creation and matching Idempotency-Key replays within 24 hours, never by subsequent reads.
       properties:
         username: *id006
         database: *id006
@@ -4109,18 +4330,22 @@ components:
         generatedPassword:
           type: string
           readOnly: true
-          description: Present only when password was omitted from the creation request and generated by the server. Display or store securely once; it cannot be retrieved again.
+          description: Present only when password was omitted and generated by the server. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
       required:
       - username
       - database
       - roles
     CreateDatabaseUserRequest:
       type: object
-      description: Omit password to have the server generate one and return it once in generatedPassword.
+      description: Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours.
       properties:
         username: *id006
         database: *id006
-        password: *id012
+        password: &DatabaseUserPassword
+          type: string
+          minLength: 8
+          writeOnly: true
+          description: At least eight Unicode characters accepted by MongoDB SASLprep (Unicode 3.2). Emoji, prohibited controls, unassigned characters and invalid bidirectional text are rejected. Omit to generate a password.
         roles:
           type: array
           items:
@@ -4132,7 +4357,10 @@ components:
     UpdateDatabaseUserRequest:
       type: object
       properties:
-        password: *id012
+        password:
+          allOf:
+          - *DatabaseUserPassword
+          description: Omit to retain the current password; a supplied value must satisfy the same minimum and SASLprep rules as creation.
         roles:
           type: array
           items:
@@ -4251,9 +4479,8 @@ components:
         storage: *id006
         type:
           type: string
-          enum:
-          - logical
-          - physical
+          minLength: 1
+          description: Must be one of the cluster provider catalog's backupTypes. Unsupported values return 400 with the provider's supported types.
       required:
       - name
       - storage
@@ -4264,9 +4491,14 @@ components:
         backup: *id006
         pitrTime: *id011
         sourceCluster: *id007
-      description: Exactly one of backup and pitrTime is required.
-      required:
-      - sourceCluster
+      description: Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+      oneOf:
+      - required: [backup]
+        not:
+          required: [pitrTime]
+      - required: [pitrTime]
+        not:
+          required: [backup]
     Restore:
       type: object
       properties:
@@ -4422,7 +4654,11 @@ components:
         checkedAt: *id011
         message:
           type: string
-      description: Checks S3 read/write/delete access and TLS without exposing credentials.
+        failureReason:
+          type: string
+          enum: [access_denied, bucket_not_found, endpoint_not_allowed, tls_error, unreachable, timeout, unknown]
+          description: Present when verified is false; categorized, secret-free cause.
+      description: Checks S3 read/write/delete access and TLS without exposing credentials. A completed verification returns HTTP 200 even on failure, with verified false, failureReason and actionable message.
       required:
       - verified
       - checkedAt
@@ -4489,7 +4725,7 @@ components:
         cluster: *id007
         type:
           type: string
-          description: "Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim."
+          description: "Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types."
         reason:
           type: string
         message:

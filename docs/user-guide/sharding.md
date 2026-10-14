@@ -34,7 +34,7 @@ Topology type is immutable. You cannot turn an existing replica set into a shard
 
 ## Connect and shard application collections
 
-Read the cluster's password-free connection summary or explicitly [reveal connection details](users-tls-access.md#connection-details). For sharded clusters the returned application hosts are **mongos only**, and no replicaSet URI option is needed for routers. Supply an application user and trust the cluster CA.
+Read the cluster's password-free connection summary or explicitly [reveal connection details](users-tls-access.md#connection-details). For sharded clusters the returned application hosts are **mongos only**, and no replicaSet URI option is needed for routers. Follow the [complete application TLS recipe](users-tls-access.md#connect-an-application-user-with-tls): create the scoped user, export `ca.pem`, build the URI from `.connection.hosts` with `authSource=appdb`, and connect with mongosh or PyMongo while trusting the cluster CA. Set `CLUSTER=analytics` for the example above. Run private connections from an application service inside that namespace's Zerops project; the management relay and public control-plane origin do not provide private database DNS or application network access.
 
 Karakoram provisions shard infrastructure and membership. Application database/collection sharding, shard-key selection and application data distribution are MongoDB administration responsibilities: use an authorized MongoDB client through mongos. Adding a shard is not proof that a collection is already sharded or balanced.
 

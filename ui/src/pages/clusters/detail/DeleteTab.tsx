@@ -70,13 +70,14 @@ export function DeleteTab() {
       </Card>
       <ConfirmDialog
         open={open}
-        onClose={() => setOpen(false)}
-        onConfirm={() => del.mutate()}
+        onClose={() => { setOpen(false); del.reset(); }}
+        onConfirm={() => del.mutateAsync()}
         title={keepVolumes && !suspended ? `Suspend ${name}` : `Delete ${name}`}
         confirmLabel={keepVolumes && !suspended ? 'Suspend' : 'Delete permanently'}
         danger
         typeToConfirm={name}
         busy={del.isPending}
+        error={del.error}
       >
         <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
           <li>Runtime services: removed</li>

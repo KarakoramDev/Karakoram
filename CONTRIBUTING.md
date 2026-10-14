@@ -74,7 +74,7 @@ For frontend work, run `npm run dev` in `ui/`; Vite serves port 5173 and proxies
 ## Public API changes
 
 1. Edit [api/openapi.yaml](api/openapi.yaml), including `x-karakoram-rbac`, request/response schemas, write-only secret fields and errors.
-2. Run `make generate` to regenerate the Go server, client and RBAC operation map. Do not edit generated files directly.
+2. Run `make generate` to regenerate the Go server (`internal/api/gen.go`), public client (`pkg/client/client.gen.go`, package `client`) and RBAC operation map. Do not edit generated files directly. Keep hand-written client helpers separate and independent of `internal/` packages; `pkg/client` is imported by external applications as well as the CLI. See the [consumer SDK guide](docs/user-guide/api.md#clientssdk).
 3. In `ui/`, run `npm run gen:api` to regenerate TypeScript types; this is separate from Go generation.
 4. Migrate server handlers, CLI commands, UI consumers and tests together. Regenerate the CLI guide from recursive `karactl --help` when its surface changes.
 5. Run `make openapi-check`; it compares Go contract/client generation against the worktree. Also review/check the generated TypeScript diff—Make's OpenAPI target does not cover that artifact.

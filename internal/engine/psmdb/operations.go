@@ -164,17 +164,8 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	switch op.Kind {
 	case domain.OperationRaiseFCV:
 		version := payload["version"]
-		if version != major(rc.Cluster.Spec.Version) {
-			return result, invalid("FCV must equal the deployed engine major")
-		}
-		for _, m := range s.Members {
-			st, e := agentStatus(ctx, rc, m.Name)
-			if e != nil {
-				return result, e
-			}
-			if major(st.EngineVersion) != version || major(m.Version) != version {
-				return result, fmt.Errorf("%w: all members must run %s before FCV raise", engine.ErrConflict, version)
-			}
+		if e := p.ValidateFCV(ctx, rc, version); e != nil {
+			return engine.OpResult{Done: true, Step: "fcv-rejected", Message: e.Error()}, e
 		}
 		sets := []string{"rs0"}
 		if rc.Cluster.Spec.Topology.Type == "sharded" {
@@ -257,6 +248,13 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 		if e == nil && result.Done {
 			e = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key)
+			if e == nil {
+				if s.LastRotatedAt == nil {
+					s.LastRotatedAt = map[string]*time.Time{}
+				}
+				stamp := now(rc).UTC()
+				s.LastRotatedAt[user] = &stamp
+			}
 		}
 		return result, e
 	case domain.OperationReplaceMember:

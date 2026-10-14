@@ -3,6 +3,7 @@
 
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { components, paths } from './schema';
+import { createSessionTransport, TEMPORARY_UNAVAILABILITY } from './session-transport';
 
 export type Schemas = components['schemas'];
 
@@ -19,7 +20,10 @@ const SAFE_METHODS: Record<string, true> = { GET: true, HEAD: true, OPTIONS: tru
  */
 export const csrf = {
   get(): string | null {
-    return window.localStorage.getItem(CSRF_KEY);
+    const stored = window.localStorage.getItem(CSRF_KEY);
+    if (stored) return stored;
+    const cookie = document.cookie.split('; ').find((part) => part.startsWith('karakoram_csrf='));
+    return cookie ? decodeURIComponent(cookie.slice('karakoram_csrf='.length)) : null;
   },
   set(token: string) {
     window.localStorage.setItem(CSRF_KEY, token);
@@ -46,58 +50,23 @@ export class ApiError extends Error {
 /** Fired on window when the API rejects the session and no refresh is possible. */
 export const UNAUTHORIZED_EVENT = 'karakoram:unauthorized';
 
-// Bodies of unsafe requests are kept as clones so a request can be replayed
-// once after a successful session refresh.
-const replayable = new WeakMap<Request, Request>();
-let refreshing: Promise<boolean> | null = null;
+const transport = createSessionTransport({
+  base: API_BASE,
+  fetch: (input, init) => fetch(input, init),
+  csrf,
+  unauthorized: () => window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT)),
+});
 
-async function refreshSession(): Promise<boolean> {
-  if (!refreshing) {
-    refreshing = (async () => {
-      const token = csrf.get();
-      if (!token) return false;
-      try {
-        const res = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { [CSRF_HEADER]: token, Accept: 'application/json' },
-        });
-        if (!res.ok) return false;
-        const session = (await res.json()) as Schemas['Session'];
-        csrf.set(session.csrfToken);
-        return true;
-      } catch {
-        return false;
-      } finally {
-        refreshing = null;
-      }
-    })();
-  }
-  return refreshing;
-}
+/** Reset recovery after an explicit new login, not after each successful read. */
+export function resetSessionRecovery() { transport.reset(); }
 
 const sessionMiddleware: Middleware = {
   onRequest({ request }) {
     if (!SAFE_METHODS[request.method]) {
       const token = csrf.get();
       if (token && !request.headers.has(CSRF_HEADER)) request.headers.set(CSRF_HEADER, token);
-      replayable.set(request, request.clone());
     }
     return request;
-  },
-  async onResponse({ request, response }) {
-    if (response.status !== 401) return response;
-    const path = new URL(request.url).pathname;
-    // Auth endpoints answer 401 for their own reasons (bad password, dead refresh).
-    if (path.startsWith(`${API_BASE}/auth/`)) return response;
-    if (await refreshSession()) {
-      const retry = replayable.get(request) ?? request.clone();
-      const token = csrf.get();
-      if (token && !SAFE_METHODS[retry.method]) retry.headers.set(CSRF_HEADER, token);
-      return fetch(retry);
-    }
-    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
-    return response;
   },
 };
 
@@ -105,6 +74,7 @@ export const api = createClient<paths>({
   baseUrl: API_BASE,
   credentials: 'same-origin',
   headers: { Accept: 'application/json' },
+  fetch: transport.fetch,
 });
 api.use(sessionMiddleware);
 
@@ -125,7 +95,8 @@ export async function unwrap<T>(p: Promise<FetchResult<T>>): Promise<T> {
 
 /** Narrow an unknown thrown value to a human-readable message. */
 export function errorMessage(err: unknown): string {
-  if (err instanceof ApiError) return err.message;
+  if (err instanceof ApiError) return err.status >= 500 ? `${TEMPORARY_UNAVAILABILITY} ${err.message}` : err.message;
+  if (err instanceof TypeError || (err instanceof Error && err.name === 'TimeoutError')) return TEMPORARY_UNAVAILABILITY;
   if (err instanceof Error) return err.message;
   return String(err);
 }

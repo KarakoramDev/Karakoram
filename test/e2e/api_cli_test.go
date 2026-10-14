@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 	"os"
 	"os/exec"
 	"path/filepath"

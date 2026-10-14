@@ -7,7 +7,7 @@ package e2e
 
 import (
 	"context"
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"

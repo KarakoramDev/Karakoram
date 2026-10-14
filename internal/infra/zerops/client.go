@@ -154,10 +154,17 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 					Error struct {
 						Code, Message string
 						Meta          json.RawMessage
+						Metadata      json.RawMessage
 					} `json:"error"`
 				}
 				_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&envelope)
-				err = &APIError{StatusCode: resp.StatusCode, Code: envelope.Error.Code, Message: envelope.Error.Message, Meta: envelope.Error.Meta}
+				if len(envelope.Error.Meta) == 0 {
+					envelope.Error.Meta = envelope.Error.Metadata
+				}
+				c.tokenMu.RLock()
+				token := c.token
+				c.tokenMu.RUnlock()
+				err = &APIError{StatusCode: resp.StatusCode, Code: envelope.Error.Code, Message: envelope.Error.Message, Meta: envelope.Error.Meta, token: token}
 			} else if out != nil {
 				if e := json.NewDecoder(resp.Body).Decode(out); e != nil {
 					retryable = networkFailure(e)

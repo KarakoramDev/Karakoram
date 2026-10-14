@@ -7,6 +7,8 @@ import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/Dialog';
+import { hasAdminAssignment } from '@/auth/validation';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
@@ -50,6 +52,7 @@ export function RbacPage() {
   const policy = useQuery({ queryKey: keys.rbacPolicy, queryFn: () => unwrap(api.GET('/rbac/policy')), enabled: auth.can('rbac', 'read') });
   const [text, setText] = useState('');
   const [seeded, setSeeded] = useState<string | null>(null);
+  const [confirmLockout, setConfirmLockout] = useState(false);
   useEffect(() => {
     if (policy.data && policy.data.policy !== seeded) {
       setText(policy.data.policy);
@@ -73,6 +76,7 @@ export function RbacPage() {
   const dirty = text !== (policy.data?.policy ?? '');
   const problems = lintPolicy(text);
   const editable = auth.can('rbac', 'update');
+  const removesAdminAssignments = !hasAdminAssignment(text);
 
   return (
     <>
@@ -84,7 +88,7 @@ export function RbacPage() {
               <Button size="sm" disabled={!dirty} onClick={() => setText(policy.data?.policy ?? '')}>
                 Discard
               </Button>
-              <Button size="sm" variant="primary" disabled={!dirty || problems.length > 0} loading={save.isPending} onClick={() => save.mutate()}>
+              <Button size="sm" variant="primary" disabled={!dirty || problems.length > 0} loading={save.isPending} onClick={() => removesAdminAssignments ? setConfirmLockout(true) : save.mutate()}>
                 Save policy
               </Button>
             </>
@@ -118,6 +122,9 @@ export function RbacPage() {
               </p>
             </details>
             <TextAreaField label="Policy" className="policy-editor" mono value={text} onChange={(e) => setText(e.target.value)} rows={18} readOnly={!editable} spellCheck={false} aria-describedby="policy-lint" />
+            {dirty && removesAdminAssignments ? <Callout tone="warn" title="Administrator lockout risk">
+              This policy has no user or group assignment to role:admin. Keep an enabled administrator with unrestricted rights. Saving requires confirmation; the server rejects policies without a verified administrator.
+            </Callout> : null}
             <div id="policy-lint">
               {problems.length ? (
                 <Callout tone="warn" title="Fix before saving">
@@ -135,6 +142,9 @@ export function RbacPage() {
         )}
       </Card>
 
+      <ConfirmDialog open={confirmLockout} onClose={() => setConfirmLockout(false)} title="Save without admin assignments?" confirmLabel="Confirm policy save" danger busy={save.isPending} onConfirm={() => { setConfirmLockout(false); return save.mutateAsync().catch(() => undefined); }}>
+        <p>This removes every user/group assignment to role:admin. Confirm that an enabled account retains unrestricted administrative rights through other rules. The server keeps the previous policy if it cannot verify that.</p>
+      </ConfirmDialog>
       <CanTester />
 
       <Card title="Your resolved permissions" flush>

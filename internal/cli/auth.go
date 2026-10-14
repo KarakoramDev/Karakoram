@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -31,8 +33,9 @@ func password(r io.Reader, w io.Writer) (string, error) {
 }
 func (a *app) addAuth(root *cobra.Command) {
 	login := &cobra.Command{Use: "login", Short: "Log in with a password, create an API token, and save the context", Args: cobra.NoArgs}
+	login.Long = "Log in and save an API token. On a terminal, the password is prompted without echo.\nWith non-terminal stdin, read the password from its first line (for example, from a secret manager).\nRe-login revokes the previously saved token after saving the replacement; failures produce a warning."
 	login.Flags().String("username", "admin", "Local account name")
-	annotate(login, "login", "createAPIToken", "logout")
+	annotate(login, "login", "createAPIToken", "logout", "deleteAPIToken")
 	login.RunE = func(cmd *cobra.Command, args []string) error {
 		username, _ := cmd.Flags().GetString("username")
 		pw, err := password(a.opts.In, a.opts.Err)
@@ -43,6 +46,7 @@ func (a *app) addAuth(root *cobra.Command) {
 			return fmt.Errorf("password cannot be empty")
 		}
 		// Existing bearer credentials must not override the newly authenticated session.
+		previous := a.config.Contexts[a.selected]
 		a.token = ""
 		session, err := a.request(cmd.Context(), "login", nil, nil, map[string]any{"username": username, "password": pw})
 		if err != nil {
@@ -69,6 +73,21 @@ func (a *app) addAuth(root *cobra.Command) {
 		a.config.CurrentContext = a.selected
 		if err = SaveConfig(a.opts.ConfigPath, a.config); err != nil {
 			return fmt.Errorf("saving credentials: %w", err)
+		}
+		if previous.TokenID != "" && previous.TokenID != id {
+			base := strings.TrimSuffix(strings.TrimSuffix(previous.Server, "/"), "/api/v1")
+			revoke, revokeErr := http.NewRequestWithContext(cmd.Context(), http.MethodDelete, base+"/api/v1/api-tokens/"+url.PathEscape(previous.TokenID), nil)
+			if revokeErr == nil {
+				revoke.Header.Set("Authorization", "Bearer "+previous.Token)
+				var response *http.Response
+				response, revokeErr = a.http.Do(revoke)
+				if revokeErr == nil {
+					_, revokeErr = decodeResponse(response)
+				}
+			}
+			if revokeErr != nil {
+				fmt.Fprintf(a.opts.Err, "WARNING: replacement token saved, but revoking previous token %s failed: %v\n", previous.TokenID, revokeErr)
+			}
 		}
 		// End the temporary password session; subsequent commands use only the API token.
 		if _, err = a.request(cmd.Context(), "logout", nil, nil, nil); err != nil {

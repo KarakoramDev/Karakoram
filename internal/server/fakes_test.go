@@ -28,7 +28,7 @@ type fakeProvider struct{}
 
 func (*fakeProvider) Name() string { return "fake" }
 func (*fakeProvider) Describe() domain.ProviderInfo {
-	return domain.ProviderInfo{Name: "fake", DisplayName: "Fake engine", Versions: []domain.VersionInfo{{Version: "8.0", Major: "8.0", Default: true, Status: "supported"}}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}, MinReplicas: 1, MaxReplicas: 7}}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}}, "configServer": {Defaults: domain.ComponentSpec{Replicas: 1}}, "router": {Defaults: domain.ComponentSpec{Replicas: 1}}}}}}
+	return domain.ProviderInfo{Name: "fake", DisplayName: "Fake engine", BackupTypes: []string{"logical", "physical"}, Versions: []domain.VersionInfo{{Version: "8.0", Major: "8.0", Default: true, Status: "supported"}}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}, MinReplicas: 1, MaxReplicas: 7}}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": {Defaults: domain.ComponentSpec{Replicas: 3}}, "configServer": {Defaults: domain.ComponentSpec{Replicas: 1}}, "router": {Defaults: domain.ComponentSpec{Replicas: 1}}}}}}
 }
 func (*fakeProvider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Provider == "" {
@@ -48,6 +48,22 @@ func (*fakeProvider) ApplyDefaults(s *domain.ClusterSpec) {
 	}
 	if s.TLS.CA == "" {
 		s.TLS.CA = "selfSigned"
+	}
+	if s.Components.Engine.Resources.CPUMode == "" {
+		s.Components.Engine.Resources = domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 2, MinRAM: 1, MaxRAM: 2, MinDisk: 5, MaxDisk: 10}
+	}
+	if s.Topology.Type == "sharded" {
+		if s.Topology.Shards == 0 {
+			s.Topology.Shards = 1
+		}
+		if s.Components.ConfigServer.Replicas == 0 {
+			s.Components.ConfigServer.Replicas = 1
+		}
+		if s.Components.Router.Replicas == 0 {
+			s.Components.Router.Replicas = 1
+		}
+		s.Components.ConfigServer.Resources = s.Components.Engine.Resources
+		s.Components.Router.Resources = s.Components.Engine.Resources
 	}
 }
 func (*fakeProvider) Validate(_ context.Context, _ *domain.Cluster, c *domain.Cluster) error {
@@ -175,12 +191,17 @@ func (t *triggerSpy) Trigger(ref domain.ClusterRef) {
 }
 func testServer(t *testing.T) (*Server, *secrets.Sealer, string) {
 	t.Helper()
+	return testServerWithDatabase(t, filepath.Join(t.TempDir(), "test.db"))
+}
+
+func testServerWithDatabase(t *testing.T, path string) (*Server, *secrets.Sealer, string) {
+	t.Helper()
 	ctx := context.Background()
 	sealer, err := secrets.New(strings.Repeat("x", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"), sealer)
+	st, err := store.Open(path, sealer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +225,7 @@ func testServer(t *testing.T) (*Server, *secrets.Sealer, string) {
 	rc := engine.Context{Backend: fakeBackend{}, Store: st, Secrets: st, Events: events.NewRecorder(st, hub), Clock: engine.RealClock{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	for _, name := range []string{"prod", "dev"} {
 		c := domain.Cluster{Name: name, Spec: domain.ClusterSpec{Provider: "fake", Version: "8.0", Topology: domain.Topology{Type: "replicaSet"}}, Status: domain.ClusterStatus{Phase: domain.PhaseReady, Members: []domain.MemberStatus{{Name: name + "m0", Set: "rs0", Health: true}}}}
+		(&fakeProvider{}).ApplyDefaults(&c.Spec)
 		if err = st.CreateCluster(ctx, &c); err != nil {
 			t.Fatal(err)
 		}
@@ -217,6 +239,7 @@ func testServer(t *testing.T) (*Server, *secrets.Sealer, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	registerConformance(t, s)
 	return s, sealer, token
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/xdg-go/stringprep"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -140,12 +141,22 @@ func validateApplicationUser(db, name string) error {
 	return nil
 }
 
-func validatePassword(password string) error {
-	if password == "" || !utf8.ValidString(password) || strings.ContainsRune(password, '\x00') {
-		return invalid("password must be non-empty UTF-8 without NUL")
+// ValidatePassword rejects credentials MongoDB cannot normalize for SCRAM.
+// SASLprep uses Unicode 3.2: later codepoints (including emoji) are unassigned.
+func ValidatePassword(password string) error {
+	if !utf8.ValidString(password) || strings.ContainsRune(password, '\x00') {
+		return engine.InvalidField("password", domain.ReasonInvalid, "password must be valid UTF-8 without NUL")
+	}
+	if utf8.RuneCountInString(password) < 8 {
+		return engine.InvalidField("password", domain.ReasonOutOfRange, "password must contain at least 8 characters")
+	}
+	if prepared, err := stringprep.SASLprep.Prepare(password); err != nil || prepared == "" {
+		return engine.InvalidField("password", domain.ReasonInvalid, "password must use MongoDB SASLprep-compatible Unicode 3.2 characters; emoji, control characters and invalid bidirectional text are not supported")
 	}
 	return nil
 }
+
+func validatePassword(password string) error { return ValidatePassword(password) }
 
 func validateRoles(roles []domain.RoleRef) error {
 	seen := make(map[domain.RoleRef]bool, len(roles))

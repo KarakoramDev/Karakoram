@@ -89,6 +89,7 @@ func (s *Service) RecoverAdmin(ctx context.Context, name, password, masterKey st
 	}
 	a.PasswordHash = hash
 	a.PasswordChangedAt = s.now()
+	a.UpdatedAt = a.PasswordChangedAt
 	a.MustChangePassword = true
 	a.Disabled = false
 	// Drop prior role subjects so an unrelated role's deny cannot block recovery.

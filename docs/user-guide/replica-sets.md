@@ -41,7 +41,7 @@ karactl events list --cluster demo
 
 Inspect phase/message/conditions, observedGeneration, member health/state/role, agent connectivity/configVersion, binary version and lag. A caught-up secondary is different from a service merely marked ACTIVE by Zerops. The cluster overview and topology tabs expose these observations; [monitoring](monitoring.md) adds time series.
 
-Default status connection URIs omit passwords. [Explicit connection reveal](users-tls-access.md#connection-details) requires a separate permission; use application-specific users for workloads.
+Default status connection URIs omit passwords. [Explicit connection reveal](users-tls-access.md#connection-details) requires a separate permission; use application-specific users for workloads. Follow the [complete application TLS recipe](users-tls-access.md#connect-an-application-user-with-tls) to create `appwriter@appdb`, export `ca.pem`, build a URI with `authSource=appdb` and `replicaSet=rs0`, and connect with mongosh or PyMongo. Run private connections from a service in the database's Zerops project, not an ordinary workstation. For public seeds, read the [replica-set discovery caveat](users-tls-access.md#public-exposure-and-discovery) before assuming external failover works.
 
 ## Add, remove and replace members
 

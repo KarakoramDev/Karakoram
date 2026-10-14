@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )

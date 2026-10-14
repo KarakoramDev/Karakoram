@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -143,7 +144,47 @@ func DeleteRole(ctx context.Context, c *mongo.Client, db, name string) error {
 	if _, err := GetRole(ctx, c, db, name); err != nil {
 		return err
 	}
+	assigned, err := queryUsers(ctx, c, bson.D{{Key: "forAllDBs", Value: true}})
+	if err != nil {
+		return err
+	}
+	roles, err := ListRoles(ctx, c)
+	if err != nil {
+		return err
+	}
+	if err := validateRoleDeletion(db, name, assigned, roles); err != nil {
+		return err
+	}
 	return run(ctx, c, db, bson.D{{Key: "dropRole", Value: name}})
+}
+
+// MongoDB dropRole silently strips user and role assignments. Require callers
+// to explicitly remove those references before allowing that destructive step.
+func validateRoleDeletion(db, name string, assigned []domain.DatabaseUser, roles []domain.DatabaseRole) error {
+	var blockers []string
+	ref := domain.RoleRef{DB: db, Role: name}
+	for _, user := range assigned {
+		for _, role := range user.Roles {
+			if role == ref {
+				blockers = append(blockers, "user "+user.Name+"@"+user.Database)
+				break
+			}
+		}
+	}
+	for _, inherited := range roles {
+		for _, role := range inherited.Roles {
+			if role == ref {
+				blockers = append(blockers, "role "+inherited.Name+"@"+inherited.Database)
+				break
+			}
+		}
+	}
+	if len(blockers) > 0 {
+		sort.Strings(blockers)
+		return domain.Conflict("databaseRole", name+"@"+db, domain.ReasonInvalidState, engine.ErrConflict,
+			"database role %s@%s is still assigned to %s; remove these role references before deleting it", name, db, strings.Join(blockers, ", "))
+	}
+	return nil
 }
 
 func queryRoles(ctx context.Context, c *mongo.Client, selector any) ([]wireRole, error) {

@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,16 @@ import (
 var ErrInvalid = errors.New("invalid namespace")
 var ErrConflict = store.ErrConflict
 var ErrNotFound = store.ErrNotFound
+
+// PlatformUnavailableError exposes a safe validation diagnostic without
+// misclassifying a platform failure as invalid namespace credentials.
+type PlatformUnavailableError struct {
+	cause error
+}
+
+func (e *PlatformUnavailableError) Error() string {
+	return temporaryPlatformError(e.cause)
+}
 
 type Backend interface {
 	infra.Backend
@@ -179,14 +190,7 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 	n.Relay.Phase = "NotRequired"
 	n.UpdatedAt = now
 	project, validation := o.DefaultBackend.ProjectInfo(ctx)
-	n.Token.LastValidatedAt = now
-	n.Token.Valid = validation == nil && project.ID == n.ProjectID
-	n.Token.LastError = ""
-	if !n.Token.Valid {
-		n.Token.LastError = "Environment-managed token cannot access the configured project"
-	} else {
-		n.ProjectName = project.Name
-	}
+	applyTokenValidation(n, project, validation, now)
 	updatePhase(n)
 	if createDefault {
 		err = o.Store.CreateNamespace(ctx, n)
@@ -289,6 +293,30 @@ func (r *Registry) trigger() {
 	default:
 	}
 }
+
+// A failed API request is not evidence that a previously accepted token expired.
+func applyTokenValidation(n *domain.Namespace, project infra.Project, validation error, now time.Time) {
+	n.Token.LastValidatedAt = now
+	if validation == nil && project.ID != n.ProjectID {
+		validation = &zerops.APIError{Code: "accessDenied", Message: "Authenticated project does not match the configured project"}
+	}
+	switch {
+	case validation == nil:
+		n.Token.Valid = true
+		n.Token.LastError = ""
+		n.ProjectName = project.Name
+	case zerops.IsAuthenticationError(validation):
+		n.Token.Valid = false
+		n.Token.LastError = "Project token access rejected: " + zerops.SafeErrorDetail(validation)
+	default:
+		n.Token.LastError = temporaryPlatformError(validation)
+	}
+}
+
+func temporaryPlatformError(err error) string {
+	return "Zerops API temporarily unavailable: " + zerops.SafeErrorDetail(err) + "; retrying"
+}
+
 func updatePhase(n *domain.Namespace) {
 	if n.Phase == "Deleting" {
 		return
@@ -310,8 +338,25 @@ func (r *Registry) Get(ctx context.Context, name string) (*domain.Namespace, err
 	return r.o.Store.GetNamespace(ctx, name)
 }
 func (r *Registry) Create(ctx context.Context, name, projectID, token, description string) (*domain.Namespace, error) {
-	if name == domain.DefaultNamespace || domain.ValidateNamespaceName(name) != nil || projectID == "" || token == "" {
-		return nil, fmt.Errorf("%w: name, project and token are required; default is reserved", ErrInvalid)
+	if name == "" {
+		e := domain.InvalidField("name", domain.ReasonRequired, "name is required")
+		e.Err = ErrInvalid
+		return nil, e
+	}
+	if err := domain.ValidateNamespaceName(name); err != nil {
+		e := domain.InvalidField("name", domain.ReasonInvalid, "%s", err)
+		e.Err = ErrInvalid
+		return nil, e
+	}
+	if name == domain.DefaultNamespace {
+		return nil, domain.Conflict("namespace", name, domain.ReasonAlreadyExists, ErrConflict, "namespace %q already exists and is reserved", name)
+	}
+	for _, field := range []struct{ name, value string }{{"projectId", projectID}, {"token", token}} {
+		if strings.TrimSpace(field.value) == "" {
+			e := domain.InvalidField(field.name, domain.ReasonRequired, "%s is required", field.name)
+			e.Err = ErrInvalid
+			return nil, e
+		}
 	}
 	if !relayHostnamePattern.MatchString(r.o.RelayHostname) || r.o.RelayHostname == "core" {
 		return nil, fmt.Errorf("%w: invalid relay hostname", ErrInvalid)
@@ -327,7 +372,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	}
 	for _, n := range all {
 		if n.Name == name {
-			return nil, fmt.Errorf("%w: namespace already exists", ErrConflict)
+			return nil, domain.Conflict("namespace", name, domain.ReasonAlreadyExists, ErrConflict, "namespace %q already exists", name)
 		}
 		if n.ProjectID == projectID {
 			return nil, fmt.Errorf("%w: project is already registered", ErrInvalid)
@@ -338,7 +383,10 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	z.Token = token
 	b, p, err := r.o.Validate(ctx, z)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalid, err)
+		if zerops.IsAuthenticationError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
+		}
+		return nil, &PlatformUnavailableError{cause: err}
 	}
 	service, err := b.GetService(ctx, r.o.RelayHostname)
 	if err != nil {
@@ -399,7 +447,10 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	z.ProjectID = n.ProjectID
 	replacement, p, err := r.o.Validate(ctx, z)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalid, err)
+		if zerops.IsAuthenticationError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
+		}
+		return nil, &PlatformUnavailableError{cause: err}
 	}
 	now := time.Now().UTC()
 	n.Token.Valid = true
@@ -445,14 +496,7 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 		}
 	}
 	_, p, validation := r.o.Validate(ctx, z)
-	n.Token.Valid = validation == nil
-	n.Token.LastValidatedAt = time.Now().UTC()
-	n.Token.LastError = ""
-	if validation != nil {
-		n.Token.LastError = validation.Error()
-	} else {
-		n.ProjectName = p.Name
-	}
+	applyTokenValidation(n, p, validation, time.Now().UTC())
 	updatePhase(n)
 	if err = r.save(ctx, n); err != nil {
 		return nil, err

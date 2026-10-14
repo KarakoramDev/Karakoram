@@ -7,13 +7,27 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
+
+// ValidateBackupStorageName applies the creation rule; legacy names remain updatable.
+func ValidateBackupStorageName(name string) error {
+	reason := domain.ReasonInvalid
+	if name == "" {
+		reason = domain.ReasonRequired
+	}
+	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 128 || strings.ContainsAny(name, ":/") {
+		e := domain.InvalidField("name", reason, "name must contain 1–128 characters, must not be blank, and must not contain ':' or '/'")
+		e.Err = ErrInvalid
+		return e
+	}
+	return nil
+}
 
 // CreateBackup inserts a new backup.
 func (s *Store) CreateBackup(ctx context.Context, v *domain.Backup) error {
@@ -170,8 +184,8 @@ func (s *Store) DeleteRetainedVolume(ctx context.Context, ref domain.ClusterRef,
 
 // CreateBackupStorage inserts a new backup storage.
 func (s *Store) CreateBackupStorage(ctx context.Context, v *domain.BackupStorage) error {
-	if v.Name == "" || strings.ContainsAny(v.Name, ":/") {
-		return fmt.Errorf("invalid backup storage name: %w", ErrInvalid)
+	if err := ValidateBackupStorageName(v.Name); err != nil {
+		return err
 	}
 	v.Namespace = domain.NormalizedNamespace(v.Namespace)
 	if err := domain.ValidateNamespaceName(v.Namespace); err != nil {

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
-package: apiclient
+package: client
 generate:
   models: true
   client: true
-output: ../internal/apiclient/client.gen.go
+output: ../pkg/client/client.gen.go
 output-options:
   skip-prune: true

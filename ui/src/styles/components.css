@@ -477,6 +477,17 @@
   border-bottom: 1px solid var(--border);
 }
 
+.table td {
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.table td code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .table th {
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -618,6 +629,17 @@
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 48px);
+}
+
+.dialog-controls {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .dialog-head {

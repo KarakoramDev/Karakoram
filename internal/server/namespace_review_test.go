@@ -207,7 +207,7 @@ func TestScheduleStorageFallsBackToPrimary(t *testing.T) {
 	if err := s.Store.CreateBackupStorage(t.Context(), &domain.BackupStorage{Namespace: "dev", Name: "archive"}); err != nil {
 		t.Fatal(err)
 	}
-	w := call(s, "PATCH", "/api/v1/clusters/prod?namespace=dev", `{"spec":{"backup":{"storage":"archive","schedules":[{"name":"daily","cron":"0 0 * * *","type":"logical"}]}}}`, admin)
+	w := call(s, "PATCH", "/api/v1/clusters/prod?namespace=dev", `{"spec":{"backup":{"storage":"archive","schedules":[{"name":"daily","cron":"0 0 * * *","type":"logical","retainCount":1,"enabled":true}]}}}`, admin)
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -216,7 +216,7 @@ func TestScheduleStorageFallsBackToPrimary(t *testing.T) {
 func TestNamespacesPaginateAfterAuthorization(t *testing.T) {
 	s, admin := namespaceTestServer(t)
 	for _, ns := range []string{"alpha", "hidden", "omega"} {
-		if err := s.Store.CreateNamespace(t.Context(), &domain.Namespace{Name: ns, Phase: "Ready"}); err != nil {
+		if err := s.Store.CreateNamespace(t.Context(), &domain.Namespace{Name: ns, Phase: "Ready", Token: domain.NamespaceTokenStatus{Source: "stored"}, Relay: domain.NamespaceRelayStatus{Phase: "Pending"}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -279,7 +279,7 @@ func TestLegacyCloneCanBePatchedAfterMigration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = db.Exec(`INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,'{}','{}',1,0,'{}',1,1)`, name, data); err != nil {
+		if _, err = db.Exec(`INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,'{"phase":"Ready"}','{}',1,0,'{}',1,1)`, name, data); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -344,7 +344,7 @@ func TestCrossNamespaceCloneFromSucceededLogicalBackup(t *testing.T) {
 	if err := s.Store.CreateBackupStorage(ctx, &storage); err != nil {
 		t.Fatal(err)
 	}
-	backup := domain.Backup{Namespace: "prod", Cluster: source.Name, Name: "saved", Storage: storage.Name, Type: "logical", Phase: domain.PhaseSucceeded, SourceVersion: spec.Version, SourceTopology: spec.Topology}
+	backup := domain.Backup{Namespace: "prod", Cluster: source.Name, Name: "saved", Storage: storage.Name, Type: "logical", Trigger: "manual", Phase: domain.PhaseSucceeded, SourceVersion: spec.Version, SourceTopology: spec.Topology}
 	if err := s.Store.CreateBackup(ctx, &backup); err != nil {
 		t.Fatal(err)
 	}

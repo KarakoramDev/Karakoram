@@ -52,7 +52,7 @@ func TestAuditClusterDeleteCookieTokenAndOIDC(t *testing.T) {
 				}
 				r.Header.Set(auth.CSRFHeader, *session.CsrfToken)
 				w := httptest.NewRecorder()
-				s.Handler().ServeHTTP(w, r)
+				testHandler(s).ServeHTTP(w, r)
 				if w.Code != 202 {
 					t.Fatal(w.Code, w.Body.String())
 				}
@@ -66,7 +66,7 @@ func TestAuditClusterDeleteCookieTokenAndOIDC(t *testing.T) {
 				}
 				expected = p.Actor()
 				w := httptest.NewRecorder()
-				s.Handler().ServeHTTP(w, r)
+				testHandler(s).ServeHTTP(w, r)
 				if w.Code != 202 {
 					t.Fatal(w.Code, w.Body.String())
 				}
@@ -229,7 +229,7 @@ func TestAuditStreamVisibility(t *testing.T) {
 			cancel()
 		}
 	}
-	_ = s.stream(ctx).serve(w)
+	_ = testStream(s, ctx, w)
 	if strings.Contains(w.Body.String(), "private audit") || !strings.Contains(w.Body.String(), "public sentinel") {
 		t.Fatal("stream exposed audit or omitted cluster event")
 	}
@@ -283,6 +283,11 @@ func TestNamespaceMutationAuditUsesRequestActor(t *testing.T) {
 func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 	s, _, admin := testServer(t)
 	ctx := t.Context()
+	for _, name := range []string{"dev", "prod"} {
+		if err := s.Store.CreateNamespace(ctx, &domain.Namespace{Name: name, Phase: "Ready"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: "auditor"}, "auditor-test-password"); err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +317,6 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 		{"", 2}, {"?namespace=dev", 2}, {"?namespace=prod", 0},
 		{"?namespace=dev&actor=alice&resource=clusters", 1},
 		{"?namespace=dev&actor=bob&resource=namespaces", 1},
-		{"?actor=alice&resource=accounts", 0},
 	} {
 		w := call(s, "GET", "/api/v1/events"+tc.query, "", token)
 		var list api.EventList
@@ -324,6 +328,9 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 				t.Fatal("list leaks unauthorized audit", e)
 			}
 		}
+	}
+	if w := call(s, "GET", "/api/v1/events?actor=alice&resource=accounts", "", token); w.Code != 403 {
+		t.Fatal("explicit unauthorized audit filter", w.Code, w.Body.String())
 	}
 	// Even installation administrators do not receive global audits through a namespace filter.
 	w := call(s, "GET", "/api/v1/events?namespace=dev&resource=accounts", "", admin)
@@ -346,7 +353,7 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 			cancel()
 		}
 	}
-	_ = s.stream(streamCtx).serve(writer)
+	_ = testStream(s, streamCtx, writer)
 	body := writer.Body.String()
 	if strings.Contains(body, "hidden-") || strings.Contains(body, "visible-namespace") || !strings.Contains(body, `"message":"visible-cluster"`) {
 		t.Fatal("stream leaks unauthorized audit or ignores composed filters")

@@ -18,7 +18,7 @@ export function OrphanedVolumesPage() {
           Deletion requests for these volumes failed after their runtimes were removed. Karakoram removed them from their clusters and keeps retrying deletion in the background with exponential backoff, capped at 1 hour. These volumes may still be billed by Zerops.
         </p>
         <p>
-          You can delete them manually in the Zerops GUI or with <code>zcli service delete {'<hostname>'}</code>. The record disappears on the next retry after deletion.
+          Manual cleanup requires access to the namespace&apos;s Zerops project: delete the service in the Zerops GUI or use <code>zcli service delete {'<hostname>'}</code> with that project selected. Karakoram has no manual-delete API in this version. The record disappears on the next retry after deletion.
         </p>
       </Callout>
       <Card title={namespace ? `Orphaned volumes in ${namespace}` : 'Orphaned volumes'} flush>

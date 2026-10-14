@@ -32,6 +32,19 @@ Two log paths serve different purposes:
 
 Redact passwords, credential-bearing URIs, environment contents, API tokens and PEM private keys before exporting logs. Capture cluster/member/operation/event identifiers and timestamps instead of full secret responses.
 
+Platform import, deploy and cleanup failures include the Zerops error code and
+a sanitized summary of metadata field/reason values in Events and cluster
+status/conditions. The summary is limited to 1024 bytes; credential-bearing
+fields, environment contents, signed URLs and raw response bodies are not
+included. A message that previously said only “See metadata” now carries the
+available safe diagnostic inline, rather than requiring a separate metadata
+link. Check the named resource bound or missing service before changing the
+specification. For `serviceStackNotFound`, inspect the recorded service/process
+identity and whether the service was removed outside Karakoram; do not recreate
+or delete unrelated services to clear the error. If details are unavailable or
+truncated, inspect that process in the Zerops dashboard and share only redacted
+error codes, service/process IDs and timestamps.
+
 ## Namespace and relay operations
 
 Use [namespace lifecycle](user-guide/namespaces.md) for registration, validation,
@@ -53,6 +66,15 @@ namespace's clusters; other projects continue reconciling. Check namespace
 `phase`/`connected`/`lastSeenAt`/`reconnects` before restarting database members.
 `/healthz` and a relay marked ACTIVE do not establish authenticated tunnel
 health. `karakoram relay readiness` probes the private listener only.
+
+An infrastructure API outage is not an invalid-token diagnosis. Namespace token
+checks retain last known validity on HTTP 429/5xx, timeouts and connection
+failures, with `Zerops API temporarily unavailable: <safe detail>; retrying` in
+`token.lastError`. They retry on the usual five-minute validation cadence.
+Only explicit access rejection (401/403 or authentication error code) marks a
+previously valid token invalid. Check timestamps and the diagnostic before
+rotating credentials or repairing a relay. A fresh installation still needs a
+successful first validation before its token is known valid.
 
 During a remote namespace outage, MongoDB replication and already-running
 member-to-S3 PBM work can continue. Management, new agent configuration pulls,
@@ -156,6 +178,16 @@ The Web UI shows **Settings > Orphaned volumes** and a warning banner linking to
 The in-process janitor runs while the control plane is running and keeps retrying recorded volumes, starting after **two minutes**, doubling the retry delay up to **one hour**. Failed attempts emit **`OrphanedVolumeDeleteFailed`** (Warning); when Zerops accepts deletion, the record is removed and **`OrphanedVolumeDeleted`** (Normal) is emitted. These events retain the original cluster name. Before deleting, the janitor checks that the hostname still belongs to the recorded service ID. If the hostname is absent or belongs to a different service ID, it drops the record without deleting anything. Karakoram never deletes services it did not record.
 
 For manual cleanup later, delete the volume in the **Zerops GUI** or run **`zcli service delete <hostname>`** once Zerops accepts deletion. If the refusal persists, report the recorded **service ID** (`serviceId`) and **failing delete Process ID** (`lastProcessId`) to Zerops support. When the hostname is gone, the janitor drops the record on its next attempt; no manual Karakoram state edit is needed.
+
+**Manual cleanup is an external prerequisite.** Karakoram's orphaned-volume
+API/CLI and Settings page only list diagnostic records; they have no manual
+force-delete action. The automatic janitor submits ordinary Zerops deletion
+requests with service-ID ownership checks, but cannot override a platform mount
+or process refusal. An operator needs separate Zerops project permissions (and,
+for the CLI route, an authenticated zcli) to resolve that refusal or remove the
+volume. This separation prevents an inventory action from bypassing platform
+data-safety checks. Use the original namespace's project, not necessarily the
+project hosting Karakoram.
 
 Re-creating a cluster or member with the same name skips the orphaned hostname and allocates a new member index. Allocation also skips runtime/volume hostnames already held by existing Zerops services rather than reusing or deleting them. See [resource naming](adr/0009-resource-naming.md) and the [platform limitation](limitations.md#control-plane-and-platform-operations).
 

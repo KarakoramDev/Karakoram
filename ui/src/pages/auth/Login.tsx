@@ -3,9 +3,10 @@
 
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { API_BASE, errorMessage } from '@/api/client';
+import { API_BASE, ApiError, errorMessage } from '@/api/client';
 import { useVersion } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
+import { loginFailureMessage, PASSWORD_CHANGED_MESSAGE } from '@/auth/validation';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { Callout } from '@/components/ui/Primitives';
@@ -29,6 +30,7 @@ export function LoginPage() {
   const params = new URLSearchParams(location.search);
   const returnTo = safeReturnTo(params.get('returnTo'));
   const ssoError = params.get('error');
+  const passwordChanged = params.get('passwordChanged') === '1';
 
   if (auth.status === 'authenticated') {
     return <Navigate to={auth.user?.mustChangePassword ? '/change-password' : returnTo} replace />;
@@ -42,7 +44,7 @@ export function LoginPage() {
       const user = await auth.login(username.trim(), password);
       navigate(user.mustChangePassword ? '/change-password' : returnTo, { replace: true });
     } catch (err) {
-      setError(errorMessage(err));
+      setError(loginFailureMessage(errorMessage(err), err instanceof ApiError ? err.details : undefined));
     } finally {
       setBusy(false);
     }
@@ -65,6 +67,7 @@ export function LoginPage() {
             </div>
           </div>
           {ssoError ? <Callout tone="danger">Single sign-on failed: {ssoError}</Callout> : null}
+          {passwordChanged ? <Callout tone="ok">{PASSWORD_CHANGED_MESSAGE}</Callout> : null}
           {error ? <Callout tone="danger">{error}</Callout> : null}
           <TextField label="Username" name="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
           <TextField label="Password" name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />

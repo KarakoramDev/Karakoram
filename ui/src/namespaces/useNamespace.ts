@@ -2,7 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useMatch, useSearchParams } from 'react-router-dom';
 import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 
 export const NAMESPACE_PARAM = 'namespace';
@@ -44,9 +44,12 @@ export function rememberNamespace(namespace: string | undefined) {
  */
 export function useNamespace(): { namespace: string | undefined; fromUrl: boolean; setNamespace: (namespace: string | undefined) => void } {
   const [params, setParams] = useSearchParams();
+  const detail = useMatch('/clusters/:namespace/:name/*');
   const raw = params.get(NAMESPACE_PARAM);
-  const fromUrl = raw !== null;
-  const namespace = fromUrl ? (raw && isNamespaceName(raw) ? raw : undefined) : readPreference();
+  const fromUrl = raw !== null || Boolean(detail);
+  // Detail routes are bound to their path namespace. Invalid collection scopes
+  // are sent to the API for an explicit error, never broadened to all namespaces.
+  const namespace = detail?.params.namespace ?? (raw !== null ? raw || undefined : readPreference());
 
   const setNamespace = useCallback(
     (next: string | undefined) => {
@@ -55,7 +58,7 @@ export function useNamespace(): { namespace: string | undefined; fromUrl: boolea
         (prev) => {
           const out = new URLSearchParams(prev);
           if (next) out.set(NAMESPACE_PARAM, next);
-          else out.delete(NAMESPACE_PARAM);
+          else out.set(NAMESPACE_PARAM, '');
           return out;
         },
         { replace: true },

@@ -43,7 +43,7 @@ func TestLoginRejectsCrossOriginAndSimpleContentTypes(t *testing.T) {
 		r.Header.Set("Sec-Fetch-Site", tc.site)
 		r.Header.Set("Content-Type", tc.content)
 		w := httptest.NewRecorder()
-		s.Handler().ServeHTTP(w, r)
+		testHandler(s).ServeHTTP(w, r)
 		if w.Code != tc.status || (tc.status != 200 && len(w.Result().Cookies()) != 0) {
 			t.Fatalf("%+v: %d %s", tc, w.Code, w.Body.String())
 		}
@@ -56,7 +56,7 @@ func TestLoginRejectsCrossOriginAndSimpleContentTypes(t *testing.T) {
 		r := httptest.NewRequest(method, "/api/v1/auth/"+path, nil)
 		r.Header.Set("Origin", "https://evil.example")
 		w := httptest.NewRecorder()
-		s.Handler().ServeHTTP(w, r)
+		testHandler(s).ServeHTTP(w, r)
 		if w.Code != 403 || len(w.Result().Cookies()) != 0 {
 			t.Fatal(path, w.Code, w.Body.String())
 		}
@@ -86,7 +86,7 @@ func TestLogoutAuthenticatesRefreshWithoutAccessCookie(t *testing.T) {
 	}
 	r.Header.Set(auth.CSRFHeader, *session.CsrfToken)
 	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, r)
+	testHandler(s).ServeHTTP(w, r)
 	if w.Code != 204 || len(w.Result().Cookies()) != 3 {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -100,7 +100,7 @@ func TestLogoutAuthenticatesRefreshWithoutAccessCookie(t *testing.T) {
 		r.AddCookie(cookie)
 	}
 	w = httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, r)
+	testHandler(s).ServeHTTP(w, r)
 	if w.Code != 401 {
 		t.Fatal("revoked access remains usable", w.Code)
 	}
@@ -113,7 +113,7 @@ func TestLogoutAuthenticatesRefreshWithoutAccessCookie(t *testing.T) {
 		}
 	}
 	w = httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, r)
+	testHandler(s).ServeHTTP(w, r)
 	if w.Code != 403 {
 		t.Fatal("refresh logout bypassed CSRF", w.Code)
 	}
@@ -190,7 +190,7 @@ func TestSSEDrainsDurableEventsDespiteReversedPublication(t *testing.T) {
 			cancel()
 		}
 	}
-	if err := s.stream(ctx).serve(w); err != nil && !errors.Is(err, context.Canceled) {
+	if err := testStream(s, ctx, w); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	body := w.Body.String()
@@ -253,7 +253,8 @@ func TestSSERevalidatesBeforeEveryEvent(t *testing.T) {
 					} else {
 						expired := time.Now().Add(-time.Second)
 						stored.ExpiresAt = &expired
-						_, err = s.Auth.UpdateToken(ctx, *stored)
+						// Simulate time passing; the public update API rejects past expiry.
+						err = s.Store.UpdateApiToken(ctx, stored)
 					}
 				case "revoke-session":
 					session, e := s.Store.GetSession(ctx, sessionID)
@@ -272,7 +273,7 @@ func TestSSERevalidatesBeforeEveryEvent(t *testing.T) {
 				}
 				s.Hub.Publish(next)
 			}
-			err := s.stream(ctx).serve(w)
+			err := testStream(s, ctx, w)
 			if !errors.Is(err, auth.ErrUnauthenticated) || strings.Contains(w.Body.String(), "must-not-deliver") {
 				t.Fatalf("revoked stream delivered: %v %s", err, w.Body.String())
 			}
@@ -323,7 +324,7 @@ func TestSSEUsesCurrentAccountSubjects(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.stream(ctx).serve(w); err != nil && !errors.Is(err, context.Canceled) {
+	if err := testStream(s, ctx, w); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	if strings.Contains(w.Body.String(), "must-not-deliver") || !strings.Contains(w.Body.String(), "sentinel") {
@@ -416,7 +417,7 @@ func TestSSEClosesIdleStreamOnRevocation(t *testing.T) {
 		}
 		// No publication wakes this stream: periodic revalidation must close it.
 	}
-	if err := s.stream(ctx).serve(w); !errors.Is(err, auth.ErrUnauthenticated) {
+	if err := testStream(s, ctx, w); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Fatal("idle revoked stream not closed", err)
 	}
 }
@@ -458,7 +459,7 @@ func TestSSEClosesOnAccessExpiry(t *testing.T) {
 		}
 		s.Hub.Publish(next)
 	}
-	if err := s.stream(ctx).serve(w); !errors.Is(err, auth.ErrUnauthenticated) {
+	if err := testStream(s, ctx, w); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Fatal("expired access stream not closed", err)
 	}
 	if strings.Contains(w.Body.String(), "must-not-deliver") {
@@ -468,7 +469,7 @@ func TestSSEClosesOnAccessExpiry(t *testing.T) {
 
 func TestSSEFlushesInitialCommentBeforeAnyEvent(t *testing.T) {
 	s, _, token := testServer(t)
-	server := httptest.NewServer(s.Handler())
+	server := httptest.NewServer(testHandler(s))
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()

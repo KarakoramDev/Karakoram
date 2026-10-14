@@ -31,6 +31,31 @@ Go 1.22; the module's `go 1.24.0` directive downloads the required toolchain
 through Go's automatic toolchain selection. The build needs outbound access to
 the Go toolchain/module registries and npm.
 
+### Build provenance for local pushes
+
+`zcli service push --no-git` uploads source without `.git`. Set **build-time**
+`KARAKORAM_VERSION` (a release tag or source-build label) and
+`KARAKORAM_COMMIT` (the full or abbreviated source revision) in the Zerops
+service's build environment **before pushing**. Setting runtime variables after
+deployment cannot change the metadata linked into the executable. Obtain the
+values from your checkout, for example `git describe --tags --always` and
+`git rev-parse HEAD`, then configure those literal values for the remote build.
+The pipeline prefers `KARAKORAM_COMMIT` over Git discovery, so these values work
+even when the remote source archive has no Git metadata.
+
+Local builds accept the same names:
+
+```sh
+KARAKORAM_VERSION="$(git describe --tags --always)" \
+KARAKORAM_COMMIT="$(git rev-parse HEAD)" make build
+```
+
+Explicit Make `VERSION`/`COMMIT` overrides still work. Check public
+`GET /api/v1/version` after deployment: `version`, `commit`, `buildDate` and
+`apiVersion` identify the executable. If metadata is absent, the API and UI say
+**`unknown (built without git metadata)`** instead of implying an identifiable
+release. The UTC build timestamp is still recorded by the Zerops pipeline.
+
 ## Required secrets and generated settings
 
 | Setting | Source and purpose |
@@ -72,11 +97,22 @@ replace `run.envVariables.KARAKORAM_PUBLIC_URL` in `zerops.yaml` with its HTTPS
 origin and redeploy. A secret with that same key does **not** override a
 pipeline runtime variable.
 
-## Local checkout installation (available now)
+## Installation sources
 
-The public repository URL in `deploy/zerops/import.yaml` is a **future publication
-URL**, not a currently available release. Use the local installer until the
-repository is public, or replace that URL with your own publicly accessible fork.
+The public repository is available at
+[github.com/KarakoramDev/Karakoram](https://github.com/KarakoramDev/Karakoram).
+For a Git-based deployment, use
+[`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml) and follow
+[the import procedure below](#import-yaml-installation-from-a-public-repository).
+For deployment from your own checkout, clone the repository and use the local
+procedure:
+
+```sh
+git clone https://github.com/KarakoramDev/Karakoram
+cd Karakoram
+```
+
+## Local checkout installation
 
 ### Import, set the secret, then push
 
@@ -140,10 +176,12 @@ installer to upgrade an existing installation.
 
 ## Import YAML installation from a public repository
 
-1. Replace `buildFromGit` in `deploy/zerops/import.yaml` with your public fork until
-   the documented publication URL is available. Use a plain GitHub/GitLab
-   repository URL, without a trailing `.git`; private repositories cannot be
-   cloned through this import mechanism.
+1. Obtain [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml) from the
+   public repository. Its `buildFromGit` already points to
+   `https://github.com/KarakoramDev/Karakoram`; no fork is required. If deploying
+   your own fork, replace it with your plain public GitHub/GitLab repository URL,
+   without a trailing `.git`. Private repositories cannot be cloned through
+   this import mechanism.
 2. Replace the empty `KARAKORAM_ZEROPS_TOKEN` value in a private copy before import,
    or plan to add it in the GUI immediately afterward.
 3. In the existing project's dashboard select **Import services** and paste the

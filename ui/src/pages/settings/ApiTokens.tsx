@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
@@ -11,6 +11,7 @@ import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Time } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
+import { tokenNameError, tokenExpiry, tokenSubmission } from './token-form';
 
 type Token = Schemas['APIToken'];
 
@@ -45,8 +46,11 @@ export function ApiTokensPage() {
             <Callout tone="warn">This is the only time the secret is shown. Store it in your CLI config or secret manager.</Callout>
             <CodeLine value={created.secret} />
             <p className="small muted">
-              Use as <code>Authorization: Bearer {created.secret.slice(0, 6)}…</code> or <code>karactl auth login --token</code>. Token <span className="mono">{created.token.name}</span> acts with your permissions.
+              Use as <code>Authorization: Bearer {created.secret.slice(0, 6)}…</code>. Token <span className="mono">{created.token.name}</span> acts with your permissions.
             </p>
+            <p className="small muted">For the CLI, supply the secret through your secure runtime environment:</p>
+            <CodeLine value={`export KARAKORAM_SERVER=${window.location.origin}\nexport KARAKORAM_TOKEN='${created.secret}'\nkaractl clusters list`} />
+            <a className="small" href="/api/v1/openapi.yaml" target="_blank" rel="noreferrer">API reference (OpenAPI)</a>
             <div>
               <Button onClick={() => setCreated(null)}>Done</Button>
             </div>
@@ -76,7 +80,7 @@ export function ApiTokensPage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Prefix</th>
+                  <th>ID</th>
                   <th>Owner</th>
                   <th>Created</th>
                   <th>Last used</th>
@@ -87,8 +91,8 @@ export function ApiTokensPage() {
               <tbody>
                 {tokens.data.items.map((t) => (
                   <tr key={t.id}>
-                    <td>{t.name}</td>
-                    <td className="mono small">{t.prefix}…</td>
+                    <td title={t.name} style={{ maxWidth: 240, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.name}</td>
+                    <td className="mono small" title={t.id} style={{ maxWidth: 160, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.id}</td>
                     <td className="mono small">{t.owner}</td>
                     <td className="small">
                       <Time iso={t.createdAt} />
@@ -133,7 +137,7 @@ export function ApiTokensPage() {
         />
       ) : null}
       {edit ? <TokenDialog existing={edit} onClose={() => setEdit(null)} onSaved={invalidate} /> : null}
-      <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.id)} title={`Revoke token ${del?.name ?? ''}`} confirmLabel="Revoke" danger busy={remove.isPending}>
+      <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del ? remove.mutateAsync(del.id).catch(() => undefined) : false} title={`Revoke token ${del?.name ?? ''}`} confirmLabel="Revoke" danger busy={remove.isPending}>
         <p className="small">Clients using this token stop working immediately.</p>
       </ConfirmDialog>
     </>
@@ -152,16 +156,19 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
   const [name, setName] = useState(existing?.name ?? '');
   const [expires, setExpires] = useState(toLocalInput(existing?.expiresAt));
   const [error, setError] = useState<string | null>(null);
-  const expiresAt = expires ? new Date(expires).toISOString() : undefined;
-  const valid = name.trim().length > 0 && (!expiresAt || new Date(expiresAt) > new Date());
+  const expiry = tokenExpiry(expires);
+  const expiresAt = expiry.expiresAt;
+  const nameProblem = tokenNameError(name);
+  const valid = !nameProblem && !expiry.error;
+  const submission = useRef(tokenSubmission());
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (submitted: { name: string; expiresAt?: string; key: string }) => {
       if (existing) {
-        await unwrap(api.PUT('/api-tokens/{token}', { params: { path: { token: existing.id } }, body: { name: name.trim(), expiresAt: expiresAt ?? null } }));
+        await unwrap(api.PUT('/api-tokens/{token}', { params: { path: { token: existing.id } }, body: { name: submitted.name, expiresAt: submitted.expiresAt ?? null } }));
         return null;
       }
-      return unwrap(api.POST('/api-tokens', { body: { name: name.trim(), ...(expiresAt ? { expiresAt } : {}) } }));
+      return unwrap(api.POST('/api-tokens', { headers: { 'Idempotency-Key': submitted.key }, body: { name: submitted.name, ...(submitted.expiresAt ? { expiresAt: submitted.expiresAt } : {}) } }));
     },
     onSuccess: (c) => {
       if (c) onCreated?.(c);
@@ -172,6 +179,7 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
       onClose();
     },
     onError: (e) => setError(errorMessage(e)),
+    onSettled: () => submission.current.release(),
   });
 
   return (
@@ -179,7 +187,13 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
       open
       onClose={onClose}
       title={existing ? `Edit token ${existing.name}` : 'Create API token'}
-      onSubmit={() => valid && save.mutate()}
+      onSubmit={() => {
+        if (!valid) return false;
+        const submitted = submission.current.begin(name, expiresAt);
+        if (!submitted) return false;
+        setError(null);
+        return save.mutateAsync(submitted).catch(() => undefined);
+      }}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -190,8 +204,8 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
       }
     >
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <TextField label="Name" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ci-deploy" />
-      <TextField label="Expires (optional)" type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} hint="Leave empty for a non-expiring token." error={expiresAt && new Date(expiresAt) <= new Date() ? 'Expiry must be in the future.' : undefined} />
+      <TextField label="Name" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ci-deploy" hint="1–128 characters after trimming; duplicate names are allowed." error={nameProblem} />
+      <TextField label="Expires (optional)" type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} hint="Leave empty for a non-expiring token." error={expiry.error} />
       {existing ? null : <p className="xs faint">The token inherits your permissions and is shown exactly once after creation.</p>}
     </Dialog>
   );

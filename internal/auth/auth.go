@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -43,6 +44,14 @@ var ErrCSRF = errors.New("invalid CSRF token")
 
 // ErrRateLimited indicates exponential login backoff is active.
 var ErrRateLimited = errors.New("login temporarily locked")
+
+// RateLimitError carries a secret-independent retry delay for login admission.
+type RateLimitError struct {
+	RetryAfterSeconds int
+}
+
+func (e *RateLimitError) Error() string { return ErrRateLimited.Error() }
+func (e *RateLimitError) Unwrap() error { return ErrRateLimited }
 
 // ErrInvalid identifies malformed account, password, token or OIDC input.
 var ErrInvalid = errors.New("invalid authentication input")
@@ -239,7 +248,8 @@ func (s *Service) Bootstrap(ctx context.Context, password string) (string, error
 	if err != nil {
 		return "", err
 	}
-	a := domain.Account{Name: "admin", DisplayName: "Administrator", Roles: []string{"role:admin"}, PasswordHash: hash, MustChangePassword: true, CreatedAt: s.now(), PasswordChangedAt: s.now()}
+	now := s.now()
+	a := domain.Account{Name: "admin", DisplayName: "Administrator", Roles: []string{"role:admin"}, PasswordHash: hash, MustChangePassword: true, CreatedAt: now, PasswordChangedAt: now, UpdatedAt: now}
 	return generated, s.o.Store.CreateAccount(ctx, &a)
 }
 
@@ -248,8 +258,14 @@ func (s *Service) Bootstrap(ctx context.Context, password string) (string, error
 func (s *Service) CreateAccount(ctx context.Context, a domain.Account, password string) (*domain.Account, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if domain.ValidateAccountName(a.Name) != nil || a.OIDC {
-		return nil, fmt.Errorf("%w: invalid local account", ErrInvalid)
+	if domain.ValidateAccountName(a.Name) != nil {
+		return nil, domain.InvalidField("name", domain.ReasonInvalid, "name must be 1–64 characters, start with a letter, and contain only letters, digits, _, ., @ or -")
+	}
+	if a.OIDC {
+		return nil, domain.InvalidField("name", domain.ReasonInvalid, "name must identify a local account")
+	}
+	if err := validateAccountPassword("password", password); err != nil {
+		return nil, err
 	}
 	hash, err := HashPassword(password)
 	if err != nil {
@@ -258,9 +274,13 @@ func (s *Service) CreateAccount(ctx context.Context, a domain.Account, password 
 	a.PasswordHash = hash
 	a.CreatedAt = s.now()
 	a.PasswordChangedAt = a.CreatedAt
+	a.UpdatedAt = a.CreatedAt
 	a.OIDCIssuer = ""
 	a.OIDCSubject = ""
 	if err = s.o.Store.CreateAccount(ctx, &a); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			return nil, domain.Conflict("account", a.Name, domain.ReasonAlreadyExists, err, "account %q already exists", a.Name)
+		}
 		return nil, err
 	}
 	a = clean(a)
@@ -298,6 +318,7 @@ func (s *Service) UpdateAccount(ctx context.Context, a domain.Account) (*domain.
 	old.Roles = append([]string(nil), a.Roles...)
 	old.Disabled = a.Disabled
 	old.MustChangePassword = a.MustChangePassword
+	old.UpdatedAt = s.now()
 	if err = s.o.Store.UpdateAccount(ctx, old); err != nil {
 		return nil, err
 	}
@@ -340,8 +361,11 @@ func (s *Service) ChangePassword(ctx context.Context, name, old, password string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, err := s.o.Store.GetAccount(ctx, name)
-	if err != nil || a.Disabled || a.OIDC || !VerifyPassword(a.PasswordHash, old) {
-		return ErrUnauthenticated
+	if err != nil {
+		return err
+	}
+	if a.Disabled || a.OIDC || !VerifyPassword(a.PasswordHash, old) {
+		return domain.InvalidField("currentPassword", domain.ReasonInvalid, "currentPassword is invalid for this local account")
 	}
 	return s.setPassword(ctx, a, password, false)
 }
@@ -360,14 +384,28 @@ func (s *Service) ResetPassword(ctx context.Context, name, password string) erro
 	return s.setPassword(ctx, a, password, true)
 }
 func (s *Service) setPassword(ctx context.Context, a *domain.Account, password string, must bool) error {
+	if err := validateAccountPassword("newPassword", password); err != nil {
+		return err
+	}
+	if VerifyPassword(a.PasswordHash, password) {
+		return domain.InvalidField("newPassword", domain.ReasonReused, "newPassword must differ from the current password")
+	}
 	hash, err := HashPassword(password)
 	if err != nil {
 		return err
 	}
 	a.PasswordHash = hash
 	a.PasswordChangedAt = s.now()
+	a.UpdatedAt = a.PasswordChangedAt
 	a.MustChangePassword = must
 	return s.o.Store.UpdateAccount(ctx, a)
+}
+
+func validateAccountPassword(field, password string) error {
+	if ValidatePassword(password) != nil {
+		return domain.InvalidField(field, domain.ReasonOutOfRange, "%s must contain at least 12 characters and at most 1024 bytes", field)
+	}
+	return nil
 }
 
 // CreateToken issues a kk_-prefixed secret exactly once.
@@ -381,8 +419,9 @@ func (s *Service) CreateToken(ctx context.Context, owner, name string, expires *
 	if a.Disabled || a.MustChangePassword {
 		return "", domain.ApiToken{}, ErrUnauthenticated
 	}
-	if expires != nil && !expires.After(s.now()) {
-		return "", domain.ApiToken{}, fmt.Errorf("%w: expiry must be in the future", ErrInvalid)
+	name, err = validateToken(name, expires, s.now())
+	if err != nil {
+		return "", domain.ApiToken{}, err
 	}
 	secret, err := secrets.Token()
 	if err != nil {
@@ -427,6 +466,11 @@ func (s *Service) GetToken(ctx context.Context, id string) (*domain.ApiToken, er
 func (s *Service) UpdateToken(ctx context.Context, t domain.ApiToken) (*domain.ApiToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var err error
+	t.Name, err = validateToken(t.Name, t.ExpiresAt, s.now())
+	if err != nil {
+		return nil, err
+	}
 	old, err := s.o.Store.GetApiToken(ctx, t.ID)
 	if err != nil {
 		return nil, err
@@ -438,6 +482,20 @@ func (s *Service) UpdateToken(ctx context.Context, t domain.ApiToken) (*domain.A
 	}
 	old.Hash = ""
 	return old, nil
+}
+
+func validateToken(name string, expires *time.Time, now time.Time) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", domain.InvalidField("name", domain.ReasonRequired, "name is required and must not be blank")
+	}
+	if utf8.RuneCountInString(name) > 128 {
+		return "", domain.InvalidField("name", domain.ReasonOutOfRange, "name must contain 1–128 characters after trimming whitespace")
+	}
+	if expires != nil && !expires.After(now) {
+		return "", domain.InvalidField("expiresAt", domain.ReasonOutOfRange, "expiresAt must be in the future")
+	}
+	return name, nil
 }
 
 // DeleteToken revokes an API token immediately.

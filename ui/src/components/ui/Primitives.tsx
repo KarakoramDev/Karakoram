@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Button } from './Button';
+import { errorDetails, exactUtc, namespaceMissing, scopedPath } from './presentation';
+import { copyText } from './submission';
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info' | 'progress' | 'accent';
 
@@ -53,17 +55,21 @@ export function Loading({ label = 'Loading…' }: { label?: string }) {
 }
 
 export function ErrorBlock({ error, retry }: { error: unknown; retry?: () => void }) {
-  const msg = error instanceof Error ? error.message : String(error);
+  const msg = error instanceof Error ? error.message : error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : String(error);
+  const missing = namespaceMissing(error);
+  const details = errorDetails(error);
   return (
-    <Callout tone="danger" title="Request failed">
+    <Callout tone="danger" title={missing ? `Namespace ${missing} does not exist` : 'Request failed'}>
       <div className="row wrap">
         <span>{msg}</span>
+        {missing ? <NavLink to={scopedPath('/clusters', undefined)}>Back to all namespaces</NavLink> : null}
         {retry ? (
           <Button size="sm" onClick={retry}>
             Retry
           </Button>
         ) : null}
       </div>
+      {details.length ? <ul>{details.map((detail) => <li key={detail}>{detail}</li>)}</ul> : null}
     </Callout>
   );
 }
@@ -120,19 +126,22 @@ export function Tabs({ items }: { items: Array<{ to: string; label: ReactNode; e
 
 export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
   const [done, setDone] = useState(false);
-  return (
+  const [error, setError] = useState<string>();
+  return <>
     <Button
       size="sm"
       aria-label={`${label} to clipboard`}
       onClick={async () => {
-        await navigator.clipboard.writeText(value);
-        setDone(true);
-        window.setTimeout(() => setDone(false), 1500);
+        const failure = await copyText(value, (text) => navigator.clipboard.writeText(text));
+        setError(failure);
+        setDone(!failure);
+        if (!failure) window.setTimeout(() => setDone(false), 1500);
       }}
     >
       {done ? 'Copied' : label}
     </Button>
-  );
+    {error ? <div className="stack"><span role="alert" className="small">{error}</span><textarea aria-label={`${label} manually`} readOnly value={value} onFocus={(event) => event.currentTarget.select()} style={{ width: '100%', minWidth: 0 }} /></div> : null}
+  </>;
 }
 
 export function CodeLine({ value }: { value: string }) {
@@ -182,7 +191,7 @@ export function formatTime(iso: string | undefined | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
 }
 
 export function formatRelative(iso: string | undefined | null): string {
@@ -213,11 +222,11 @@ export function formatDuration(seconds: number | undefined | null): string {
   return `${d}d ${h % 24}h`;
 }
 
-export function Time({ iso }: { iso: string | undefined | null }) {
+export function Time({ iso, exact = false }: { iso: string | undefined | null; exact?: boolean }) {
   if (!iso) return <span className="faint">—</span>;
   return (
-    <time dateTime={iso} title={formatTime(iso)}>
-      {formatRelative(iso)}
+    <time dateTime={iso} title={exactUtc(iso)}>
+      {exact ? exactUtc(iso) : formatRelative(iso)}
     </time>
   );
 }

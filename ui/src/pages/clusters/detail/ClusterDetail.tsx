@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useCluster, type Cluster } from '@/api/hooks';
+import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject, type Action, type Resource } from '@/auth/permissions';
 import { rememberNamespace } from '@/namespaces/useNamespace';
@@ -15,6 +16,7 @@ import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Badge, Callout, ErrorBlock, Loading, Menu, MenuItem, PageHeader, Tabs } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { PhaseBadge, topologySummary } from '../cluster-utils';
+import { colocatedGroups, maintenanceCopy, observedVersion } from './detail-state';
 
 export interface ClusterContext {
   cluster: Cluster;
@@ -51,15 +53,17 @@ export function ClusterDetailLayout() {
   const q = useCluster(namespace, name);
   const [confirm, setConfirm] = useState<null | 'restart' | 'rotate-tls' | 'resume'>(null);
   const base = clusterPath(namespace, name);
+  const submission = useIdempotencyKey();
 
   const action = useMutation({
     mutationFn: async (kind: 'restart' | 'rotate-tls' | 'resume') => {
-      const path = { params: { path: { cluster: name }, query: { namespace } } };
+      const path = { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } } };
       if (kind === 'restart') return unwrap(api.POST('/clusters/{cluster}/restart', path));
       if (kind === 'rotate-tls') return unwrap(api.POST('/clusters/{cluster}/rotate-tls', path));
       return unwrap(api.POST('/clusters/{cluster}/resume', path));
     },
     onSuccess: (_r, kind) => {
+      submission.reset();
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(kind === 'resume' ? 'Resuming cluster.' : kind === 'restart' ? 'Rolling restart started.' : 'TLS rotation started.');
@@ -81,7 +85,7 @@ export function ClusterDetailLayout() {
       </div>
     );
   }
-  if (q.error || !q.data) {
+  if (!q.data) {
     // A pre-namespace `/clusters/<name>/<tab>` link parses as namespace
     // `<name>` and cluster `<tab>`; when the server knows no such cluster,
     // resend it to the default namespace.
@@ -105,7 +109,7 @@ export function ClusterDetailLayout() {
   const cluster = q.data;
   const can: ClusterContext['can'] = (act, resource = 'clusters') => auth.can(resource, act, clusterObject(namespace, name));
   const suspended = cluster.status.phase === 'Suspended';
-  const colocated = cluster.status.placement?.groups.some((g) => g.members.length > 1);
+  const colocated = colocatedGroups(cluster.status.placement?.groups).length > 0;
 
   return (
     <div className="page">
@@ -132,7 +136,7 @@ export function ClusterDetailLayout() {
         }
         description={
           <>
-            {topologySummary(cluster)} · version {cluster.status.version ?? cluster.spec.version}
+            {topologySummary(cluster)} · running {observedVersion(cluster.status) || 'not yet observed'} · desired {cluster.spec.version}
             {cluster.status.fcv ? ` · FCV ${cluster.status.fcv}` : ''}
             {cluster.status.message ? ` · ${cluster.status.message}` : ''}
           </>
@@ -156,6 +160,7 @@ export function ClusterDetailLayout() {
           </>
         }
       />
+      {q.isError ? <Callout tone="warn" title="Cached status — latest refresh failed"><ErrorBlock error={q.error} retry={() => q.refetch()} /></Callout> : null}
       {cluster.status.phase === 'Error' || cluster.status.phase === 'Degraded' ? (
         <Callout tone={cluster.status.phase === 'Error' ? 'danger' : 'warn'} title={cluster.status.phase}>
           {cluster.status.message ?? cluster.status.conditions.find((c) => c.status !== 'True')?.message ?? 'See conditions on the overview tab.'}
@@ -172,28 +177,30 @@ export function ClusterDetailLayout() {
           { to: `${base}/monitoring`, label: 'Monitoring' },
           { to: `${base}/events`, label: 'Events & logs' },
           { to: `${base}/operations`, label: 'Operations' },
-          { to: `${base}/delete`, label: 'Delete' },
+          ...(can('delete') ? [{ to: `${base}/delete`, label: 'Delete' }] : []),
         ]}
       />
       <Outlet context={{ cluster, namespace, name, base, can } satisfies ClusterContext} />
 
       <ConfirmDialog
         open={confirm === 'restart'}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => action.mutate('restart')}
+        onClose={() => { setConfirm(null); action.reset(); submission.reset(); }}
+        onConfirm={() => action.mutateAsync('restart')}
         title="Rolling restart"
         confirmLabel="Restart members"
         busy={action.isPending}
+        error={action.error}
       >
-        <p className="small">Members restart one at a time, secondaries first and the primary last after a step-down. Writes pause briefly during the primary election.</p>
+        <p className="small">{maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas)}</p>
       </ConfirmDialog>
       <ConfirmDialog
         open={confirm === 'rotate-tls'}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => action.mutate('rotate-tls')}
+        onClose={() => { setConfirm(null); action.reset(); submission.reset(); }}
+        onConfirm={() => action.mutateAsync('rotate-tls')}
         title="Rotate TLS certificates"
         confirmLabel="Rotate"
         busy={action.isPending}
+        error={action.error}
       >
         <p className="small">
           New member and server certificates are issued and rolled out with a rolling restart.
@@ -202,11 +209,12 @@ export function ClusterDetailLayout() {
       </ConfirmDialog>
       <ConfirmDialog
         open={confirm === 'resume'}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => action.mutate('resume')}
+        onClose={() => { setConfirm(null); action.reset(); submission.reset(); }}
+        onConfirm={() => action.mutateAsync('resume')}
         title="Resume suspended cluster"
         confirmLabel="Resume"
         busy={action.isPending}
+        error={action.error}
       >
         <p className="small">Runtime services are recreated on the retained volumes and the cluster is reconciled back to Ready.</p>
       </ConfirmDialog>

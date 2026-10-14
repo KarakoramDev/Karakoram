@@ -414,6 +414,7 @@ type Account struct {
 	MustChangePassword bool      `json:"mustChangePassword"`
 	Disabled           bool      `json:"disabled"`
 	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt,omitempty"`
 	PasswordChangedAt  time.Time `json:"passwordChangedAt,omitempty"`
 	OIDC               bool      `json:"oidc"`
 	OIDCIssuer         string    `json:"oidcIssuer,omitempty"`
@@ -514,6 +515,7 @@ type Privilege struct {
 
 // SystemUser describes a fixed-purpose engine account.
 type SystemUser struct {
-	Name  string    `json:"name"`
-	Roles []RoleRef `json:"roles"`
+	Name          string     `json:"name"`
+	Roles         []RoleRef  `json:"roles"`
+	LastRotatedAt *time.Time `json:"lastRotatedAt,omitempty"`
 }

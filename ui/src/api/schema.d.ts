@@ -130,7 +130,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Create a local-account cookie session */
+        /**
+         * Create a local-account cookie session
+         * @description After five failed attempts, account/source backoff starts at one second and doubles to fifteen minutes. While throttled, correct and incorrect passwords receive the same 429 response and retry delay.
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -238,7 +241,7 @@ export type paths = {
     "/backup-storages": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -259,7 +262,7 @@ export type paths = {
     "/backup-storages/{storage}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -286,7 +289,7 @@ export type paths = {
     "/backup-storages/{storage}/verify": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -308,7 +311,7 @@ export type paths = {
     "/clusters": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -335,7 +338,7 @@ export type paths = {
     "/clusters/{cluster}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -364,7 +367,7 @@ export type paths = {
     "/clusters/{cluster}/backups": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -391,7 +394,7 @@ export type paths = {
     "/clusters/{cluster}/backups/{backup}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -422,7 +425,7 @@ export type paths = {
     "/clusters/{cluster}/balancer": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -446,7 +449,7 @@ export type paths = {
     "/clusters/{cluster}/connection": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -469,7 +472,7 @@ export type paths = {
     "/clusters/{cluster}/database-roles": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -496,7 +499,7 @@ export type paths = {
     "/clusters/{cluster}/database-roles/{database}/{role}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -513,7 +516,10 @@ export type paths = {
         /** Replace role privileges and inherited roles */
         put: operations["replaceDatabaseRole"];
         post?: never;
-        /** Delete a custom database role */
+        /**
+         * Delete a custom database role
+         * @description Rejects with 409 invalid_state while the role is assigned to users or inherited by custom roles. Remove those references explicitly before deletion; assignments are never silently stripped.
+         */
         delete: operations["deleteDatabaseRole"];
         options?: never;
         head?: never;
@@ -523,7 +529,7 @@ export type paths = {
     "/clusters/{cluster}/database-users": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -547,7 +553,7 @@ export type paths = {
     "/clusters/{cluster}/database-users/{database}/{username}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -574,7 +580,7 @@ export type paths = {
     "/clusters/{cluster}/members": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -597,7 +603,7 @@ export type paths = {
     "/clusters/{cluster}/members/{member}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -621,7 +627,7 @@ export type paths = {
     "/clusters/{cluster}/members/{member}/logs": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -645,7 +651,7 @@ export type paths = {
     "/clusters/{cluster}/members/{member}/replace": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -669,7 +675,7 @@ export type paths = {
     "/clusters/{cluster}/metrics": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -692,7 +698,7 @@ export type paths = {
     "/clusters/{cluster}/operations": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -715,7 +721,7 @@ export type paths = {
     "/clusters/{cluster}/pitr": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -725,7 +731,10 @@ export type paths = {
             };
             cookie?: never;
         };
-        /** Read the continuous restorable PITR window */
+        /**
+         * Read the continuous restorable PITR window
+         * @description Returns the latest continuous backed interval; an initializing cluster returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+         */
         get: operations["getPITRWindow"];
         put?: never;
         post?: never;
@@ -738,7 +747,7 @@ export type paths = {
     "/clusters/{cluster}/placement": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -761,7 +770,7 @@ export type paths = {
     "/clusters/{cluster}/raise-fcv": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -784,7 +793,7 @@ export type paths = {
     "/clusters/{cluster}/restart": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -807,7 +816,7 @@ export type paths = {
     "/clusters/{cluster}/restores": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -822,7 +831,7 @@ export type paths = {
         put?: never;
         /**
          * Queue in-place backup or point-in-time restore
-         * @description Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata.
+         * @description Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
          */
         post: operations["createRestore"];
         delete?: never;
@@ -834,7 +843,7 @@ export type paths = {
     "/clusters/{cluster}/restores/{restore}": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -858,7 +867,7 @@ export type paths = {
     "/clusters/{cluster}/resume": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -881,7 +890,7 @@ export type paths = {
     "/clusters/{cluster}/rotate-tls": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -907,7 +916,7 @@ export type paths = {
     "/clusters/{cluster}/status": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -930,7 +939,7 @@ export type paths = {
     "/clusters/{cluster}/system-users": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -953,7 +962,7 @@ export type paths = {
     "/clusters/{cluster}/system-users/{user}/rotate": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -977,7 +986,7 @@ export type paths = {
     "/events": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -1000,7 +1009,7 @@ export type paths = {
     "/events/stream": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -1009,7 +1018,20 @@ export type paths = {
         };
         /**
          * Stream authorization-filtered events with durable replay
-         * @description SSE frames: id is the durable event ID, event is the event type, data is a JSON Event. Replays after the requested cursor then streams live events. Heartbeat comment frames keep the connection alive. Authorization uses events:read or audit:read on namespace/cluster for cluster entries, audit:read on the namespace for namespace-level entries, and audit:read on "*" for global entries. Namespace, actor and resource filters compose; actor and resource filters are exact matches.
+         * @description SSE frames use the durable ID as id, the stored type (normally Normal,
+         *     Warning or Audit) verbatim as event, and a JSON Event as data. Lifecycle
+         *     details are in reason, not dot-qualified event names. For example:
+         *
+         *     id: 42
+         *     event: Warning
+         *     data: {"id":42,"cluster":"demo","type":"Warning","reason":"OperationFailed","message":"Backup failed","createdAt":"2026-01-01T00:00:00Z"}
+         *
+         *     Replays after the requested cursor then streams live events. Heartbeat
+         *     comments keep the connection alive. Authorization uses events:read or
+         *     audit:read on namespace/cluster for cluster entries, audit:read on the
+         *     namespace for namespace-level entries, and audit:read on "*" for global
+         *     entries. Namespace, actor and resource filters compose; actor and resource
+         *     filters are exact matches.
          */
         get: operations["streamEvents"];
         put?: never;
@@ -1040,7 +1062,7 @@ export type paths = {
     "/metrics": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -1049,7 +1071,7 @@ export type paths = {
         };
         /**
          * Scrape Prometheus-compatible cluster metrics
-         * @description Root endpoint requires a bearer API token and monitoring read authorization; cookie sessions are not accepted by scrapers. Only authorized clusters are included.
+         * @description Root endpoint accepts bearer API tokens (recommended for scrapers) or a signed-in browser cookie session. Both require monitoring read authorization; only authorized clusters are included.
          */
         get: operations["getPrometheusMetrics"];
         put?: never;
@@ -1075,7 +1097,7 @@ export type paths = {
         put?: never;
         /**
          * Register a project namespace and deploy its relay
-         * @description Requires namespaces/create on '*'. Validates the token and project synchronously, then starts relay deployment asynchronously. The name default is reserved and each project may belong to only one namespace.
+         * @description Requires namespaces/create on '*'. Validates the token and project synchronously, then starts relay deployment asynchronously. Missing fields and invalid name syntax return 400 with field and reason. Reserved default and duplicate names return 409 conflict with reason already_exists. Each project may belong to only one namespace.
          */
         post: operations["createNamespace"];
         delete?: never;
@@ -1155,10 +1177,27 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/openapi.yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download this server's authoritative OpenAPI specification */
+        get: operations["getOpenAPISpec"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/operations": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -1203,7 +1242,7 @@ export type paths = {
     "/orphaned-volumes": {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -1370,6 +1409,13 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
+        /** @description Start with a letter; use only letters, digits, underscore, dot, @ or dash. */
+        AccountName: string;
+        /**
+         * Format: password
+         * @description At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+         */
+        AccountPassword: string;
         AgentStatus: {
             /** Format: int64 */
             configVersion?: number;
@@ -1396,6 +1442,8 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
+        /** @description Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID. */
+        APITokenName: string;
         Backup: {
             cluster: string;
             /** Format: date-time */
@@ -1431,7 +1479,8 @@ export type components = {
             enabled: boolean;
             name: string;
             retainCount: number;
-            storage: string;
+            /** @description Optional override; when omitted, use backup.storage. */
+            storage?: string;
             /** @enum {string} */
             type: "logical" | "physical";
         };
@@ -1486,8 +1535,7 @@ export type components = {
         ChangePasswordRequest: {
             /** Format: password */
             currentPassword: string;
-            /** Format: password */
-            newPassword: string;
+            newPassword: components["schemas"]["AccountPassword"];
         };
         Cluster: {
             /** Format: date-time */
@@ -1594,20 +1642,22 @@ export type components = {
             enabled: boolean;
             /** @default true */
             mustChangePassword: boolean;
-            name: string;
-            /** Format: password */
-            password: string;
+            name: components["schemas"]["AccountName"];
+            password: components["schemas"]["AccountPassword"];
         };
         CreateAPITokenRequest: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Optional RFC 3339 timestamp, strictly in the future.
+             */
             expiresAt?: string;
-            name: string;
+            name: components["schemas"]["APITokenName"];
         };
         CreateBackupRequest: {
             name: string;
             storage: string;
-            /** @enum {string} */
-            type: "logical" | "physical";
+            /** @description Must be one of the cluster provider catalog's backupTypes. Unsupported values return 400 with the provider's supported types. */
+            type: string;
         };
         CreateBackupStorageRequest: {
             bucket: string;
@@ -1631,22 +1681,22 @@ export type components = {
             spec: components["schemas"]["ClusterSpec"];
         };
         CreatedAPIToken: {
-            /** @description kk_ prefixed bearer token, returned exactly once by creation. Store securely; later GETs cannot recover it. */
+            /** @description kk_ prefixed bearer token, returned by creation and matching Idempotency-Key replays within 24 hours. Store securely; later GETs cannot recover it. */
             readonly secret: string;
             token: components["schemas"]["APIToken"];
         };
-        /** @description Omit password to have the server generate one and return it once in generatedPassword. */
+        /** @description Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours. */
         CreateDatabaseUserRequest: {
             database: string;
-            /** Format: password */
+            /** @description At least eight Unicode characters accepted by MongoDB SASLprep (Unicode 3.2). Emoji, prohibited controls, unassigned characters and invalid bidirectional text are rejected. Omit to generate a password. */
             password?: string;
             roles: components["schemas"]["RoleReference"][];
             username: string;
         };
-        /** @description Application user creation result. Any generated password is returned exactly once and never included in subsequent reads. */
+        /** @description Application user creation result. Generated passwords are returned by creation and matching Idempotency-Key replays within 24 hours, never by subsequent reads. */
         CreatedDatabaseUser: {
             database: string;
-            /** @description Present only when password was omitted from the creation request and generated by the server. Display or store securely once; it cannot be retrieved again. */
+            /** @description Present only when password was omitted and generated by the server. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it. */
             readonly generatedPassword?: string;
             roles: components["schemas"]["RoleReference"][];
             username: string;
@@ -1695,12 +1745,26 @@ export type components = {
             /** Format: date-time */
             pitrTime?: string;
         };
+        /**
+         * @description Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+         *     `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+         *     `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+         *     `message` is a human-readable explanation that names the rejected field or resource.
+         */
         Error: {
             code: string;
-            /** @description Structured validation or conflict details; never contains secrets. */
+            /**
+             * @description Structured, secret-free context; omitted when there is nothing to add. Validation
+             *     errors carry `field` (JSON path such as `spec.components.engine.replicas`, or a
+             *     query/path parameter name) and `reason` (`required`, `unknown_field`, `invalid`,
+             *     `out_of_range`, `unsupported`, `conflict`, `reused`). Missing or conflicting
+             *     resources carry `resource`, `name` and `reason` (`not_found`, `already_exists`,
+             *     `invalid_state`, `protected`) and, for `invalid_state`, the current `state`.
+             *     Other keys may be added; clients must ignore unknown keys.
+             */
             details?: {
                 [key: string]: unknown;
-            } | null;
+            };
             message: string;
         };
         Event: {
@@ -1720,7 +1784,7 @@ export type components = {
             resource?: string;
             /** @description Non-secret resource identifier, such as a cluster name, account name or token ID. */
             target?: string;
-            /** @description Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim. */
+            /** @description Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types. */
             type: string;
         };
         EventList: {
@@ -1841,7 +1905,7 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
-        /** @description Project namespace name, 2–32 lowercase letters, digits or hyphens. */
+        /** @description Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved. */
         NamespaceName: string;
         NamespaceTokenRotate: {
             /** Format: password */
@@ -2013,10 +2077,11 @@ export type components = {
             version: string;
         };
         RaiseFCVRequest: {
+            /** @description Deployed engine major form, for example 8.0 (not 8.0.32-14). All members must finish the binary rollout before promotion. */
             version: string;
         };
         RBACPolicy: {
-            /** @description Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. */
+            /** @description Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. Validation errors name policy and the line. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies. */
             policy: string;
         };
         /** @description Relay health; the default namespace uses direct networking. */
@@ -2045,8 +2110,7 @@ export type components = {
         ResetPasswordRequest: {
             /** @default true */
             mustChangePassword: boolean;
-            /** Format: password */
-            password: string;
+            password: components["schemas"]["AccountPassword"];
         };
         Resources: {
             /** @enum {string} */
@@ -2081,13 +2145,13 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
-        /** @description Exactly one of backup and pitrTime is required. */
+        /** @description Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict. */
         RestoreSource: {
             backup?: string;
             /** Format: date-time */
             pitrTime?: string;
-            sourceCluster: string;
-        };
+            sourceCluster?: string;
+        } & (unknown | unknown);
         RoleReference: {
             db: string;
             role: string;
@@ -2098,7 +2162,7 @@ export type components = {
             /** Format: password */
             secretAccessKey: string;
         };
-        /** @description Sets HttpOnly Secure SameSite=Strict karakoram_session and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON. */
+        /** @description Sets HttpOnly Secure SameSite=Strict karakoram_access and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON. */
         Session: {
             account: components["schemas"]["CurrentUser"];
             readonly csrfToken: string;
@@ -2108,10 +2172,15 @@ export type components = {
         Settings: {
             oidc: components["schemas"]["OIDCConfig"];
         };
-        /** @description Checks S3 read/write/delete access and TLS without exposing credentials. */
+        /** @description Checks S3 read/write/delete access and TLS without exposing credentials. A completed verification returns HTTP 200 even on failure, with verified false, failureReason and actionable message. */
         StorageVerification: {
             /** Format: date-time */
             checkedAt: string;
+            /**
+             * @description Present when verified is false; categorized, secret-free cause.
+             * @enum {string}
+             */
+            failureReason?: "access_denied" | "bucket_not_found" | "endpoint_not_allowed" | "tls_error" | "unreachable" | "timeout" | "unknown";
             message: string;
             verified: boolean;
         };
@@ -2169,9 +2238,12 @@ export type components = {
             mustChangePassword: boolean;
         };
         UpdateAPITokenRequest: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description RFC 3339 timestamp strictly in the future, or null to remove expiry.
+             */
             expiresAt?: string | null;
-            name: string;
+            name: components["schemas"]["APITokenName"];
         };
         /** @description Replaces storage configuration. Omitted credentials retain the existing encrypted credentials. */
         UpdateBackupStorageRequest: {
@@ -2194,7 +2266,7 @@ export type components = {
             roles: components["schemas"]["RoleReference"][];
         };
         UpdateDatabaseUserRequest: {
-            /** Format: password */
+            /** @description Omit to retain the current password; a supplied value must satisfy the same minimum and SASLprep rules as creation. */
             password?: string;
             roles: components["schemas"]["RoleReference"][];
         };
@@ -2207,9 +2279,11 @@ export type components = {
         Version: {
             apiVersion: string;
             buildDate?: string;
+            /** @description Source revision supplied at build time, or "unknown (built without git metadata)". */
             commit?: string;
             /** @description Public discovery flag for the login UI; no issuer or client secret is exposed. */
             readonly oidcEnabled: boolean;
+            /** @description Release/source label, or "unknown (built without git metadata)" when not supplied. */
             version: string;
         };
     };
@@ -2223,7 +2297,12 @@ export type components = {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Conflicting resource state, unsafe topology change, unsupported action, or unavailable replay cursor. */
+        /**
+         * @description Conflicting resource state, unsafe topology change, unsupported action,
+         *     or unavailable replay cursor. On operations accepting Idempotency-Key,
+         *     details.field is Idempotency-Key and details.reason is conflict for a
+         *     different request body or invalid_state for an in-flight duplicate.
+         */
         Conflict: {
             headers: {
                 [name: string]: unknown;
@@ -2268,6 +2347,15 @@ export type components = {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description Authentication or namespace runtime is temporarily unavailable. */
+        Unavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description Invalid namespace token, project mismatch or duplicate project. */
         UnprocessableEntity: {
             headers: {
@@ -2285,15 +2373,29 @@ export type components = {
         CSRF: string;
         /** @description Opaque cursor returned by the preceding page. */
         Cursor: string;
+        /**
+         * @description Optional retry key scoped to the authenticated account or token identity,
+         *     method, route, namespace and path parameters. Retained for 24 hours after
+         *     a successful response. The same key and canonical JSON body replay the
+         *     original status, body and relevant headers, including one-time secrets
+         *     and Karakoram-Operation-Id when present. Different bodies conflict with
+         *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+         *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+         *     responses are retained. Use a fresh key for each new intended mutation.
+         */
+        IdempotencyKey: string;
         /** @description Maximum results per page. Results are authorization-filtered before pagination. */
         Limit: number;
         /** @description Project namespace name; the RBAC object is this name. */
         NamespacePath: components["schemas"]["NamespaceName"];
-        /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+        /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
         NamespaceQuery: components["schemas"]["NamespaceName"];
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description Present and true when the stored successful response was replayed. */
+        IdempotentReplayed: true;
+    };
     pathItems: never;
 };
 export type $defs = Record<string, never>;
@@ -2333,6 +2435,17 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -2348,6 +2461,7 @@ export interface operations {
             /** @description Successful response. */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2522,6 +2636,17 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -2537,6 +2662,7 @@ export interface operations {
             /** @description Successful response. */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2706,6 +2832,44 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            /** @description Request exceeds the 2 MiB body limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Login requires application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Login temporarily throttled. Wait for the indicated delay before retrying. */
+            429: {
+                headers: {
+                    /** @description Number of seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Login temporarily throttled; wait before trying again",
+                     *       "details": {
+                     *         "retryAfterSeconds": 1
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };
@@ -2777,7 +2941,7 @@ export interface operations {
             /** @description Successful response. */
             302: {
                 headers: {
-                    /** @description Validated same-origin post-login UI path. */
+                    /** @description Installation root after successful authentication. */
                     Location?: string;
                     /** @description Session and rotating refresh cookies. */
                     "Set-Cookie"?: string;
@@ -2791,12 +2955,13 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     oidcLogin: {
         parameters: {
             query?: {
-                /** @description Same-origin relative UI path after login; external URLs are rejected. */
+                /** @description Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root. */
                 returnTo?: string;
             };
             header?: never;
@@ -2820,6 +2985,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     refreshSession: {
@@ -2860,7 +3026,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -2889,10 +3055,21 @@ export interface operations {
     createBackupStorage: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -2908,6 +3085,7 @@ export interface operations {
             /** @description Successful response. */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2919,13 +3097,14 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };
     getBackupStorage: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -2956,7 +3135,7 @@ export interface operations {
     replaceBackupStorage: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -2994,7 +3173,7 @@ export interface operations {
     deleteBackupStorage: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3026,7 +3205,7 @@ export interface operations {
     verifyBackupStorage: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3064,7 +3243,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3093,10 +3272,21 @@ export interface operations {
     createCluster: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -3112,6 +3302,7 @@ export interface operations {
             /** @description Successful response. */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3123,13 +3314,14 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };
     getCluster: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3161,10 +3353,21 @@ export interface operations {
     replaceCluster: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -3183,6 +3386,7 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3202,7 +3406,7 @@ export interface operations {
             query?: {
                 keepBackups?: boolean;
                 keepVolumes?: boolean;
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3235,10 +3439,21 @@ export interface operations {
     patchCluster: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -3257,6 +3472,7 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3278,7 +3494,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3310,10 +3526,21 @@ export interface operations {
     createBackup: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -3332,6 +3559,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3349,7 +3577,7 @@ export interface operations {
     getBackup: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3382,7 +3610,7 @@ export interface operations {
     deleteBackup: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3425,7 +3653,7 @@ export interface operations {
     getClusterBalancer: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3457,7 +3685,7 @@ export interface operations {
     replaceClusterBalancer: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3496,7 +3724,7 @@ export interface operations {
     getClusterConnection: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3525,6 +3753,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listDatabaseRoles: {
@@ -3534,7 +3763,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3566,10 +3795,21 @@ export interface operations {
     createDatabaseRole: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -3588,6 +3828,7 @@ export interface operations {
             /** @description Successful response. */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3605,7 +3846,7 @@ export interface operations {
     getDatabaseRole: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3639,7 +3880,7 @@ export interface operations {
     replaceDatabaseRole: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3680,7 +3921,7 @@ export interface operations {
     deleteDatabaseRole: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3719,7 +3960,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3751,10 +3992,21 @@ export interface operations {
     createDatabaseUser: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -3775,6 +4027,7 @@ export interface operations {
                 headers: {
                     /** @description Generated credentials must not be cached. */
                     "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3792,7 +4045,7 @@ export interface operations {
     getDatabaseUser: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3826,7 +4079,7 @@ export interface operations {
     replaceDatabaseUser: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3867,7 +4120,7 @@ export interface operations {
     deleteDatabaseUser: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -3902,7 +4155,7 @@ export interface operations {
     listClusterMembers: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3934,7 +4187,7 @@ export interface operations {
     getClusterMember: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -3969,7 +4222,7 @@ export interface operations {
             query?: {
                 cursor?: string;
                 lines?: number;
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 process?: "mongod" | "mongos" | "pbm-agent" | "agent";
                 since?: string;
@@ -4004,7 +4257,7 @@ export interface operations {
     replaceClusterMember: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -4040,7 +4293,7 @@ export interface operations {
     getClusterMetrics: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 /** @description Lookback from now. */
                 range?: string;
@@ -4080,7 +4333,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 phase?: string;
             };
@@ -4113,7 +4366,7 @@ export interface operations {
     getPITRWindow: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4145,7 +4398,7 @@ export interface operations {
     getClusterPlacement: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4177,7 +4430,7 @@ export interface operations {
     raiseClusterFCV: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -4216,7 +4469,7 @@ export interface operations {
     restartCluster: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -4255,7 +4508,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4287,10 +4540,21 @@ export interface operations {
     createRestore: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -4309,6 +4573,7 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -4326,7 +4591,7 @@ export interface operations {
     getRestore: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4359,7 +4624,7 @@ export interface operations {
     resumeCluster: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -4394,7 +4659,7 @@ export interface operations {
     rotateClusterTLS: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -4429,7 +4694,7 @@ export interface operations {
     getClusterStatus: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4461,7 +4726,7 @@ export interface operations {
     listSystemUsers: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4493,7 +4758,7 @@ export interface operations {
     rotateSystemUser: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
@@ -4536,14 +4801,15 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
-                /** @description Exact resource category, such as clusters, accounts, auth or rbac. */
-                resource?: string;
-                type?: string;
+                /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
+                resource?: "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
+                type?: "Normal" | "Warning" | "Audit";
             };
             header?: never;
             path?: never;
@@ -4576,12 +4842,13 @@ export interface operations {
                 cluster?: string;
                 /** @description Replay events after this durable event cursor. */
                 cursor?: string;
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
-                /** @description Exact resource category, such as clusters, accounts, auth or rbac. */
-                resource?: string;
-                type?: string;
+                /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
+                resource?: "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
+                type?: "Normal" | "Warning" | "Audit";
             };
             header?: {
                 /** @description SSE reconnection cursor; used when cursor is absent. */
@@ -4638,7 +4905,7 @@ export interface operations {
     getPrometheusMetrics: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4697,6 +4964,17 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account or token identity,
+                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Only 2xx
+                 *     responses are retained. Use a fresh key for each new intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -4712,6 +4990,7 @@ export interface operations {
             /** @description Registered; relay deployment continues asynchronously. */
             201: {
                 headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -4888,6 +5167,29 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getOpenAPISpec: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Embedded OpenAPI YAML; publicly cacheable for five minutes. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "public, max-age=300";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     listOperations: {
         parameters: {
             query?: {
@@ -4896,7 +5198,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Maximum results per page. Results are authorization-filtered before pagination. */
                 limit?: components["parameters"]["Limit"];
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
                 phase?: string;
             };
@@ -4954,7 +5256,7 @@ export interface operations {
     listOrphanedVolumes: {
         parameters: {
             query?: {
-                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. */
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: never;
@@ -4972,7 +5274,9 @@ export interface operations {
                     "application/json": components["schemas"]["OrphanedVolumeList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

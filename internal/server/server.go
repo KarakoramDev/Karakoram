@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -104,6 +105,21 @@ func ok(body any) response { return response{status: 200, body: body} }
 func fail(status int, code, message string) response {
 	return response{status: status, body: api.Error{Code: code, Message: message}}
 }
+
+// failDetails is fail with a structured, secret-free details object.
+func failDetails(status int, code, message string, details map[string]any) response {
+	e := api.Error{Code: code, Message: message}
+	if len(details) > 0 {
+		e.Details = &details
+	}
+	return response{status: status, body: e}
+}
+
+// invalidField rejects one request field or parameter with 400 invalid_request.
+func invalidField(field, reason, message string) response {
+	return failDetails(400, "invalid_request", message, map[string]any{"field": field, "reason": reason})
+}
+
 func (s *Server) failure(err error) response {
 	var namespaceConflict *store.NamespaceConflictError
 	if errors.As(err, &namespaceConflict) {
@@ -113,6 +129,21 @@ func (s *Server) failure(err error) response {
 	if errors.As(err, &invalidRef) {
 		return fail(400, "invalid_request", invalidRef.Error())
 	}
+	var fieldErr *domain.FieldError
+	if errors.As(err, &fieldErr) {
+		return invalidField(fieldErr.Field, fieldErr.Reason, fieldErr.Message)
+	}
+	var resErr *domain.ResourceError
+	if errors.As(err, &resErr) {
+		details := map[string]any{"resource": resErr.Resource, "name": resErr.Name, "reason": resErr.Reason}
+		if resErr.State != "" {
+			details["state"] = resErr.State
+		}
+		if resErr.Reason == domain.ReasonNotFound {
+			return failDetails(404, "not_found", resErr.Message, details)
+		}
+		return failDetails(409, "conflict", resErr.Message, details)
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
@@ -121,6 +152,13 @@ func (s *Server) failure(err error) response {
 	case errors.Is(err, engine.ErrInvalid), errors.Is(err, auth.ErrInvalid), errors.Is(err, store.ErrInvalid):
 		var v *engine.ValidationError
 		if errors.As(err, &v) {
+			if v.Field != "" {
+				reason := v.Reason
+				if reason == "" {
+					reason = domain.ReasonInvalid
+				}
+				return invalidField(v.Field, reason, v.Message)
+			}
 			return fail(400, "invalid_request", v.Message)
 		}
 		return fail(400, "invalid_request", "Invalid request")
@@ -185,7 +223,7 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 		}
 		if namespaces, present := r.URL.Query()["namespace"]; present {
 			if len(namespaces) != 1 || domain.ValidateNamespaceName(namespaces[0]) != nil {
-				return invalid(), nil
+				return invalidField("namespace", domain.ReasonInvalid, "namespace must contain 2–32 lowercase letters, digits or hyphens, start with a letter and end with a letter or digit"), nil
 			}
 		}
 		if id == "login" || id == "refreshSession" || id == "logout" || id == "oidcLogin" {
@@ -238,11 +276,17 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 					}
 				}
 				if !selfService(id) && !collection(id) && !s.RBAC.Can(p.Subjects, rule.Resource, rule.Action, obj) {
-					return fail(403, "forbidden", "Permission denied"), nil
+					return failDetails(403, "forbidden", fmt.Sprintf("Permission denied: %s %s on %q; ask an administrator to grant access", rule.Resource, rule.Action, obj), map[string]any{"resource": rule.Resource, "action": rule.Action, "object": obj}), nil
 				}
 			}
 		}
-		return next(ctx, w, r.WithContext(ctx), v)
+		// Cluster creation checks name syntax before resolving its namespace.
+		if namespace := r.URL.Query().Get("namespace"); namespace != "" && id != "createCluster" {
+			if failure := s.requireNamespace(ctx, namespace); failure != nil {
+				return *failure, nil
+			}
+		}
+		return s.idempotent(next, id, ctx, w, r.WithContext(ctx), v)
 	}
 }
 
@@ -287,6 +331,11 @@ func (s *Server) Handler() http.Handler {
 			if errors.As(err, &large) {
 				status = 413
 			}
+			var timestamp *time.ParseError
+			if errors.As(err, &timestamp) && (r.URL.Path == "/api/v1/api-tokens" || strings.HasPrefix(r.URL.Path, "/api/v1/api-tokens/")) {
+				_ = invalidField("expiresAt", domain.ReasonInvalid, "expiresAt must be a valid RFC 3339 timestamp").write(w)
+				return
+			}
 			_ = fail(status, "invalid_request", "Invalid request body").write(w)
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -328,6 +377,11 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		var readable bool
+		r, readable = s.captureIdempotencyBody(w, r)
+		if !readable {
+			return
+		}
 		mux.ServeHTTP(w, r)
 		// The route pattern has no path values, query strings, cookies or credentials.
 		s.Logger.Info("HTTP request", "method", r.Method, "route", r.Pattern, "duration", time.Since(started))
@@ -442,6 +496,9 @@ func clusterObject(namespace, name string) string {
 	return domain.NormalizedNamespace(namespace) + "/" + name
 }
 func (s *Server) usableNamespace(namespace string) *response {
+	if failure := s.requireNamespace(context.Background(), namespace); failure != nil {
+		return failure
+	}
 	if _, err := s.namespaces.Backend(namespace); err != nil {
 		r := fail(422, "invalid_namespace", "Namespace "+namespace+" does not exist or is unavailable")
 		return &r

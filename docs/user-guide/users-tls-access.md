@@ -6,7 +6,7 @@ Karakoram accounts/policies authorize the **control plane**; MongoDB users/roles
 
 ## Application users and custom roles
 
-In a cluster's **Users** tab, create application identities scoped to their authentication database and role references. For example, submit this API-shaped file to grant a workload read/write access only to `appdb`:
+In a cluster's **Users** tab, create application identities scoped to their authentication database and role references. For example, save this API-shaped file as `app-user.yaml` to grant a workload read/write access only to `appdb`:
 
 ```yaml
 username: appwriter
@@ -23,6 +23,8 @@ karactl db-users get demo appdb appwriter
 ```
 
 If creation omits `password`, the server generates one and returns `generatedPassword` **once**. Capture it securely at creation; subsequent reads cannot recover an application password. A supplied password is write-only. Update with `db-users set CLUSTER DATABASE USER -f FILE`; omit the password to retain it. Delete with `db-users delete CLUSTER DATABASE USER`.
+
+Every supplied password, on creation or password change, must contain **at least eight Unicode characters**. Omit the field to generate a password on creation or retain it on update; an explicitly empty value is rejected. MongoDB SCRAM authentication uses **SASLprep (Unicode 3.2)** normalization: ordinary punctuation, accented Latin and supported CJK characters are allowed, but emoji, unassigned/prohibited characters, controls and invalid bidirectional text are rejected before contacting MongoDB. Invalid passwords return HTTP 400 with `details.field: password` and reason `out_of_range` (minimum) or `invalid` (character/profile rule); error messages never include the password.
 
 Custom roles use MongoDB privilege resource/action documents and optional inherited role references:
 
@@ -45,6 +47,8 @@ karactl db-roles get demo appdb appreader
 
 `db-roles set` updates inherited roles/privileges; `db-roles delete` removes a custom role. Role resources `cluster`/`anyResource` are not interchangeable with database/collection resources. MongoDB built-in roles are referenced, not managed as editable custom roles. Provider-reserved accounts/roles are protected. Application user/role operations require `database-users` permissions in Karakoram; do not grant broad database system roles to applications for convenience.
 
+Deleting a custom role that is still assigned to any user or inherited by another custom role returns **409** with reason `invalid_state`, naming the dependent identities. Remove those role references explicitly using user/role updates, then retry the same DELETE; there is no force-delete parameter. This prevents MongoDB's native `dropRole` behavior from silently stripping user assignments.
+
 ## System users and rotation
 
 Each cluster has independently generated passwords for these reserved accounts in `admin`:
@@ -66,6 +70,8 @@ karactl operations cluster demo
 ```
 
 Rotation is a durable operation: passwords are changed per set and local backup/monitor credentials reloaded member by member. Follow the operation to success. Do not manually reset these users behind the provider; it must retain usable credentials. System-user listings do not reveal passwords. Connection reveal currently returns **databaseAdmin only**, not every system account or any application password.
+
+After the rotation operation succeeds, system-user listings return that account's `lastRotatedAt` in UTC. The timestamp is durable provider state and survives control-plane restarts; a failed or still-running rotation does not advance it.
 
 ## Keyfile
 
@@ -128,6 +134,116 @@ management only and is not an application connection endpoint; workloads need
 network access to the database project or deliberate public TCP exposure.
 Credential authorization is on `cluster-credentials, read, prod/orders`.
 
+### Connect an application user with TLS
+
+This recipe uses the scoped `appwriter@appdb` user above, not the revealed
+administrative account. Keep the cluster at `requireTLS` and wait for **Ready**
+with healthy members and matching desired/observed generations before connecting.
+You need `karactl` configured for your installation, `jq`, `mongosh`, and Python 3
+with PyMongo installed (`python3 -m pip install pymongo` in your application's
+environment).
+
+**Private hostnames resolve only inside the selected namespace's Zerops
+project.** Run the client commands from an application service in that project.
+The simplest way to follow the complete recipe is to run it there with an
+authenticated `karactl`. You can instead create the user/export connection
+material on your workstation, then securely transfer `ca.pem`, the password-free
+host list and the application password to the application service. A successful
+public control-plane login does not make private database DNS reachable from
+your workstation. For outside-project access, first read
+[public exposure and discovery](#public-exposure-and-discovery).
+
+1. Create the application user from `app-user.yaml`, capturing the generated
+   password rather than copying an administrative credential:
+
+   ```sh
+   # Select the namespace containing the database; use it on every command.
+   NAMESPACE=default
+   CLUSTER=demo
+   APP_PASSWORD=$(karactl -n "$NAMESPACE" db-users create "$CLUSTER" \
+     -f app-user.yaml -o json | jq -er .generatedPassword)
+   ```
+
+   Store this one-time password in a secret manager. If the user already exists,
+   load its saved password instead of creating it again; GET cannot recover it.
+   Keep shell tracing disabled and do not commit secrets or credential-bearing
+   URIs.
+
+2. Export the public cluster CA as a real multiline PEM file:
+
+   ```sh
+   karactl -n "$NAMESPACE" clusters ca "$CLUSTER" > ca.pem
+   ```
+
+   The JSON alternative uses the top-level `caCertificate` field:
+
+   ```sh
+   karactl -n "$NAMESPACE" clusters connection "$CLUSTER" --reveal -o json \
+     | jq -r .caCertificate > ca.pem
+   ```
+
+   Or use the API directly, with the installation origin and a Karakoram bearer
+   token loaded securely:
+
+   ```sh
+   curl --fail-with-body --silent --show-error \
+     -H "Authorization: Bearer $KARAKORAM_TOKEN" \
+     "$KARAKORAM_SERVER/api/v1/clusters/$CLUSTER/connection?namespace=$NAMESPACE" \
+     | jq -r .caCertificate > ca.pem
+   ```
+
+   Both paths require `cluster-credentials:read`. Connection reveal also returns
+   administrative secrets: do not retain its full JSON in logs or application
+   configuration. Do not copy a human-readable table cell into a PEM file.
+
+3. Read only the password-free connection summary, URL-encode the application
+   password, and build an application URI:
+
+   ```sh
+   SUMMARY=$(karactl -n "$NAMESPACE" clusters connection "$CLUSTER" --reveal -o json \
+     | jq -c .connection)
+   MONGO_HOSTS=$(printf '%s' "$SUMMARY" | jq -er '.hosts | join(",")')
+   REPLICA_SET=$(printf '%s' "$SUMMARY" | jq -r '.replicaSet // empty')
+   ENCODED_PASSWORD=$(printf '%s' "$APP_PASSWORD" | jq -sRr @uri)
+   URI_OPTIONS='authSource=appdb&tls=true'
+   if [ -n "$REPLICA_SET" ]; then
+     URI_OPTIONS="$URI_OPTIONS&replicaSet=$REPLICA_SET"
+   fi
+   export MONGODB_URI="mongodb://appwriter:$ENCODED_PASSWORD@$MONGO_HOSTS/appdb?$URI_OPTIONS"
+   ```
+
+   `.connection.hosts` contains private replica-set members or, for sharding,
+   mongos routers. The replica-set summary supplies `replicaSet` (`rs0`);
+   sharded summaries omit it, so the same recipe does not add that option for
+   mongos. `authSource=appdb` matches where this user was created, not `admin`.
+   Treat `MONGODB_URI` as a secret.
+
+4. From the application service in the database project, verify a TLS-authenticated
+   write with mongosh:
+
+   ```sh
+   mongosh "$MONGODB_URI" --tls --tlsCAFile ca.pem \
+     --eval 'db.orders.insertOne({example: "tls connection"}); db.orders.findOne()'
+   ```
+
+5. Connect from PyMongo using the same CA and application identity:
+
+   ```python
+   import os
+   from pymongo import MongoClient
+
+   with MongoClient(os.environ["MONGODB_URI"], tls=True, tlsCAFile="ca.pem") as client:
+       client.admin.command("ping")
+       print(client.appdb.orders.find_one())
+   ```
+
+   Keep CA/hostname verification enabled. DNS failures mean the client is not
+   resolving the project's private hosts; authentication failures require
+   checking the saved application password, `authSource` and role grants. A TLS
+   trust error requires the CA for this cluster, not an insecure verification
+   flag. Replica-set public seed connectivity alone does not establish working
+   external discovery/failover; see the caveat below.
+
 ## Public exposure and discovery
 
 Private-only is the default. The agent explicitly renders both `net.bindIpAll: true` and `net.ipv6: true` for dual-stack MongoDB listeners; private IPv4/IPv6 and supported public IPv6 routing therefore use the same managed listener. `bindIpAll` alone does not enable MongoDB IPv6. Both settings are provider/agent-owned and cannot be overridden through engineConfig. Public MongoDB TCP requires project IPv6 or a **dedicated** public IPv4, not shared IPv4 or the HTTP subdomain. You must supply a nonempty CIDR allowlist:
@@ -148,3 +264,9 @@ The documentation prefix above is an example, not a usable client network. Repla
 **Replica-set split-horizon caveat:** Karakoram does not configure a complete external DNS/SNI split-horizon scheme. A reachable public seed still advertises private member hostnames in normal MongoDB discovery; external clients must be able to resolve/reach the discovered addresses with their correct per-member ports and certificate validation. Merely mapping names to the shared IP does not fix distinct public port mappings. `directConnection=true` can target one publicly routed member for diagnostics, but it bypasses normal replica-set discovery/failover and is not an external HA connection solution.
 
 Treat `publicHosts` as routing information, not proof of externally usable replica-set failover. A complete external discovery solution requires coordinated advertised horizons/DNS/ports and TLS/SNI-aware clients; this is a known [limitation](../limitations.md). Public routers for sharded clusters do not have this replica-set client discovery requirement. Never expose agent port 9443 or broad allowlist ranges merely to work around a connection error.
+
+In public endpoint summaries, show the discovery caveat alongside the seed address: **Public seeds advertise private member hostnames. External clients must resolve and reach the discovered members; `directConnection=true` is for diagnostics only, not HA/failover.** This caveat applies to MongoDB replica sets, not sharded-cluster mongos endpoints.
+
+## Reading placement
+
+Host fingerprints are best-effort observations, not guaranteed anti-affinity. Co-location warnings only group members with the same **known** fingerprint. Members grouped as `unknown` have not reported a usable fingerprint: **placement unknown until members report host fingerprints**, not evidence that they share a physical host.

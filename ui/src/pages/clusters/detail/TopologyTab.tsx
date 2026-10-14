@@ -5,15 +5,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
-import { useClusters } from '@/api/hooks';
+import { useClusters, useProviders } from '@/api/hooks';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, Switch, TextAreaField, TextField } from '@/components/ui/Field';
 import { Callout, Card, Menu, MenuItem } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
-import { ResourcesEditor, validateResources } from '../editors/ResourcesEditor';
-import { ExposureEditor, TLSEditor, validateExposure, validateTLS } from '../editors/AccessEditor';
+import { ResourcesEditor } from '../editors/ResourcesEditor';
+import { ExposureEditor, TLSEditor } from '../editors/AccessEditor';
 import { useClusterContext } from './ClusterDetail';
+import { scalingReview } from './detail-state';
+import { resourceMinimums, validateResources } from '../wizard/resources';
+import { memberChoices } from '../wizard/validation';
+import { validateExposure, validateTLS } from '../wizard/access';
+import { useSubmissionKey } from './use-submission-key';
 
 type Spec = Schemas['ClusterSpec'];
 const RS_SIZES = [1, 3, 5, 7];
@@ -95,9 +101,23 @@ export function TopologyTab() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const clusters = useClusters(namespace);
+  const providers = useProviders();
+  const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
+  const topology = provider?.topologies.find((t) => t.type === cluster.spec.topology.type);
+  const minimums = {
+    engine: resourceMinimums(cluster.spec.provider, topology, 'engine'),
+    configServer: resourceMinimums(cluster.spec.provider, topology, 'configServer'),
+    router: resourceMinimums(cluster.spec.provider, topology, 'router'),
+  };
+  const engineChoices = memberChoices(topology, 'engine');
+  const configChoices = memberChoices(topology, 'configServer');
+  const engineSizes = engineChoices.length ? engineChoices : RS_SIZES;
+  const configSizes = configChoices.length ? configChoices : RS_SIZES;
   const [draft, setDraft] = useState<Draft>(() => draftFrom(cluster.spec));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [replaceMember, setReplaceMember] = useState<string | null>(null);
+  const submission = useSubmissionKey(JSON.stringify(draft));
+  const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
 
   // Re-seed when the persisted spec changes under us and the user has no edits.
   const persistedKey = JSON.stringify(cluster.spec);
@@ -115,20 +135,21 @@ export function TopologyTab() {
   const dirty = Object.keys(patch).length > 0;
 
   const errors: string[] = [];
-  if (!RS_SIZES.includes(draft.engineReplicas)) errors.push('Member count must be 1, 3, 5 or 7.');
-  errors.push(...validateResources(draft.engineResources, cluster.spec.components.engine.resources).map((e) => `Members: ${e}`));
+  if (!engineSizes.includes(draft.engineReplicas)) errors.push(`Member count must be one of: ${engineSizes.join(', ')}.`);
+  errors.push(...validateResources(draft.engineResources, cluster.spec.components.engine.resources, false, minimums.engine).map((e) => `Members: ${e}`));
   if (sharded) {
     if (draft.shards < (cluster.spec.topology.shards ?? 0)) errors.push('Shards cannot be removed.');
-    if (![1, 3, 5].includes(draft.configReplicas)) errors.push('Config servers must be 1, 3 or 5.');
+    if (!configSizes.includes(draft.configReplicas)) errors.push(`Config servers must be one of: ${configSizes.join(', ')}.`);
     if (draft.routerReplicas < 1) errors.push('At least one router is required.');
-    if (draft.configResources) errors.push(...validateResources(draft.configResources, cluster.spec.components.configServer?.resources).map((e) => `Config servers: ${e}`));
-    if (draft.routerResources) errors.push(...validateResources(draft.routerResources, undefined, true).map((e) => `Routers: ${e}`));
+    if (draft.configResources) errors.push(...validateResources(draft.configResources, cluster.spec.components.configServer?.resources, false, minimums.configServer).map((e) => `Config servers: ${e}`));
+    if (draft.routerResources) errors.push(...validateResources(draft.routerResources, undefined, true, minimums.router).map((e) => `Routers: ${e}`));
   }
-  errors.push(...validateTLS(draft.tls.ca === 'userProvided' && draft.tls.ca !== cluster.spec.tls?.ca ? draft.tls : undefined), ...validateExposure(draft.exposure));
+  errors.push(...validateTLS(draft.tls, true), ...validateExposure(draft.exposure, !patch.exposure || allAddressesConfirmed));
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
+    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
     onSuccess: (c) => {
+      submission.reset();
       queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success('Changes submitted; the cluster is reconciling.');
@@ -140,8 +161,9 @@ export function TopologyTab() {
   });
 
   const replace = useMutation({
-    mutationFn: (member: string) => unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', { params: { path: { cluster: name, member }, query: { namespace } } })),
+    mutationFn: (member: string) => unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name, member }, query: { namespace } } })),
     onSuccess: (op) => {
+      submission.reset();
       toast.success(`Replacement started (operation ${op.id}).`);
       setReplaceMember(null);
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
@@ -149,12 +171,7 @@ export function TopologyTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const disruptive: string[] = [];
-  if (patch.components && typeof patch.components === 'object' && 'engine' in patch.components) disruptive.push('member resources change → rolling restart of members');
-  if (patch.tls) disruptive.push('TLS change → rolling restart');
-  if (patch.engineConfig !== undefined) disruptive.push('engine configuration change → rolling restart');
-  if (patch.exposure) disruptive.push('exposure change → public routes added or removed');
-  if (patch.topology) disruptive.push(`shards ${cluster.spec.topology.shards} → ${draft.shards}: new shard replica sets will be created and joined`);
+  const disruptive = scalingReview(cluster.spec, patch);
 
   const members = cluster.status.members.filter((m) => m.role !== 'router');
 
@@ -180,7 +197,7 @@ export function TopologyTab() {
                 <div className="field">
                   <span className="field-label">Config servers</span>
                   <div className="pill-group" role="group" aria-label="Config server members">
-                    {[1, 3, 5].map((n) => (
+                    {configSizes.map((n) => (
                       <button key={n} type="button" aria-pressed={draft.configReplicas === n} onClick={() => setDraft((d) => ({ ...d, configReplicas: n }))}>
                         {n}
                       </button>
@@ -194,7 +211,7 @@ export function TopologyTab() {
               legend={sharded ? 'Members per shard' : 'Members'}
               value={String(draft.engineReplicas)}
               onChange={(v) => setDraft((d) => ({ ...d, engineReplicas: Number(v) }))}
-              options={RS_SIZES.map((n) => ({
+              options={engineSizes.map((n) => ({
                 value: String(n),
                 title: `${n}`,
                 description: n > cluster.spec.components.engine.replicas ? 'adds members (initial sync)' : n < cluster.spec.components.engine.replicas ? 'removes members (quorum-safe)' : 'current',
@@ -205,16 +222,16 @@ export function TopologyTab() {
         </Card>
 
         <Card title={sharded ? 'Shard member resources' : 'Member resources'}>
-          <ResourcesEditor idPrefix="engine" value={draft.engineResources} persisted={cluster.spec.components.engine.resources} onChange={(r) => setDraft((d) => ({ ...d, engineResources: r }))} />
+          <ResourcesEditor minimums={minimums.engine} showErrors idPrefix="engine" value={draft.engineResources} persisted={cluster.spec.components.engine.resources} onChange={(r) => setDraft((d) => ({ ...d, engineResources: r }))} />
         </Card>
         {sharded && draft.configResources ? (
           <Card title="Config server resources">
-            <ResourcesEditor idPrefix="cfg" value={draft.configResources} persisted={cluster.spec.components.configServer?.resources} onChange={(r) => setDraft((d) => ({ ...d, configResources: r }))} />
+            <ResourcesEditor minimums={minimums.configServer} showErrors idPrefix="cfg" value={draft.configResources} persisted={cluster.spec.components.configServer?.resources} onChange={(r) => setDraft((d) => ({ ...d, configResources: r }))} />
           </Card>
         ) : null}
         {sharded && draft.routerResources ? (
           <Card title="Router resources">
-            <ResourcesEditor idPrefix="router" noDisk value={draft.routerResources} onChange={(r) => setDraft((d) => ({ ...d, routerResources: r }))} />
+            <ResourcesEditor minimums={minimums.router} showErrors idPrefix="router" noDisk value={draft.routerResources} onChange={(r) => setDraft((d) => ({ ...d, routerResources: r }))} />
           </Card>
         ) : null}
 
@@ -222,7 +239,7 @@ export function TopologyTab() {
           <TLSEditor editing value={draft.tls} onChange={(tls) => setDraft((d) => ({ ...d, tls }))} />
         </Card>
         <Card title="Network exposure">
-          <ExposureEditor value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} />
+          <ExposureEditor allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} />
         </Card>
         <Card title="Monitoring & engine configuration">
           <div className="stack" style={{ gap: 14 }}>
@@ -292,10 +309,10 @@ export function TopologyTab() {
         </div>
       </Card>
 
-      <ConfirmDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={() => save.mutate()} title="Apply topology changes" confirmLabel="Apply" busy={save.isPending}>
+      <ConfirmDialog open={confirmOpen} onClose={() => { setConfirmOpen(false); save.reset(); submission.reset(); }} onConfirm={() => save.mutateAsync()} title="Apply topology changes" confirmLabel="Apply" busy={save.isPending} error={save.error}>
         <div className="stack">
           {disruptive.length ? (
-            <Callout tone="warn" title="This change is disruptive">
+            <Callout tone="warn" title="What will change">
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {disruptive.map((d) => (
                   <li key={d}>{d}</li>
@@ -313,13 +330,14 @@ export function TopologyTab() {
 
       <ConfirmDialog
         open={replaceMember !== null}
-        onClose={() => setReplaceMember(null)}
-        onConfirm={() => replaceMember && replace.mutate(replaceMember)}
+        onClose={() => { setReplaceMember(null); replace.reset(); submission.reset(); }}
+        onConfirm={() => replaceMember && replace.mutateAsync(replaceMember)}
         title={`Replace ${replaceMember ?? ''}`}
         confirmLabel="Replace member"
         danger
         typeToConfirm={replaceMember ?? undefined}
         busy={replace.isPending}
+        error={replace.error}
       >
         <p className="small">
           A new member with the next index is created and completes initial sync before <span className="mono">{replaceMember}</span> is removed from the set and its services and volume are deleted. If it is the primary, a

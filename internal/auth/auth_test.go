@@ -35,14 +35,14 @@ func setup(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Bootstrap(context.Background(), password); err != nil {
+	if _, err = s.Bootstrap(context.Background(), "temporary-test-password"); err != nil {
 		t.Fatal(err)
 	}
 	a, err := s.GetAccount(t.Context(), "admin")
 	if err != nil || !a.MustChangePassword {
 		t.Fatal("bootstrap must require password change", err)
 	}
-	if err = s.ChangePassword(t.Context(), "admin", password, password); err != nil {
+	if err = s.ChangePassword(t.Context(), "admin", "temporary-test-password", password); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -260,14 +260,12 @@ func TestTokenExpiryAndDisabledOwner(t *testing.T) {
 	}
 	r := request("GET", nil, "")
 	r.Header.Set("Authorization", "Bearer "+secret)
-	past := time.Now().Add(-time.Hour)
-	tok.ExpiresAt = &past
-	if _, err = s.UpdateToken(ctx, tok); err != nil {
-		t.Fatal(err)
-	}
+	now := s.now()
+	s.now = func() time.Time { return expiry.Add(time.Second) }
 	if _, err = s.Authenticate(r); err == nil {
 		t.Fatal("expired token")
 	}
+	s.now = func() time.Time { return now }
 	tok.ExpiresAt = nil
 	if _, err = s.UpdateToken(ctx, tok); err != nil {
 		t.Fatal(err)

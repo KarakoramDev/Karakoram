@@ -126,6 +126,9 @@ func TestCommandsAgainstServer(t *testing.T) {
 		case "/metrics":
 			w.Header().Set("Content-Type", "text/plain")
 			fmt.Fprint(w, "karakoram_up 1\n")
+		case "/api/v1/openapi.yaml":
+			w.Header().Set("Content-Type", "application/yaml")
+			fmt.Fprint(w, "openapi: 3.0.3\n")
 		case "/api/v1/clusters":
 			if r.Header.Get("Authorization") != "Bearer test-token" {
 				t.Error("missing bearer token")
@@ -146,7 +149,7 @@ func TestCommandsAgainstServer(t *testing.T) {
 	for _, tt := range []struct {
 		args []string
 		want string
-	}{{[]string{"health", "-o", "json"}, `"database": true`}, {[]string{"metrics"}, "karakoram_up 1"}, {[]string{"--token", "test-token", "clusters", "list", "--limit", "2"}, "demo"}, {[]string{"clusters", "members", "demo", "m0", "-o", "yaml"}, "state: SECONDARY"}} {
+	}{{[]string{"health", "-o", "json"}, `"database": true`}, {[]string{"metrics"}, "karakoram_up 1"}, {[]string{"openapi"}, "openapi: 3.0.3"}, {[]string{"--token", "test-token", "clusters", "list", "--limit", "2"}, "demo"}, {[]string{"clusters", "members", "demo", "m0", "-o", "yaml"}, "state: SECONDARY"}} {
 		out, _, err := execute(t, server.URL+"/api/v1", config, "", tt.args...)
 		if err != nil {
 			t.Fatal(err)
@@ -337,13 +340,13 @@ func TestLoginAndLogout(t *testing.T) {
 			if body["password"] != "password-secret" {
 				t.Error("password not sent")
 			}
-			http.SetCookie(w, &http.Cookie{Name: "karakoram_session", Value: "session", Path: "/"})
+			http.SetCookie(w, &http.Cookie{Name: "karakoram_access", Value: "session", Path: "/"})
 			fmt.Fprint(w, `{"csrfToken":"csrf","account":{"name":"admin"}}`)
 		case "/api/v1/api-tokens":
 			if r.Header.Get("X-Karakoram-CSRF") != "csrf" {
 				t.Error("missing CSRF")
 			}
-			if _, err := r.Cookie("karakoram_session"); err != nil {
+			if _, err := r.Cookie("karakoram_access"); err != nil {
 				t.Error("missing session")
 			}
 			fmt.Fprint(w, `{"secret":"kk_test-secret","token":{"id":"token-one"}}`)

@@ -115,7 +115,7 @@ func (a *app) namespacesTable(v any) error {
 }
 
 func (a *app) addConfig(root *cobra.Command) {
-	group := &cobra.Command{Use: "config", Short: "Manage saved connection contexts"}
+	group := groupCommand("config", "Manage saved connection contexts")
 	set := &cobra.Command{Use: "set-context <name>", Short: "Save server, credential and namespace flags in a context", Args: cobra.ExactArgs(1)}
 	set.PersistentPreRunE = func(cmd *cobra.Command, args []string) error { return nil }
 	set.RunE = func(cmd *cobra.Command, args []string) error {

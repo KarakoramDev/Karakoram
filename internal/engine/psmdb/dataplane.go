@@ -60,10 +60,14 @@ func (p *Provider) Connection(ctx context.Context, rc *engine.Context) (domain.C
 }
 
 // SystemUsers returns provider-managed role assignments without credentials.
-func (*Provider) SystemUsers(context.Context, *engine.Context) ([]domain.SystemUser, error) {
+func (*Provider) SystemUsers(_ context.Context, rc *engine.Context) ([]domain.SystemUser, error) {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return nil, err
+	}
 	out := []domain.SystemUser{}
 	for _, u := range users.SystemUserDefs() {
-		out = append(out, domain.SystemUser{Name: u.Name, Roles: u.Roles})
+		out = append(out, domain.SystemUser{Name: u.Name, Roles: u.Roles, LastRotatedAt: s.LastRotatedAt[u.Name]})
 	}
 	return out, nil
 }
@@ -108,6 +112,9 @@ func (p *Provider) CreateDatabaseUser(ctx context.Context, rc *engine.Context, u
 			return "", e
 		}
 	}
+	if e := users.ValidatePassword(pw); e != nil {
+		return "", e
+	}
 	c, e := p.userClient(ctx, rc)
 	if e != nil {
 		return "", e
@@ -121,6 +128,11 @@ func (p *Provider) CreateDatabaseUser(ctx context.Context, rc *engine.Context, u
 
 // UpdateDatabaseUser replaces roles and optionally the password.
 func (p *Provider) UpdateDatabaseUser(ctx context.Context, rc *engine.Context, u domain.DatabaseUser, pw string) error {
+	if pw != "" {
+		if e := users.ValidatePassword(pw); e != nil {
+			return e
+		}
+	}
 	c, e := p.userClient(ctx, rc)
 	if e != nil {
 		return e
@@ -378,6 +390,10 @@ func (p *Provider) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain
 	if e != nil {
 		return nil, e
 	}
+	if s.Phase != "ready" || len(s.Members) == 0 {
+		return nil, domain.Conflict("cluster", rc.Cluster.Name, domain.ReasonInvalidState, engine.ErrConflict,
+			"cluster %q is still initializing or unavailable; PITR coverage is not ready until members report and a base snapshot with continuous oplog history is available", rc.Cluster.Name)
+	}
 	env, e := p.pbmEnv(ctx, rc, s)
 	if e != nil {
 		return nil, e
@@ -409,7 +425,7 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		}
 	}
 	if unknown {
-		warnings = append(warnings, "physical-host placement is unknown for some members")
+		warnings = append(warnings, "placement unknown until members report host fingerprints")
 	}
 	v.Warning = strings.Join(warnings, "; ")
 	return v, nil

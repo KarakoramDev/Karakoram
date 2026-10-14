@@ -310,7 +310,7 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 func assertNamespaceMigrationFixture(t *testing.T, s *Store, f namespaceMigrationFixture) {
 	t.Helper()
 	ctx := context.Background()
-	assertNamespaceMigrationNames(t, s.reader, []string{"001.sql", "002.sql", "003.sql", "004.sql"})
+	assertNamespaceMigrationNames(t, s.reader, []string{"001.sql", "002.sql", "003.sql", "004.sql", "005_idempotency.sql"})
 	clusters, err := s.ListClusters(ctx, domain.DefaultNamespace)
 	assertNamespaceMigrationValue(t, "default clusters", clusters, f.clusters, err)
 	for _, want := range f.clusters {

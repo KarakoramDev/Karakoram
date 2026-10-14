@@ -128,7 +128,7 @@ func parse(text string) ([]domain.PolicyRule, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("policy CSV: %w", err)
+			return nil, domain.InvalidField("policy", domain.ReasonInvalid, "policy CSV is invalid: %v", err)
 		}
 		for i := range row {
 			row[i] = strings.TrimSpace(row[i])
@@ -136,25 +136,29 @@ func parse(text string) ([]domain.PolicyRule, error) {
 		if len(row) == 0 {
 			continue
 		}
+		line, _ := rd.FieldPos(0)
+		invalid := func(message string) error {
+			return domain.InvalidField("policy", domain.ReasonInvalid, "policy line %d: %s", line, message)
+		}
 		switch row[0] {
 		case "g":
 			if len(row) != 3 || !subject(row[1]) || !strings.HasPrefix(row[2], "role:") || len(row[2]) == 5 {
-				return nil, errors.New("invalid role binding")
+				return nil, invalid("g rules require g, user/group/role subject, role:NAME")
 			}
 		case "p":
 			if len(row) == 5 {
 				row = append(row, "allow")
 			}
 			if len(row) != 6 || !subject(row[1]) || row[4] == "" || (row[5] != "allow" && row[5] != "deny") {
-				return nil, errors.New("invalid policy rule")
+				return nil, invalid("p rules require p, user/group/role subject, resource, action, object[, allow|deny]")
 			}
 			row[4] = normalizeObject(row[2], row[4])
 			if err := validateObject(row[4]); err != nil {
-				return nil, err
+				return nil, invalid(err.Error())
 			}
 			for _, pattern := range row[2:5] {
 				if _, err := util.GlobMatch("", pattern); err != nil {
-					return nil, fmt.Errorf("invalid glob %q: %w", pattern, err)
+					return nil, invalid(fmt.Sprintf("invalid glob %q: %v", pattern, err))
 				}
 			}
 			found := false
@@ -171,10 +175,10 @@ func parse(text string) ([]domain.PolicyRule, error) {
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf("unknown resource/action %q/%q", row[2], row[3])
+				return nil, invalid(fmt.Sprintf("unknown resource/action %q/%q", row[2], row[3]))
 			}
 		default:
-			return nil, fmt.Errorf("unknown policy type %q", row[0])
+			return nil, invalid(fmt.Sprintf("unknown policy type %q; rules start with p or g", row[0]))
 		}
 		rules = append(rules, domain.PolicyRule{PType: row[0], Values: append([]string(nil), row[1:]...)})
 	}
@@ -397,7 +401,7 @@ func (e *Enforcer) ReplacePolicy(ctx context.Context, text string) error {
 		}
 	}
 	if !admin {
-		return errors.New("policy must preserve an unrestricted administrator")
+		return domain.InvalidField("policy", domain.ReasonProtected, "policy must preserve an unrestricted administrator: retain full admin rights for at least one enabled account or a verified active OIDC group identity, without deny rules")
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()

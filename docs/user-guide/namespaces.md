@@ -10,6 +10,8 @@ Namespace names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters
 
 CLI single-object/create/mutation commands resolve namespace as **`--namespace/-n` > saved context namespace > `default`**. Collection commands without an explicit `-n` list all authorized namespaces; with `-n` they filter. Save a default for object commands with `karactl config set-context production --namespace prod`. Responses carry `namespace`, and unfiltered tables identify it.
 
+An explicit nonexistent `?namespace=NAME` returns **404** `not_found` on collections, details and sub-resources, with `details.resource: namespace` and `details.name`. It is not an empty namespace. Omit the parameter entirely for **All namespaces**; an empty or malformed parameter returns **400**.
+
 `karactl namespaces list` follows every authorized result page in all output formats.
 
 The UI namespace switcher offers **All namespaces** and authorized namespace names with health indicators. Selection is carried in `?namespace=` and a non-secret localStorage preference; cluster detail routes include the namespace. Choose an explicit namespace when creating a cluster/storage. A shared link does not bypass authorization. Reading namespace metadata is separate from reading its clusters.
@@ -34,9 +36,21 @@ karactl namespaces rotate-token dev --token-file replacement-token.txt
 karactl -n dev clusters list
 ```
 
-Do not place the token in an argument value, committed file or shell trace. Creation rejects invalid credentials/project scope, a duplicate project or an occupied relay hostname with **422**; an existing namespace name returns **409**. Missing/invalid request shape may return **400**. A valid token is not proof that the relay is connected: wait for relay `Ready` and `connected: true`.
+Do not place the token in an argument value, committed file or shell trace. Missing `name`, `projectId` or `token` returns **400** `invalid_request` naming the missing field. Invalid name syntax returns **400** with `details.field: name` and the full 2–32-character rule. Both an existing name and reserved `default` return **409** `conflict` with reason `already_exists`. Invalid credentials/project scope, a duplicate project or an occupied relay hostname return **422**. A valid token is not proof that the relay is connected: wait for relay `Ready` and `connected: true`.
 
 Re-validation returns updated health; an invalid stored token is represented by `token.valid: false` and `lastError`, not necessarily an HTTP error. Automatic checks refresh token health about every five minutes. Rotation validates access to the **same project**, persists the replacement and changes the Backend's token without restarting the relay/session. Revoke the old Zerops token only after successful rotation. For `default`, API rotation returns **409**: update the control-plane service secret and restart instead.
+
+Token health distinguishes an explicit access rejection from a platform outage.
+HTTP **401/403** and explicit authentication error codes invalidate the token;
+HTTP **429/5xx**, timeouts and connection failures retain its last known
+`valid` value and report `Zerops API temporarily unavailable: <safe detail>;
+retrying` in `token.lastError`. Automatic validation retries on its normal
+five-minute cadence. This applies to startup checks as well as manual and
+automatic re-validation. A new namespace has no previously confirmed validity
+until validation succeeds. Transient registration/rotation failures return HTTP
+**500** with code `internal_error` and the safe temporary-unavailability message,
+not **422** `invalid_namespace`. They do not save new credentials or label the
+submitted token invalid; retry when Zerops recovers.
 
 Validation confirms project identity and service-list access; it does not probe every import/deploy/secret mutation. A token that can only read the project may pass validation and then fail relay deployment. Supply the required Full access scope and inspect both token and relay health.
 
@@ -161,6 +175,7 @@ the replacement; relay provisioning starts again from `Pending`.
 ## Troubleshooting
 
 - **Token invalid:** re-validate, check project-scoped Full access and rotate with a replacement for the same project. Updating a Karakoram API token does not fix the infrastructure token.
+- **Zerops API temporarily unavailable:** inspect `token.lastError` and the validation timestamp. Rate limits, server failures and connectivity problems do not establish that a token is invalid. Keep the existing token, allow automatic re-validation or run `namespaces validate` after platform recovery; do not rotate credentials or repair the relay solely because of this diagnostic.
 - **Relay Pending/Deploying/Error:** inspect `relay.lastError`, project capacity, owned service identity and Zerops deployment/runtime logs. Do not replace enrollment secrets manually or adopt an unrelated service occupying the hostname.
 - **Relay disconnected:** verify the configured public HTTPS origin and certificate, outbound reachability and WebSocket forwarding; inspect connection/last-seen/reconnect fields. The tunnel reconnects automatically. Database replication may still be healthy.
 - **Target refused:** the `RelayTargetRefused` event (at most one per minute per namespace) names the target and the relay's reason. While members are created or removed, `target hostname could not be resolved` and `target TCP connection failed` are expected, and `target is not in namespace policy` can appear once before the relay receives the updated policy. Persistent refusals need a check of the generated member/router hostnames. Only current policy targets on 27017/9443 are allowed. Do not broaden policy to reach `core`, IP literals or arbitrary services.

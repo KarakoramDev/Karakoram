@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 )
 
 func TestMultiNamespace(t *testing.T) {

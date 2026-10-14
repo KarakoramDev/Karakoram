@@ -41,6 +41,7 @@ func namespaceServer(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	c := domain.Cluster{Namespace: "dev", Name: "prod", Spec: domain.ClusterSpec{Provider: "fake", Version: "8.0", Topology: domain.Topology{Type: "replicaSet"}}, Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
+	(&fakeProvider{}).ApplyDefaults(&c.Spec)
 	if err := s.Store.CreateCluster(t.Context(), &c); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +183,7 @@ func TestCrossNamespaceRestoreAndCloneExportPermission(t *testing.T) {
 		t.Fatal(r)
 	}
 	for _, ns := range []string{"default", "dev"} {
-		events, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: ns, Type: "CrossNamespaceRestore"})
+		events, err := s.Store.ListEvents(ctx, store.EventFilter{Namespace: ns, Type: "Audit"})
 		if err != nil || len(events) != 2 {
 			t.Fatal(ns, events, err)
 		}
@@ -220,10 +221,10 @@ func TestNamespaceStorageIsolationAndCreateValidation(t *testing.T) {
 	if w := call(s, "POST", "/api/v1/backup-storages?namespace=dev", body, reader); w.Code != 403 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if w := call(s, "POST", "/api/v1/backup-storages?namespace=missing", body, admin); w.Code != 422 {
+	if w := call(s, "POST", "/api/v1/backup-storages?namespace=missing", body, admin); w.Code != 404 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	if w := call(s, "POST", "/api/v1/clusters?namespace=missing", `{"name":"new",`+namespaceClusterSpec+`}}`, admin); w.Code != 422 {
+	if w := call(s, "POST", "/api/v1/clusters?namespace=missing", `{"name":"new",`+namespaceClusterSpec+`}}`, admin); w.Code != 404 {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	defaultCluster, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "prod"})
@@ -280,7 +281,7 @@ func TestNamespaceEventStreamFiltersPerEvent(t *testing.T) {
 			cancel()
 		}
 	}
-	if err := s.stream(ctx).serve(w); err != nil && !errors.Is(err, context.Canceled) {
+	if err := testStream(s, ctx, w); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	body := w.Body.String()

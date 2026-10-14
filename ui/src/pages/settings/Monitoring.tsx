@@ -36,7 +36,7 @@ export function MonitoringSettingsPage() {
             Karakoram's node agents collect engine metrics from every member and the control plane aggregates them. Per-cluster dashboards live under each cluster's Monitoring tab; external systems scrape all clusters at once from the endpoint below using
             an API token. Only clusters the token's owner may read (<code>monitoring:read</code>) are included.
           </p>
-          <KV items={[['Endpoint', <CodeLine value={scrapeURL} />], ['Auth', 'Authorization: Bearer <API token> (create under API tokens)'], ['Format', 'Prometheus text exposition; labels cluster, member, set, role'], ['Filter', 'Optional ?namespace=<name> limits the scrape to one namespace']]} />
+          <KV items={[['Endpoint', <CodeLine value={scrapeURL} />], ['Auth', 'Authorization: Bearer <API token> (create under API tokens)'], ['Format', 'Prometheus text exposition; labels namespace, cluster, member. Operation/document series also use operation; network series use direction.'], ['Filter', 'Optional ?namespace=<name> limits the scrape to one namespace']]} />
           <div className="section-title">Example scrape config</div>
           <pre className="code">{scrapeConfig}</pre>
           <p className="xs faint">

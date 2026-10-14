@@ -29,6 +29,7 @@ import { RbacPage } from '@/pages/settings/Rbac';
 import { ApiTokensPage } from '@/pages/settings/ApiTokens';
 import { SsoPage } from '@/pages/settings/Sso';
 import { MonitoringSettingsPage } from '@/pages/settings/Monitoring';
+import { OperationDetailPage } from '@/pages/OperationDetail';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -64,6 +65,7 @@ const router = createBrowserRouter([
           },
           { path: '/events', element: <EventsPage /> },
           { path: '/operations', element: <OperationsPage /> },
+          { path: '/operations/:id', element: <OperationDetailPage /> },
           {
             path: '/settings',
             element: <SettingsLayout />,

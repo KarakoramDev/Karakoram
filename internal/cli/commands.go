@@ -39,7 +39,7 @@ func (a *app) addCommands(root *cobra.Command) {
 			prefix = strings.TrimSpace(prefix + " " + word)
 			g := groups[prefix]
 			if g == nil {
-				g = &cobra.Command{Use: word, Short: "Manage " + prefix}
+				g = groupCommand(word, "Manage "+prefix)
 				parent.AddCommand(g)
 				groups[prefix] = g
 			}
@@ -49,6 +49,19 @@ func (a *app) addCommands(root *cobra.Command) {
 		c := &cobra.Command{Use: use, Short: commandDescription(s), Args: cobra.ExactArgs(s.args)}
 		if strings.Contains(s.path, "[") {
 			c.Args = cobra.RangeArgs(s.args, s.args+1)
+		}
+		validateArgs := c.Args
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := validateArgs(cmd, args); err != nil {
+				return usageError("%s", err)
+			}
+			return nil
+		}
+		if s.operation == "deleteAPIToken" {
+			c.Aliases = []string{"revoke"}
+		}
+		if destructive(s.operation) {
+			c.Flags().BoolP("yes", "y", false, "Skip interactive confirmation")
 		}
 		annotate(c, s.operation)
 		if c.Name() == "members" {
@@ -80,6 +93,9 @@ func (a *app) addCommands(root *cobra.Command) {
 			c.Annotations[operationAnnotation] += ",getOperation,getCluster"
 		}
 		a.specialFlags(c, s)
+		if s.operation == "listEvents" {
+			c.Flags().Lookup("order").Usage = "Event order: asc or desc (server default when omitted)"
+		}
 		c.RunE = func(cmd *cobra.Command, args []string) error { return a.run(cmd, s, args) }
 		parent.AddCommand(c)
 	}
@@ -87,10 +103,19 @@ func (a *app) addCommands(root *cobra.Command) {
 	a.addConfig(root)
 }
 func commandDescription(s commandSpec) string {
-	if s.body {
-		return s.operation + ": submit YAML/JSON with -f (see API request schema)"
+	words := strings.Fields(s.path)
+	end := len(words)
+	for i, word := range words {
+		if strings.HasPrefix(word, "<") || strings.HasPrefix(word, "[") {
+			end = i
+			break
+		}
 	}
-	return s.operation
+	description := strings.Join(words[:end], " ")
+	if s.body {
+		description += ": submit a JSON/YAML request body with -f"
+	}
+	return description
 }
 func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	q := map[string]any{}
@@ -110,12 +135,19 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 			q[f.key] = v
 		}
 	}
+	if order, ok := q["order"].(string); ok && order != "asc" && order != "desc" {
+		return usageError("--order must be asc or desc")
+	}
 	if s.operation == "streamEvents" {
 		return a.watch(cmd.Context(), q)
 	}
 	if strings.HasPrefix(s.path, "operations wait") {
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		return a.waitOperation(cmd.Context(), args[0], timeout, true)
+	}
+	if s.path == "clusters wait <cluster>" {
+		timeout, _ := cmd.Flags().GetDuration("timeout")
+		return a.waitCluster(cmd.Context(), "observe", args[0], 0, nil, timeout)
 	}
 	op := s.operation
 	if s.operation == "listClusterMembers" && len(args) == 2 {
@@ -125,10 +157,13 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if err != nil {
 		return err
 	}
-	if s.operation == "getClusterConnection" {
+	if err := a.confirm(cmd, s.operation, args); err != nil {
+		return err
+	}
+	if s.operation == "getClusterConnection" && s.path != "clusters ca <cluster>" {
 		reveal, _ := cmd.Flags().GetBool("reveal")
 		if !reveal {
-			return fmt.Errorf("connection credentials are sensitive; pass --reveal to display them")
+			return a.connectionSummary(cmd, args)
 		}
 	}
 	if s.operation == "createRestore" {
@@ -137,9 +172,34 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 			return a.clone(cmd, args[0], into, body)
 		}
 	}
+	if op == "deleteCluster" {
+		// Reading is optional: delete-only principals must still be able to delete.
+		if current, lookupErr := a.request(cmd.Context(), "getCluster", args, nil, nil); lookupErr == nil && nested(current, "status", "phase") == "Deleting" {
+			fmt.Fprintf(a.opts.Err, "Cluster %s is already being deleted.\n", args[0])
+		}
+	}
 	result, err := a.request(cmd.Context(), op, args, q, body)
 	if err != nil {
 		return err
+	}
+	if s.path == "clusters ca <cluster>" {
+		pem, _ := nested(result, "caCertificate").(string)
+		return printPEM(a.opts.Out, pem)
+	}
+	if op == "verifyBackupStorage" {
+		if err := a.print(result); err != nil {
+			return err
+		}
+		if verified, _ := nested(result, "verified").(bool); !verified {
+			return fmt.Errorf("storage verification failed: %s", cell(nested(result, "message")))
+		}
+		return nil
+	}
+	if op == "getClusterConnection" && a.format == "table" {
+		return a.connectionTable(result)
+	}
+	if op == "getClusterStatus" && a.format == "table" {
+		return a.statusTable(result)
 	}
 	if wait, _ := cmd.Flags().GetBool("wait"); wait {
 		timeout, _ := cmd.Flags().GetDuration("timeout")

@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"gopkg.in/yaml.v3"
@@ -150,19 +151,12 @@ func (r *Registry) step(ctx context.Context, name string) {
 		var validation error
 		var project infra.Project
 		if err != nil {
-			validation = errors.New("Project token is unavailable")
+			validation = &zerops.APIError{Code: "accessDenied", Message: "Stored project credentials are unavailable"}
 		} else {
 			_, project, validation = r.o.Validate(ctx, z)
 		}
 		was := n.Token.Valid
-		n.Token.Valid = validation == nil
-		n.Token.LastValidatedAt = time.Now().UTC()
-		n.Token.LastError = ""
-		if validation != nil {
-			n.Token.LastError = validation.Error()
-		} else {
-			n.ProjectName = project.Name
-		}
+		applyTokenValidation(n, project, validation, time.Now().UTC())
 		if was != n.Token.Valid {
 			if n.Token.Valid {
 				r.event(ctx, n, "NamespaceValidated", "Project token validated")
