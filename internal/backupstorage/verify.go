@@ -55,7 +55,7 @@ func Failure(err error) (reason, message string) {
 	case "bucket_not_found":
 		message = "S3 bucket does not exist; check the bucket name, endpoint and region"
 	case "endpoint_not_allowed":
-		message = "S3 endpoint is not permitted; use an HTTPS origin without credentials, path, query or fragment; redirects, loopback and metadata addresses are forbidden and private endpoints require an operator allowlist"
+		message = "S3 endpoint is not permitted; use an HTTP(S) origin without credentials, path, query or fragment; redirects, loopback and metadata addresses are forbidden and private endpoints require an operator allowlist"
 	case "tls_error":
 		message = "S3 TLS certificate verification or handshake failed; check the endpoint hostname, certificate chain and TLS configuration"
 	case "unreachable":
@@ -71,9 +71,6 @@ func Failure(err error) (reason, message string) {
 // Verify probes put, get and delete permissions with a random, private object under the configured prefix.
 // TLS certificate verification and path-style addressing follow the storage settings exactly.
 func Verify(ctx context.Context, s domain.BackupStorage, c domain.StorageCredentials) error {
-	if u, err := url.Parse(s.EndpointURL); err == nil && u.Scheme == "http" {
-		return &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 verification requires HTTPS")}
-	}
 	return verify(ctx, s, c, nil)
 }
 

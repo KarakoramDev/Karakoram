@@ -49,15 +49,14 @@ named `ZEROPS_TOKEN` or `ZEROPS_PROJECT_ID` is rejected with
 `KARAKORAM_ZEROPS_*` names above in all environments. The optional
 `KARAKORAM_ZEROPS_API_URL` selects a non-default Zerops API endpoint.
 
-Backup-storage verification requires HTTPS and permits public global-unicast S3
-endpoints on port 443. The exact hostname `storage-prg1.zerops.io` is trusted by
-default on that port, including its private resolution. For another private S3
-endpoint or a nonstandard port, set `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` **on the
-Karakoram service**, for example `backupstore:9000,storage.example.com`. Host-only
-entries permit standard ports and host:port permits only that port, but neither
-allows HTTP verification. Replace these examples with your actual trusted HTTPS
-destinations and restart/redeploy after changing the variable. Do not broadly
-allowlist project services.
+Backup-storage verification permits public global-unicast S3 endpoints on ports
+80/443. The exact hostname `storage-prg1.zerops.io` is trusted by default on
+those ports, including its private resolution. For another private S3 endpoint
+or a nonstandard port, set `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` **on the Karakoram
+service**, for example `backupstore:9000,storage.example.com`; host-only entries
+allow 80/443, while host:port allows only the specified port. Replace these
+examples with your actual trusted destinations and restart/redeploy after
+changing the variable. Do not broadly allowlist project services.
 
 Loopback, link-local/metadata-style, unspecified/non-global destinations and
 100.64.0.0/10 remain blocked even for allowlisted hosts. The verifier rejects

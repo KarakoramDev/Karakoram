@@ -53,7 +53,7 @@ func TestFailureCategorizationAndSecretSafety(t *testing.T) {
 
 func TestVerificationEndpointPolicyCategories(t *testing.T) {
 	credentials := domain.StorageCredentials{AccessKeyID: "private-access", SecretAccessKey: "private-secret"}
-	for _, endpoint := range []string{"http://example.test", "https://user:private-secret@example.test", "https://example.test/path", "https://example.test?token=private-secret", "https://127.0.0.1", "https://10.0.0.1"} {
+	for _, endpoint := range []string{"https://user:private-secret@example.test", "https://example.test/path", "https://example.test?token=private-secret", "https://127.0.0.1", "https://10.0.0.1"} {
 		err := Verify(t.Context(), domain.BackupStorage{Type: "s3", EndpointURL: endpoint, Bucket: "bucket", Region: "us-east-1", ForcePathStyle: true}, credentials)
 		reason, message := Failure(err)
 		if reason != "endpoint_not_allowed" || strings.Contains(message, "private-secret") || strings.Contains(message, "private-access") {
@@ -65,5 +65,20 @@ func TestVerificationEndpointPolicyCategories(t *testing.T) {
 	reason, _ := Failure(probeError("put", err))
 	if reason != "endpoint_not_allowed" {
 		t.Fatal(reason, err)
+	}
+}
+
+func TestVerifyHTTPUsesEndpointPolicy(t *testing.T) {
+	t.Setenv("KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST", "storage.example.test:9000")
+	for _, endpoint := range []string{"http://example.test", "http://storage-prg1.zerops.io", "http://storage.example.test:9000"} {
+		// Cancellation prevents outbound requests while proving HTTP reaches the
+		// verifier rather than being rejected solely for its transport scheme.
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		err := Verify(ctx, domain.BackupStorage{Type: "s3", EndpointURL: endpoint, Bucket: "bucket", Region: "us-east-1", ForcePathStyle: true}, domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"})
+		reason, _ := Failure(err)
+		if !errors.Is(err, context.Canceled) || reason == "endpoint_not_allowed" {
+			t.Fatalf("%s: %s: %v", endpoint, reason, err)
+		}
 	}
 }

@@ -168,13 +168,13 @@ func TestStorageFieldConflictAndVerificationDiagnostics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	storage.EndpointURL = "http://s3.example.test"
+	storage.EndpointURL = "http://s3.example.test/path"
 	if err = s.Store.UpdateBackupStorage(t.Context(), storage); err != nil {
 		t.Fatal(err)
 	}
 	w := call(s, "POST", "/api/v1/backup-storages/archive/verify", "", token)
 	var result api.StorageVerification
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Verified || result.FailureReason == nil || string(*result.FailureReason) != "endpoint_not_allowed" || !strings.Contains(result.Message, "HTTPS") {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Verified || result.FailureReason == nil || string(*result.FailureReason) != "endpoint_not_allowed" || !strings.Contains(result.Message, "HTTP(S)") {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	if strings.Contains(w.Body.String(), "private-secret") || strings.Contains(w.Body.String(), "private-access") {

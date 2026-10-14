@@ -56,7 +56,7 @@ Registration saves configuration, not proof of S3 access. A verification failure
 | --- | --- |
 | `access_denied` | Access key/secret pair and bucket read, write and delete permissions; expired credentials or a signature/region mismatch |
 | `bucket_not_found` | Existing bucket name, regional endpoint and signing region |
-| `endpoint_not_allowed` | HTTPS origin only; no credentials, non-root path, query, fragment or redirects. Loopback/metadata destinations are forbidden; private addresses and nonstandard ports need the operator allowlist below |
+| `endpoint_not_allowed` | HTTP(S) origin only; no credentials, non-root path, query, fragment or redirects. Loopback/metadata destinations are forbidden; private addresses and nonstandard ports need the operator allowlist below |
 | `tls_error` | Endpoint hostname, certificate chain and TLS handshake; repair certificates rather than disabling verification |
 | `unreachable` | DNS, endpoint port, network routes and firewall from the control plane |
 | `timeout` | Endpoint responsiveness and network connectivity; retry after the service is reachable |
@@ -64,7 +64,7 @@ Registration saves configuration, not proof of S3 access. A verification failure
 
 ### Endpoint verification policy
 
-The verification endpoint must be an **HTTPS** origin without embedded credentials, a non-root path, query or fragment. Public global-unicast destinations on **443** are permitted by default. For a private S3 server or nonstandard port, configure the **control-plane service** environment `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` with comma-separated exact `host` or `host:port` entries, then restart/redeploy that service. Host-only entries allow standard ports; host:port allows that exact port. `storage-prg1.zerops.io` on 443 is already trusted for Zerops storage's private addresses. Allowlisting never permits HTTP verification.
+The verification endpoint must be an HTTP(S) origin without embedded credentials, a non-root path, query or fragment. Public global-unicast destinations on **80/443** are permitted by default. For a private S3 server or nonstandard port, configure the **control-plane service** environment `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` with comma-separated exact `host` or `host:port` entries, then restart/redeploy that service. Host-only entries allow ports 80/443; host:port allows that exact port. `storage-prg1.zerops.io` on 80/443 is already trusted for Zerops storage's private addresses.
 
 Loopback, link-local/metadata-style addresses, unspecified/non-global addresses and shared range 100.64.0.0/10 stay blocked even when allowlisted. The verifier checks all DNS answers on every connection, disables proxies, rejects redirects and has a thirty-second deadline. Use the actual regional S3 origin, not a redirecting website URL; keep HTTPS/TLS verification enabled. This is the verifier's policy, not a guarantee that PBM uses the same outbound sandbox. See [security](../security.md#s3-verifier-outbound-policy) and [installation settings](../install.md#required-secrets-and-generated-settings).
 
