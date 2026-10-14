@@ -459,8 +459,6 @@ func (f *elasticFixture) assertBackupsDeleted(before map[string]api.Backup) {
 	for name := range before {
 		f.s.expect(nil, 404)(f.s.client.GetBackup(f.s.ctx, f.name, name, &api.GetBackupParams{Namespace: f.s.namespace}))
 	}
-	if len(f.backupInventory()) != 0 {
-		f.s.t.Fatal("deleted cluster still has backup records")
-	}
+	f.s.expect(nil, 404)(f.s.client.ListBackups(f.s.ctx, f.name, &api.ListBackupsParams{Namespace: f.s.namespace}))
 	f.s.snapshot("backups-deleted", map[string]interface{}{"recordsRemoved": len(before), "status404": true, "inventoryEmpty": true})
 }

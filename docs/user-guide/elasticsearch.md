@@ -10,7 +10,7 @@ Before creating a cluster, [install and authenticate](../install.md), select its
 
 ## Verification status
 
-A single-node Elasticsearch 9.5.5 cluster formed on Zerops, passed production bootstrap checks and turned green. Unit and Docker integration coverage exists, but the full live three-node/component matrix is **not yet verified**; formation alone does not establish scaling, rolling maintenance, component delivery or snapshot recovery end to end.
+Live Zerops checks have exercised a three-node Elasticsearch 9.5.4 Stack with Kibana, Logstash and APM, verified HTTPS and access controls, monitoring, rolling restart, member replacement, same-cluster snapshot restore, a single-node snapshot clone, rolling patch upgrade to 9.5.5, 3→4→3 scaling with cleared exclusions, retained-volume/backup suspension and resume, and final cluster/backup-record deletion. A dedicated-master smoke also formed three master-only and two data nodes with exact proof data. Docker integration tests cover rendered TLS/file-realm/keystore configuration and real security/snapshot APIs. These are functional checks on disposable data, not production load, failure-domain isolation or durability guarantees.
 
 ## Topologies and presets
 
