@@ -45,6 +45,71 @@ func TestUsageExitCodesAndOfflineCompletion(t *testing.T) {
 	}
 }
 
+func TestFlagValidationExitCodes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/clusters/demo" {
+			t.Errorf("invalid flags submitted a request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"name":"demo","spec":{}}`)
+	}))
+	defer server.Close()
+	cases := [][]string{
+		{"health", "--output", "bogus"},
+		{"health", "--server", "not-a-url"},
+		{"health", "--context", "missing"},
+		{"health", "--cookie", "invalid"},
+		{"clusters", "create"},
+		{"clusters", "scale", "demo", "--component", "invalid"},
+		{"clusters", "scale", "demo"},
+		{"clusters", "upgrade", "demo"},
+		{"clusters", "raise-fcv", "demo"},
+		{"backups", "create", "demo", "--type", "invalid"},
+		{"backups", "create", "demo"},
+		{"restores", "create", "demo"},
+		{"restores", "create", "demo", "--backup", "base", "--time", "2026-01-01T00:00:00Z"},
+		{"restores", "create", "demo", "--time", "invalid"},
+		{"rbac", "can"},
+		{"storages", "create"},
+		{"namespaces", "create"},
+		{"namespaces", "create", "--token-file", "-"},
+		{"namespaces", "rotate-token", "demo"},
+		{"namespaces", "update", "demo"},
+		{"events", "list", "--order", "invalid"},
+	}
+	for _, flags := range [][]string{
+		{"--topology", "invalid"},
+		{"--cpu-mode", "invalid"},
+		{"--members", "0"},
+		{"--tls-mode", "invalid"},
+		{"--from-backup", "base"},
+		{"--source-cluster", "source", "--from-pitr", "invalid"},
+		{"--schedule", "invalid"},
+		{"--schedule", "daily=invalid"},
+		{"--schedule", "daily=0 1 * * *,invalid"},
+		{"--schedule", "daily=0 1 * * *,type=invalid"},
+		{"--schedule", "daily=0 1 * * *,retain=0"},
+		{"--schedule", "daily=0 1 * * *,other=value"},
+		{"--schedule", "daily=0 1 * * *"},
+	} {
+		cases = append(cases, append([]string{"clusters", "create", "demo", "--version", "8.0"}, flags...))
+	}
+	for _, shards := range []string{"0", "129"} {
+		cases = append(cases,
+			[]string{"clusters", "create", "demo", "--version", "8.0", "--topology", "sharded", "--shards", shards},
+			[]string{"clusters", "scale", "demo", "--shards", shards},
+		)
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			code, out, stderr := runCLI(t, server.URL, "test-token\n", false, args...)
+			if code != 2 || out != "" || !strings.Contains(stderr, "Usage:") {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, out, stderr)
+			}
+		})
+	}
+}
+
 func TestTableNumbersUseDecimalNotation(t *testing.T) {
 	for _, tt := range []struct {
 		value any

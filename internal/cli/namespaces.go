@@ -33,7 +33,7 @@ func (a *app) namespaceBody(cmd *cobra.Command, op string) (any, error) {
 	case "createNamespace", "rotateNamespaceToken":
 		path, _ := cmd.Flags().GetString("token-file")
 		if path == "" {
-			return nil, fmt.Errorf("--token-file is required ('-' reads stdin)")
+			return nil, usageError("--token-file is required ('-' reads stdin)")
 		}
 		var data []byte
 		var err error
@@ -54,7 +54,7 @@ func (a *app) namespaceBody(cmd *cobra.Command, op string) (any, error) {
 			name, _ := cmd.Flags().GetString("name")
 			project, _ := cmd.Flags().GetString("project-id")
 			if name == "" || project == "" {
-				return nil, fmt.Errorf("--name and --project-id are required")
+				return nil, usageError("--name and --project-id are required")
 			}
 			description, _ := cmd.Flags().GetString("description")
 			body["name"], body["projectId"], body["description"] = name, project, description
@@ -62,7 +62,7 @@ func (a *app) namespaceBody(cmd *cobra.Command, op string) (any, error) {
 		return body, nil
 	case "updateNamespace":
 		if !cmd.Flags().Changed("description") {
-			return nil, fmt.Errorf("--description is required")
+			return nil, usageError("--description is required")
 		}
 		description, _ := cmd.Flags().GetString("description")
 		return map[string]any{"description": description}, nil
