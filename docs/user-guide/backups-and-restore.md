@@ -189,6 +189,90 @@ karactl backups list demo
 
 For a live cluster, deletion is asynchronous and observes PBM inventory absence before removing the record. PBM backup deletion is not reversible. Review PITR dependencies first. Cluster deletion removes owned backup/PITR history unless `--keep-backups` is explicitly selected; `--keep-volumes` is a separate choice.
 
+### Recover when cluster deletion stays pending
+
+Deletion is server-side reconciliation, not a foreground CLI job. A wait timeout
+or lost HTTP reply does not undo it. Do not recreate the same cluster name,
+manually erase its Karakoram state, or delete database volumes just to make the
+inventory disappear.
+
+1. Inspect the cluster and the accepted deletion operation in the **same
+   namespace**, then inspect recent events:
+
+   ```sh
+   karactl -n default clusters get demo -o json
+   karactl -n default clusters status demo
+   karactl -n default operations cluster demo
+   karactl -n default events list --cluster demo
+   # Use the ID returned by deletion or found in the cluster's operations.
+   karactl operations get OPERATION_ID -o json
+   ```
+
+   Read phase, message, conditions, operation target and event diagnostics rather
+   than treating `Deleting` as progress by itself. The deletion response exposes
+   its Operation and `Karakoram-Operation-Id` header. If a client lost the
+   response, find the operation through the cluster operation list; do not
+   initiate unrelated recovery work. Use API event pagination (`nextCursor`) or
+   newest-first `order=desc` when investigating a long history.
+
+2. Repair the specific prerequisite: an unavailable namespace needs a valid
+   project token/connected relay; failed S3 cleanup needs the recorded bucket,
+   prefix and write/delete credentials; a blocked Zerops process needs platform
+   diagnosis. For an unformed cluster, PBM may never have become reachable:
+   inspect the failed cleanup step instead of waiting for database readiness
+   after deletion has begun. The control plane retries transient platform
+   failures with backoff; let an already-running platform process finish before
+   retrying the mutation.
+
+3. After repairing the cause, observe the existing operation with
+   `karactl operations wait OPERATION_ID`. If deletion failed or the original
+   request was not accepted, repeat deletion **with the same intentional
+   retention choices** and follow the returned operation:
+
+   ```sh
+   # Destructive retry: removes volumes and owned backups.
+   karactl -n default clusters delete demo --wait
+   ```
+
+   Do not repeatedly submit DELETE while a deletion operation is still active.
+   Check whether the cluster is already absent before retrying after response
+   loss. A missing cluster is not proof that every orphaned volume is gone.
+
+4. Decide retention before deleting, not as a blind workaround for failed
+   cleanup. To suspend a cluster while keeping both live data and recovery
+   objects, use:
+
+   ```sh
+   karactl -n default clusters delete demo --keep-volumes --keep-backups --wait
+   # Only a completed retained-volume suspension can be resumed.
+   karactl -n default clusters resume demo --wait
+   ```
+
+   `--keep-volumes` retains volume identity/secrets and results in `Suspended`;
+   `--keep-backups` separately preserves backup objects/records. Neither can
+   recover data already deleted or reverse a submitted platform deletion.
+   Backup records marked Failed are not usable recovery bases. Keep the storage
+   registered until retained records have been dealt with.
+
+5. Inspect **Settings → Orphaned volumes** or
+   `karactl -n default orphaned-volumes list -o json`. An orphan record means the
+   runtime was removed but Zerops refused the volume deletion. Karakoram retries
+   automatically; the retained disk can still consume capacity and incur charges.
+   Manual removal requires access to the **database namespace's Zerops project**
+   outside Karakoram: delete the recorded volume in the Zerops GUI or run
+   `zcli service delete <hostname>` with zcli authenticated for that project.
+   Confirm the recorded service ID and that no runtime needs the volume before
+   removing it. If Zerops still refuses deletion, give its support the volume
+   service ID and failing delete Process ID. Karakoram cannot bypass platform
+   mount/process restrictions.
+
+After deletion completes, check cluster absence (or `Suspended` if retaining
+volumes), retained backup inventory and the orphan inventory separately. See
+[orphan cleanup and retry timing](../operations.md#orphaned-platform-volumes)
+and [troubleshooting](../operations.md#troubleshooting-by-symptom). Do not remove
+the namespace token/relay until owned-resource cleanup is complete.
+
+
 ### Retained backups after full cluster deletion
 
 Deleting volumes with `--keep-backups` removes the cluster resource, but preserves backup records, immutable snapshot provenance and protected recovery identities. Continue using the original cluster name **and namespace** with the backup API/CLI; permissions remain `backups` read/delete on **`<source namespace>/<source cluster>`**, not the destination or storage:

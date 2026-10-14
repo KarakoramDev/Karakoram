@@ -179,6 +179,16 @@ The in-process janitor runs while the control plane is running and keeps retryin
 
 For manual cleanup later, delete the volume in the **Zerops GUI** or run **`zcli service delete <hostname>`** once Zerops accepts deletion. If the refusal persists, report the recorded **service ID** (`serviceId`) and **failing delete Process ID** (`lastProcessId`) to Zerops support. When the hostname is gone, the janitor drops the record on its next attempt; no manual Karakoram state edit is needed.
 
+**Manual cleanup is an external prerequisite.** Karakoram's orphaned-volume
+API/CLI and Settings page only list diagnostic records; they have no manual
+force-delete action. The automatic janitor submits ordinary Zerops deletion
+requests with service-ID ownership checks, but cannot override a platform mount
+or process refusal. An operator needs separate Zerops project permissions (and,
+for the CLI route, an authenticated zcli) to resolve that refusal or remove the
+volume. This separation prevents an inventory action from bypassing platform
+data-safety checks. Use the original namespace's project, not necessarily the
+project hosting Karakoram.
+
 Re-creating a cluster or member with the same name skips the orphaned hostname and allocates a new member index. Allocation also skips runtime/volume hostnames already held by existing Zerops services rather than reusing or deleting them. See [resource naming](adr/0009-resource-naming.md) and the [platform limitation](limitations.md#control-plane-and-platform-operations).
 
 ## Control-plane state backup and recovery

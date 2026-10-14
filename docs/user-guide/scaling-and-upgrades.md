@@ -78,6 +78,60 @@ karactl clusters status demo
 
 FCV uses the major form (`8.0`), not the package version (`8.0.32-14`). The operation checks observed/deployed component majors and uses confirmation for 7.0+. Raising FCV is a compatibility/rollback boundary: do not assume redeploying an old binary is a supported downgrade after it. Karakoram does not offer an arbitrary engine rollback command; follow the target engine's supported recovery process and use tested backups when necessary.
 
+### Cancel and recover a stuck FCV request
+
+An FCV request must use major form such as `8.0`, never `8.0.32-14`, and match
+the observed deployed engine major. A validation error is not an accepted
+operation: fix the reported field before submitting again. For an already
+accepted request that is stuck or was made with the wrong target:
+
+1. Inspect the operation and deployed state, selecting the database namespace:
+
+   ```sh
+   karactl -n default operations cluster demo
+   karactl operations get OPERATION_ID -o json
+   karactl -n default clusters status demo
+   karactl -n default clusters members demo
+   karactl -n default events list --cluster demo
+   ```
+
+   Use actual observed member versions/FCV, not only the desired version. A
+   binary upgrade in progress must finish before an FCV promotion can succeed.
+
+2. Cancel the wrong request using **`POST /api/v1/operations/{id}/cancel`**.
+   With the installation origin and bearer token loaded as described in the
+   [curl bootstrap](api.md#copyable-curl-bootstrap):
+
+   ```sh
+   OPERATION_ID='the-operation-id'
+   curl --fail-with-body --silent --show-error -X POST \
+     -H "Authorization: Bearer $KARAKORAM_TOKEN" \
+     "$SERVER/api/v1/operations/$OPERATION_ID/cancel"
+   karactl operations get "$OPERATION_ID" -o json
+   ```
+
+   The response is a tracking Operation (202). Observe it until terminal
+   `Cancelled`, `Failed` or `Succeeded`; cancellation is not rollback and cannot
+   lower an FCV that MongoDB already applied. A 409 `invalid_state` means the
+   operation cannot be cancelled in its current state: read its phase/message
+   and resolve the reported prerequisite rather than submitting competing work.
+
+3. Once the old operation is terminal, the cluster is healthy, and every relevant
+   component is deployed on the intended major, re-read FCV. If it is already
+   correct, no promotion is needed. Otherwise submit the **major-form** target:
+
+   ```sh
+   karactl -n default clusters raise-fcv demo --version 8.0 --wait
+   karactl -n default clusters status demo
+   ```
+
+   Substitute the major actually deployed on your cluster. Do not patch a newer
+   desired binary version merely to make an invalid FCV target look plausible,
+   manually edit operation records, or assume retained old FCV makes binary
+   downgrade supported. If native FCV change failed partway, preserve diagnostics
+   and use MongoDB's supported recovery procedure before retrying.
+
+
 ## Rolling restart and overrides
 
 ```sh
