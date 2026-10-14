@@ -6,7 +6,7 @@ Karakoram accounts/policies authorize the **control plane**; MongoDB users/roles
 
 ## Application users and custom roles
 
-In a cluster's **Users** tab, create application identities scoped to their authentication database and role references. For example, submit this API-shaped file to grant a workload read/write access only to `appdb`:
+In a cluster's **Users** tab, create application identities scoped to their authentication database and role references. For example, save this API-shaped file as `app-user.yaml` to grant a workload read/write access only to `appdb`:
 
 ```yaml
 username: appwriter
@@ -127,6 +127,116 @@ project**, not necessarily the control-plane project. The relay carries
 management only and is not an application connection endpoint; workloads need
 network access to the database project or deliberate public TCP exposure.
 Credential authorization is on `cluster-credentials, read, prod/orders`.
+
+### Connect an application user with TLS
+
+This recipe uses the scoped `appwriter@appdb` user above, not the revealed
+administrative account. Keep the cluster at `requireTLS` and wait for **Ready**
+with healthy members and matching desired/observed generations before connecting.
+You need `karactl` configured for your installation, `jq`, `mongosh`, and Python 3
+with PyMongo installed (`python3 -m pip install pymongo` in your application's
+environment).
+
+**Private hostnames resolve only inside the selected namespace's Zerops
+project.** Run the client commands from an application service in that project.
+The simplest way to follow the complete recipe is to run it there with an
+authenticated `karactl`. You can instead create the user/export connection
+material on your workstation, then securely transfer `ca.pem`, the password-free
+host list and the application password to the application service. A successful
+public control-plane login does not make private database DNS reachable from
+your workstation. For outside-project access, first read
+[public exposure and discovery](#public-exposure-and-discovery).
+
+1. Create the application user from `app-user.yaml`, capturing the generated
+   password rather than copying an administrative credential:
+
+   ```sh
+   # Select the namespace containing the database; use it on every command.
+   NAMESPACE=default
+   CLUSTER=demo
+   APP_PASSWORD=$(karactl -n "$NAMESPACE" db-users create "$CLUSTER" \
+     -f app-user.yaml -o json | jq -er .generatedPassword)
+   ```
+
+   Store this one-time password in a secret manager. If the user already exists,
+   load its saved password instead of creating it again; GET cannot recover it.
+   Keep shell tracing disabled and do not commit secrets or credential-bearing
+   URIs.
+
+2. Export the public cluster CA as a real multiline PEM file:
+
+   ```sh
+   karactl -n "$NAMESPACE" clusters ca "$CLUSTER" > ca.pem
+   ```
+
+   The JSON alternative uses the top-level `caCertificate` field:
+
+   ```sh
+   karactl -n "$NAMESPACE" clusters connection "$CLUSTER" --reveal -o json \
+     | jq -r .caCertificate > ca.pem
+   ```
+
+   Or use the API directly, with the installation origin and a Karakoram bearer
+   token loaded securely:
+
+   ```sh
+   curl --fail-with-body --silent --show-error \
+     -H "Authorization: Bearer $KARAKORAM_TOKEN" \
+     "$KARAKORAM_SERVER/api/v1/clusters/$CLUSTER/connection?namespace=$NAMESPACE" \
+     | jq -r .caCertificate > ca.pem
+   ```
+
+   Both paths require `cluster-credentials:read`. Connection reveal also returns
+   administrative secrets: do not retain its full JSON in logs or application
+   configuration. Do not copy a human-readable table cell into a PEM file.
+
+3. Read only the password-free connection summary, URL-encode the application
+   password, and build an application URI:
+
+   ```sh
+   SUMMARY=$(karactl -n "$NAMESPACE" clusters connection "$CLUSTER" --reveal -o json \
+     | jq -c .connection)
+   MONGO_HOSTS=$(printf '%s' "$SUMMARY" | jq -er '.hosts | join(",")')
+   REPLICA_SET=$(printf '%s' "$SUMMARY" | jq -r '.replicaSet // empty')
+   ENCODED_PASSWORD=$(printf '%s' "$APP_PASSWORD" | jq -sRr @uri)
+   URI_OPTIONS='authSource=appdb&tls=true'
+   if [ -n "$REPLICA_SET" ]; then
+     URI_OPTIONS="$URI_OPTIONS&replicaSet=$REPLICA_SET"
+   fi
+   export MONGODB_URI="mongodb://appwriter:$ENCODED_PASSWORD@$MONGO_HOSTS/appdb?$URI_OPTIONS"
+   ```
+
+   `.connection.hosts` contains private replica-set members or, for sharding,
+   mongos routers. The replica-set summary supplies `replicaSet` (`rs0`);
+   sharded summaries omit it, so the same recipe does not add that option for
+   mongos. `authSource=appdb` matches where this user was created, not `admin`.
+   Treat `MONGODB_URI` as a secret.
+
+4. From the application service in the database project, verify a TLS-authenticated
+   write with mongosh:
+
+   ```sh
+   mongosh "$MONGODB_URI" --tls --tlsCAFile ca.pem \
+     --eval 'db.orders.insertOne({example: "tls connection"}); db.orders.findOne()'
+   ```
+
+5. Connect from PyMongo using the same CA and application identity:
+
+   ```python
+   import os
+   from pymongo import MongoClient
+
+   with MongoClient(os.environ["MONGODB_URI"], tls=True, tlsCAFile="ca.pem") as client:
+       client.admin.command("ping")
+       print(client.appdb.orders.find_one())
+   ```
+
+   Keep CA/hostname verification enabled. DNS failures mean the client is not
+   resolving the project's private hosts; authentication failures require
+   checking the saved application password, `authSource` and role grants. A TLS
+   trust error requires the CA for this cluster, not an insecure verification
+   flag. Replica-set public seed connectivity alone does not establish working
+   external discovery/failover; see the caveat below.
 
 ## Public exposure and discovery
 
