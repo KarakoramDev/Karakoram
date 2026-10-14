@@ -58,6 +58,7 @@ var OperationRBAC = map[string]RBACRule{
 	"getHealth":              {Resource: "", Action: "", ObjectParam: "", Public: true},
 	"getMemberLogs":          {Resource: "monitoring", Action: "read", ObjectParam: "cluster", Public: false},
 	"getNamespace":           {Resource: "namespaces", Action: "read", ObjectParam: "namespace", Public: false},
+	"getOpenAPISpec":         {Resource: "", Action: "", ObjectParam: "", Public: true},
 	"getOperation":           {Resource: "operations", Action: "read", ObjectParam: "*", Public: false},
 	"getPITRWindow":          {Resource: "backups", Action: "read", ObjectParam: "cluster", Public: false},
 	"getPermissions":         {Resource: "rbac", Action: "read", ObjectParam: "*", Public: false},

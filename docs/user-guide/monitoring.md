@@ -52,6 +52,8 @@ The public endpoint is **`GET /metrics` at the installation root**, not `/api/v1
 
 Without a `namespace` query parameter the endpoint includes all authorized namespaces. Set `?namespace=<name>` to restrict the scrape to one namespace.
 
+A signed-in browser's `karakoram_access` cookie also authenticates this read-only endpoint, with the same monitoring permissions and filtering. Bearer tokens are recommended for Prometheus and other unattended scrapers; do not copy expiring browser cookies into scraper configuration.
+
 ```yaml
 scrape_configs:
   - job_name: karakoram
@@ -105,5 +107,22 @@ Use `rate(karakoram_opcounters_total[5m])` for operation throughput in Prometheu
 - **Remote scrape/config pull failed:** inspect [relay health](namespaces.md#relay-health), public-origin reachability and namespace-qualified agent routing. Relay platform readiness proves only its private listener, not the tunnel; do not disable CA/hostname verification.
 - **PBM up but no backups:** the metric indicates a supervised process only; inspect PBM registration and backup/error records.
 - **Memory near bound:** RSS excludes other processes; inspect Zerops allocation/runtime logs before concluding the complete container fits.
+
+## Event streams
+
+`GET /api/v1/events/stream` sends stored event categories, normally `Normal`,
+`Warning` or `Audit`, in `event:`. Lifecycle details such as `OperationFailed`
+are in the JSON `reason`; `type=Warning` filters warning events, whereas
+`type=operation.updated` is not a lifecycle filter. Example:
+
+```text
+id: 42
+event: Warning
+data: {"id":42,"cluster":"demo","type":"Warning","reason":"OperationFailed","message":"Backup failed","createdAt":"2026-01-01T00:00:00Z"}
+
+```
+
+Use persisted operations/status for authoritative progress and preserve the SSE
+ID and filters when reconnecting. See the [API event contract](api.md#pagination-and-events).
 
 See [operations](../operations.md), [RBAC](rbac-and-auth.md) and [backups/PITR](backups-and-restore.md).

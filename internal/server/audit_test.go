@@ -52,7 +52,7 @@ func TestAuditClusterDeleteCookieTokenAndOIDC(t *testing.T) {
 				}
 				r.Header.Set(auth.CSRFHeader, *session.CsrfToken)
 				w := httptest.NewRecorder()
-				s.Handler().ServeHTTP(w, r)
+				testHandler(s).ServeHTTP(w, r)
 				if w.Code != 202 {
 					t.Fatal(w.Code, w.Body.String())
 				}
@@ -66,7 +66,7 @@ func TestAuditClusterDeleteCookieTokenAndOIDC(t *testing.T) {
 				}
 				expected = p.Actor()
 				w := httptest.NewRecorder()
-				s.Handler().ServeHTTP(w, r)
+				testHandler(s).ServeHTTP(w, r)
 				if w.Code != 202 {
 					t.Fatal(w.Code, w.Body.String())
 				}
@@ -229,7 +229,7 @@ func TestAuditStreamVisibility(t *testing.T) {
 			cancel()
 		}
 	}
-	_ = s.stream(ctx).serve(w)
+	_ = testStream(s, ctx, w)
 	if strings.Contains(w.Body.String(), "private audit") || !strings.Contains(w.Body.String(), "public sentinel") {
 		t.Fatal("stream exposed audit or omitted cluster event")
 	}
@@ -353,7 +353,7 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 			cancel()
 		}
 	}
-	_ = s.stream(streamCtx).serve(writer)
+	_ = testStream(s, streamCtx, writer)
 	body := writer.Body.String()
 	if strings.Contains(body, "hidden-") || strings.Contains(body, "visible-namespace") || !strings.Contains(body, `"message":"visible-cluster"`) {
 		t.Fatal("stream leaks unauthorized audit or ignores composed filters")

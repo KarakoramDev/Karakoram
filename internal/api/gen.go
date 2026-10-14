@@ -169,9 +169,9 @@ const (
 
 // Defines values for ProviderVersionStatus.
 const (
-	Deprecated  ProviderVersionStatus = "deprecated"
-	Supported   ProviderVersionStatus = "supported"
-	Unavailable ProviderVersionStatus = "unavailable"
+	ProviderVersionStatusDeprecated  ProviderVersionStatus = "deprecated"
+	ProviderVersionStatusSupported   ProviderVersionStatus = "supported"
+	ProviderVersionStatusUnavailable ProviderVersionStatus = "unavailable"
 )
 
 // Defines values for RelayStatusPhase.
@@ -402,12 +402,14 @@ type BackupList struct {
 // BackupSchedule defines model for BackupSchedule.
 type BackupSchedule struct {
 	// Cron Five-field cron expression, evaluated in UTC.
-	Cron        string             `json:"cron"`
-	Enabled     bool               `json:"enabled"`
-	Name        string             `json:"name"`
-	RetainCount int                `json:"retainCount"`
-	Storage     string             `json:"storage"`
-	Type        BackupScheduleType `json:"type"`
+	Cron        string `json:"cron"`
+	Enabled     bool   `json:"enabled"`
+	Name        string `json:"name"`
+	RetainCount int    `json:"retainCount"`
+
+	// Storage Optional override; when omitted, use backup.storage.
+	Storage *string            `json:"storage,omitempty"`
+	Type    BackupScheduleType `json:"type"`
 }
 
 // BackupScheduleType defines model for BackupSchedule.Type.
@@ -798,7 +800,7 @@ type Event struct {
 	// Target Non-secret resource identifier, such as a cluster name, account name or token ID.
 	Target *string `json:"target,omitempty"`
 
-	// Type Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim.
+	// Type Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types.
 	Type string `json:"type"`
 }
 
@@ -1285,7 +1287,7 @@ type S3Credentials struct {
 	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
 }
 
-// Session Sets HttpOnly Secure SameSite=Strict karakoram_session and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON.
+// Session Sets HttpOnly Secure SameSite=Strict karakoram_access and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON.
 type Session struct {
 	Account   CurrentUser `json:"account"`
 	CsrfToken *string     `json:"csrfToken,omitempty"`
@@ -1427,11 +1429,15 @@ type UpgradePath struct {
 type Version struct {
 	ApiVersion string  `json:"apiVersion"`
 	BuildDate  *string `json:"buildDate,omitempty"`
-	Commit     *string `json:"commit,omitempty"`
+
+	// Commit Source revision supplied at build time, or "unknown (built without git metadata)".
+	Commit *string `json:"commit,omitempty"`
 
 	// OidcEnabled Public discovery flag for the login UI; no issuer or client secret is exposed.
-	OidcEnabled *bool  `json:"oidcEnabled,omitempty"`
-	Version     string `json:"version"`
+	OidcEnabled *bool `json:"oidcEnabled,omitempty"`
+
+	// Version Release/source label, or "unknown (built without git metadata)" when not supplied.
+	Version string `json:"version"`
 }
 
 // CSRF defines model for CSRF.
@@ -1490,6 +1496,12 @@ type NotFound = Error
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type Unauthorized = Error
+
+// Unavailable Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type Unavailable = Error
 
 // UnprocessableEntity Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -1603,7 +1615,7 @@ type OidcCallbackParams struct {
 
 // OidcLoginParams defines parameters for OidcLogin.
 type OidcLoginParams struct {
-	// ReturnTo Same-origin relative UI path after login; external URLs are rejected.
+	// ReturnTo Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
 	ReturnTo *string `form:"returnTo,omitempty" json:"returnTo,omitempty"`
 }
 
@@ -2116,10 +2128,12 @@ type ListEventsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Order Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order.
-	Order       *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
-	Cluster     *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Type        *ListEventsParamsType  `form:"type,omitempty" json:"type,omitempty"`
-	OperationId *string                `form:"operationId,omitempty" json:"operationId,omitempty"`
+	Order   *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+	Cluster *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
+
+	// Type Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type.
+	Type        *ListEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
+	OperationId *string               `form:"operationId,omitempty" json:"operationId,omitempty"`
 
 	// Actor Exact actor identity, including token name and ID when applicable.
 	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
@@ -2142,7 +2156,9 @@ type ListEventsParamsResource string
 
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
-	Cluster     *string                 `form:"cluster,omitempty" json:"cluster,omitempty"`
+	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
+
+	// Type Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type.
 	Type        *StreamEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string                 `form:"operationId,omitempty" json:"operationId,omitempty"`
 
@@ -2693,6 +2709,9 @@ type ServerInterface interface {
 	// Revalidate a namespace token and project
 	// (POST /namespaces/{namespace}/validate)
 	ValidateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params ValidateNamespaceParams)
+	// Download this server's authoritative OpenAPI specification
+	// (GET /openapi.yaml)
+	GetOpenAPISpec(w http.ResponseWriter, r *http.Request)
 	// List readable durable operations
 	// (GET /operations)
 	ListOperations(w http.ResponseWriter, r *http.Request, params ListOperationsParams)
@@ -6862,6 +6881,8 @@ func (siw *ServerInterfaceWrapper) GetPrometheusMetrics(w http.ResponseWriter, r
 
 	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
 
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
 	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
@@ -7248,6 +7269,20 @@ func (siw *ServerInterfaceWrapper) ValidateNamespace(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ValidateNamespace(w, r, namespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOpenAPISpec operation middleware
+func (siw *ServerInterfaceWrapper) GetOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOpenAPISpec(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7867,6 +7902,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/namespaces/{namespace}", wrapper.UpdateNamespace)
 	m.HandleFunc("PUT "+options.BaseURL+"/namespaces/{namespace}/token", wrapper.RotateNamespaceToken)
 	m.HandleFunc("POST "+options.BaseURL+"/namespaces/{namespace}/validate", wrapper.ValidateNamespace)
+	m.HandleFunc("GET "+options.BaseURL+"/openapi.yaml", wrapper.GetOpenAPISpec)
 	m.HandleFunc("GET "+options.BaseURL+"/operations", wrapper.ListOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/operations/{operation}", wrapper.GetOperation)
 	m.HandleFunc("GET "+options.BaseURL+"/orphaned-volumes", wrapper.ListOrphanedVolumes)
@@ -7894,6 +7930,8 @@ type InternalErrorJSONResponse Error
 type NotFoundJSONResponse Error
 
 type UnauthorizedJSONResponse Error
+
+type UnavailableJSONResponse Error
 
 type UnprocessableEntityJSONResponse Error
 
@@ -8843,6 +8881,24 @@ func (response Login409JSONResponse) VisitLoginResponse(w http.ResponseWriter) e
 	return json.NewEncoder(w).Encode(response)
 }
 
+type Login413JSONResponse Error
+
+func (response Login413JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type Login415JSONResponse Error
+
+func (response Login415JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type Login429ResponseHeaders struct {
 	RetryAfter int
 }
@@ -9087,6 +9143,15 @@ func (response OidcCallback500JSONResponse) VisitOidcCallbackResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type OidcCallback503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response OidcCallback503JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type OidcLoginRequestObject struct {
 	Params OidcLoginParams
 }
@@ -9159,6 +9224,15 @@ type OidcLogin500JSONResponse struct{ InternalErrorJSONResponse }
 func (response OidcLogin500JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type OidcLogin503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response OidcLogin503JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9380,6 +9454,17 @@ type CreateBackupStorage409JSONResponse struct{ ConflictJSONResponse }
 func (response CreateBackupStorage409JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateBackupStorage422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateBackupStorage422JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9819,6 +9904,17 @@ type CreateCluster409JSONResponse struct{ ConflictJSONResponse }
 func (response CreateCluster409JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateCluster422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateCluster422JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -10665,6 +10761,15 @@ type GetClusterConnection500JSONResponse struct{ InternalErrorJSONResponse }
 func (response GetClusterConnection500JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetClusterConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetClusterConnection503JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -13518,6 +13623,38 @@ func (response ValidateNamespace500JSONResponse) VisitValidateNamespaceResponse(
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetOpenAPISpecRequestObject struct {
+}
+
+type GetOpenAPISpecResponseObject interface {
+	VisitGetOpenAPISpecResponse(w http.ResponseWriter) error
+}
+
+type GetOpenAPISpec200ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetOpenAPISpec200ApplicationyamlResponse struct {
+	Body          io.Reader
+	Headers       GetOpenAPISpec200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetOpenAPISpec200ApplicationyamlResponse) VisitGetOpenAPISpecResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/yaml")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
 type ListOperationsRequestObject struct {
 	Params ListOperationsParams
 }
@@ -14580,6 +14717,9 @@ type StrictServerInterface interface {
 	// Revalidate a namespace token and project
 	// (POST /namespaces/{namespace}/validate)
 	ValidateNamespace(ctx context.Context, request ValidateNamespaceRequestObject) (ValidateNamespaceResponseObject, error)
+	// Download this server's authoritative OpenAPI specification
+	// (GET /openapi.yaml)
+	GetOpenAPISpec(ctx context.Context, request GetOpenAPISpecRequestObject) (GetOpenAPISpecResponseObject, error)
 	// List readable durable operations
 	// (GET /operations)
 	ListOperations(ctx context.Context, request ListOperationsRequestObject) (ListOperationsResponseObject, error)
@@ -16844,6 +16984,30 @@ func (sh *strictHandler) ValidateNamespace(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ValidateNamespaceResponseObject); ok {
 		if err := validResponse.VisitValidateNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOpenAPISpec operation middleware
+func (sh *strictHandler) GetOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+	var request GetOpenAPISpecRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOpenAPISpec(ctx, request.(GetOpenAPISpecRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOpenAPISpec")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOpenAPISpecResponseObject); ok {
+		if err := validResponse.VisitGetOpenAPISpecResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

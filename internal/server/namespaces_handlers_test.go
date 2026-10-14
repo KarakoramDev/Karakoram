@@ -41,6 +41,7 @@ func namespaceServer(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	c := domain.Cluster{Namespace: "dev", Name: "prod", Spec: domain.ClusterSpec{Provider: "fake", Version: "8.0", Topology: domain.Topology{Type: "replicaSet"}}, Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
+	(&fakeProvider{}).ApplyDefaults(&c.Spec)
 	if err := s.Store.CreateCluster(t.Context(), &c); err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +281,7 @@ func TestNamespaceEventStreamFiltersPerEvent(t *testing.T) {
 			cancel()
 		}
 	}
-	if err := s.stream(ctx).serve(w); err != nil && !errors.Is(err, context.Canceled) {
+	if err := testStream(s, ctx, w); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
 	body := w.Body.String()

@@ -268,12 +268,12 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		enabled := cfg.IssuerURL != ""
-		return ok(api.Version{Version: version.Version, Commit: &version.Commit, BuildDate: &version.BuildDate, ApiVersion: "v1", OidcEnabled: &enabled})
+		return ok(api.Version{Version: version.VersionLabel(), Commit: ptr(version.CommitLabel()), BuildDate: &version.BuildDate, ApiVersion: "v1", OidcEnabled: &enabled})
 	}
 	return fail(500, "internal_error", "Unknown identity operation")
 }
 func (s *Server) settingsAPI(c auth.OIDCSettings) api.Settings {
 	enabled := c.IssuerURL != ""
 	redirect := strings.TrimRight(s.PublicURL, "/") + "/api/v1/auth/oidc/callback"
-	return api.Settings{Oidc: api.OIDCConfig{Enabled: enabled, IssuerURL: &c.IssuerURL, ClientId: &c.ClientID, GroupsClaim: &c.GroupsClaim, Scopes: &c.Scopes, RedirectURL: &redirect}}
+	return api.Settings{Oidc: api.OIDCConfig{Enabled: enabled, IssuerURL: &c.IssuerURL, ClientId: &c.ClientID, GroupsClaim: &c.GroupsClaim, Scopes: ptr(nonNil(c.Scopes)), RedirectURL: &redirect}}
 }

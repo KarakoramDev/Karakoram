@@ -81,10 +81,16 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
 For a Git-connected service, redeploy the chosen revision using Zerops's normal
 Git deployment controls. `buildFromGit` in the installer is a one-time source
 import, not an automatically configured GitHub webhook integration. You may
-always use the local push path instead. To set build metadata, provide
-`KARAKORAM_VERSION` in the build environment; otherwise the pipeline labels a
-source deployment `dev`. Version, commit (when Git metadata is available), and
-UTC build date use the same linker fields as the Makefile.
+always use the local push path instead. Before a `--no-git` push, provide both
+`KARAKORAM_VERSION` and `KARAKORAM_COMMIT` in the **remote build environment**;
+the archive has no `.git`, so Git discovery cannot identify that revision.
+Use a release tag/source label and the checkout's `git rev-parse HEAD` output.
+These are build-time inputs, not settings that can be changed in a running
+binary. The pipeline gives the commit override priority and records a UTC build
+date using the same linker fields as `make build`. See
+[build provenance](install.md#build-provenance-for-local-pushes) for local builds.
+Public `/api/v1/version` and the UI explicitly report
+`unknown (built without git metadata)` when provenance was not supplied.
 
 The pipeline rebuilds the UI and static Go binary and deploys the executable to
 the existing runtime. `deploy.temporaryShutdown: true` stops the old container

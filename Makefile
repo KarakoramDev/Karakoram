@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
-VERSION ?= dev
-COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
+VERSION ?= $(or $(KARAKORAM_VERSION),dev)
+COMMIT ?= $(or $(KARAKORAM_COMMIT),$(shell git rev-parse --short HEAD 2>/dev/null || printf unknown))
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -s -w -X github.com/KarakoramDev/Karakoram/internal/version.Version=$(VERSION) -X github.com/KarakoramDev/Karakoram/internal/version.Commit=$(COMMIT) -X github.com/KarakoramDev/Karakoram/internal/version.BuildDate=$(BUILD_DATE)
 UI_TAGS = $(if $(wildcard internal/ui/dist/index.html),-tags ui,)

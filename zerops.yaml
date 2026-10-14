@@ -11,7 +11,7 @@ zerops:
           CGO_ENABLED=0 go build -tags ui -trimpath
           -ldflags "-s -w
           -X github.com/KarakoramDev/Karakoram/internal/version.Version=${KARAKORAM_VERSION:-dev}
-          -X github.com/KarakoramDev/Karakoram/internal/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || printf unknown)
+          -X github.com/KarakoramDev/Karakoram/internal/version.Commit=${KARAKORAM_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || printf unknown)}
           -X github.com/KarakoramDev/Karakoram/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           -o karakoram ./cmd/karakoram
       deployFiles: [karakoram]

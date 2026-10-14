@@ -31,6 +31,31 @@ Go 1.22; the module's `go 1.24.0` directive downloads the required toolchain
 through Go's automatic toolchain selection. The build needs outbound access to
 the Go toolchain/module registries and npm.
 
+### Build provenance for local pushes
+
+`zcli service push --no-git` uploads source without `.git`. Set **build-time**
+`KARAKORAM_VERSION` (a release tag or source-build label) and
+`KARAKORAM_COMMIT` (the full or abbreviated source revision) in the Zerops
+service's build environment **before pushing**. Setting runtime variables after
+deployment cannot change the metadata linked into the executable. Obtain the
+values from your checkout, for example `git describe --tags --always` and
+`git rev-parse HEAD`, then configure those literal values for the remote build.
+The pipeline prefers `KARAKORAM_COMMIT` over Git discovery, so these values work
+even when the remote source archive has no Git metadata.
+
+Local builds accept the same names:
+
+```sh
+KARAKORAM_VERSION="$(git describe --tags --always)" \
+KARAKORAM_COMMIT="$(git rev-parse HEAD)" make build
+```
+
+Explicit Make `VERSION`/`COMMIT` overrides still work. Check public
+`GET /api/v1/version` after deployment: `version`, `commit`, `buildDate` and
+`apiVersion` identify the executable. If metadata is absent, the API and UI say
+**`unknown (built without git metadata)`** instead of implying an identifiable
+release. The UTC build timestamp is still recorded by the Zerops pipeline.
+
 ## Required secrets and generated settings
 
 | Setting | Source and purpose |

@@ -1018,7 +1018,20 @@ export type paths = {
         };
         /**
          * Stream authorization-filtered events with durable replay
-         * @description SSE frames: id is the durable event ID, event is the event type, data is a JSON Event. Replays after the requested cursor then streams live events. Heartbeat comment frames keep the connection alive. Authorization uses events:read or audit:read on namespace/cluster for cluster entries, audit:read on the namespace for namespace-level entries, and audit:read on "*" for global entries. Namespace, actor and resource filters compose; actor and resource filters are exact matches.
+         * @description SSE frames use the durable ID as id, the stored type (normally Normal,
+         *     Warning or Audit) verbatim as event, and a JSON Event as data. Lifecycle
+         *     details are in reason, not dot-qualified event names. For example:
+         *
+         *     id: 42
+         *     event: Warning
+         *     data: {"id":42,"cluster":"demo","type":"Warning","reason":"OperationFailed","message":"Backup failed","createdAt":"2026-01-01T00:00:00Z"}
+         *
+         *     Replays after the requested cursor then streams live events. Heartbeat
+         *     comments keep the connection alive. Authorization uses events:read or
+         *     audit:read on namespace/cluster for cluster entries, audit:read on the
+         *     namespace for namespace-level entries, and audit:read on "*" for global
+         *     entries. Namespace, actor and resource filters compose; actor and resource
+         *     filters are exact matches.
          */
         get: operations["streamEvents"];
         put?: never;
@@ -1058,7 +1071,7 @@ export type paths = {
         };
         /**
          * Scrape Prometheus-compatible cluster metrics
-         * @description Root endpoint requires a bearer API token and monitoring read authorization; cookie sessions are not accepted by scrapers. Only authorized clusters are included.
+         * @description Root endpoint accepts bearer API tokens (recommended for scrapers) or a signed-in browser cookie session. Both require monitoring read authorization; only authorized clusters are included.
          */
         get: operations["getPrometheusMetrics"];
         put?: never;
@@ -1158,6 +1171,23 @@ export type paths = {
         put?: never;
         /** Revalidate a namespace token and project */
         post: operations["validateNamespace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/openapi.yaml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download this server's authoritative OpenAPI specification */
+        get: operations["getOpenAPISpec"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1449,7 +1479,8 @@ export type components = {
             enabled: boolean;
             name: string;
             retainCount: number;
-            storage: string;
+            /** @description Optional override; when omitted, use backup.storage. */
+            storage?: string;
             /** @enum {string} */
             type: "logical" | "physical";
         };
@@ -1753,7 +1784,7 @@ export type components = {
             resource?: string;
             /** @description Non-secret resource identifier, such as a cluster name, account name or token ID. */
             target?: string;
-            /** @description Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim. */
+            /** @description Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types. */
             type: string;
         };
         EventList: {
@@ -2131,7 +2162,7 @@ export type components = {
             /** Format: password */
             secretAccessKey: string;
         };
-        /** @description Sets HttpOnly Secure SameSite=Strict karakoram_session and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON. */
+        /** @description Sets HttpOnly Secure SameSite=Strict karakoram_access and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON. */
         Session: {
             account: components["schemas"]["CurrentUser"];
             readonly csrfToken: string;
@@ -2248,9 +2279,11 @@ export type components = {
         Version: {
             apiVersion: string;
             buildDate?: string;
+            /** @description Source revision supplied at build time, or "unknown (built without git metadata)". */
             commit?: string;
             /** @description Public discovery flag for the login UI; no issuer or client secret is exposed. */
             readonly oidcEnabled: boolean;
+            /** @description Release/source label, or "unknown (built without git metadata)" when not supplied. */
             version: string;
         };
     };
@@ -2307,6 +2340,15 @@ export type components = {
         };
         /** @description Missing, expired or invalid authentication. */
         Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Authentication or namespace runtime is temporarily unavailable. */
+        Unavailable: {
             headers: {
                 [name: string]: unknown;
             };
@@ -2790,6 +2832,24 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            /** @description Request exceeds the 2 MiB body limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Login requires application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Login temporarily throttled. Wait for the indicated delay before retrying. */
             429: {
                 headers: {
@@ -2881,7 +2941,7 @@ export interface operations {
             /** @description Successful response. */
             302: {
                 headers: {
-                    /** @description Validated same-origin post-login UI path. */
+                    /** @description Installation root after successful authentication. */
                     Location?: string;
                     /** @description Session and rotating refresh cookies. */
                     "Set-Cookie"?: string;
@@ -2895,12 +2955,13 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     oidcLogin: {
         parameters: {
             query?: {
-                /** @description Same-origin relative UI path after login; external URLs are rejected. */
+                /** @description Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root. */
                 returnTo?: string;
             };
             header?: never;
@@ -2924,6 +2985,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     refreshSession: {
@@ -3035,6 +3097,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3251,6 +3314,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3689,6 +3753,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listDatabaseRoles: {
@@ -4743,6 +4808,7 @@ export interface operations {
                 order?: "asc" | "desc";
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
                 resource?: "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
             header?: never;
@@ -4781,6 +4847,7 @@ export interface operations {
                 operationId?: string;
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
                 resource?: "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
             header?: {
@@ -5098,6 +5165,29 @@ export interface operations {
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getOpenAPISpec: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Embedded OpenAPI YAML; publicly cacheable for five minutes. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "public, max-age=300";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/yaml": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
         };
     };
     listOperations: {

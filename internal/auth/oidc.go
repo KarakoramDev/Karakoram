@@ -142,23 +142,39 @@ type oidcState struct {
 	ClientID   string `json:"ci"`
 }
 
+// oidcHTTPError uses the same secret-safe error envelope as the management API.
+func oidcHTTPError(w http.ResponseWriter, message string, status int) {
+	code := "internal_error"
+	if status == http.StatusUnauthorized {
+		code = "unauthorized"
+	} else if status == http.StatusServiceUnavailable {
+		code = "unavailable"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}{code, message})
+}
+
 // OIDCLoginHandler sends state, nonce and S256 PKCE to the verified issuer. The
 // signed ten-minute state cookie uses Lax only for the top-level SSO callback;
 // local access/refresh/CSRF cookies remain SameSite Strict.
 func (s *Service) OIDCLoginHandler(w http.ResponseWriter, r *http.Request) {
 	cfg, _, config, err := s.oidcClient(r.Context())
 	if err != nil {
-		http.Error(w, "OIDC unavailable", http.StatusServiceUnavailable)
+		oidcHTTPError(w, "OIDC unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	state, err := random()
 	if err != nil {
-		http.Error(w, "authentication unavailable", 500)
+		oidcHTTPError(w, "authentication unavailable", 500)
 		return
 	}
 	nonce, err := random()
 	if err != nil {
-		http.Error(w, "authentication unavailable", 500)
+		oidcHTTPError(w, "authentication unavailable", 500)
 		return
 	}
 	verifier := oauth2.GenerateVerifier()
@@ -166,7 +182,7 @@ func (s *Service) OIDCLoginHandler(w http.ResponseWriter, r *http.Request) {
 	claims := oidcState{RegisteredClaims: jwt.RegisteredClaims{Issuer: s.o.Issuer, Audience: jwt.ClaimStrings{"karakoram-oidc-state"}, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute))}, State: state, Nonce: nonce, Verifier: verifier, OIDCIssuer: cfg.IssuerURL, ClientID: cfg.ClientID}
 	signed, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims).SignedString(s.key)
 	if err != nil {
-		http.Error(w, "authentication unavailable", 500)
+		oidcHTTPError(w, "authentication unavailable", 500)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: oidcCookie, Value: signed, Path: "/api/v1/auth/oidc", HttpOnly: true, Secure: s.o.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 600, Expires: now.Add(10 * time.Minute)})
@@ -182,11 +198,11 @@ func (s *Service) OIDCCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	fail := func() {
 		if auditPrincipal.Account != "" {
 			if err := s.auditAuthentication(r.Context(), auditPrincipal, "LoginFailed", "OIDC login failed"); err != nil {
-				http.Error(w, "authentication unavailable", http.StatusServiceUnavailable)
+				oidcHTTPError(w, "authentication unavailable", http.StatusServiceUnavailable)
 				return
 			}
 		}
-		http.Error(w, "OIDC authentication failed", http.StatusUnauthorized)
+		oidcHTTPError(w, "OIDC authentication failed", http.StatusUnauthorized)
 	}
 	c, err := r.Cookie(oidcCookie)
 	if err != nil {

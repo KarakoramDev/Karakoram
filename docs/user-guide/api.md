@@ -4,7 +4,7 @@
 
 The public contract is [api/openapi.yaml](../../api/openapi.yaml), **OpenAPI 3.0.3**. Most routes are rooted at `/api/v1`. `GET /healthz` and authenticated `GET /metrics` are installation-root exceptions. The root WebSocket `/relay/v1/connect` is **not in OpenAPI** and authenticates inside the tunnel with relay mTLS, not API tokens/cookies. The private `/internal/agent/v1` and node `/v1` protocols are not public management APIs.
 
-The UI and `karactl` use this contract. Download the running installation's specification from **`GET /api/v1/openapi.yaml`**, or use the checked-in file for a specific release. Karakoram does not currently ship an interactive Swagger UI.
+The UI and `karactl` use this contract. Download the exact specification embedded in your running server at **`GET /api/v1/openapi.yaml`** (public, no authentication, `Content-Type: application/yaml`, cacheable for five minutes). Karakoram does not ship an interactive Swagger UI. Use the running server's document when generating a client for that deployment.
 
 ## Authentication
 
@@ -92,6 +92,13 @@ error bodies and fail on HTTP errors. Use an account with the resource permissio
 needed by your automation; a token does not bypass its owner's RBAC. Revoke it
 when no longer needed with `DELETE /api/v1/api-tokens/{id}` and bearer
 authentication.
+
+Root **`GET /metrics`** accepts both bearer API tokens and signed-in browser cookie sessions, with identical per-cluster `monitoring:read` filtering. Use a dedicated, least-privilege bearer token for unattended scrapers; browser sessions expire and rotate and are not suitable scraper credentials.
+
+OIDC login/callback failures return the same JSON `{code, message}` envelope as other API errors. A disabled or temporarily unavailable issuer returns 503; invalid callback state or credentials returns 401.
+
+The current OIDC flow redirects successful authentication to the installation
+root; the accepted `returnTo` hint does not currently change that redirect.
 
 ## Authorization and credential reveal
 
@@ -217,15 +224,30 @@ operation before deciding what to do; changing keys is not a recovery shortcut.
 
 Paginated lists return `{items: [...], nextCursor?: "..."}`. `limit` defaults to **100** and lists accept **1–500**. Pass the returned opaque `cursor` to the same list with the same filters. Authorization filtering happens before pagination. Stop when `nextCursor` is absent. Lists are not a snapshot transaction across multiple requests; concurrent changes can affect pagination. Providers and specialized status/window/log responses have their own schemas.
 
+Successful responses follow the published schemas: collections and present array fields are `[]`, never `null`; optional identifiers are omitted when absent. Cluster fields that do not apply, such as an unconfigured PITR span, are omitted rather than reported as zero. Handler tests validate HTTP responses against this document under ordinary `go test ./...`.
+
+Backup schedules may omit `storage` to inherit the cluster's primary
+`spec.backup.storage`; successful responses omit that optional override when it
+was not configured rather than returning `storage: ""`.
+
 `GET /api/v1/events` accepts optional string filters **`actor`** and **`resource`**, alongside `namespace`, `cluster`, `type`, `operationId`, `limit` and `cursor`. Actor/resource filters are exact, case-sensitive matches, combined with each other and all other filters (AND); omitted/empty values do not restrict that field. For example, `/api/v1/events?namespace=dev&actor=alice&resource=namespaces` selects that actor's namespace-management activity in dev. URL-encode actor strings containing spaces or token metadata. Filters never grant permission: cluster events require **`events:read` or `audit:read`** on `<namespace>/<cluster>`; namespace-level audit requires **`audit:read`** on `<namespace>`; global installation audit requires it on `*`. Keep the same filters when advancing a cursor.
 
 Event list/stream `type` accepts **Normal, Warning, Audit**; lifecycle action names such as `OperationFailed` are `reason`, not `type`. Unknown types/resources return **400** and list accepted values. The `cluster` filter on events and operations must be 2–12 lowercase letters/digits starting with a letter. An explicit `resource=auth` (or another unreadable resource category) returns **403** naming the missing `audit/read` permission. Unfiltered queries continue to silently omit unauthorized records, so a successful empty list does not prove there are no installation-wide audit records.
 
 Events are listed oldest-first by default, so following `nextCursor` replays history forward. Pass **`order=desc`** to start from the newest event instead; its `nextCursor` then continues to older events. The Events pages in the web UI use `order=desc`.
 
-Events expose `actor`, optional string **`resource`**/**`target`**, and `namespace` for namespace-scoped activity (omitted for global installation activity). Cluster-management events use `resource: "clusters"`, `target` equal to the cluster name, and retain `cluster`. Orphan-volume janitor events retain the original namespace/cluster but use resource `orphaned-volumes` and target equal to the volume hostname. Namespace-management and relay lifecycle records leave `cluster` empty, retain `namespace` and use resource `namespaces`. Other audit records use the affected resource (for example `accounts`, `rbac`, `settings`, `api-tokens`, `auth` or `backup-storages`) and target. Older events may omit attribution/resource/target. Every successful mutation and credential reveal is audited using safe action metadata, not request/response bodies or secrets. Login/OIDC success/failure and logout have authentication-owned events. All audit activity shares the durable event history and indefinite retention described in [security](../security.md#audit-attribution-and-durability).
+Events expose `actor`, optional string **`resource`**/**`target`**, and `namespace` for namespace-scoped activity (omitted for global installation activity). Cluster-management events use `resource: "clusters"`, `target` equal to the cluster name, and retain `cluster`. Orphan-volume janitor events retain the original namespace/cluster but use resource `orphaned-volumes` and target equal to the volume hostname. Namespace-management and relay lifecycle records omit `cluster`, retain `namespace` and use resource `namespaces`. Other audit records use the affected resource (for example `accounts`, `rbac`, `settings`, `api-tokens`, `auth` or `backup-storages`) and target. Older events may omit attribution/resource/target. Every successful mutation and credential reveal is audited using safe action metadata, not request/response bodies or secrets. Login/OIDC success/failure and logout have authentication-owned events. All audit activity shares the durable event history and indefinite retention described in [security](../security.md#audit-attribution-and-durability).
 
-`GET /api/v1/events/stream` uses `text/event-stream`, numeric event IDs and named event types **Normal**, **Warning** and **Audit**. Lifecycle action names such as `OperationFailed` appear in `reason`; `type=operation.updated` is not a supported filter. Reconnect with `Last-Event-ID`, or an explicit `cursor` query (which takes precedence), to replay authorized durable events. Filters include namespace/cluster/type/operationId and the same exact, case-sensitive actor/resource intersections as the list; preserve all filters on reconnect. SSE live delivery can reconnect; it does not replace persisted operation/status queries.
+`GET /api/v1/events/stream` uses `text/event-stream`, numeric event IDs and the **stored event type verbatim** as the frame's `event:` field. Current severity/audit categories are **`Normal`**, **`Warning`** and **`Audit`**; lifecycle detail is in **`reason`** (for example `ClusterReady`, `OperationFailed`, `LoginSucceeded`). The list and stream **`type` filter matches these stored values**, not `cluster.updated` or `operation.updated`. Clients must tolerate additional stored types. Reconnect with `Last-Event-ID`, or an explicit `cursor` query (which takes precedence), to replay authorized durable events. Filters include namespace/cluster/type/operationId and the same exact, case-sensitive actor/resource intersections as the list; preserve all filters on reconnect. SSE live delivery does not replace persisted operation/status queries.
+
+```text
+id: 42
+event: Warning
+data: {"id":42,"namespace":"default","cluster":"demo","type":"Warning","reason":"OperationFailed","message":"Backup failed","createdAt":"2026-01-01T00:00:00Z"}
+
+```
+
+For warning history use `/api/v1/events?type=Warning`; for a live warning stream use `/api/v1/events/stream?type=Warning`. Global audit events omit `cluster` (and omit `namespace` when installation-wide).
 
 SSE also sends **comment frames**: an immediately flushed `: connected` comment with approximately **16 KiB of random-base64 padding**, followed by similarly padded `: heartbeat` comments every **fifteen seconds**. Three precomputed heartbeat variants are cycled to resist gzip dictionary compression without generating fresh padding for each heartbeat. A correct SSE parser ignores comments; they carry no event ID/data and must **not** advance the replay cursor or become application events. The stream sets `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`, rather than the ordinary sensitive-JSON `no-store` policy. Preserve these headers through additional proxies. Authentication/permissions are revalidated while draining durable events and on heartbeats; a closed/expired session stream should reauthenticate and reconnect using its last received event ID.
 
@@ -415,3 +437,18 @@ make openapi-check
 Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, then the owned RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation uses the lockfile's openapi-typescript and writes `ui/src/api/schema.d.ts`. Do not hand-edit generated artifacts.
 
 `make openapi-check` regenerates/diffs the Go API/client/RBAC paths; it is not a TypeScript-drift or live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.
+
+For consumers whose YAML parser limits alias expansion, maintainers can normalize
+the source without changing its OpenAPI meaning:
+
+```sh
+go run ./internal/tools/specnoalias
+go run ./internal/tools/specnoalias -check
+go generate ./api/...
+(cd ui && npm run gen:api)
+```
+
+The tool preserves existing `#/components/responses/...` references rather than
+copying error schemas. `-check` exits nonzero if any YAML anchor or alias remains,
+so it can guard a normalized specification in CI.
+

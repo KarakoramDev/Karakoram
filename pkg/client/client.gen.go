@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/oapi-codegen/runtime"
 )
 
@@ -169,9 +171,9 @@ const (
 
 // Defines values for ProviderVersionStatus.
 const (
-	Deprecated  ProviderVersionStatus = "deprecated"
-	Supported   ProviderVersionStatus = "supported"
-	Unavailable ProviderVersionStatus = "unavailable"
+	ProviderVersionStatusDeprecated  ProviderVersionStatus = "deprecated"
+	ProviderVersionStatusSupported   ProviderVersionStatus = "supported"
+	ProviderVersionStatusUnavailable ProviderVersionStatus = "unavailable"
 )
 
 // Defines values for RelayStatusPhase.
@@ -402,12 +404,14 @@ type BackupList struct {
 // BackupSchedule defines model for BackupSchedule.
 type BackupSchedule struct {
 	// Cron Five-field cron expression, evaluated in UTC.
-	Cron        string             `json:"cron"`
-	Enabled     bool               `json:"enabled"`
-	Name        string             `json:"name"`
-	RetainCount int                `json:"retainCount"`
-	Storage     string             `json:"storage"`
-	Type        BackupScheduleType `json:"type"`
+	Cron        string `json:"cron"`
+	Enabled     bool   `json:"enabled"`
+	Name        string `json:"name"`
+	RetainCount int    `json:"retainCount"`
+
+	// Storage Optional override; when omitted, use backup.storage.
+	Storage *string            `json:"storage,omitempty"`
+	Type    BackupScheduleType `json:"type"`
 }
 
 // BackupScheduleType defines model for BackupSchedule.Type.
@@ -798,7 +802,7 @@ type Event struct {
 	// Target Non-secret resource identifier, such as a cluster name, account name or token ID.
 	Target *string `json:"target,omitempty"`
 
-	// Type Stable event prefixes for UI invalidation: cluster.updated, backup.updated, restore.updated, operation.updated, member.updated; event is a generic activity event. Additional dot-qualified types may be introduced; clients should invalidate by the prefix and cluster, not reject unknown event types. SSE event: uses this value verbatim.
+	// Type Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types.
 	Type string `json:"type"`
 }
 
@@ -1285,7 +1289,7 @@ type S3Credentials struct {
 	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
 }
 
-// Session Sets HttpOnly Secure SameSite=Strict karakoram_session and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON.
+// Session Sets HttpOnly Secure SameSite=Strict karakoram_access and rotating karakoram_refresh cookies. No access JWT or refresh secret is exposed in JSON.
 type Session struct {
 	Account   CurrentUser `json:"account"`
 	CsrfToken *string     `json:"csrfToken,omitempty"`
@@ -1427,11 +1431,15 @@ type UpgradePath struct {
 type Version struct {
 	ApiVersion string  `json:"apiVersion"`
 	BuildDate  *string `json:"buildDate,omitempty"`
-	Commit     *string `json:"commit,omitempty"`
+
+	// Commit Source revision supplied at build time, or "unknown (built without git metadata)".
+	Commit *string `json:"commit,omitempty"`
 
 	// OidcEnabled Public discovery flag for the login UI; no issuer or client secret is exposed.
-	OidcEnabled *bool  `json:"oidcEnabled,omitempty"`
-	Version     string `json:"version"`
+	OidcEnabled *bool `json:"oidcEnabled,omitempty"`
+
+	// Version Release/source label, or "unknown (built without git metadata)" when not supplied.
+	Version string `json:"version"`
 }
 
 // CSRF defines model for CSRF.
@@ -1490,6 +1498,12 @@ type NotFound = Error
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type Unauthorized = Error
+
+// Unavailable Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type Unavailable = Error
 
 // UnprocessableEntity Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -1603,7 +1617,7 @@ type OidcCallbackParams struct {
 
 // OidcLoginParams defines parameters for OidcLogin.
 type OidcLoginParams struct {
-	// ReturnTo Same-origin relative UI path after login; external URLs are rejected.
+	// ReturnTo Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
 	ReturnTo *string `form:"returnTo,omitempty" json:"returnTo,omitempty"`
 }
 
@@ -2116,10 +2130,12 @@ type ListEventsParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Order Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order.
-	Order       *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
-	Cluster     *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Type        *ListEventsParamsType  `form:"type,omitempty" json:"type,omitempty"`
-	OperationId *string                `form:"operationId,omitempty" json:"operationId,omitempty"`
+	Order   *ListEventsParamsOrder `form:"order,omitempty" json:"order,omitempty"`
+	Cluster *string                `form:"cluster,omitempty" json:"cluster,omitempty"`
+
+	// Type Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type.
+	Type        *ListEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
+	OperationId *string               `form:"operationId,omitempty" json:"operationId,omitempty"`
 
 	// Actor Exact actor identity, including token name and ID when applicable.
 	Actor *string `form:"actor,omitempty" json:"actor,omitempty"`
@@ -2142,7 +2158,9 @@ type ListEventsParamsResource string
 
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
-	Cluster     *string                 `form:"cluster,omitempty" json:"cluster,omitempty"`
+	Cluster *string `form:"cluster,omitempty" json:"cluster,omitempty"`
+
+	// Type Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type.
 	Type        *StreamEventsParamsType `form:"type,omitempty" json:"type,omitempty"`
 	OperationId *string                 `form:"operationId,omitempty" json:"operationId,omitempty"`
 
@@ -2809,6 +2827,9 @@ type ClientInterface interface {
 
 	// ValidateNamespace request
 	ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOpenAPISpec request
+	GetOpenAPISpec(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOperations request
 	ListOperations(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4031,6 +4052,18 @@ func (c *Client) RotateNamespaceToken(ctx context.Context, namespace NamespacePa
 
 func (c *Client) ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewValidateNamespaceRequest(c.Server, namespace, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOpenAPISpec(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOpenAPISpecRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -9684,6 +9717,33 @@ func NewValidateNamespaceRequest(server string, namespace NamespacePath, params 
 	return req, nil
 }
 
+// NewGetOpenAPISpecRequest generates requests for GetOpenAPISpec
+func NewGetOpenAPISpecRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/openapi.yaml")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListOperationsRequest generates requests for ListOperations
 func NewListOperationsRequest(server string, params *ListOperationsParams) (*http.Request, error) {
 	var err error
@@ -10531,6 +10591,9 @@ type ClientWithResponsesInterface interface {
 	// ValidateNamespaceWithResponse request
 	ValidateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*ValidateNamespaceResponse, error)
 
+	// GetOpenAPISpecWithResponse request
+	GetOpenAPISpecWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOpenAPISpecResponse, error)
+
 	// ListOperationsWithResponse request
 	ListOperationsWithResponse(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*ListOperationsResponse, error)
 
@@ -10915,6 +10978,8 @@ type LoginResponse struct {
 	JSON403      *Forbidden
 	JSON404      *NotFound
 	JSON409      *Conflict
+	JSON413      *Error
+	JSON415      *Error
 	JSON429      *Error
 	JSON500      *InternalError
 }
@@ -10999,6 +11064,7 @@ type OidcCallbackResponse struct {
 	JSON404      *NotFound
 	JSON409      *Conflict
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -11026,6 +11092,7 @@ type OidcLoginResponse struct {
 	JSON404      *NotFound
 	JSON409      *Conflict
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -11109,6 +11176,7 @@ type CreateBackupStorageResponse struct {
 	JSON403      *Forbidden
 	JSON404      *NotFound
 	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
 
@@ -11276,6 +11344,7 @@ type CreateClusterResponse struct {
 	JSON403      *Forbidden
 	JSON404      *NotFound
 	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
 
@@ -11584,6 +11653,7 @@ type GetClusterConnectionResponse struct {
 	JSON404      *NotFound
 	JSON409      *Conflict
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -12680,6 +12750,28 @@ func (r ValidateNamespaceResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ValidateNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOpenAPISpecResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	YAML200      *map[string]interface{}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOpenAPISpecResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOpenAPISpecResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -13888,6 +13980,15 @@ func (c *ClientWithResponses) ValidateNamespaceWithResponse(ctx context.Context,
 	return ParseValidateNamespaceResponse(rsp)
 }
 
+// GetOpenAPISpecWithResponse request returning *GetOpenAPISpecResponse
+func (c *ClientWithResponses) GetOpenAPISpecWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOpenAPISpecResponse, error) {
+	rsp, err := c.GetOpenAPISpec(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOpenAPISpecResponse(rsp)
+}
+
 // ListOperationsWithResponse request returning *ListOperationsResponse
 func (c *ClientWithResponses) ListOperationsWithResponse(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*ListOperationsResponse, error) {
 	rsp, err := c.ListOperations(ctx, params, reqEditors...)
@@ -14864,6 +14965,20 @@ func ParseLoginResponse(rsp *http.Response) (*LoginResponse, error) {
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15068,6 +15183,13 @@ func ParseOidcCallbackResponse(rsp *http.Response) (*OidcCallbackResponse, error
 		}
 		response.JSON500 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -15128,6 +15250,13 @@ func ParseOidcLoginResponse(rsp *http.Response) (*OidcLoginResponse, error) {
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -15325,6 +15454,13 @@ func ParseCreateBackupStorageResponse(rsp *http.Response) (*CreateBackupStorageR
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15726,6 +15862,13 @@ func ParseCreateClusterResponse(rsp *http.Response) (*CreateClusterResponse, err
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16474,6 +16617,13 @@ func ParseGetClusterConnectionResponse(rsp *http.Response) (*GetClusterConnectio
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -19070,6 +19220,32 @@ func ParseValidateNamespaceResponse(rsp *http.Response) (*ValidateNamespaceRespo
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOpenAPISpecResponse parses an HTTP response from a GetOpenAPISpecWithResponse call
+func ParseGetOpenAPISpecResponse(rsp *http.Response) (*GetOpenAPISpecResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOpenAPISpecResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "yaml") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := yaml.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.YAML200 = &dest
 
 	}
 

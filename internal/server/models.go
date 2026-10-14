@@ -53,7 +53,7 @@ func specDomain(a api.ClusterSpec) domain.ClusterSpec {
 		if a.Backup.Schedules != nil {
 			s.Backup.Schedules = make([]domain.BackupSchedule, 0, len(*a.Backup.Schedules))
 			for _, b := range *a.Backup.Schedules {
-				s.Backup.Schedules = append(s.Backup.Schedules, domain.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: string(b.Type), Storage: b.Storage, RetainCount: b.RetainCount, Enabled: b.Enabled})
+				s.Backup.Schedules = append(s.Backup.Schedules, domain.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: string(b.Type), Storage: value(b.Storage), RetainCount: b.RetainCount, Enabled: b.Enabled})
 			}
 		}
 		if a.Backup.Pitr != nil {
@@ -74,8 +74,28 @@ func specDomain(a api.ClusterSpec) domain.ClusterSpec {
 	}
 	return s
 }
+
+// optionalString omits values that are absent, rather than inventing an empty
+// identifier in a successful response.
+func optionalString(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func nonNil[T any](v []T) []T {
+	if v == nil {
+		return []T{}
+	}
+	return v
+}
+
 func specAPI(s domain.ClusterSpec) api.ClusterSpec {
-	a := api.ClusterSpec{Provider: s.Provider, Version: s.Version, Topology: api.Topology{Type: api.TopologyType(s.Topology.Type)}, Components: api.Components{Engine: componentAPI(s.Components.Engine)}, EngineConfig: ptr(s.EngineConfig), Tls: &api.TLS{Mode: api.TLSMode(s.TLS.Mode), Ca: api.TLSCa(s.TLS.CA)}, Exposure: &api.Exposure{Public: s.Exposure.Public, IpType: ptr(api.ExposureIpType(s.Exposure.IPType)), Allowlist: &s.Exposure.Allowlist}, Monitoring: &api.MonitoringSpec{Enabled: s.Monitoring.Enabled}}
+	a := api.ClusterSpec{Provider: s.Provider, Version: s.Version, Topology: api.Topology{Type: api.TopologyType(s.Topology.Type)}, Components: api.Components{Engine: componentAPI(s.Components.Engine)}, EngineConfig: optionalString(s.EngineConfig), Tls: &api.TLS{Mode: api.TLSMode(s.TLS.Mode), Ca: api.TLSCa(s.TLS.CA)}, Exposure: &api.Exposure{Public: s.Exposure.Public, Allowlist: ptr(nonNil(s.Exposure.Allowlist))}, Monitoring: &api.MonitoringSpec{Enabled: s.Monitoring.Enabled}}
+	if s.Exposure.IPType != "" {
+		a.Exposure.IpType = ptr(api.ExposureIpType(s.Exposure.IPType))
+	}
 	if s.Topology.Type == "sharded" {
 		a.Topology.Shards = &s.Topology.Shards
 		a.Components.ConfigServer = ptr(componentAPI(s.Components.ConfigServer))
@@ -83,16 +103,22 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	}
 	schedules := make([]api.BackupSchedule, 0, len(s.Backup.Schedules))
 	for _, b := range s.Backup.Schedules {
-		schedules = append(schedules, api.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: api.BackupScheduleType(b.Type), Storage: b.Storage, RetainCount: b.RetainCount, Enabled: b.Enabled})
+		schedules = append(schedules, api.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: api.BackupScheduleType(b.Type), Storage: optionalString(b.Storage), RetainCount: b.RetainCount, Enabled: b.Enabled})
 	}
-	a.Backup = &api.BackupSpec{Storage: &s.Backup.Storage, Schedules: &schedules, Pitr: &api.PITRSpec{Enabled: s.Backup.PITR.Enabled, OplogSpanMinutes: &s.Backup.PITR.OplogSpanMinutes}}
+	a.Backup = &api.BackupSpec{Storage: optionalString(s.Backup.Storage), Schedules: &schedules}
+	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 {
+		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled}
+		if s.Backup.PITR.OplogSpanMinutes != 0 {
+			a.Backup.Pitr.OplogSpanMinutes = &s.Backup.PITR.OplogSpanMinutes
+		}
+	}
 	if s.DataSource != nil {
-		a.DataSource = &api.DataSource{Namespace: ptr(domain.NormalizedNamespace(s.DataSource.Namespace)), Cluster: s.DataSource.Cluster, Backup: &s.DataSource.Backup, PitrTime: s.DataSource.PITRTime}
+		a.DataSource = &api.DataSource{Namespace: ptr(domain.NormalizedNamespace(s.DataSource.Namespace)), Cluster: s.DataSource.Cluster, Backup: optionalString(s.DataSource.Backup), PitrTime: s.DataSource.PITRTime}
 	}
 	return a
 }
 func connectionAPI(c domain.Connection) api.ConnectionSummary {
-	return api.ConnectionSummary{Hosts: c.Hosts, ReplicaSet: &c.ReplicaSet, Uri: c.URI, PublicHosts: &c.PublicHosts}
+	return api.ConnectionSummary{Hosts: nonNil(c.Hosts), ReplicaSet: optionalString(c.ReplicaSet), Uri: c.URI, PublicHosts: ptr(nonNil(c.PublicHosts))}
 }
 func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api.Member {
 	usage := s.Monitoring.MemberUsage(cluster, m.Name)
@@ -145,12 +171,12 @@ func placementAPI(p domain.Placement) api.Placement {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		a.Groups = append(a.Groups, api.PlacementGroup{Name: n, Members: p.Groups[n]})
+		a.Groups = append(a.Groups, api.PlacementGroup{Name: n, Members: nonNil(p.Groups[n])})
 	}
 	return a
 }
 func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatus) api.ClusterStatus {
-	a := api.ClusterStatus{Phase: api.ClusterStatusPhase(status.Phase), Message: &status.Message, ObservedGeneration: status.ObservedGeneration, Version: &status.Version, Fcv: &status.FCV, Connection: ptr(connectionAPI(status.Connection)), Placement: ptr(placementAPI(status.Placement)), Conditions: []api.Condition{}, Members: []api.Member{}}
+	a := api.ClusterStatus{Phase: api.ClusterStatusPhase(status.Phase), Message: optionalString(status.Message), ObservedGeneration: status.ObservedGeneration, Version: optionalString(status.Version), Fcv: optionalString(status.FCV), Connection: ptr(connectionAPI(status.Connection)), Placement: ptr(placementAPI(status.Placement)), Conditions: []api.Condition{}, Members: []api.Member{}}
 	for _, c := range status.Conditions {
 		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: c.Message, LastTransitionTime: c.LastTransitionTime})
 	}
@@ -174,24 +200,17 @@ func operationAPI(o domain.Operation) api.Operation {
 	return api.Operation{Namespace: ptr(domain.NormalizedNamespace(o.Namespace)), Id: o.ID, Cluster: o.Cluster, Type: api.OperationType(o.Kind), Phase: api.OperationPhase(o.Phase), Message: &o.Message, Actor: &o.Actor, CreatedAt: o.CreatedAt, StartedAt: o.StartedAt, CompletedAt: o.CompletedAt}
 }
 func backupAPI(b domain.Backup) api.Backup {
-	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: &b.Schedule, Phase: api.BackupPhase(b.Phase), PbmName: &b.PBMName, StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: &b.Error}
+	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: optionalString(b.Schedule), Phase: api.BackupPhase(b.Phase), PbmName: optionalString(b.PBMName), StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: optionalString(b.Error)}
 }
 func restoreAPI(r domain.Restore) api.Restore {
-	source := api.RestoreSource{PitrTime: r.Source.PITRTime}
-	if r.Source.Backup != "" {
-		source.Backup = &r.Source.Backup
-	}
-	if r.Source.SourceCluster != "" {
-		source.SourceCluster = &r.Source.SourceCluster
-	}
-	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: source, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: &r.Error}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error)}
 }
 func eventAPI(e domain.Event) api.Event {
 	var namespace *string
 	if e.Namespace != "" {
 		namespace = &e.Namespace
 	}
-	return api.Event{Namespace: namespace, Id: e.ID, Cluster: &e.Cluster, OperationId: &e.Operation, Type: e.Type, Reason: &e.Reason, Message: e.Message, Actor: &e.Actor, Resource: &e.Resource, Target: &e.Target, CreatedAt: e.CreatedAt}
+	return api.Event{Namespace: namespace, Id: e.ID, Cluster: optionalString(e.Cluster), OperationId: optionalString(e.Operation), Type: e.Type, Reason: optionalString(e.Reason), Message: e.Message, Actor: optionalString(e.Actor), Resource: optionalString(e.Resource), Target: optionalString(e.Target), CreatedAt: e.CreatedAt}
 }
 func rolesDomain(a []api.RoleReference) []domain.RoleRef {
 	out := make([]domain.RoleRef, 0, len(a))
@@ -221,7 +240,7 @@ func privilegesDomain(a []api.Privilege) []domain.Privilege {
 func roleAPI(r domain.DatabaseRole) api.DatabaseRole {
 	a := api.DatabaseRole{Name: r.Name, Database: r.Database, Roles: rolesAPI(r.Roles), Privileges: []api.Privilege{}}
 	for _, p := range r.Privileges {
-		v := api.Privilege{Actions: p.Actions}
+		v := api.Privilege{Actions: nonNil(p.Actions)}
 		_ = json.Unmarshal(p.Resource, &v.Resource)
 		a.Privileges = append(a.Privileges, v)
 	}

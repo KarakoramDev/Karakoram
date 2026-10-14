@@ -104,6 +104,7 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"GetSettings", "GET", "/api/v1/settings", ""},
 		{"ReplaceSettings", "PUT", "/api/v1/settings", "{\"oidc\":{\"enabled\":false}}"},
 		{"GetVersion", "GET", "/api/v1/version", ""},
+		{"GetOpenAPISpec", "GET", "/api/v1/openapi.yaml", ""},
 	}
 	seen := map[string]bool{}
 	for _, route := range routes {
@@ -117,7 +118,7 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 			r.Header.Set("Authorization", "Bearer "+token)
 			r.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
-			s.Handler().ServeHTTP(w, r)
+			testHandler(s).ServeHTTP(w, r)
 			if w.Code == 501 || w.Code == 500 || strings.Contains(w.Body.String(), "Unknown ") {
 				t.Fatalf("missing handler: %d %s", w.Code, w.Body.String())
 			}
