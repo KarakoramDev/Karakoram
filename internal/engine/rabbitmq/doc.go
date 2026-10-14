@@ -33,6 +33,9 @@
 // allowing the retained Khepri majority to recover. Persistently mounted volumes
 // are handed to orphan-volume cleanup only after their runtime is absent and
 // their ownership is verified again.
+// Member versions come from the local broker's cluster_status observation, not
+// the agent's startup-cached version. A missing observed broker version blocks
+// readiness, including for a one-member definitions clone.
 //
 // Broker credentials, Erlang cookies, CA keys, leaf certificates and pending
 // password rotations exist only in SecretStore. Public AMQP requires an explicit

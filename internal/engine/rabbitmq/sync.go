@@ -81,7 +81,7 @@ func (p *Provider) healthy(ctx context.Context, rc *engine.Context, m *member) (
 	if err != nil {
 		return false, err
 	}
-	return slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && noProblems(b.Alarms) && noProblems(b.Partitions) && !b.Maintenance, nil
+	return b.Version != "" && slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && noProblems(b.Alarms) && noProblems(b.Partitions) && !b.Maintenance, nil
 }
 func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *internalState, m *member) error {
 	if err := verifyMemberServices(ctx, rc, m); err != nil {

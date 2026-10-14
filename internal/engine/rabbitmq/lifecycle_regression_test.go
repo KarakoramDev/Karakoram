@@ -39,6 +39,51 @@ func (a *lifecycleAgents) Dial(ctx context.Context, ref domain.ClusterRef, name 
 	return a.fakeAgents.Dial(ctx, ref, name)
 }
 
+func TestStatusUsesObservedBrokerVersion(t *testing.T) {
+	for _, cached := range []string{"", "4.3.5"} {
+		t.Run("agent-version-"+cached, func(t *testing.T) {
+			p, rc, _, a := setup(t)
+			rc.Cluster.Spec.Components.Engine.Replicas = 1
+			ready(t, p, rc)
+			// A newly booted definitions clone can cache an empty agent version
+			// while its local broker already reports a healthy running version.
+			a.broker("demom0").agentVersion = &cached
+			status, err := p.Status(context.Background(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.Phase != domain.PhaseReady || len(status.Members) != 1 {
+				t.Fatalf("single broker status: %+v", status)
+			}
+			m := status.Members[0]
+			if !m.Health || !m.Agent.Healthy || m.Role != "broker" || m.State != "RUNNING" || m.Version != "4.3.6" {
+				t.Fatalf("broker observation replaced by cached agent version: %+v", m)
+			}
+		})
+	}
+}
+
+func TestMissingBrokerVersionBlocksReadiness(t *testing.T) {
+	p, rc, _, a := setup(t)
+	rc.Cluster.Spec.Components.Engine.Replicas = 1
+	ready(t, p, rc)
+	broker := a.broker("demom0")
+	broker.version = ""
+	cached := "4.3.6"
+	broker.agentVersion = &cached
+	status, err := p.Status(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Phase != domain.PhaseDegraded || status.Members[0].Health || status.Members[0].Version != "" {
+		t.Fatalf("missing broker version published healthy readiness: %+v", status)
+	}
+	healthy, err := p.healthy(context.Background(), rc, state(t, rc).Members[0])
+	if err != nil || healthy {
+		t.Fatalf("missing broker version passed reconcile readiness: healthy=%v err=%v", healthy, err)
+	}
+}
+
 func TestStatusHealthyMajorityDuringBrokerShutdown(t *testing.T) {
 	for _, stopped := range []string{"process", "application", "unreachable"} {
 		t.Run(stopped, func(t *testing.T) {

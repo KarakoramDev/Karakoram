@@ -170,6 +170,15 @@ func TestRabbitMQAgent(t *testing.T) {
 			}
 			return nil
 		})
+		// Observe the actual local version before explicit bootstrap/join,
+		// including the one-broker startup used by definitions clones.
+		var observed rmqspec.StatusResponse
+		if err := client.Engine(ctx, "rabbitmq", "status", rmqspec.EmptyRequest{}, &observed); err != nil {
+			t.Fatal("startup broker status", err)
+		}
+		if observed.Version != "4.3.6" || observed.NodeName != "rabbit@"+member || !slices.Contains(observed.RunningNodes, observed.NodeName) {
+			t.Fatalf("startup broker version/membership: %+v", observed)
+		}
 		// Zerops runs readiness checks as root with an empty environment and the
 		// provider's explicit engine and data-directory arguments.
 		if out, err := exec.CommandContext(ctx, "docker", "exec", "-u", "0", name, "env", "-i", "/karakoram", "agent", "readiness", "--engine=rabbitmq", "--data-dir=/data").CombinedOutput(); err != nil {

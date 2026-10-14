@@ -198,16 +198,17 @@ type testClock struct{ at time.Time }
 func (c *testClock) Now() time.Time { return c.at }
 
 type fakeBroker struct {
-	running     bool
-	down        bool
-	joined      bool
-	critical    bool
-	maintenance bool
-	appStopped  bool
-	version     string
-	config      int64
-	alarms      json.RawMessage
-	partitions  json.RawMessage
+	running      bool
+	down         bool
+	joined       bool
+	critical     bool
+	maintenance  bool
+	appStopped   bool
+	version      string
+	agentVersion *string
+	config       int64
+	alarms       json.RawMessage
+	partitions   json.RawMessage
 }
 type fakeAgents struct {
 	t             *testing.T
@@ -276,7 +277,11 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if b.running {
 				state = "running"
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: b.version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}})
+			version := b.version
+			if b.agentVersion != nil {
+				version = *b.agentVersion
+			}
+			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}})
 		case "/v1/reload":
 			cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
 			if err != nil {

@@ -76,7 +76,6 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		st, e := p.agentStatus(ctx, rc, m.Name)
 		if e == nil {
 			ms.Agent = domain.AgentStatus{Healthy: running(st), ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
-			ms.Version = st.EngineVersion
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
 			ms.PlacementGroup = st.HostFingerprint
@@ -88,7 +87,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		}
 		b, e := p.brokerStatus(ctx, rc, m.Name)
 		if e == nil {
-			ms.Health = ms.Agent.Healthy && slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && !b.Maintenance
+			// The generic agent version is cached before the broker finishes
+			// starting; cluster_status observes the running local broker.
+			ms.Version = b.Version
+			ms.Health = ms.Agent.Healthy && b.Version != "" && slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && !b.Maintenance
 			ms.State = "RUNNING"
 			if !ms.Health {
 				ms.State = "DOWN"
