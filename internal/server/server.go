@@ -279,7 +279,7 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 				}
 			}
 		}
-		return next(ctx, w, r.WithContext(ctx), v)
+		return s.idempotent(next, id, ctx, w, r.WithContext(ctx), v)
 	}
 }
 
@@ -365,6 +365,11 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		var readable bool
+		r, readable = s.captureIdempotencyBody(w, r)
+		if !readable {
+			return
+		}
 		mux.ServeHTTP(w, r)
 		// The route pattern has no path values, query strings, cookies or credentials.
 		s.Logger.Info("HTTP request", "method", r.Method, "route", r.Pattern, "duration", time.Since(started))

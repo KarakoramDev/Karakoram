@@ -555,6 +555,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -563,6 +566,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -730,6 +734,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -738,6 +745,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -914,6 +922,7 @@ paths:
       x-karakoram-rbac: {resource: namespaces, action: create, object: '*'}
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -923,6 +932,9 @@ paths:
       responses:
         '201':
           description: Registered; relay deployment continues asynchronously.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1139,6 +1151,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1152,6 +1167,7 @@ paths:
         by the handler rather than route metadata.
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1202,6 +1218,9 @@ paths:
         '409': *id005
         '200':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1210,6 +1229,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1233,6 +1253,9 @@ paths:
         '409': *id005
         '200':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1241,6 +1264,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1750,6 +1774,8 @@ paths:
         '201':
           description: Successful response.
           headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
             Cache-Control:
               description: Generated credentials must not be cached.
               schema:
@@ -1764,6 +1790,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1905,6 +1932,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -1913,6 +1943,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2077,6 +2108,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -2085,6 +2119,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2225,6 +2260,9 @@ paths:
         '409': *id005
         '202':
           description: Accepted; track the returned operation.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -2239,6 +2277,7 @@ paths:
         handler rather than route metadata.
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2322,6 +2361,9 @@ paths:
         '409': *id005
         '201':
           description: Successful response.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
@@ -2330,6 +2372,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2828,6 +2871,24 @@ components:
         rotating HttpOnly karakoram_refresh cookie at /auth/refresh. X-Karakoram-CSRF
         is required on unsafe methods.
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Optional retry key scoped to the authenticated account or token identity,
+        method, route, namespace and path parameters. Retained for 24 hours after
+        a successful response. The same key and canonical JSON body replay the
+        original status, body and relevant headers, including one-time secrets
+        and Karakoram-Operation-Id when present. Different bodies conflict with
+        HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+        in-flight duplicates return 409 with reason invalid_state. Only 2xx
+        responses are retained. Use a fresh key for each new intended mutation.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: '^[!-~]+$'
     NamespaceQuery:
       name: namespace
       in: query
@@ -2875,6 +2936,12 @@ components:
       required: true
       description: Managed cluster name; the RBAC object is namespace/cluster.
       schema: *id007
+  headers:
+    IdempotentReplayed:
+      description: Present and true when the stored successful response was replayed.
+      schema:
+        type: boolean
+        enum: [true]
   responses:
     BadRequest:
       description: Invalid request, query, cursor, or resource configuration.
@@ -2902,8 +2969,11 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Conflict:
-      description: Conflicting resource state, unsafe topology change, unsupported
-        action, or unavailable replay cursor.
+      description: |
+        Conflicting resource state, unsafe topology change, unsupported action,
+        or unavailable replay cursor. On operations accepting Idempotency-Key,
+        details.field is Idempotency-Key and details.reason is conflict for a
+        different request body or invalid_state for an in-flight duplicate.
       content:
         application/json:
           schema:
@@ -3377,8 +3447,8 @@ components:
         secret:
           type: string
           readOnly: true
-          description: kk_ prefixed bearer token, returned exactly once by creation.
-            Store securely; later GETs cannot recover it.
+          description: kk_ prefixed bearer token, returned by creation and matching
+            Idempotency-Key replays within 24 hours. Store securely; later GETs cannot recover it.
       required:
       - token
       - secret
@@ -4109,7 +4179,7 @@ components:
       - roles
     CreatedDatabaseUser:
       type: object
-      description: Application user creation result. Any generated password is returned exactly once and never included in subsequent reads.
+      description: Application user creation result. Generated passwords are returned by creation and matching Idempotency-Key replays within 24 hours, never by subsequent reads.
       properties:
         username: *id006
         database: *id006
@@ -4120,14 +4190,14 @@ components:
         generatedPassword:
           type: string
           readOnly: true
-          description: Present only when password was omitted from the creation request and generated by the server. Display or store securely once; it cannot be retrieved again.
+          description: Present only when password was omitted and generated by the server. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
       required:
       - username
       - database
       - roles
     CreateDatabaseUserRequest:
       type: object
-      description: Omit password to have the server generate one and return it once in generatedPassword.
+      description: Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours.
       properties:
         username: *id006
         database: *id006

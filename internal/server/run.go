@@ -140,7 +140,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	defer cancel()
 	public.BaseContext = func(net.Listener) context.Context { return child }
 	internal.BaseContext = func(net.Listener) context.Context { return child }
-	results := make(chan error, 8)
+	results := make(chan error, 9)
 	var workers sync.WaitGroup
 	launch := func(run func() error) { workers.Add(1); go func() { defer workers.Done(); results <- run() }() }
 	launch(func() error { return public.Serve(publicListener) })
@@ -151,6 +151,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	launch(func() error { return schedules.Run(child) })
 	launch(func() error { return janitor.Run(child) })
 	launch(func() error { return collector.Run(child) })
+	launch(func() error { return server.runIdempotencyPurge(child) })
 	logger.Info("Karakoram server listening", "public", c.PublicListen, "internal", c.InternalListen)
 	var runErr error
 	select {

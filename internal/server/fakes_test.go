@@ -175,12 +175,17 @@ func (t *triggerSpy) Trigger(ref domain.ClusterRef) {
 }
 func testServer(t *testing.T) (*Server, *secrets.Sealer, string) {
 	t.Helper()
+	return testServerWithDatabase(t, filepath.Join(t.TempDir(), "test.db"))
+}
+
+func testServerWithDatabase(t *testing.T, path string) (*Server, *secrets.Sealer, string) {
+	t.Helper()
 	ctx := context.Background()
 	sealer, err := secrets.New(strings.Repeat("x", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"), sealer)
+	st, err := store.Open(path, sealer)
 	if err != nil {
 		t.Fatal(err)
 	}

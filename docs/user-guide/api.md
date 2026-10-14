@@ -155,6 +155,53 @@ Each Operation exposes its initiating `actor`. Desired-state writes persist attr
 
 Network disconnect or client wait timeout does not cancel server work. Do not submit a second restore simply because a reply was lost: node receipts may intentionally report an ambiguous initiation requiring observation/operator recovery. No cancel-every-operation endpoint or universal exactly-once mutation guarantee is supplied.
 
+## Safe retries with Idempotency-Key
+
+Send an optional `Idempotency-Key` header for API-token creation, cluster creation,
+cluster PUT/PATCH, backup and restore creation. Account, namespace, backup-storage,
+database-user and database-role creation also support it. Use a random, unique key
+for each intended mutation (for example a UUID); reuse that same key and body for
+network retries or double submissions. A key must contain **1–255 visible ASCII
+characters without spaces**. Requests without the header retain their usual behavior.
+
+Keys are scoped to the authenticated account (including its OIDC issuer), or the
+specific bearer token identity, plus method, route, namespace and path parameters.
+Omitting `namespace` and sending `namespace=default` have the same scope. Another
+account/token or another route cannot retrieve your stored response. Authentication,
+CSRF and route authorization are checked again before every replay.
+
+After a successful **2xx** response, the server retains its exact status and body,
+plus relevant headers such as `Content-Type`, `Cache-Control`, `Location`, `ETag`
+and `Karakoram-Operation-Id` when supplied, for **24 hours**. A matching retry
+returns that response with `Idempotent-Replayed: true`, without creating another
+resource or queuing another operation. JSON whitespace and object-key order do
+not affect matching; array order, values, omitted fields and explicit `null` do.
+Numeric spellings are retained, so reuse the same numeric representations.
+The response is the original snapshot, not the resource's latest state; poll the
+resource or its returned operation to observe asynchronous completion.
+
+* Reusing a key with a different body returns **409**, `code: conflict`,
+  `details: {field: "Idempotency-Key", reason: "conflict"}`. Use a fresh key only
+  when a genuinely different mutation is intended.
+* A concurrent request with the same key returns **409** with reason
+  `invalid_state` while the first request is in flight. Retry the same key/body
+  after that request finishes.
+* **4xx/5xx are not cached**. Once a failed request finishes, its key can be retried
+  with corrected input. Do not interpret a network timeout as a server rejection.
+
+One-time API-token secrets and generated database passwords are replayed too.
+Treat the replay as sensitive: responses remain `Cache-Control: no-store` where
+applicable, and the complete stored response is encrypted using the installation's
+master key. Expired records are unusable immediately and are purged on server
+startup and hourly (so ciphertext removal can lag expiry by up to one hour).
+After expiry the key is a new request; existing resource names may then conflict.
+
+This is bounded retry protection, not an atomic, universal exactly-once guarantee:
+an interrupted server between committing a mutation and saving its response leaves
+an in-flight reservation until expiry. A response-persistence failure likewise
+keeps the reservation instead of executing a duplicate. Inspect the resource and
+operation before deciding what to do; changing keys is not a recovery shortcut.
+
 ## Pagination and events
 
 Paginated lists return `{items: [...], nextCursor?: "..."}`. `limit` defaults to **100** and lists accept **1–500**. Pass the returned opaque `cursor` to the same list with the same filters. Authorization filtering happens before pagination. Stop when `nextCursor` is absent. Lists are not a snapshot transaction across multiple requests; concurrent changes can affect pagination. Providers and specialized status/window/log responses have their own schemas.
