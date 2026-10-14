@@ -340,13 +340,13 @@ func TestLoginAndLogout(t *testing.T) {
 			if body["password"] != "password-secret" {
 				t.Error("password not sent")
 			}
-			http.SetCookie(w, &http.Cookie{Name: "karakoram_session", Value: "session", Path: "/"})
+			http.SetCookie(w, &http.Cookie{Name: "karakoram_access", Value: "session", Path: "/"})
 			fmt.Fprint(w, `{"csrfToken":"csrf","account":{"name":"admin"}}`)
 		case "/api/v1/api-tokens":
 			if r.Header.Get("X-Karakoram-CSRF") != "csrf" {
 				t.Error("missing CSRF")
 			}
-			if _, err := r.Cookie("karakoram_session"); err != nil {
+			if _, err := r.Cookie("karakoram_access"); err != nil {
 				t.Error("missing session")
 			}
 			fmt.Fprint(w, `{"secret":"kk_test-secret","token":{"id":"token-one"}}`)
