@@ -124,6 +124,8 @@ Supplied member leaves are never automatically renewed or replaced. Within 30 da
 
 PEM inputs are supplied in a protected API-shaped create/patch file, using YAML block scalars. Certificate and private-key fields must be supplied as pairs. Do not paste private material into terminal history or shared screenshots. TLS leaf rotation issues certificates under the current CA; do not assume it preserves an externally supplied leaf unchanged.
 
+For an existing cluster already using `userProvided`, leave CA PEM inputs empty to retain its stored signing pair; the API never returns private PEM material in the spec. The topology editor permits this omission only while the CA source is unchanged. Selecting `userProvided` from another source requires a CA certificate and signing key in the form, but submitting material does not override the provider's immutable CA-source restriction: it is not a supported CA migration.
+
 ## Connection details
 
 Cluster status contains private hosts, replicaSet (for replica sets), a **password-free** URI and provisioned public endpoints. In the Overview tab, **Reveal credentials**, or:

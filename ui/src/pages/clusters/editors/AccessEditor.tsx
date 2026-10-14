@@ -10,8 +10,9 @@ type TLS = Schemas['TLS'];
 type Exposure = Schemas['Exposure'];
 
 
-export function TLSEditor({ value, onChange, editing }: { value: TLS; onChange: (t: TLS) => void; editing?: boolean }) {
-  const errors = tlsErrors(value, editing);
+export function TLSEditor({ value, onChange, storedCA }: { value: TLS; onChange: (t: TLS) => void; storedCA?: TLS['ca'] }) {
+  const editing = storedCA === value.ca;
+  const errors = tlsErrors(value, storedCA);
   return (
     <div className="stack" style={{ gap: 14 }}>
       <ChoiceGroup<TLS['mode']>
@@ -41,7 +42,7 @@ export function TLSEditor({ value, onChange, editing }: { value: TLS; onChange: 
             <div className="stack">
               {editing ? <Callout tone="info">Stored PEM material is never returned. Existing CA material cannot change. Leave PEM fields empty to keep stored material; supply a matching server certificate/key pair to replace member leaves.</Callout> : null}
               <TextAreaField label="CA certificate (PEM)" required={!editing} mono value={value.caCertificate ?? ''} onChange={(e) => onChange({ ...value, caCertificate: e.target.value })} rows={4} error={errors.caCertificate} />
-              <TextAreaField label="CA signing private key (PEM)" required={!editing} mono value={value.caPrivateKey ?? ''} onChange={(e) => onChange({ ...value, caPrivateKey: e.target.value })} rows={3} error={errors.caPrivateKey} hint="Required at creation to issue member and agent certificates. Use a dedicated cluster CA." />
+              <TextAreaField label="CA signing private key (PEM)" required={!editing} mono value={value.caPrivateKey ?? ''} onChange={(e) => onChange({ ...value, caPrivateKey: e.target.value })} rows={3} error={errors.caPrivateKey} hint="Required for a new CA source to issue member and agent certificates. Use a dedicated cluster CA." />
               <div className="grid-2">
                 <TextAreaField label="Server certificate chain (PEM, optional)" mono value={value.certificate ?? ''} onChange={(e) => onChange({ ...value, certificate: e.target.value })} rows={4} error={errors.certificate} />
                 <TextAreaField label="Server private key (PEM, optional)" mono value={value.privateKey ?? ''} onChange={(e) => onChange({ ...value, privateKey: e.target.value })} rows={4} error={errors.privateKey} />

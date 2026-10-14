@@ -161,8 +161,17 @@ test('user-provided PKI requires CA signing pair and permits optional paired lea
   assert.ok(validateTLS({ ...tls, certificate: 'LEAF' }).length);
   assert.ok(validateTLS({ ...tls, privateKey: 'LEAF KEY' }).length);
   assert.deepEqual(validateTLS({ ...tls, certificate: 'LEAF', privateKey: 'LEAF KEY' }), []);
-  assert.deepEqual(validateTLS({ ca: 'userProvided', mode: 'requireTLS' }, true), []);
+  assert.deepEqual(validateTLS({ ca: 'userProvided', mode: 'requireTLS' }, 'userProvided'), []);
   assert.deepEqual(validateTLS({ ca: 'userProvided', mode: 'disabled' }), []);
+});
+
+test('switching CA source cannot reuse the empty-PEM editing exemption', () => {
+  const tls: Schemas['TLS'] = { ca: 'userProvided', mode: 'requireTLS' };
+  assert.match(validateTLS(tls, 'selfSigned').join(' '), /CA certificate PEM is required/);
+  assert.match(validateTLS(tls, 'selfSigned').join(' '), /CA signing private key PEM is required/);
+  assert.deepEqual(validateTLS(tls, 'userProvided'), []);
+  assert.deepEqual(validateTLS({ ...tls, caCertificate: 'CA', caPrivateKey: 'KEY' }, 'selfSigned'), []);
+  assert.match(validateTLS({ ...tls, caCertificate: 'CA' }, 'userProvided').join(' '), /signing private key/);
 });
 
 test('Review totals include every shard, config server, router and data volume', () => {

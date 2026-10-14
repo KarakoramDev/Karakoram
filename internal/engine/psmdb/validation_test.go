@@ -101,3 +101,15 @@ func TestLegacyExposureValidationOnUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestCASourceSwitchRejectsMissingMaterial(t *testing.T) {
+	p := New(Options{})
+	old := domain.Cluster{Name: "sample"}
+	p.ApplyDefaults(&old.Spec)
+	next := old
+	next.Spec.TLS.CA = "userProvided"
+	err := p.Validate(t.Context(), &old, &next)
+	if err == nil || !strings.Contains(err.Error(), "CA source is immutable") {
+		t.Fatalf("source change must be rejected before secret handling: %v", err)
+	}
+}

@@ -74,7 +74,7 @@ export function TopologyTab() {
     if (draft.configResources) errors.push(...validateResources(draft.configResources, cluster.spec.components.configServer?.resources, false, minimums.configServer).map((e) => `Config servers: ${e}`));
     if (draft.routerResources) errors.push(...validateResources(draft.routerResources, undefined, true, minimums.router).map((e) => `Routers: ${e}`));
   }
-  errors.push(...validateTLS(draft.tls, true));
+  errors.push(...validateTLS(draft.tls, cluster.spec.tls?.ca ?? 'selfSigned'));
   if (patch.exposure) errors.push(...validateExposure(draft.exposure, allAddressesConfirmed));
 
   const save = useMutation({
@@ -167,7 +167,7 @@ export function TopologyTab() {
         ) : null}
 
         <Card title="Transport security">
-          <TLSEditor editing value={draft.tls} onChange={(tls) => setDraft((d) => ({ ...d, tls }))} />
+          <TLSEditor storedCA={cluster.spec.tls?.ca ?? 'selfSigned'} value={draft.tls} onChange={(tls) => setDraft((d) => ({ ...d, tls }))} />
         </Card>
         <Card title="Network exposure">
           <ExposureEditor allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} />

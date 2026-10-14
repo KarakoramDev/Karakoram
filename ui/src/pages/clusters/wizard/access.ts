@@ -80,10 +80,10 @@ export function validateExposure(exposure: Schemas['Exposure'] | undefined, allA
   return errors;
 }
 
-export function tlsErrors(tls: Schemas['TLS'] | undefined, editing = false): Partial<Record<keyof Schemas['TLS'], string>> {
+export function tlsErrors(tls: Schemas['TLS'] | undefined, storedCA?: Schemas['TLS']['ca']): Partial<Record<keyof Schemas['TLS'], string>> {
   if (!tls || tls.mode === 'disabled' || tls.ca !== 'userProvided') return {};
   const errors: Partial<Record<keyof Schemas['TLS'], string>> = {};
-  if (!editing || tls.caCertificate?.trim() || tls.caPrivateKey?.trim()) {
+  if (tls.ca !== storedCA || tls.caCertificate?.trim() || tls.caPrivateKey?.trim()) {
     if (!tls.caCertificate?.trim()) errors.caCertificate = 'CA certificate PEM is required.';
     if (!tls.caPrivateKey?.trim()) errors.caPrivateKey = 'CA signing private key PEM is required to issue member and agent certificates.';
   }
@@ -92,8 +92,8 @@ export function tlsErrors(tls: Schemas['TLS'] | undefined, editing = false): Par
   return errors;
 }
 
-export function validateTLS(tls: Schemas['TLS'] | undefined, editing = false): string[] {
-  return Object.values(tlsErrors(tls, editing));
+export function validateTLS(tls: Schemas['TLS'] | undefined, storedCA?: Schemas['TLS']['ca']): string[] {
+  return Object.values(tlsErrors(tls, storedCA));
 }
 
 /** Empty optional PEM inputs mean omission, not an invalid empty certificate pair. */
