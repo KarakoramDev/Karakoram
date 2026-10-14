@@ -197,3 +197,9 @@ Restarts checkpoint per-member progress, check health/quorum and process seconda
 **A one-member replica set is unavailable while its only member restarts or upgrades.** There is no secondary or primary failover to preserve availability; plan an application maintenance window for singleton binary upgrades, explicit restarts and resource changes that require member replacement/restart.
 
 `engineConfig` accepts validated YAML overrides, but provider-owned networking/authentication/TLS/replication/sharding/process/logging/dbpath/cache settings cannot be replaced. Do not use overrides to bypass orchestration safety. Use API-shaped patch files for supported advanced settings and inspect validation errors; see [API](api.md) and [operations](../operations.md).
+
+If a member replacement reaches its operation limit during old-member removal,
+the operation fails but ordinary convergence resumes removal and promotes the
+caught-up replacement. Inspect replica-set membership and voting state before
+raising FCV; a failed replacement operation does not roll back its desired
+member changes.

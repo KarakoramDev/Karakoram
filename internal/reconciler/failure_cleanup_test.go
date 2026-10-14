@@ -210,11 +210,11 @@ func TestExpiredReplaceMemberReleasesConvergenceGate(t *testing.T) {
 		t.Run(expiry, func(t *testing.T) {
 			ctx := context.Background()
 			m, st := newTestManager(t, &psmdb.Provider{})
-			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"replaceActive":true,"members":[{"name":"old","role":"mongod"},{"name":"replacement","role":"mongod","stage":"planned"}]}`)}
+			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"replaceActive":true,"members":[{"name":"old","role":"mongod","removing":true},{"name":"replacement","role":"mongod","stage":"replacement-caught-up"}]}`)}
 			if err := st.CreateCluster(ctx, c); err != nil {
 				t.Fatal(err)
 			}
-			op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationReplaceMember, Phase: domain.PhaseRunning, Step: "replacement-sync", Checkpoint: json.RawMessage(`{"stage":"join","newMember":"replacement"}`), Payload: json.RawMessage(`{"member":"old"}`), CreatedAt: time.Now(), LastError: "platform unavailable"}
+			op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationReplaceMember, Phase: domain.PhaseRunning, Step: "replacement-remove", Checkpoint: json.RawMessage(`{"stage":"remove","newMember":"replacement"}`), Payload: json.RawMessage(`{"member":"old"}`), CreatedAt: time.Now(), LastError: "platform unavailable"}
 			if expiry == "deadline" {
 				op.CreatedAt = time.Now().Add(-3 * time.Hour)
 			} else {
@@ -236,9 +236,16 @@ func TestExpiredReplaceMemberReleasesConvergenceGate(t *testing.T) {
 			}
 			var state struct {
 				ReplaceActive bool `json:"replaceActive"`
+				Members       []struct {
+					Name  string `json:"name"`
+					Stage string `json:"stage"`
+				} `json:"members"`
 			}
 			if err := json.Unmarshal(current.Internal, &state); err != nil || state.ReplaceActive {
 				t.Fatal(string(current.Internal), err)
+			}
+			if len(state.Members) != 2 || state.Members[1].Stage != "syncing" {
+				t.Fatal("replacement cannot resume promotion", string(current.Internal))
 			}
 		})
 	}

@@ -92,6 +92,11 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 		// Ordinary convergence owns any partially provisioned replacement and
 		// outstanding platform action after the replacement gate is released.
 		s.ReplaceActive = false
+		for _, member := range s.Members {
+			if member.Stage == "replacement-caught-up" {
+				member.Stage = "syncing"
+			}
+		}
 		if err = save(rc.Cluster, s); err != nil {
 			return engine.OpResult{}, err
 		}
