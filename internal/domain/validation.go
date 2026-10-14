@@ -101,6 +101,25 @@ func ValidateExposure(exposure Exposure) error {
 	return nil
 }
 
+// ExposureCoversFamily reports whether valid CIDRs cover the configured address
+// family completely. It ignores Public and AllowAllAddresses; invalid or
+// family-mismatched legacy allowlists do not qualify.
+func ExposureCoversFamily(exposure Exposure) bool {
+	ipType := exposureIPType(exposure.IPType)
+	if ipType != "IPV4" && ipType != "IPV6" {
+		return false
+	}
+	prefixes := make([]netip.Prefix, 0, len(exposure.Allowlist))
+	for _, cidr := range exposure.Allowlist {
+		prefix, err := netip.ParsePrefix(cidr)
+		if err != nil || prefix.Addr().Is4() != (ipType == "IPV4") {
+			return false
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixesCoverFamily(prefixes)
+}
+
 // CIDR ranges are either disjoint or nested. Sorting by network address, then
 // shortest prefix, lets us omit duplicates and contained ranges before summing.
 func prefixesCoverFamily(prefixes []netip.Prefix) bool {

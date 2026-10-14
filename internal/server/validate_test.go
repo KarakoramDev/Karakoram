@@ -253,6 +253,64 @@ func TestSplitAllowlistRequiresAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestExposureAcknowledgementDoesNotSurviveNarrowing(t *testing.T) {
+	s, _, token := testServer(t)
+	for _, step := range []struct {
+		body   string
+		status int
+		ack    bool
+	}{
+		{`{"spec":{"exposure":{"public":true,"ipType":"IPV4","allowlist":["0.0.0.0/0"],"allowAllAddresses":true}}}`, 200, true},
+		{`{"spec":{"exposure":{"allowlist":["203.0.113.0/24"]}}}`, 200, false},
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/0"]}}}`, 400, false},
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/1","128.0.0.0/1"]}}}`, 400, false},
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/1","128.0.0.0/1"],"allowAllAddresses":true}}}`, 200, true},
+		// Even an already acknowledged all-address list needs a fresh
+		// acknowledgement when the request changes its routing.
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/0"]}}}`, 400, true},
+		{`{"spec":{"components":{"engine":{"replicas":5}}}}`, 200, true},
+		{`{"spec":{"exposure":{"public":false,"allowAllAddresses":true}}}`, 200, false},
+		{`{"spec":{"exposure":{"public":true}}}`, 400, false},
+	} {
+		w := call(s, "PATCH", "/api/v1/clusters/prod", step.body, token)
+		if w.Code != step.status {
+			t.Fatalf("%s: %d %s", step.body, w.Code, w.Body.String())
+		}
+		c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Namespace: "default", Name: "prod"})
+		if err != nil || c.Spec.Exposure.AllowAllAddresses != step.ack {
+			t.Fatalf("%s: stored acknowledgement = %v, error = %v", step.body, c, err)
+		}
+	}
+}
+
+func TestExposureAcknowledgementNormalizedOnCreateAndReplace(t *testing.T) {
+	s, _, token := testServer(t)
+	w := call(s, "POST", "/api/v1/clusters", `{"name":"sample","spec":{"provider":"fake","exposure":{"public":true,"ipType":"IPV4","allowlist":["203.0.113.0/24"],"allowAllAddresses":true}}}`, token)
+	if w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	ref := domain.ClusterRef{Namespace: "default", Name: "sample"}
+	c, err := s.Store.GetCluster(t.Context(), ref)
+	if err != nil || c.Spec.Exposure.AllowAllAddresses {
+		t.Fatal("restricted creation retained acknowledgement", c, err)
+	}
+	c.Spec.Exposure.AllowAllAddresses = true
+	c.Spec.Exposure.Public = false
+	c.Spec.Exposure.Allowlist = []string{"0.0.0.0/0"}
+	body, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = call(s, "PUT", "/api/v1/clusters/sample", string(body), token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	c, err = s.Store.GetCluster(t.Context(), ref)
+	if err != nil || c.Spec.Exposure.AllowAllAddresses {
+		t.Fatal("private replacement retained acknowledgement", c, err)
+	}
+}
+
 func TestClosedSchemasAndCompositions(t *testing.T) {
 	doc, err := apispec.Load()
 	if err != nil {

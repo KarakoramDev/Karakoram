@@ -156,6 +156,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
 			return s.failure(err)
 		}
+		c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
 		}
@@ -213,7 +214,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			if _, yes := v.(map[string]any); !yes {
 				return invalid()
 			}
-			data, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+			base := c.Spec
+			// Acknowledgement belongs to this request, not the merge-patch base.
+			// Unchanged legacy routing is still accepted by ValidateExposureUpdate.
+			base.Exposure.AllowAllAddresses = false
+			data, err := json.Marshal(map[string]any{"spec": specAPI(base)})
 			if err != nil {
 				return s.failure(err)
 			}
@@ -244,6 +249,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = domain.ValidateExposureUpdate(&c.Spec.Exposure, next.Spec.Exposure); err != nil {
 			return s.failure(err)
 		}
+		next.Spec.Exposure.AllowAllAddresses = next.Spec.Exposure.Public && domain.ExposureCoversFamily(next.Spec.Exposure)
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
 		}

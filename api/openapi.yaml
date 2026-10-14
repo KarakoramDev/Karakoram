@@ -5461,7 +5461,7 @@ components:
             description: IPv4 or IPv6 CIDR.
         allowAllAddresses:
           type: boolean
-          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure.
+          description: Reports full-family coverage for public exposure after a save. Private or restricted exposure clears this flag. Entries must still match ipType. Unrelated updates preserve unchanged legacy routing.
       required:
         - public
     MonitoringSpec:
@@ -7043,7 +7043,7 @@ components:
             description: IPv4 or IPv6 CIDR.
         allowAllAddresses:
           type: boolean
-          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure.
+          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
       additionalProperties: false
     ClusterInputSpec:
       type: object
@@ -7220,7 +7220,7 @@ components:
           nullable: true
         allowAllAddresses:
           type: boolean
-          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure.
+          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
           nullable: true
       additionalProperties: false
       nullable: true

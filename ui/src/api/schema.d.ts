@@ -1913,7 +1913,7 @@ export type components = {
             nextCursor?: string;
         };
         Exposure: {
-            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure. */
+            /** @description Reports full-family coverage for public exposure after a save. Private or restricted exposure clears this flag. Entries must still match ipType. Unrelated updates preserve unchanged legacy routing. */
             allowAllAddresses?: boolean;
             allowlist?: string[];
             /**
@@ -1925,7 +1925,7 @@ export type components = {
             public: boolean;
         };
         ExposureInput: {
-            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean;
             allowlist?: string[];
             /**
@@ -1937,7 +1937,7 @@ export type components = {
             public: boolean;
         };
         ExposurePatch: {
-            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist enforce these rules; unrelated updates preserve unchanged legacy exposure. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean | null;
             allowlist?: string[] | null;
             /**

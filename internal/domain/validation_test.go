@@ -61,6 +61,9 @@ func TestExposureUnionCoverage(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			exposure := Exposure{Public: true, IPType: tc.ip, Allowlist: tc.cidrs}
+			if all := ExposureCoversFamily(exposure); all != tc.all {
+				t.Fatalf("family coverage = %t, want %t", all, tc.all)
+			}
 			err := ValidateExposure(exposure)
 			if tc.all {
 				var field *FieldError

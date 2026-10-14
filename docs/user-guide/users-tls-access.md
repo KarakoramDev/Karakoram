@@ -280,6 +280,8 @@ Every allowlist entry must be a valid CIDR of the configured `ipType`: IPv6 for 
 
 The wizard and topology exposure editor send that acknowledgement only while the confirmation is checked and the current public allowlist covers an entire IP family. Changing exposure settings clears the confirmation; private or restricted exposure never inherits an earlier acknowledgement.
 
+The API also clears the stored acknowledgement when create, PUT or PATCH saves private or restricted exposure. A routing change that results in full-family coverage must include `allowAllAddresses: true` in that request: PATCH does not inherit it from the existing cluster. After narrowing an allowlist, widening it again (including with split ranges) requires a fresh acknowledgement. Unchanged exposure remains accepted on unrelated updates.
+
 Clusters saved before these rules may retain an unacknowledged all-address allowlist or a family mismatch. Unrelated PUT/PATCH updates (including version upgrades and scaling) leave that legacy exposure unchanged and do not require revalidation. Creating a cluster or changing its exposure's public flag, address family or allowlist must satisfy the current rules; correct legacy entries and explicitly acknowledge full-family coverage before saving an exposure edit.
 
 **Use layered access controls.** An IP allowlist is defense in depth, not a substitute for authentication. Prefer private access; when public access is needed, retain `requireTLS` and strong credentials and verify allowed and denied client access for your deployment. See [networking limitations](../limitations.md#access-and-networking).
