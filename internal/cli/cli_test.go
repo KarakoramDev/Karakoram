@@ -118,6 +118,54 @@ func execute(t *testing.T, server, config, input string, args ...string) (string
 	return out.String(), stderr.String(), err
 }
 
+func TestClusterCreateVersionDefaults(t *testing.T) {
+	for _, tt := range []struct {
+		name, input, version string
+		flags                []string
+	}{
+		{name: "catalog default"},
+		{name: "empty version", flags: []string{"--version", ""}},
+		{name: "explicit version", version: "8.0.29-13", flags: []string{"--version", "8.0.29-13"}},
+		{name: "file default", input: `{"name":"demo","spec":{"provider":"psmdb"}}`, flags: []string{"-f", "-", "--version", "ignored"}},
+		{name: "file version", input: `{"name":"demo","spec":{"provider":"psmdb","version":"7.0.43-23"}}`, version: "7.0.43-23", flags: []string{"-f", "-", "--version", "ignored"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/api/v1/clusters" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"name":"demo","spec":{"version":"8.0.32-14"}}`)
+			}))
+			defer server.Close()
+			args := append([]string{"clusters", "create", "demo"}, tt.flags...)
+			code, _, stderr := runCLI(t, server.URL, tt.input, false, args...)
+			if code != 0 {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			spec, ok := body["spec"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing spec: %+v", body)
+			}
+			version, present := spec["version"]
+			if tt.version == "" && present || tt.version != "" && version != tt.version {
+				t.Errorf("version=%v present=%v want=%q", version, present, tt.version)
+			}
+			if spec["provider"] != "psmdb" {
+				t.Errorf("provider missing: %+v", spec)
+			}
+		})
+	}
+	code, out, stderr := runCLI(t, "", "", false, "clusters", "create", "--help")
+	if code != 0 || !strings.Contains(out, "defaults to provider catalog default") {
+		t.Errorf("help code=%d out=%q stderr=%q", code, out, stderr)
+	}
+}
+
 func TestClusterCreateBackupStorageOptional(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -457,7 +505,7 @@ func TestWaitAndSSE(t *testing.T) {
 }
 func TestInvalidArguments(t *testing.T) {
 	config := filepath.Join(t.TempDir(), "config.yaml")
-	for _, args := range [][]string{{"-o", "xml", "health"}, {"clusters", "get"}, {"clusters", "create", "demo"}, {"clusters", "create", "demo", "--version", "8.0", "--topology", "wrong"}, {"clusters", "scale", "demo"}, {"clusters", "connection", "demo"}, {"restores", "create", "demo", "--backup", "a", "--time", "2026-01-01T00:00:00Z"}} {
+	for _, args := range [][]string{{"-o", "xml", "health"}, {"clusters", "get"}, {"clusters", "create", "demo", "--version", "8.0", "--topology", "wrong"}, {"clusters", "scale", "demo"}, {"clusters", "connection", "demo"}, {"restores", "create", "demo", "--backup", "a", "--time", "2026-01-01T00:00:00Z"}} {
 		if _, _, err := execute(t, "http://127.0.0.1:1", config, "", args...); err == nil {
 			t.Fatalf("accepted %v", args)
 		}

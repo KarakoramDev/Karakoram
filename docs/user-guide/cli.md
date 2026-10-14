@@ -33,7 +33,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `karactl openapi > openapi.yaml` downloads the running server's authoritative OpenAPI document as raw YAML. This public endpoint does not require login.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. Use protected input for secret fields. When supplied, the file defines the request body instead of convenience body flags.
 - Cluster **create** files contain `name` and `spec`; **edit** replaces the full `spec` and can open the configured editor when no file is supplied; **patch/scale/upgrade** files have `{spec: {...}}` merge-patch shape. Arrays such as schedules are replaced, not appended.
-- Convenience create flags default to the `psmdb` provider and its topology/resource defaults. For another provider, presets or optional components, run `karactl providers get <provider> -o json`, copy a preset's `spec` into a JSON/YAML body with `name` and `spec`, customize components, then submit with `clusters create -f FILE`. There is no `--preset` flag.
+- Convenience create flags default to the `psmdb` provider and its topology/resource defaults. `--version` is optional: when omitted or empty, the CLI omits `spec.version` so the server applies the selected provider's catalog default. Supply `--version VERSION` to pin an exact version. For another provider, presets or optional components, run `karactl providers get <provider> -o json`, copy a preset's `spec` into a JSON/YAML body with `name` and `spec`, customize components, then submit with `clusters create -f FILE`. There is no `--preset` flag.
 - `clusters create --backup-storage NAME` sets the default backup destination. A `--schedule` can instead supply its own `storage=NAME`; without `--backup-storage`, the CLI omits the optional default storage field, including for `--pitr` alone. Each schedule still needs either its own storage or the default, and the server validates PITR prerequisites.
 - `rbac policy set -f FILE` is the exception: the file contains raw policy CSV.
 - `clusters connection NAME` prints a password-free endpoint/TLS summary without requiring credentials-read permission. CA availability is not checked on this path; TLS-disabled clusters report that no CA is configured. Add `--reveal` to display sensitive engine credentials, copyable URIs and the CA as a multiline PEM block. Do not capture revealed output in logs.
@@ -342,7 +342,7 @@ Commands absent below have no additional flags except confirmation: destructive 
       --timeout duration         Maximum wait duration (default 30m0s)
       --tls-mode string          disabled, preferTLS or requireTLS (default "requireTLS")
       --topology string          replicaSet or sharded (default "replicaSet")
-      --version string           Exact engine version (see providers get <provider>)
+      --version string           Exact engine version (defaults to provider catalog default; see providers get <provider>)
       --wait                     Wait for operation completion and observed cluster generation
 ```
 

@@ -40,7 +40,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		if strings.HasPrefix(s.path, "clusters create") {
 			c.Long = "Create a cluster. Convenience flags use PSMDB defaults; --provider defaults to psmdb.\nFor other providers, presets or optional components, submit the complete JSON/YAML body with -f.\nRun karactl providers get <provider> -o json to inspect versions, presets and components,\nthen copy a preset spec into a body containing name and spec. There is no --preset flag."
 			c.Flags().String("provider", "psmdb", "Engine provider")
-			c.Flags().String("version", "", "Exact engine version (see providers get <provider>)")
+			c.Flags().String("version", "", "Exact engine version (defaults to provider catalog default; see providers get <provider>)")
 			c.Flags().String("topology", "replicaSet", "replicaSet or sharded")
 			c.Flags().String("backup-storage", "", "Default backup storage")
 			c.Flags().StringArray("schedule", nil, "Schedule: NAME=CRON,type=logical|physical,retain=COUNT[,storage=NAME]")
@@ -249,9 +249,6 @@ func resourceFlags(cmd *cobra.Command, defaults bool) map[string]any {
 }
 func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	version, _ := cmd.Flags().GetString("version")
-	if version == "" {
-		return nil, usageError("--version is required without -f")
-	}
 	provider, _ := cmd.Flags().GetString("provider")
 	topology, _ := cmd.Flags().GetString("topology")
 	if topology != "replicaSet" && topology != "sharded" {
@@ -286,7 +283,10 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	allow, _ := cmd.Flags().GetStringSlice("allow")
 	ipType, _ := cmd.Flags().GetString("ip-type")
 	monitoring, _ := cmd.Flags().GetBool("monitoring")
-	spec := map[string]any{"provider": provider, "version": version, "topology": t, "components": components, "tls": map[string]any{"mode": tlsMode, "ca": "selfSigned"}, "exposure": map[string]any{"public": public, "allowlist": allow, "ipType": ipType}, "monitoring": map[string]any{"enabled": monitoring}}
+	spec := map[string]any{"provider": provider, "topology": t, "components": components, "tls": map[string]any{"mode": tlsMode, "ca": "selfSigned"}, "exposure": map[string]any{"public": public, "allowlist": allow, "ipType": ipType}, "monitoring": map[string]any{"enabled": monitoring}}
+	if version != "" {
+		spec["version"] = version
+	}
 	storage, _ := cmd.Flags().GetString("backup-storage")
 	pitr, _ := cmd.Flags().GetBool("pitr")
 	schedules, _ := cmd.Flags().GetStringArray("schedule")
