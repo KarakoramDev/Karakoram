@@ -414,6 +414,7 @@ type Account struct {
 	MustChangePassword bool      `json:"mustChangePassword"`
 	Disabled           bool      `json:"disabled"`
 	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt,omitempty"`
 	PasswordChangedAt  time.Time `json:"passwordChangedAt,omitempty"`
 	OIDC               bool      `json:"oidc"`
 	OIDCIssuer         string    `json:"oidcIssuer,omitempty"`

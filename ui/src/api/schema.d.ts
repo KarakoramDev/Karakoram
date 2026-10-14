@@ -130,7 +130,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Create a local-account cookie session */
+        /**
+         * Create a local-account cookie session
+         * @description After five failed attempts, account/source backoff starts at one second and doubles to fifteen minutes. While throttled, correct and incorrect passwords receive the same 429 response and retry delay.
+         */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -1376,6 +1379,13 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
+        /** @description Start with a letter; use only letters, digits, underscore, dot, @ or dash. */
+        AccountName: string;
+        /**
+         * Format: password
+         * @description At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+         */
+        AccountPassword: string;
         AgentStatus: {
             /** Format: int64 */
             configVersion?: number;
@@ -1402,6 +1412,8 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
+        /** @description Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID. */
+        APITokenName: string;
         Backup: {
             cluster: string;
             /** Format: date-time */
@@ -1492,8 +1504,7 @@ export type components = {
         ChangePasswordRequest: {
             /** Format: password */
             currentPassword: string;
-            /** Format: password */
-            newPassword: string;
+            newPassword: components["schemas"]["AccountPassword"];
         };
         Cluster: {
             /** Format: date-time */
@@ -1600,14 +1611,16 @@ export type components = {
             enabled: boolean;
             /** @default true */
             mustChangePassword: boolean;
-            name: string;
-            /** Format: password */
-            password: string;
+            name: components["schemas"]["AccountName"];
+            password: components["schemas"]["AccountPassword"];
         };
         CreateAPITokenRequest: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Optional RFC 3339 timestamp, strictly in the future.
+             */
             expiresAt?: string;
-            name: string;
+            name: components["schemas"]["APITokenName"];
         };
         CreateBackupRequest: {
             name: string;
@@ -2037,7 +2050,7 @@ export type components = {
             version: string;
         };
         RBACPolicy: {
-            /** @description Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. */
+            /** @description Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. Validation errors name policy and the line. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies. */
             policy: string;
         };
         /** @description Relay health; the default namespace uses direct networking. */
@@ -2066,8 +2079,7 @@ export type components = {
         ResetPasswordRequest: {
             /** @default true */
             mustChangePassword: boolean;
-            /** Format: password */
-            password: string;
+            password: components["schemas"]["AccountPassword"];
         };
         Resources: {
             /** @enum {string} */
@@ -2190,9 +2202,12 @@ export type components = {
             mustChangePassword: boolean;
         };
         UpdateAPITokenRequest: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description RFC 3339 timestamp strictly in the future, or null to remove expiry.
+             */
             expiresAt?: string | null;
-            name: string;
+            name: components["schemas"]["APITokenName"];
         };
         /** @description Replaces storage configuration. Omitted credentials retain the existing encrypted credentials. */
         UpdateBackupStorageRequest: {
@@ -2770,6 +2785,26 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            /** @description Login temporarily throttled. Wait for the indicated delay before retrying. */
+            429: {
+                headers: {
+                    /** @description Number of seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Login temporarily throttled; wait before trying again",
+                     *       "details": {
+                     *         "retryAfterSeconds": 1
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

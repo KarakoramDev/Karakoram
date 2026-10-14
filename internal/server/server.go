@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -275,7 +276,7 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 					}
 				}
 				if !selfService(id) && !collection(id) && !s.RBAC.Can(p.Subjects, rule.Resource, rule.Action, obj) {
-					return fail(403, "forbidden", "Permission denied"), nil
+					return failDetails(403, "forbidden", fmt.Sprintf("Permission denied: %s %s on %q; ask an administrator to grant access", rule.Resource, rule.Action, obj), map[string]any{"resource": rule.Resource, "action": rule.Action, "object": obj}), nil
 				}
 			}
 		}
@@ -323,6 +324,11 @@ func (s *Server) Handler() http.Handler {
 			var large *http.MaxBytesError
 			if errors.As(err, &large) {
 				status = 413
+			}
+			var timestamp *time.ParseError
+			if errors.As(err, &timestamp) && (r.URL.Path == "/api/v1/api-tokens" || strings.HasPrefix(r.URL.Path, "/api/v1/api-tokens/")) {
+				_ = invalidField("expiresAt", domain.ReasonInvalid, "expiresAt must be a valid RFC 3339 timestamp").write(w)
+				return
 			}
 			_ = fail(status, "invalid_request", "Invalid request body").write(w)
 		},

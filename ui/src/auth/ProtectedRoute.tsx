@@ -9,10 +9,10 @@ export function ProtectedRoute({ allowPasswordChange = false }: { allowPasswordC
   const auth = useAuth();
   const location = useLocation();
 
-  if (auth.status === 'loading') {
+  if (auth.status === 'loading' || auth.status === 'unavailable') {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <Loading label="Checking session…" />
+        <Loading label={auth.status === 'unavailable' ? 'Waiting for the server…' : 'Checking session…'} />
       </div>
     );
   }

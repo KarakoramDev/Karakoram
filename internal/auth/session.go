@@ -110,7 +110,7 @@ func (s *Service) Login(ctx context.Context, w http.ResponseWriter, user, passwo
 	case s.loginWork <- struct{}{}:
 		defer func() { <-s.loginWork }()
 	default:
-		return nil, ErrRateLimited
+		return nil, &RateLimitError{RetryAfterSeconds: 1}
 	}
 	s.mu.Lock()
 	ip, _ := ctx.Value(clientIPKey{}).(string)
@@ -124,7 +124,7 @@ func (s *Service) Login(ctx context.Context, w http.ResponseWriter, user, passwo
 	v := s.attempts[key]
 	if v.Until.After(now) {
 		s.mu.Unlock()
-		return nil, ErrRateLimited
+		return nil, &RateLimitError{RetryAfterSeconds: int((v.Until.Sub(now) + time.Second - 1) / time.Second)}
 	}
 	a, err := s.o.Store.GetAccount(ctx, user)
 	hash := s.dummy

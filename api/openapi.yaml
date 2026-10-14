@@ -73,6 +73,9 @@ paths:
       tags:
       - Auth
       summary: Create a local-account cookie session
+      description: After five failed attempts, account/source backoff starts at one second
+        and doubles to fifteen minutes. While throttled, correct and incorrect
+        passwords receive the same 429 response and retry delay.
       x-karakoram-rbac: public
       responses:
         '400': &id001
@@ -85,6 +88,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409': &id005
           $ref: '#/components/responses/Conflict'
+        '429':
+          description: Login temporarily throttled. Wait for the indicated delay before retrying.
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: rate_limited
+                message: Login temporarily throttled; wait before trying again
+                details:
+                  retryAfterSeconds: 1
         '200':
           description: Successful response.
           content:
@@ -3248,14 +3268,16 @@ components:
       type: object
       properties:
         currentPassword: *id012
-        newPassword: *id012
+        newPassword:
+          $ref: '#/components/schemas/AccountPassword'
       required:
       - currentPassword
       - newPassword
     ResetPasswordRequest:
       type: object
       properties:
-        password: *id012
+        password:
+          $ref: '#/components/schemas/AccountPassword'
         mustChangePassword:
           type: boolean
           default: true
@@ -3335,7 +3357,9 @@ components:
         policy:
           type: string
           description: 'Casbin CSV: p, subject, resource, action, object, allow|deny;
-            g, subject, role. Built-in roles remain installed.'
+            g, subject, role. Built-in roles remain installed. Validation errors name
+            policy and the line. Replacement must preserve unrestricted administration
+            for an enabled account or verified active OIDC group identity without denies.'
       required:
       - policy
     CanRequest:
@@ -3385,11 +3409,35 @@ components:
       - mustChangePassword
       - createdAt
       - updatedAt
+    AccountName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[a-zA-Z][a-zA-Z0-9_.@-]{0,63}$'
+      description: Start with a letter; use only letters, digits, underscore, dot, @ or dash.
+    AccountPassword:
+      type: string
+      format: password
+      writeOnly: true
+      minLength: 12
+      maxLength: 1024
+      description: At least 12 Unicode characters and at most 1024 UTF-8 bytes.
+        Password changes and resets must differ from the current password; rejected
+        changes retain the mandatory-change flag.
+    APITokenName:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '\S'
+      description: Required non-blank name, trimmed before storage, 1–128 characters.
+        Duplicate names are allowed; identify tokens by their unique ID.
     CreateAccountRequest:
       type: object
       properties:
-        name: *id006
-        password: *id012
+        name:
+          $ref: '#/components/schemas/AccountName'
+        password:
+          $ref: '#/components/schemas/AccountPassword'
         enabled:
           type: boolean
           default: true
@@ -3431,18 +3479,24 @@ components:
     CreateAPITokenRequest:
       type: object
       properties:
-        name: *id006
-        expiresAt: *id011
+        name:
+          $ref: '#/components/schemas/APITokenName'
+        expiresAt:
+          type: string
+          format: date-time
+          description: Optional RFC 3339 timestamp, strictly in the future.
       required:
       - name
     UpdateAPITokenRequest:
       type: object
       properties:
-        name: *id006
+        name:
+          $ref: '#/components/schemas/APITokenName'
         expiresAt:
           type: string
           format: date-time
           nullable: true
+          description: RFC 3339 timestamp strictly in the future, or null to remove expiry.
       required:
       - name
     CreatedAPIToken:

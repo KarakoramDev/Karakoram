@@ -18,9 +18,17 @@ The abbreviated value is only illustrative. Load a real token from a secret mana
 
 Local browser login uses `POST /api/v1/auth/login` with `{username, password}`. The response sets cookies and returns `{account, csrfToken, expiresAt}`, not a browser-readable JWT. Runtime cookie names are **`karakoram_access`**, `karakoram_refresh` and readable `karakoram_csrf`; the access cookie contains an EdDSA JWT. Access/refresh are HttpOnly and SameSite=Strict, and Secure for an HTTPS public origin. Default access life is five minutes; rotating refresh families last thirty days.
 
+Login applies account/source exponential backoff after five failed attempts. While throttled, correct and incorrect passwords alike return 429 `rate_limited` with a `Retry-After` seconds header and `details.retryAfterSeconds`. Wait that long before retrying; ordinary 401 responses intentionally do not reveal account existence.
+
 For cookie-authenticated unsafe methods (anything except GET/HEAD/OPTIONS), send **`X-Karakoram-CSRF`** matching the readable CSRF cookie and persisted session token. This includes refresh/logout/password changes. Pre-authentication login does not require that header. `GET /api/v1/auth/me` can discover the current session's `csrfToken`, including after OIDC callback; bearer responses omit it. Do not put session/API credentials into browser local storage.
 
 `POST /auth/refresh` rotates the refresh secret; reusing an older refresh token revokes that family. Forced password-change sessions permit current-user discovery, password change and logout, not normal operations or token creation. After password change reauthenticate. OIDC uses `/auth/oidc/login` and `/auth/oidc/callback` under `/api/v1`, with browser redirect/state/PKCE rather than an invented device-code API.
+
+Local account creation/reset and `newPassword` require at least **12 Unicode characters**, at most **1024 UTF-8 bytes**, and changes/resets must differ from the current password. A rejected change returns 400 `invalid_request` with `details.field` and `details.reason`: `currentPassword`/`invalid`, `newPassword`/`reused` or `newPassword`/`out_of_range`. Rejection preserves the mandatory-change restriction. Account names start with a letter, contain only letters/digits/`_ . @ -`, and are 1–64 characters; duplicates return 409 `already_exists` naming the account. Account `updatedAt` advances on metadata updates as well as password changes.
+
+API-token names are trimmed, non-blank and 1–128 characters; duplicate names are allowed and IDs distinguish them. Creation and update both require future RFC 3339 `expiresAt`, with 400 field-specific `invalid` or `out_of_range` errors. Null on update removes expiry. The UI prevents concurrent duplicate submissions and reuses an `Idempotency-Key` when retrying an unchanged token-creation request.
+
+The UI restores an access-expired session through refresh, preserves identity during 5xx/network failures and offers automatic/manual retry. Ordinary UI API requests are bounded to 30 seconds (SSE is excluded). Persistent 401 after a successful refresh ends the session instead of causing repeated refreshes.
 
 ### Copyable curl bootstrap
 
@@ -84,7 +92,6 @@ error bodies and fail on HTTP errors. Use an account with the resource permissio
 needed by your automation; a token does not bypass its owner's RBAC. Revoke it
 when no longer needed with `DELETE /api/v1/api-tokens/{id}` and bearer
 authentication.
-
 
 ## Authorization and credential reveal
 
@@ -233,6 +240,7 @@ Structured errors are `{code, message, details?}`; do not rely on English messag
 | 409 | Conflicting resource state/operation or unsupported action reported as conflict |
 | 413 | Request exceeds the current 2 MiB body limit |
 | 422 | Namespace token/project/name or relay-hostname validation failed |
+| 429 | `rate_limited` login backoff; retry after the header/body delay |
 | 500 | Unexpected server error, deliberately generic public response |
 | 503 | Unavailable store/monitoring subsystem for the relevant endpoint |
 

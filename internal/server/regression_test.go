@@ -253,7 +253,8 @@ func TestSSERevalidatesBeforeEveryEvent(t *testing.T) {
 					} else {
 						expired := time.Now().Add(-time.Second)
 						stored.ExpiresAt = &expired
-						_, err = s.Auth.UpdateToken(ctx, *stored)
+						// Simulate time passing; the public update API rejects past expiry.
+						err = s.Store.UpdateApiToken(ctx, stored)
 					}
 				case "revoke-session":
 					session, e := s.Store.GetSession(ctx, sessionID)

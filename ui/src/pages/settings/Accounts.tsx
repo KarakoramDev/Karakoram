@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
+import { accountNameError, ACCOUNT_NAME_RULE, passwordError } from '@/auth/validation';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { Checkbox, TextField } from '@/components/ui/Field';
@@ -124,7 +125,7 @@ export function AccountsPage() {
 
       {create ? <CreateAccountDialog onClose={() => setCreate(false)} onSaved={invalidate} /> : null}
       {reset ? <ResetPasswordDialog account={reset} onClose={() => setReset(null)} onSaved={invalidate} /> : null}
-      <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.name)} title={`Delete account ${del?.name ?? ''}`} confirmLabel="Delete" danger typeToConfirm={del?.name} busy={remove.isPending}>
+      <ConfirmDialog open={del !== null} onClose={() => setDel(null)} onConfirm={() => del ? remove.mutateAsync(del.name).catch(() => undefined) : false} title={`Delete account ${del?.name ?? ''}`} confirmLabel="Delete" danger typeToConfirm={del?.name} busy={remove.isPending}>
         <p className="small">All sessions and API tokens owned by this account are revoked immediately.</p>
       </ConfirmDialog>
     </>
@@ -138,7 +139,9 @@ function CreateAccountDialog({ onClose, onSaved }: { onClose: () => void; onSave
   const [enabled, setEnabled] = useState(true);
   const [mustChange, setMustChange] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const valid = /^[a-z][a-z0-9._-]{1,62}$/.test(name) && password.length >= 12;
+  const nameProblem = accountNameError(name);
+  const passwordProblem = passwordError(password);
+  const valid = !nameProblem && !passwordProblem;
   const create = useMutation({
     mutationFn: () => unwrap(api.POST('/accounts', { body: { name, password, enabled, mustChangePassword: mustChange } })),
     onSuccess: () => {
@@ -153,7 +156,7 @@ function CreateAccountDialog({ onClose, onSaved }: { onClose: () => void; onSave
       open
       onClose={onClose}
       title="Add local account"
-      onSubmit={() => valid && create.mutate()}
+      onSubmit={() => valid ? create.mutateAsync().catch(() => undefined) : false}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -164,8 +167,8 @@ function CreateAccountDialog({ onClose, onSaved }: { onClose: () => void; onSave
       }
     >
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <TextField label="Username" mono required autoFocus value={name} onChange={(e) => setName(e.target.value)} hint="Lowercase letters, digits, dots, dashes." />
-      <TextField label="Initial password" type="password" autoComplete="new-password" required minLength={12} value={password} onChange={(e) => setPassword(e.target.value)} hint="At least 12 characters; share out of band." />
+      <TextField label="Username" mono required autoFocus value={name} onChange={(e) => setName(e.target.value)} hint={ACCOUNT_NAME_RULE} error={name.length > 0 ? nameProblem : undefined} />
+      <TextField label="Initial password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} hint="At least 12 characters, at most 1024 bytes; share out of band." error={password.length > 0 ? passwordProblem : undefined} />
       <Checkbox label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
       <Checkbox label="Require password change at first sign-in" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} />
     </Dialog>
@@ -191,18 +194,18 @@ function ResetPasswordDialog({ account, onClose, onSaved }: { account: Account; 
       open
       onClose={onClose}
       title={`Reset password for ${account.name}`}
-      onSubmit={() => password.length >= 12 && reset.mutate()}
+      onSubmit={() => !passwordError(password) ? reset.mutateAsync().catch(() => undefined) : false}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary" loading={reset.isPending} disabled={password.length < 12}>
+          <Button type="submit" variant="primary" loading={reset.isPending} disabled={!!passwordError(password)}>
             Reset password
           </Button>
         </>
       }
     >
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <TextField label="New password" type="password" autoComplete="new-password" required minLength={12} autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
+      <TextField label="New password" type="password" autoComplete="new-password" required autoFocus value={password} onChange={(e) => setPassword(e.target.value)} hint="At least 12 characters and at most 1024 bytes; must differ from the current password." error={password.length > 0 ? passwordError(password) : undefined} />
       <Checkbox label="Require the user to change it at next sign-in" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} />
       <p className="xs faint">Existing sessions and tokens of this account may be invalidated by server policy.</p>
     </Dialog>

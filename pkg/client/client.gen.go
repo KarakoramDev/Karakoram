@@ -275,6 +275,9 @@ type APITokenList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// APITokenName Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID.
+type APITokenName = string
+
 // Account defines model for Account.
 type Account struct {
 	CreatedAt          time.Time `json:"createdAt"`
@@ -291,6 +294,12 @@ type AccountList struct {
 	// NextCursor Opaque continuation cursor; absent at the end.
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
+
+// AccountName Start with a letter; use only letters, digits, underscore, dot, @ or dash.
+type AccountName = string
+
+// AccountPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+type AccountPassword = string
 
 // AgentStatus defines model for AgentStatus.
 type AgentStatus struct {
@@ -412,7 +421,9 @@ type CanResponse struct {
 // ChangePasswordRequest defines model for ChangePasswordRequest.
 type ChangePasswordRequest struct {
 	CurrentPassword *string `json:"currentPassword,omitempty"`
-	NewPassword     *string `json:"newPassword,omitempty"`
+
+	// NewPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+	NewPassword *AccountPassword `json:"newPassword,omitempty"`
 }
 
 // Cluster defines model for Cluster.
@@ -548,16 +559,23 @@ type ConnectionSummary struct {
 
 // CreateAPITokenRequest defines model for CreateAPITokenRequest.
 type CreateAPITokenRequest struct {
+	// ExpiresAt Optional RFC 3339 timestamp, strictly in the future.
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	Name      string     `json:"name"`
+
+	// Name Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID.
+	Name APITokenName `json:"name"`
 }
 
 // CreateAccountRequest defines model for CreateAccountRequest.
 type CreateAccountRequest struct {
-	Enabled            *bool   `json:"enabled,omitempty"`
-	MustChangePassword *bool   `json:"mustChangePassword,omitempty"`
-	Name               string  `json:"name"`
-	Password           *string `json:"password,omitempty"`
+	Enabled            *bool `json:"enabled,omitempty"`
+	MustChangePassword *bool `json:"mustChangePassword,omitempty"`
+
+	// Name Start with a letter; use only letters, digits, underscore, dot, @ or dash.
+	Name AccountName `json:"name"`
+
+	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+	Password *AccountPassword `json:"password,omitempty"`
 }
 
 // CreateBackupRequest defines model for CreateBackupRequest.
@@ -1098,7 +1116,7 @@ type ProviderVersionStatus string
 
 // RBACPolicy defines model for RBACPolicy.
 type RBACPolicy struct {
-	// Policy Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed.
+	// Policy Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. Validation errors name policy and the line. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies.
 	Policy string `json:"policy"`
 }
 
@@ -1133,8 +1151,10 @@ type ReplaceClusterRequest struct {
 
 // ResetPasswordRequest defines model for ResetPasswordRequest.
 type ResetPasswordRequest struct {
-	MustChangePassword *bool   `json:"mustChangePassword,omitempty"`
-	Password           *string `json:"password,omitempty"`
+	MustChangePassword *bool `json:"mustChangePassword,omitempty"`
+
+	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+	Password *AccountPassword `json:"password,omitempty"`
 }
 
 // Resources defines model for Resources.
@@ -1284,8 +1304,11 @@ type TopologyType string
 
 // UpdateAPITokenRequest defines model for UpdateAPITokenRequest.
 type UpdateAPITokenRequest struct {
+	// ExpiresAt RFC 3339 timestamp strictly in the future, or null to remove expiry.
 	ExpiresAt *time.Time `json:"expiresAt"`
-	Name      string     `json:"name"`
+
+	// Name Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID.
+	Name APITokenName `json:"name"`
 }
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
@@ -10689,6 +10712,7 @@ type LoginResponse struct {
 	JSON403      *Forbidden
 	JSON404      *NotFound
 	JSON409      *Conflict
+	JSON429      *Error
 	JSON500      *InternalError
 }
 
@@ -14634,6 +14658,13 @@ func ParseLoginResponse(rsp *http.Response) (*LoginResponse, error) {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
