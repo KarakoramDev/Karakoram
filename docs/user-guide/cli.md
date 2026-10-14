@@ -56,6 +56,11 @@ Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](r
 
 Deleting clusters, backups, storages, API tokens, accounts, namespaces, database users or roles prompts **Type the name to confirm** when stdin is a terminal. The same safeguard applies to in-place restores, member replacement, compatibility-version raises, system-user/TLS/namespace-token rotation and account password resets. For compound identities, type the final argument (the backup/member/user/role); in-place restore asks for the target cluster. `--yes` / `-y` skips confirmation. Non-terminal stdin does not prompt, preserving automation behavior. Declining or reaching EOF without confirmation exits non-zero without submitting the mutation. Repeated deletion of a cluster already Deleting reports that deletion is already underway; it does not imply that cleanup has finished.
 
+With unchanged `--keep-volumes` and `--keep-backups` options, a repeated cluster
+delete returns the existing in-flight Operation; output and `--wait` use that
+same operation ID. Changing either option supersedes the previous tracking
+record with a new Operation.
+
 Every failure exits non-zero, including a successful HTTP storage-verification response with `verified: false`. Output retains the verification message. Server errors print their human message plus available field, reason and resource details on stderr; command-line mistakes also print usage on stderr. Locally rejected flag values (including `--output` and `--shards` bounds) and missing required convenience flags exit with status 2; request bodies rejected by the server exit with status 6.
 
 | Exit status | Meaning |

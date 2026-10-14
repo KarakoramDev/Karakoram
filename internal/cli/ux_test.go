@@ -411,7 +411,9 @@ func TestReplacementFailureMessageAndRepeatedDelete(t *testing.T) {
 		case strings.Contains(r.URL.Path, "operations"):
 			fmt.Fprint(w, `{"id":"op-one","phase":"Failed","message":"Single-member clusters cannot replace members; use restore"}`)
 		case r.Method == "DELETE":
+			w.Header().Set("Karakoram-Operation-Id", "delete-existing")
 			w.WriteHeader(202)
+			fmt.Fprint(w, `{"id":"delete-existing","type":"delete","phase":"Running","message":"Deleting resources"}`)
 		default:
 			fmt.Fprint(w, `{"name":"demo","status":{"phase":"Deleting"}}`)
 		}
@@ -421,9 +423,40 @@ func TestReplacementFailureMessageAndRepeatedDelete(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "Single-member clusters cannot replace members") {
 		t.Fatalf("failure code=%d stderr=%q", code, stderr)
 	}
-	code, _, stderr = runCLI(t, server.URL, "", false, "clusters", "delete", "demo")
-	if code != 0 || !strings.Contains(stderr, "already being deleted") {
-		t.Fatalf("delete code=%d stderr=%q", code, stderr)
+	code, out, stderr := runCLI(t, server.URL, "", false, "clusters", "delete", "demo", "--yes")
+	if code != 0 || !strings.Contains(stderr, "already being deleted") || !strings.Contains(out, "delete-existing") || !strings.Contains(out, "Running") {
+		t.Fatalf("delete code=%d stdout=%q stderr=%q", code, out, stderr)
+	}
+}
+
+func TestRepeatedDeleteWaitsForReturnedOperation(t *testing.T) {
+	waited := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/operations/delete-existing":
+			waited = true
+			fmt.Fprint(w, `{"id":"delete-existing","type":"delete","phase":"Succeeded","message":"Deletion complete"}`)
+		case r.Method == "DELETE":
+			w.Header().Set("Karakoram-Operation-Id", "delete-existing")
+			w.WriteHeader(202)
+			fmt.Fprint(w, `{"id":"delete-existing","type":"delete","phase":"Running","message":"Deleting resources"}`)
+		case waited:
+			w.WriteHeader(404)
+			fmt.Fprint(w, `{"code":"not_found","message":"Cluster deleted"}`)
+		default:
+			fmt.Fprint(w, `{"name":"demo","status":{"phase":"Deleting"}}`)
+		}
+	}))
+	defer server.Close()
+	code, out, stderr := runCLI(t, server.URL, "", false, "clusters", "delete", "demo", "--yes", "--wait", "--timeout", "1s")
+	if code != 0 || !waited || !strings.Contains(out, "deleted") {
+		t.Fatalf("code=%d waited=%t stdout=%q stderr=%q", code, waited, out, stderr)
+	}
+	for _, message := range []string{"already being deleted", "operation delete-existing", "Deletion complete"} {
+		if !strings.Contains(stderr, message) {
+			t.Errorf("stderr %q missing %q", stderr, message)
+		}
 	}
 }
 

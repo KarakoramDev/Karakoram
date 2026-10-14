@@ -70,6 +70,105 @@ func TestClusterAcceptanceAndDeleteOperationBodies(t *testing.T) {
 	clusterTracking(t, call(s, "POST", "/api/v1/clusters/newdemo/resume", "", token), 202)
 }
 
+func TestRepeatedClusterDeleteReusesInFlightOperation(t *testing.T) {
+	for _, phase := range []domain.Phase{domain.PhasePending, domain.PhaseRunning} {
+		for _, options := range []string{
+			"keepVolumes=false&keepBackups=false",
+			"keepVolumes=true&keepBackups=false",
+			"keepVolumes=false&keepBackups=true",
+			"keepVolumes=true&keepBackups=true",
+		} {
+			t.Run(string(phase)+"/"+options, func(t *testing.T) {
+				s, _, token := testServer(t)
+				ctx := context.Background()
+				path := "/api/v1/clusters/prod?" + options
+				first := call(s, "DELETE", path, "", token)
+				id := first.Header().Get("Karakoram-Operation-Id")
+				if first.Code != 202 || id == "" {
+					t.Fatal(first.Code, first.Body.String())
+				}
+				op, err := s.Store.GetOperation(ctx, id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				op.Phase, op.Message = phase, "Original deletion progress"
+				if err = s.Store.UpdateOperation(ctx, op); err != nil {
+					t.Fatal(err)
+				}
+				before, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				paths := []string{path}
+				if options == "keepVolumes=false&keepBackups=false" {
+					paths = append(paths, "/api/v1/clusters/prod")
+				}
+				for _, repeatPath := range paths {
+					repeat := call(s, "DELETE", repeatPath, "", token)
+					var body api.Operation
+					if err = json.Unmarshal(repeat.Body.Bytes(), &body); err != nil {
+						t.Fatal(err, repeat.Body.String())
+					}
+					if repeat.Code != 202 || repeat.Header().Get("Karakoram-Operation-Id") != id || body.Id != id || string(body.Phase) != string(phase) || value(body.Message) != op.Message {
+						t.Fatal(repeat.Code, repeat.Header(), repeat.Body.String())
+					}
+				}
+				after, err := s.Store.GetCluster(ctx, before.Ref())
+				if err != nil || after.Generation != before.Generation || !after.UpdatedAt.Equal(before.UpdatedAt) {
+					t.Fatal("identical delete changed cluster intent", after, err)
+				}
+				operations, err := s.Store.ListOperations(ctx, before.Ref())
+				if err != nil || len(operations) != 1 || operations[0].ID != id || operations[0].Phase != phase || operations[0].CompletedAt != nil {
+					t.Fatal("identical delete superseded tracking", operations, err)
+				}
+				if before.DeleteOptions.KeepVolumes {
+					err = s.Store.SuspendCluster(ctx, after)
+				} else {
+					err = s.Store.DeleteCluster(ctx, before.Ref())
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				completed, err := s.Store.GetOperation(ctx, id)
+				if err != nil || completed.Phase != domain.PhaseSucceeded {
+					t.Fatal("original delete did not complete", completed, err)
+				}
+			})
+		}
+	}
+}
+
+func TestRepeatedClusterDeleteWithDifferentOptionsSupersedes(t *testing.T) {
+	for _, options := range []string{"keepVolumes=true", "keepBackups=true"} {
+		t.Run(options, func(t *testing.T) {
+			s, _, token := testServer(t)
+			ctx := context.Background()
+			first := call(s, "DELETE", "/api/v1/clusters/prod", "", token)
+			id := first.Header().Get("Karakoram-Operation-Id")
+			if first.Code != 202 || id == "" {
+				t.Fatal(first.Code, first.Body.String())
+			}
+			repeat := call(s, "DELETE", "/api/v1/clusters/prod?"+options, "", token)
+			nextID := repeat.Header().Get("Karakoram-Operation-Id")
+			var body api.Operation
+			if err := json.Unmarshal(repeat.Body.Bytes(), &body); err != nil {
+				t.Fatal(err, repeat.Body.String())
+			}
+			if repeat.Code != 202 || nextID == "" || nextID == id || body.Id != nextID {
+				t.Fatal(repeat.Code, repeat.Header(), repeat.Body.String())
+			}
+			old, err := s.Store.GetOperation(ctx, id)
+			if err != nil || old.Phase != domain.PhaseCancelled || old.Message != "Superseded by operation "+nextID+" (delete)" {
+				t.Fatal(old, err)
+			}
+			current, err := s.Store.GetOperation(ctx, nextID)
+			if err != nil || current.Phase != domain.PhasePending || current.TargetGeneration != old.TargetGeneration+1 {
+				t.Fatal(current, err)
+			}
+		})
+	}
+}
+
 func TestBackupRestoreTrackingAndNotReadyRejection(t *testing.T) {
 	s, _, token := testServer(t)
 	ctx := context.Background()
