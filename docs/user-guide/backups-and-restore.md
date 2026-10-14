@@ -183,6 +183,14 @@ karactl operations cluster demo
 
 The timestamp is illustrative; replace it with a real point in your reported window. Exactly one of backup or time is required. Restore requests accept a source cluster, with the target used by default. Use matching topology/engine major and a successful snapshot; physical restores especially depend on binary/data compatibility.
 
+An in-place **logical restore is not a full rollback**: PBM drops/replaces the
+namespaces contained in the backup, but leaves databases and collections that
+did not exist in that backup untouched, including their documents. To obtain an
+exact copy of the backed-up data, stop writes and drop those extra databases or
+collections before restoring, or use a physical backup/restore (which replaces
+the data directory) or restore into a new cluster. See
+[PBM logical backups and restores](https://docs.percona.com/percona-backup-mongodb/latest/features/logical.html).
+
 REST uses `source.backup` or `source.pitrTime`: set exactly one. Both selectors or neither return **400**, `details.field: source`, reason `conflict`. A nonexistent backup returns **404** with its name and source cluster/namespace; the same dependency context is returned for clone creation. Duplicate restore names return **409** `already_exists`. These errors are synchronous: no restore operation is accepted.
 
 Karakoram serializes disruptive cluster work. It disables PITR and, for sharding, coordinates balancer/router holds. Physical restore suppresses automatic mongod/PBM restart on all relevant nodes. Mongod may be offline and PBM may exit successfully as part of recovery; progress is read with PBM storage configuration while MongoDB is unavailable. Karakoram then starts mongod/PBM, releases maintenance, restores system users, resyncs target storage and restores router/balancer state. Logical restores do not use the offline physical lifecycle.
