@@ -267,7 +267,6 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
 	actor := "reconciler"
 	operation := ""
-	var trackingDeadline time.Time
 	defer func() {
 		if err != nil && !errors.Is(err, errClusterGone) {
 			err = &attributedError{error: err, actor: actor, operation: operation}
@@ -295,7 +294,6 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			}
 			continue
 		}
-		trackingDeadline = op.CreatedAt.Add(m.operationTimeout(op))
 		operation = op.ID
 		if op.Phase == domain.PhasePending {
 			now := m.opts.Context.Clock.Now()
@@ -329,12 +327,8 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	rc.Cluster = c
 	rc.Events = m
 	previous := c.Status.Phase
-	providerCtx := ctx
-	if !trackingDeadline.IsZero() {
-		var cancel context.CancelFunc
-		providerCtx, cancel = context.WithTimeout(ctx, trackingDeadline.Sub(rc.Clock.Now()))
-		defer cancel()
-	}
+	// Convergence records bound observation, not the platform calls needed to
+	// finish applying desired state or cleaning up after a failed record.
 	if c.Deleting {
 		c.Status.Phase = domain.PhaseDeleting
 		if c.Status.Message == "" {
@@ -343,10 +337,10 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		if err = m.state(ctx, c, previous); err != nil {
 			return 0, err
 		}
-		if err = m.resolve(providerCtx, &rc); err != nil {
+		if err = m.resolve(ctx, &rc); err != nil {
 			return 0, err
 		}
-		done, cleanupErr := p.Cleanup(providerCtx, &rc, c.DeleteOptions)
+		done, cleanupErr := p.Cleanup(ctx, &rc, c.DeleteOptions)
 		if err = m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 			return 0, err
 		}
@@ -388,7 +382,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if !errors.Is(err, store.ErrNotFound) {
 		return 0, err
 	}
-	result, syncErr := m.synchronize(providerCtx, p, &rc)
+	result, syncErr := m.synchronize(ctx, p, &rc)
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}

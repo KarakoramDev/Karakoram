@@ -176,6 +176,10 @@ Desired-state operations observe their `targetGeneration`; they succeed when tha
 
 Operations limit ordinary work to **20 consecutive retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. A successful provider step resets the failure count. Validation/unsupported errors stop ordinary work immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. For provider-supported recovery (PSMDB backup, restore and member replacement), exhausted or expired Running work remains Running at `failure-cleanup` until compensation completes, then becomes **Failed with its original failure reason**, not Cancelled. Cleanup retries with backoff beyond the original budget/deadline: restore releases process/maintenance/router holds and restores target PBM configuration; replacement releases its convergence gate. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
 
+Desired-state tracking deadlines govern the operation record only. They do not
+shorten the context used for cluster synchronization or deletion cleanup, so a
+platform call near the deadline can finish while convergence continues.
+
 Zerops failure messages expose diagnostic codes/messages, field/reason metadata
 and known validation limits (`minDisk`, `maxDisk`, `min`, `max` and
 `minFreeResource.memoryGBytes`). Arbitrary metadata is omitted; sensitive
