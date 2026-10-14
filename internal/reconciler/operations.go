@@ -5,6 +5,7 @@ package reconciler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -30,6 +31,8 @@ func (m *Manager) failQueueOperation(p engine.Provider, op *domain.Operation, er
 	}
 	if cleanup, ok := p.(operationFailureCleanup); ok && cleanup.SupportsFailureCleanup(op) {
 		op.LastError = op.Message
+		now := m.opts.Context.Clock.Now()
+		op.FailureCleanupStartedAt = &now
 		op.Phase, op.CompletedAt, op.Step = domain.PhaseRunning, nil, failureCleanupStep
 		return false
 	}
@@ -41,6 +44,23 @@ func (m *Manager) failQueueOperation(p engine.Provider, op *domain.Operation, er
 const DefaultOperationTimeout = 2 * time.Hour
 const DefaultRestoreTimeout = 6 * time.Hour
 const DefaultOperationRetryLimit = 20
+const DefaultFailureCleanupTimeout = 6 * time.Hour
+
+func compensationStep(op *domain.Operation) string {
+	var cp struct {
+		Step  string `json:"step"`
+		Stage string `json:"stage"`
+	}
+	if json.Unmarshal(op.Checkpoint, &cp) == nil {
+		if cp.Step != "" {
+			return cp.Step
+		}
+		if cp.Stage != "" {
+			return cp.Stage
+		}
+	}
+	return op.Step
+}
 
 func (m *Manager) operationTimeout(op *domain.Operation) time.Duration {
 	if d := m.opts.OperationTimeouts[op.Kind]; d > 0 {

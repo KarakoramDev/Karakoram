@@ -405,26 +405,27 @@ func (o Operation) Terminal() bool {
 
 // Operation tracks durable desired-state convergence or a checkpointed action.
 type Operation struct {
-	Namespace        string          `json:"namespace,omitempty"`
-	ID               string          `json:"id"`
-	Cluster          string          `json:"cluster"`
-	Kind             string          `json:"kind"`
-	Target           OperationTarget `json:"target"`
-	TargetGeneration int64           `json:"targetGeneration,omitempty"`
-	Failures         int             `json:"failures,omitempty"`
-	LastError        string          `json:"lastError,omitempty"`
-	CancelRequested  bool            `json:"cancelRequested,omitempty"`
-	Phase            Phase           `json:"phase"`
-	Step             string          `json:"step,omitempty"`
-	Message          string          `json:"message,omitempty"`
-	Payload          json.RawMessage `json:"payload,omitempty"`
-	Checkpoint       json.RawMessage `json:"checkpoint,omitempty"`
-	Attempts         int             `json:"attempts"`
-	CreatedAt        time.Time       `json:"createdAt"`
-	UpdatedAt        time.Time       `json:"updatedAt"`
-	StartedAt        *time.Time      `json:"startedAt,omitempty"`
-	CompletedAt      *time.Time      `json:"completedAt,omitempty"`
-	Actor            string          `json:"actor"`
+	Namespace               string          `json:"namespace,omitempty"`
+	ID                      string          `json:"id"`
+	Cluster                 string          `json:"cluster"`
+	Kind                    string          `json:"kind"`
+	Target                  OperationTarget `json:"target"`
+	TargetGeneration        int64           `json:"targetGeneration,omitempty"`
+	Failures                int             `json:"failures,omitempty"`
+	LastError               string          `json:"lastError,omitempty"`
+	CancelRequested         bool            `json:"cancelRequested,omitempty"`
+	Phase                   Phase           `json:"phase"`
+	Step                    string          `json:"step,omitempty"`
+	Message                 string          `json:"message,omitempty"`
+	Payload                 json.RawMessage `json:"payload,omitempty"`
+	Checkpoint              json.RawMessage `json:"checkpoint,omitempty"`
+	Attempts                int             `json:"attempts"`
+	CreatedAt               time.Time       `json:"createdAt"`
+	UpdatedAt               time.Time       `json:"updatedAt"`
+	StartedAt               *time.Time      `json:"startedAt,omitempty"`
+	CompletedAt             *time.Time      `json:"completedAt,omitempty"`
+	FailureCleanupStartedAt *time.Time      `json:"failureCleanupStartedAt,omitempty"`
+	Actor                   string          `json:"actor"`
 }
 
 // Event is a durable audit and lifecycle notification.

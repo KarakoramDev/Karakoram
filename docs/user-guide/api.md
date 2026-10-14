@@ -176,6 +176,16 @@ Desired-state operations observe their `targetGeneration`; they succeed when tha
 
 Operations limit ordinary work to **20 consecutive retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. A successful provider step resets the failure count. Validation/unsupported errors stop ordinary work immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. For provider-supported recovery (PSMDB backup, restore and member replacement), exhausted or expired Running work remains Running at `failure-cleanup` until compensation completes, then becomes **Failed with its original failure reason**, not Cancelled. Cleanup retries with backoff beyond the original budget/deadline: restore releases process/maintenance/router holds and restores target PBM configuration; replacement releases its convergence gate. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
 
+Failure compensation has a separate **six-hour recovery window**, measured from
+entry into `failure-cleanup` and persisted across control-plane restarts.
+`DefaultFailureCleanupTimeout` supplies the default; embedded deployments can
+set `Options.FailureCleanupTimeout`. If recovery cannot complete in that window,
+the operation becomes Failed and releases the queue with a Warning event naming
+the unfinished compensation checkpoint and stating that **manual recovery is
+required**. Inspect and repair processes, maintenance holds, routers and PBM
+state before submitting dependent work. An unresolved PBM restore is not assumed
+finished, and database processes are not started merely because recovery expires.
+
 Desired-state tracking deadlines govern the operation record only. They do not
 shorten the context used for cluster synchronization or deletion cleanup, so a
 platform call near the deadline can finish while convergence continues.
@@ -241,8 +251,9 @@ karactl operations wait "$OPERATION_ID"
 
 `operations wait` reports Cancelled as a non-successful terminal result. There
 is no universal cancel/rollback or exactly-once mutation guarantee. Cooperative
-cleanup keeps queue ownership and retries with backoff until safe recovery is
-complete; the ordinary retry/deadline budget does not interrupt compensation.
+cleanup keeps queue ownership and retries beyond the ordinary retry/deadline
+budget. Failed-operation recovery is bounded by the separate recovery window
+above; exceeding it requires manual recovery, not automatic rollback.
 
 ## Safe retries with Idempotency-Key
 

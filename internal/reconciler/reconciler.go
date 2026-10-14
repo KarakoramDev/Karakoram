@@ -31,15 +31,16 @@ func (e *attributedError) Unwrap() error { return e.error }
 
 // Options configures serialized reconciliation and retry delays.
 type Options struct {
-	Store               *store.Store
-	Registry            *engine.Registry
-	Namespaces          engine.Namespaces
-	Context             engine.Context
-	ResyncInterval      time.Duration
-	BackoffMin          time.Duration
-	BackoffMax          time.Duration
-	OperationRetryLimit int
-	OperationTimeouts   map[string]time.Duration
+	Store                 *store.Store
+	Registry              *engine.Registry
+	Namespaces            engine.Namespaces
+	Context               engine.Context
+	ResyncInterval        time.Duration
+	BackoffMin            time.Duration
+	BackoffMax            time.Duration
+	OperationRetryLimit   int
+	OperationTimeouts     map[string]time.Duration
+	FailureCleanupTimeout time.Duration
 }
 type worker struct {
 	trigger chan struct{}
@@ -71,6 +72,9 @@ func New(opts Options) (*Manager, error) {
 	}
 	if opts.OperationRetryLimit <= 0 {
 		opts.OperationRetryLimit = DefaultOperationRetryLimit
+	}
+	if opts.FailureCleanupTimeout <= 0 {
+		opts.FailureCleanupTimeout = DefaultFailureCleanupTimeout
 	}
 	if opts.BackoffMin > opts.BackoffMax {
 		opts.BackoffMin = opts.BackoffMax
@@ -521,7 +525,25 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		terminal = m.failQueueOperation(p, op, nil)
 	}
 	failing := op.Step == failureCleanupStep
-	// Compensation is not subject to the exhausted work deadline.
+	cleanupExpired := false
+	if failing {
+		// Legacy cleanup records receive a fresh, durable recovery window.
+		if op.FailureCleanupStartedAt == nil {
+			stamp := rc.Clock.Now()
+			op.FailureCleanupStartedAt = &stamp
+		}
+		deadline := op.FailureCleanupStartedAt.Add(m.opts.FailureCleanupTimeout)
+		cleanupExpired = !rc.Clock.Now().Before(deadline)
+		if cleanupExpired {
+			terminal = true
+			op.Message = fmt.Sprintf("%s; recovery exceeded its %s cleanup deadline at compensation step %q; manual recovery is required", op.LastError, m.opts.FailureCleanupTimeout, compensationStep(op))
+		} else {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
+			defer cancel()
+		}
+	}
+	// Compensation has its own window, not the exhausted work deadline.
 	if !terminal && !failing {
 		deadline := op.CreatedAt.Add(m.operationTimeout(op))
 		var cancel context.CancelFunc
@@ -572,7 +594,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	if opErr == nil && !terminal {
 		op.Failures = 0
 	}
-	if failing {
+	if failing && !cleanupExpired {
 		// Cleanup errors retain the checkpoint and retry with worker backoff,
 		// including errors that would be permanent during ordinary work.
 		opResult.Done = opResult.Done && opErr == nil

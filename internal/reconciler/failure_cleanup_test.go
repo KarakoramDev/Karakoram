@@ -20,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 type cleanupAgentDialer struct {
@@ -278,5 +279,57 @@ func TestSuccessfulOperationStepResetsFailureBudget(t *testing.T) {
 	got, err := st.GetOperation(ctx, op.ID)
 	if err != nil || got.Phase != domain.PhaseSucceeded || got.Failures != 0 || calls != 6 {
 		t.Fatal(got, err, calls)
+	}
+}
+
+func TestFailureCleanupDeadlineReleasesQueueWithRecoveryWarning(t *testing.T) {
+	ctx := context.Background()
+	m, st := newTestManager(t, &psmdb.Provider{})
+	stamp := time.Now().UTC()
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}}
+	if err := st.CreateCluster(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore, Phase: domain.PhaseRunning, Step: failureCleanupStep, LastError: "original failure", Checkpoint: json.RawMessage(`{"step":"routers-on"}`)}
+	// Use the durable representation so this also covers process restarts.
+	raw, _ := json.Marshal(op)
+	var fields map[string]any
+	_ = json.Unmarshal(raw, &fields)
+	fields["failureCleanupStartedAt"] = stamp
+	raw, _ = json.Marshal(fields)
+	if err := json.Unmarshal(raw, op); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.EnqueueOperation(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	m.opts.Context.Clock = fixedClock{now: stamp.Add(7 * time.Hour)}
+	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetOperation(ctx, op.ID)
+	if err != nil || got.Phase != domain.PhaseFailed || got.CompletedAt == nil || !strings.Contains(got.Message, "routers-on") || !strings.Contains(got.Message, "manual recovery is required") || !strings.Contains(got.Message, "original failure") {
+		t.Fatal(got, err)
+	}
+	events, err := st.ListEvents(ctx, store.EventFilter{Cluster: c.Name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range events {
+		if event.Reason == "OperationFailed" && event.Type == "Warning" && strings.Contains(event.Message, "routers-on") && strings.Contains(event.Message, "manual recovery is required") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("missing manual recovery warning", events)
+	}
+	next := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestart, Phase: domain.PhasePending}
+	if err := st.EnqueueOperation(ctx, next); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := st.ClaimOperation(ctx, c.Ref())
+	if err != nil || claimed.ID != next.ID {
+		t.Fatal("cleanup retained queue ownership", claimed, err)
 	}
 }
