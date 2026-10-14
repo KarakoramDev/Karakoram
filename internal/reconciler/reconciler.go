@@ -504,9 +504,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	ctx = context.WithValue(ctx, operationEventKey{}, op.ID)
 	c := rc.Cluster
 	previous := c.Status.Phase
-	deadline := op.CreatedAt.Add(m.operationTimeout(op))
-	callCtx, cancel := context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
-	defer cancel()
+	callCtx := ctx
 	var opResult engine.OpResult
 	var opErr error
 	if op.Kind == domain.OperationRestore {
@@ -518,15 +516,27 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			previous = domain.PhaseRestoring
 		}
 	}
-	if m.operationFailure(op, nil) {
+	terminal := false
+	if op.Step != failureCleanupStep {
+		terminal = m.failQueueOperation(p, op, nil)
+	}
+	failing := op.Step == failureCleanupStep
+	// Compensation is not subject to the exhausted work deadline.
+	if !terminal && !failing {
+		deadline := op.CreatedAt.Add(m.operationTimeout(op))
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
+		defer cancel()
+	}
+	if terminal {
 		opResult.Done = true
 		opErr = errors.New(op.Message)
 	} else if err := m.resolve(callCtx, rc); err != nil {
 		opErr = err
-	} else if op.CancelRequested {
+	} else if failing || op.CancelRequested {
 		if canceller, ok := p.(engine.OperationCanceller); ok {
 			opResult, opErr = canceller.CancelOperation(callCtx, rc, op)
-			if opResult.Done && opErr == nil {
+			if opResult.Done && opErr == nil && !failing {
 				op.Phase = domain.PhaseCancelled
 			}
 		} else {
@@ -559,9 +569,24 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			c.Status.Message = "Restoring: " + opErr.Error()
 		}
 	}
-	if !opResult.Done && m.operationFailure(op, opErr) {
-		opResult.Done = true
-		opErr = errors.New(op.Message)
+	if opErr == nil && !terminal {
+		op.Failures = 0
+	}
+	if failing {
+		// Cleanup errors retain the checkpoint and retry with worker backoff,
+		// including errors that would be permanent during ordinary work.
+		opResult.Done = opResult.Done && opErr == nil
+		if opResult.Done {
+			opErr = errors.New(op.LastError)
+			op.Message = op.LastError
+		} else {
+			op.Step = failureCleanupStep
+		}
+	} else if !opResult.Done {
+		if m.failQueueOperation(p, op, opErr) {
+			opResult.Done = true
+			opErr = errors.New(op.Message)
+		}
 	}
 	if opResult.Done {
 		if op.Phase != domain.PhaseCancelled {
@@ -590,7 +615,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	// using its new checkpoint rather than unrelated ordinary convergence.
 	var result engine.Result
 	var syncErr error
-	if policy, ok := p.(engine.OperationSyncPolicy); ok && !opResult.Done && opErr == nil && policy.SyncDuringOperation(op) {
+	if policy, ok := p.(engine.OperationSyncPolicy); ok && op.Step != failureCleanupStep && !opResult.Done && opErr == nil && policy.SyncDuringOperation(op) {
 		result, syncErr = m.synchronize(ctx, p, rc)
 	}
 	// Persist even on provider error, atomically with the state referenced by

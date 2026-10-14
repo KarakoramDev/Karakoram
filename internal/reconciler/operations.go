@@ -15,6 +15,27 @@ import (
 
 type operationEventKey struct{}
 
+// failureCleanupStep keeps cleanup ownership durable without changing the
+// provider's checkpoint. LastError carries the original terminal reason.
+const failureCleanupStep = "failure-cleanup"
+
+type operationFailureCleanup interface {
+	engine.OperationCanceller
+	SupportsFailureCleanup(*domain.Operation) bool
+}
+
+func (m *Manager) failQueueOperation(p engine.Provider, op *domain.Operation, err error) bool {
+	if !m.operationFailure(op, err) {
+		return false
+	}
+	if cleanup, ok := p.(operationFailureCleanup); ok && cleanup.SupportsFailureCleanup(op) {
+		op.LastError = op.Message
+		op.Phase, op.CompletedAt, op.Step = domain.PhaseRunning, nil, failureCleanupStep
+		return false
+	}
+	return true
+}
+
 // DefaultOperationTimeout bounds wall-clock queue ownership, including scheduled
 // waits and successful-but-incomplete checkpoints. Restore gets a larger window.
 const DefaultOperationTimeout = 2 * time.Hour

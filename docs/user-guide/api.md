@@ -174,7 +174,7 @@ Every accepted create, PUT/PATCH (including scale/resources/exposure/TLS/version
 
 Desired-state operations observe their `targetGeneration`; they succeed when that generation is observed and the cluster is Ready, or Degraded with an explanatory message. A newer mutation cancels superseded tracking records with the newer operation ID in the message. Deletion succeeds only when removal (or requested suspension) completes. Tracking records do not block the imperative queue or roll back desired state. `spec.version` is the requested version; `status.version` is observed from runtime members (the oldest observed member during a mixed-version rollout), and is absent when observation is unavailable. Inspect member versions and FCV before declaring an upgrade complete.
 
-Operations have bounded ownership: **20 retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. Validation/unsupported errors fail immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
+Operations limit ordinary work to **20 consecutive retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. A successful provider step resets the failure count. Validation/unsupported errors stop ordinary work immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. For provider-supported recovery (PSMDB backup, restore and member replacement), exhausted or expired Running work remains Running at `failure-cleanup` until compensation completes, then becomes **Failed with its original failure reason**, not Cancelled. Cleanup retries with backoff beyond the original budget/deadline: restore releases process/maintenance/router holds and restores target PBM configuration; replacement releases its convergence gate. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
 
 Zerops failure messages expose diagnostic codes/messages, field/reason metadata
 and known validation limits (`minDisk`, `maxDisk`, `min`, `max` and
@@ -232,8 +232,9 @@ karactl operations wait "$OPERATION_ID"
 ```
 
 `operations wait` reports Cancelled as a non-successful terminal result. There
-is no universal cancel/rollback or exactly-once mutation guarantee; operation
-retry/deadline budgets above still bound ownership while cleanup is pending.
+is no universal cancel/rollback or exactly-once mutation guarantee. Cooperative
+cleanup keeps queue ownership and retries with backoff until safe recovery is
+complete; the ordinary retry/deadline budget does not interrupt compensation.
 
 ## Safe retries with Idempotency-Key
 

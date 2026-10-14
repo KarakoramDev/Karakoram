@@ -57,9 +57,9 @@ func loadCheckpoint(op *domain.Operation) (checkpoint, error) {
 	return cp, nil
 }
 
-// PrepareCancellation switches accepted pre-mutation restore cancellation to
-// target-configuration recovery; backup polling issues its durable cancel receipt.
-// Requests are accepted only at safe checkpoints by the owning provider.
+// PrepareCancellation switches restore to compensating recovery and backup
+// polling to its durable cancel receipt. User requests are accepted only at safe
+// checkpoints; expired work may require recovery after processes were stopped.
 func PrepareCancellation(op *domain.Operation) (bool, error) {
 	cp, err := loadCheckpoint(op)
 	if err != nil {
@@ -69,7 +69,22 @@ func PrepareCancellation(op *domain.Operation) (bool, error) {
 		return true, nil
 	}
 	if op.Kind == domain.OperationRestore && !cp.Cancelling {
-		cp.Step, cp.Failure = "configure-target", "Restore cancelled before data mutation"
+		failure := "Restore cancelled before data mutation"
+		if op.Step == "failure-cleanup" && op.LastError != "" {
+			failure = op.LastError
+		}
+		cp.Failure = failure
+		switch cp.Step {
+		case "configure-source", "source-resync", "source-inventory", "disable-pitr":
+			cp.Step, cp.Index = "configure-target", 0
+		case "routers-off":
+			// Finish an already-submitted stop before starting routers again.
+			if cp.RouterOp == nil {
+				cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
+			}
+		case "balancer-off", "maintenance-on", "start", "poll":
+			cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
+		}
 	}
 	cp.Cancelling = true
 	op.Checkpoint, err = json.Marshal(cp)

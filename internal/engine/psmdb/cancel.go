@@ -72,7 +72,31 @@ func (p *Provider) CanCancelOperation(op *domain.Operation) error {
 	return fmt.Errorf("Operation %s (%s) cannot be cancelled safely at checkpoint %q: data mutation or cleanup may already be in progress", op.ID, op.Kind, checkpoint)
 }
 
+// SupportsFailureCleanup identifies operations whose expired work must restore
+// provider invariants before releasing queue ownership.
+func (*Provider) SupportsFailureCleanup(op *domain.Operation) bool {
+	switch op.Kind {
+	case domain.OperationBackup, domain.OperationRestore, domain.OperationReplaceMember:
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if op.Kind == domain.OperationReplaceMember {
+		s, err := load(rc.Cluster)
+		if err != nil {
+			return engine.OpResult{}, err
+		}
+		// Ordinary convergence owns any partially provisioned replacement and
+		// outstanding platform action after the replacement gate is released.
+		s.ReplaceActive = false
+		if err = save(rc.Cluster, s); err != nil {
+			return engine.OpResult{}, err
+		}
+		return engine.OpResult{Done: true, Step: "replacement-cleaned-up"}, nil
+	}
 	// The request was authorized against an unchanged durable checkpoint. An
 	// in-flight safe step may have advanced once before persisting the request;
 	// the worker must honor it before executing the next (possibly unsafe) step.
