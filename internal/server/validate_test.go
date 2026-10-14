@@ -403,3 +403,33 @@ func TestTypedClientOmittedFieldsAndExplicitZero(t *testing.T) {
 		}
 	}
 }
+
+func TestBackupConflictExplainsPendingGeneration(t *testing.T) {
+	s, _, token := testServer(t)
+	ref := domain.ClusterRef{Namespace: "default", Name: "prod"}
+	c, err := s.Store.GetCluster(t.Context(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Spec.Components.Engine.Replicas = 5
+	if err := s.Store.UpdateClusterSpec(t.Context(), ref, c.Spec); err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "POST", "/api/v1/clusters/prod/backups", `{"name":"beforechange","type":"logical","storage":"archive"}`, token)
+	var problem api.Error
+	if err := json.Unmarshal(w.Body.Bytes(), &problem); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 409 || !strings.Contains(problem.Message, "Ready") ||
+		!strings.Contains(problem.Message, "generation 2 is pending (observed generation 1)") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if problem.Details == nil || (*problem.Details)["generation"] != float64(2) ||
+		(*problem.Details)["observedGeneration"] != float64(1) {
+		t.Fatal(problem.Details)
+	}
+	backups, err := s.Store.ListBackups(t.Context(), ref)
+	if err != nil || len(backups) != 0 {
+		t.Fatal(backups, err)
+	}
+}

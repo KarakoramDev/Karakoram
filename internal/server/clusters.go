@@ -378,7 +378,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "CreateBackup":
 		b := in.Body.(*api.CreateBackupRequest)
 		if c.Deleting || (c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation {
-			return failDetails(409, "conflict", "Backup requires a formed, active cluster; cluster "+c.Name+" is "+string(c.Status.Phase), map[string]any{"resource": "cluster", "name": c.Name, "reason": domain.ReasonInvalidState, "state": string(c.Status.Phase)})
+			state := string(c.Status.Phase)
+			if c.Deleting {
+				state += "; deletion is pending"
+			}
+			if c.Status.ObservedGeneration < c.Generation {
+				state += fmt.Sprintf("; generation %d is pending (observed generation %d)", c.Generation, c.Status.ObservedGeneration)
+			}
+			return failDetails(409, "conflict", "Backup requires a formed, active cluster with no pending changes; cluster "+c.Name+" is "+state, map[string]any{"resource": "cluster", "name": c.Name, "reason": domain.ReasonInvalidState, "state": string(c.Status.Phase), "generation": c.Generation, "observedGeneration": c.Status.ObservedGeneration})
 		}
 		if b.Name == "" {
 			return invalidField("name", domain.ReasonRequired, "name is required")
