@@ -224,6 +224,12 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		return c.GetMemberLogs(ctx, args[0], args[1], &p)
 	case "getOperation":
 		return c.GetOperation(ctx, args[0])
+	case "cancelOperation":
+		var p client.CancelOperationParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.CancelOperation(ctx, args[0], &p)
 	case "getPITRWindow":
 		var p client.GetPITRWindowParams
 		if err = json.Unmarshal(q, &p); err != nil {

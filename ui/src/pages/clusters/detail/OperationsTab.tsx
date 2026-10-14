@@ -9,7 +9,10 @@ import { keys } from '@/api/keys';
 import { DEFAULT_NAMESPACE } from '@/auth/permissions';
 import { Card, ErrorBlock, Loading, Segmented, Time, formatDuration } from '@/components/ui/Primitives';
 import { OpPhaseBadge } from '../cluster-utils';
-import { clusterPath, useClusterContext } from './ClusterDetail';
+import { useClusterContext } from './ClusterDetail';
+import { clusterPath } from '../cluster-path';
+import { OperationTarget } from '@/components/OperationNotice';
+import { operationPath } from '@/components/operations';
 import { elapsedSeconds } from '@/components/ui/presentation';
 
 type Operation = Schemas['Operation'];
@@ -26,6 +29,7 @@ export function OperationsTable({ items, showCluster, showNamespace }: { items: 
             {showNamespace ? <th>Namespace</th> : null}
             {showCluster ? <th>Cluster</th> : null}
             <th>Type</th>
+            <th>Target</th>
             <th>Phase</th>
             <th>Actor</th>
             <th style={{ width: 200 }}>Progress</th>
@@ -38,10 +42,11 @@ export function OperationsTable({ items, showCluster, showNamespace }: { items: 
         <tbody>
           {items.map((op) => (
             <tr key={op.id}>
-              <td className="mono xs" title={op.id}><Link to={`/operations/${encodeURIComponent(op.id)}`}>{op.id}</Link></td>
+              <td className="mono xs" title={op.id}><Link to={operationPath(op.id)}>{op.id}</Link></td>
               {showNamespace ? <td className="mono small">{op.namespace || DEFAULT_NAMESPACE}</td> : null}
               {showCluster ? <td className="mono small" title={op.cluster}><Link to={clusterPath(op.namespace || DEFAULT_NAMESPACE, op.cluster)}>{op.cluster}</Link></td> : null}
               <td className="small">{op.type}</td>
+              <td className="small mono"><OperationTarget operation={op} /></td>
               <td>
                 <OpPhaseBadge phase={op.phase} />
               </td>
@@ -79,7 +84,7 @@ export function OperationsTable({ items, showCluster, showNamespace }: { items: 
           ))}
           {items.length === 0 ? (
             <tr>
-              <td colSpan={9 + extra} className="table-empty">
+              <td colSpan={11 + extra} className="table-empty">
                 No operations.
               </td>
             </tr>

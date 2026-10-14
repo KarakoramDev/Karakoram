@@ -7,9 +7,9 @@ package psmdb
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"math"
-	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
@@ -219,38 +219,64 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		known = known || v.Version == s.Version
 	}
 	if !known {
-		return invalid("unsupported engine version %q", s.Version)
+		versions := make([]string, 0, len(catalog))
+		for _, v := range catalog {
+			versions = append(versions, v.Version)
+		}
+		return engine.InvalidField("spec.version", domain.ReasonUnsupported, "spec.version is not offered by provider psmdb; offered versions: %s", strings.Join(versions, ", "))
 	}
 	if s.Topology.Type != "replicaSet" && s.Topology.Type != "sharded" {
 		return invalid("unsupported topology")
 	}
 	if s.Topology.Type == "sharded" && (s.Topology.Shards < 1 || s.Topology.Shards > 128) {
-		return invalid("shards must be 1..128")
+		return engine.InvalidField("spec.topology.shards", domain.ReasonOutOfRange, "spec.topology.shards must be from 1 to 128")
 	}
 	cs := []domain.ComponentSpec{s.Components.Engine}
 	if s.Topology.Type == "sharded" {
 		cs = append(cs, s.Components.ConfigServer, s.Components.Router)
 	}
 	for i, c := range cs {
+		component := "engine"
+		if i == 1 {
+			component = "configServer"
+		} else if i == 2 {
+			component = "router"
+		}
+		field := "spec.components." + component
 		if i < 2 && (c.Replicas < 1 || c.Replicas > 7 || c.Replicas%2 == 0) {
-			return invalid("replica sets require 1, 3, 5 or 7 members")
+			return engine.InvalidField(field+".replicas", domain.ReasonOutOfRange, "%s.replicas must be 1, 3, 5 or 7", field)
 		}
 		if i == 2 && (c.Replicas < 1 || c.Replicas > 32) {
-			return invalid("routers must be 1..32")
+			return engine.InvalidField(field+".replicas", domain.ReasonOutOfRange, "%s.replicas must be from 1 to 32", field)
 		}
 		r := c.Resources
 		if r.CPUMode != "SHARED" && r.CPUMode != "DEDICATED" {
-			return invalid("cpuMode must be SHARED or DEDICATED")
+			return engine.InvalidField(field+".resources.cpuMode", domain.ReasonInvalid, "%s.resources.cpuMode must be SHARED or DEDICATED", field)
 		}
-		if r.MinCPU <= 0 || r.MaxCPU < r.MinCPU || r.MinRAM < 0.5 || r.MaxRAM < r.MinRAM || r.MinDisk < 5 || r.MaxDisk < r.MinDisk {
-			return invalid("invalid resource bounds (RAM >=0.5 GB, disk >=5 GB)")
+		for _, bound := range []struct {
+			name           string
+			value, minimum float64
+		}{
+			{"minCpu", r.MinCPU, 1}, {"maxCpu", r.MaxCPU, r.MinCPU},
+			{"minRam", r.MinRAM, 0.5}, {"maxRam", r.MaxRAM, r.MinRAM},
+			{"minDisk", r.MinDisk, 5}, {"maxDisk", r.MaxDisk, r.MinDisk},
+		} {
+			if bound.value < bound.minimum {
+				return engine.InvalidField(field+".resources."+bound.name, domain.ReasonOutOfRange, "%s.resources.%s must be at least %g", field, bound.name, bound.minimum)
+			}
 		}
 		// Zerops allocates whole CPU cores and rejects fractional autoscaling bounds.
 		if r.MinCPU != math.Trunc(r.MinCPU) || r.MaxCPU != math.Trunc(r.MaxCPU) || (r.StartCPU != nil && *r.StartCPU != math.Trunc(*r.StartCPU)) {
-			return invalid("CPU bounds must be whole cores (>= 1)")
+			name := "minCpu"
+			if r.MaxCPU != math.Trunc(r.MaxCPU) {
+				name = "maxCpu"
+			} else if r.StartCPU != nil && *r.StartCPU != math.Trunc(*r.StartCPU) {
+				name = "startCpu"
+			}
+			return engine.InvalidField(field+".resources."+name, domain.ReasonInvalid, "%s.resources.%s must be a whole number of cores (at least 1)", field, name)
 		}
 		if r.StartCPU != nil && (*r.StartCPU < r.MinCPU || *r.StartCPU > r.MaxCPU) {
-			return invalid("startCpu outside CPU bounds")
+			return engine.InvalidField(field+".resources.startCpu", domain.ReasonOutOfRange, "%s.resources.startCpu must be between minCpu and maxCpu", field)
 		}
 	}
 	if s.TLS.Mode != "disabled" && s.TLS.Mode != "preferTLS" && s.TLS.Mode != "requireTLS" {
@@ -259,16 +285,11 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.TLS.CA != "selfSigned" && s.TLS.CA != "userProvided" {
 		return invalid("invalid TLS CA source")
 	}
-	if s.Exposure.Public && len(s.Exposure.Allowlist) == 0 {
-		return invalid("public exposure requires an IP allowlist")
-	}
-	if s.Exposure.IPType != "IPV6" && s.Exposure.IPType != "IPV4" {
-		return invalid("invalid exposure IP type")
-	}
-	for _, cidr := range s.Exposure.Allowlist {
-		if _, e := netip.ParsePrefix(cidr); e != nil {
-			return invalid("invalid allowlist CIDR %q", cidr)
+	if err := domain.ValidateExposure(s.Exposure); err != nil {
+		if field, ok := err.(*domain.FieldError); ok {
+			field.Err = engine.ErrInvalid
 		}
+		return err
 	}
 	if s.Backup.PITR.Enabled && s.Backup.Storage == "" {
 		return invalid("PITR requires backup storage")
@@ -280,7 +301,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.Backup.Storage != "" {
 		storages[s.Backup.Storage] = true
 	}
-	for _, b := range s.Backup.Schedules {
+	for i, b := range s.Backup.Schedules {
 		if _, e := cron.ParseStandard(b.Cron); e != nil {
 			return invalid("invalid backup schedule %q", b.Name)
 		}
@@ -288,7 +309,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			return invalid("invalid backup type")
 		}
 		if b.RetainCount < 1 {
-			return invalid("retainCount must be positive")
+			return engine.InvalidField(fmt.Sprintf("spec.backup.schedules.%d.retainCount", i), domain.ReasonOutOfRange, "spec.backup.schedules.%d.retainCount must be positive (at least 1)", i)
 		}
 		storage := b.Storage
 		if storage == "" {

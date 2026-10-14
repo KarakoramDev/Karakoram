@@ -66,7 +66,7 @@ func TestSecurity(t *testing.T) {
 			s.exerciseUsersRoles(name)
 			s.put(name, "rotation-proof", username)
 			s.proof(name, "rotation-proof", username)
-			s.backup(name, storage, api.CreateBackupRequestTypeLogical)
+			s.backup(name, storage, "logical")
 			s.assertMetrics(name)
 			s.assertPrometheus(name)
 		}
@@ -79,7 +79,7 @@ func TestSecurity(t *testing.T) {
 		name := s.create(spec)
 		s.assertPublic(name, false)
 		s.update(name, func(spec *api.ClusterSpec) {
-			spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.IPV6), Allowlist: ptr([]string{requireCIDR(t)})}
+			spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.ExposureIpTypeIPV6), Allowlist: ptr([]string{requireCIDR(t)})}
 		})
 		connection := s.connection(name)
 		if connection.CaCertificate == nil || connection.Connection.PublicHosts == nil || len(*connection.Connection.PublicHosts) != 3 {
@@ -93,12 +93,12 @@ func TestSecurity(t *testing.T) {
 		s.assertMemberTransport(name)
 		db, fresh := credential(connection, "databaseAdmin")
 		s.rejectedAuth(name, "databaseAdmin", fresh, db, false)
-		s.update(name, func(spec *api.ClusterSpec) { spec.Tls.Mode = api.PreferTLS })
+		s.update(name, func(spec *api.ClusterSpec) { spec.Tls.Mode = api.TLSModePreferTLS })
 		s.acceptConnection(name, true)
 		s.acceptConnection(name, false)
-		s.update(name, func(spec *api.ClusterSpec) { spec.Tls.Mode = api.Disabled })
+		s.update(name, func(spec *api.ClusterSpec) { spec.Tls.Mode = api.TLSModeDisabled })
 		s.acceptConnection(name, false)
-		s.update(name, func(spec *api.ClusterSpec) { spec.Tls.Mode = api.RequireTLS })
+		s.update(name, func(spec *api.ClusterSpec) { spec.Tls.Mode = api.TLSModeRequireTLS })
 		s.assertMemberTransport(name)
 		s.acceptConnection(name, true)
 		s.rejectedAuth(name, "databaseAdmin", fresh, db, false)

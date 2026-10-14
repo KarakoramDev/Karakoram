@@ -27,8 +27,15 @@ const (
 	PhaseRunning      Phase = "Running"
 	PhaseSucceeded    Phase = "Succeeded"
 	PhaseFailed       Phase = "Failed"
+	PhaseCancelled    Phase = "Cancelled"
 )
 const (
+	OperationCreate           = "create"
+	OperationUpdate           = "update"
+	OperationTLS              = "tls"
+	OperationUpgrade          = "upgrade"
+	OperationDelete           = "delete"
+	OperationResume           = "resume"
 	OperationBackup           = "backup"
 	OperationDeleteBackup     = "delete-backup"
 	OperationRestore          = "restore"
@@ -41,12 +48,13 @@ const (
 
 // Cluster holds desired state, observed state, and provider-owned durable state.
 type Cluster struct {
-	Namespace  string          `json:"namespace,omitempty"`
-	Name       string          `json:"name"`
-	Spec       ClusterSpec     `json:"spec"`
-	Status     ClusterStatus   `json:"status"`
-	Internal   json.RawMessage `json:"-"`
-	Generation int64           `json:"generation"`
+	Namespace   string          `json:"namespace,omitempty"`
+	Name        string          `json:"name"`
+	OperationID string          `json:"operationId,omitempty"`
+	Spec        ClusterSpec     `json:"spec"`
+	Status      ClusterStatus   `json:"status"`
+	Internal    json.RawMessage `json:"-"`
+	Generation  int64           `json:"generation"`
 	// RequestedBy belongs to Generation, not to observed-state updates.
 	// It remains empty for generations whose historical requester is unknown.
 	RequestedBy   string        `json:"-"`
@@ -132,9 +140,10 @@ type TLSConfig struct {
 
 // Exposure defines optional public TCP access and firewall rules.
 type Exposure struct {
-	Public    bool     `json:"public"`
-	IPType    string   `json:"ipType"`
-	Allowlist []string `json:"allowlist"`
+	Public            bool     `json:"public"`
+	IPType            string   `json:"ipType"`
+	Allowlist         []string `json:"allowlist"`
+	AllowAllAddresses bool     `json:"allowAllAddresses,omitempty"`
 }
 
 // MonitoringConfig controls engine monitoring.
@@ -274,7 +283,7 @@ type UpgradePath struct {
 	// RequiresFCV is the feature compatibility version the cluster must have
 	// before this upgrade may start (major upgrades only).
 	RequiresFCV string `json:"requiresFCV,omitempty"`
-	// RequiresBackup recommends a fresh backup before the upgrade.
+	// RequiresBackup requires a fresh successful backup before the upgrade.
 	RequiresBackup bool `json:"requiresBackup,omitempty"`
 }
 
@@ -326,15 +335,16 @@ type StorageCredentials struct {
 
 // Backup tracks one durable backup inventory entry.
 type Backup struct {
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"name"`
-	Cluster   string `json:"cluster"`
-	Storage   string `json:"storage"`
-	Type      string `json:"type"`
-	Trigger   string `json:"trigger"`
-	Schedule  string `json:"schedule,omitempty"`
-	Phase     Phase  `json:"phase"`
-	PBMName   string `json:"pbmName,omitempty"`
+	Namespace   string `json:"namespace,omitempty"`
+	Name        string `json:"name"`
+	Cluster     string `json:"cluster"`
+	OperationID string `json:"operationId,omitempty"`
+	Storage     string `json:"storage"`
+	Type        string `json:"type"`
+	Trigger     string `json:"trigger"`
+	Schedule    string `json:"schedule,omitempty"`
+	Phase       Phase  `json:"phase"`
+	PBMName     string `json:"pbmName,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -356,6 +366,7 @@ type Restore struct {
 	SourceNamespace string        `json:"sourceNamespace,omitempty"`
 	Name            string        `json:"name"`
 	Cluster         string        `json:"cluster"`
+	OperationID     string        `json:"operationId,omitempty"`
 	Source          RestoreSource `json:"source"`
 	Phase           Phase         `json:"phase"`
 	StartedAt       *time.Time    `json:"startedAt,omitempty"`
@@ -371,23 +382,49 @@ type RestoreSource struct {
 	SourceCluster string     `json:"sourceCluster,omitempty"`
 }
 
-// Operation tracks a durable, checkpointed imperative action.
+// OperationTarget identifies the non-secret resource affected by an operation.
+type OperationTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// IsConvergenceOperation identifies tracking records for desired-state work.
+func IsConvergenceOperation(kind string) bool {
+	switch kind {
+	case OperationCreate, OperationUpdate, OperationTLS, OperationUpgrade, OperationDelete, OperationResume:
+		return true
+	default:
+		return false
+	}
+}
+
+// Terminal reports whether an operation no longer owns queue work.
+func (o Operation) Terminal() bool {
+	return o.Phase == PhaseSucceeded || o.Phase == PhaseFailed || o.Phase == PhaseCancelled
+}
+
+// Operation tracks durable desired-state convergence or a checkpointed action.
 type Operation struct {
-	Namespace   string          `json:"namespace,omitempty"`
-	ID          string          `json:"id"`
-	Cluster     string          `json:"cluster"`
-	Kind        string          `json:"kind"`
-	Phase       Phase           `json:"phase"`
-	Step        string          `json:"step,omitempty"`
-	Message     string          `json:"message,omitempty"`
-	Payload     json.RawMessage `json:"payload,omitempty"`
-	Checkpoint  json.RawMessage `json:"checkpoint,omitempty"`
-	Attempts    int             `json:"attempts"`
-	CreatedAt   time.Time       `json:"createdAt"`
-	UpdatedAt   time.Time       `json:"updatedAt"`
-	StartedAt   *time.Time      `json:"startedAt,omitempty"`
-	CompletedAt *time.Time      `json:"completedAt,omitempty"`
-	Actor       string          `json:"actor"`
+	Namespace        string          `json:"namespace,omitempty"`
+	ID               string          `json:"id"`
+	Cluster          string          `json:"cluster"`
+	Kind             string          `json:"kind"`
+	Target           OperationTarget `json:"target"`
+	TargetGeneration int64           `json:"targetGeneration,omitempty"`
+	Failures         int             `json:"failures,omitempty"`
+	LastError        string          `json:"lastError,omitempty"`
+	CancelRequested  bool            `json:"cancelRequested,omitempty"`
+	Phase            Phase           `json:"phase"`
+	Step             string          `json:"step,omitempty"`
+	Message          string          `json:"message,omitempty"`
+	Payload          json.RawMessage `json:"payload,omitempty"`
+	Checkpoint       json.RawMessage `json:"checkpoint,omitempty"`
+	Attempts         int             `json:"attempts"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	UpdatedAt        time.Time       `json:"updatedAt"`
+	StartedAt        *time.Time      `json:"startedAt,omitempty"`
+	CompletedAt      *time.Time      `json:"completedAt,omitempty"`
+	Actor            string          `json:"actor"`
 }
 
 // Event is a durable audit and lifecycle notification.

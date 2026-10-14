@@ -21,7 +21,7 @@ make build-all
 # UI static checks (there is no automated browser-workflow suite):
 (cd ui && npm ci && npm run typecheck && npm run lint && npm run build)
 
-# Generated Go contract/client/RBAC consistency, from a Git checkout:
+# Alias-free specification and generated Go/TypeScript consistency, from a Git checkout with UI dependencies installed:
 make openapi-check
 ```
 

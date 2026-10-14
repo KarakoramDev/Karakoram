@@ -231,7 +231,7 @@ func TestRetainedRestorePreflight(t *testing.T) {
 			if w := call(s, "POST", "/api/v1/clusters/prod/restores", body, admin); w.Code != 202 {
 				t.Fatal(w.Code, w.Body.String())
 			}
-			cloneBody := `{"name":"copy","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"engine":{"replicas":1},"dataSource":{"cluster":"deleted","backup":"saved"}}}`
+			cloneBody := `{"name":"copy","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":1}},"dataSource":{"cluster":"deleted","backup":"saved"}}}`
 			if w := call(s, "POST", "/api/v1/clusters", cloneBody, admin); w.Code != 201 {
 				t.Fatal("retained clone rejected", w.Code, w.Body.String())
 			}

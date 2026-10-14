@@ -29,4 +29,6 @@ lint:
 ui:
 	cd ui && npm ci && npm run build
 openapi-check: generate
+	go run ./internal/tools/specnoalias -check
 	git diff --exit-code -- api internal/api pkg/client
+	cd ui && npm run gen:api && git diff --exit-code -- src/api/schema.d.ts

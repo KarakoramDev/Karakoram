@@ -52,6 +52,14 @@ Use **Settings → Backup storages → Edit**, or `karactl storages set archive 
 
 Registration saves configuration, not proof of S3 access. A verification failure still returns **HTTP 200**, with `verified: false`, `failureReason` and a secret-free message; success omits `failureReason`. The probe checks put/get/delete from the control plane, not connectivity from every database member.
 
+The UI separates **Options** (HTTP without TLS, or HTTPS with certificate
+verification on/off) from **Verification** (not checked in this session,
+checking, successful or failed). A failed result shows its category, message and
+check time; a later configuration change asks you to verify again. Results are
+kept for the current page session, not a durable history. HTTPS/certificate
+verification settings alone do not prove credentials or bucket access, and a
+successful probe does not make plaintext HTTP safe.
+
 | `failureReason` | What to check |
 | --- | --- |
 | `access_denied` | Access key/secret pair and bucket read, write and delete permissions; expired credentials or a signature/region mismatch |
@@ -80,13 +88,30 @@ karactl operations cluster demo
 
 Both types execute on nodes via PBM; physical snapshots require PSMDB. A create request returns acceptance, not completion. Watch Backup phase (`Pending`, `Running`, `Succeeded`, `Failed`) and the matching Operation. The inventory carries PBM name, storage, type, timestamps, last-write time, size and error. Only a successful backup is a recovery base.
 
-If a mutation returns an Operation ID, use `karactl operations wait ID`. For backups/restores, inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
+Backup and restore responses always identify their operation as `operationId`, also returned in `Karakoram-Operation-Id`; use `karactl operations wait ID`. Inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
+
+Accepted backup/restore actions in the UI include **View operation** links in
+their success toasts. Follow the linked [operation detail page](web-ui.md#operation-details-and-cancellation),
+then inspect the inventory's final outcome. For catalog upgrades marked
+`requiresBackup`, only a Succeeded backup completed within 24 hours and no
+earlier than the last known convergence to the current version qualifies;
+see [the server-enforced gate](scaling-and-upgrades.md#required-pre-upgrade-backups).
+
+Manual backup requests require a formed, active cluster with its current generation observed. Creating, suspended, deleting or otherwise unconverged clusters return **409** naming the phase instead of leaving a Pending record. If an operation fails, expires, is cancelled or is retired by cluster deletion, its unfinished backup inventory becomes Failed with the same message. Failed records without a started PBM snapshot, and never-started records without active work, can be deleted immediately and their name reused; snapshots that did start still need asynchronous backend cleanup. Backups have a 20-failure/two-hour operation limit; restores have a six-hour deadline. See the [API async contract](api.md#declarative-updates-and-asynchronous-work) for configuration and safe cancellation checkpoints.
+
+After full cluster removal, deleting a retained Failed/never-started record without a PBM snapshot is synchronous (**204**) and does not require reachable storage. An active matching operation still blocks deletion until it is cancelled or terminal. Removal also deletes the record's protected recovery credential. Cleanup of a cluster that never configured PBM removes never-started owned records without waiting for nonexistent database agents; ambiguous durable start receipts remain subject to remote snapshot cleanup instead.
 
 For applications outside this repository, see the [Go client installation and usage walkthrough](api.md#clientssdk), including bearer authentication, structured errors and operation polling. The public client exposes backup, PITR-window, restore and clone request methods from the same OpenAPI contract; after polling, inspect the recovery resource and validate the recovered data as described above.
 
 Missing storage dependencies return **404** with `details.resource: backupStorage` and the requested name. A duplicate backup name returns **409** `already_exists`; state conflicts identify the backup and its current state. Unsupported `type` returns **400** naming the field and listing the provider's supported types; do not assume every engine supports logical/physical backups. A PITR-window request for an engine without PITR returns an explicit unsupported-capability error naming that engine.
 
+Active work is matched to the operation's recorded backup target. When it blocks deletion, the **409** error retains `details.resource: backup`, the backup name and its current `details.state`, and directs you to cancel the operation first.
+
 ## Schedules and count retention
+
+Without cluster-update permission, the UI's backup policy is read-only, even
+when you can read backup inventory. Saving schedules, storage or PITR settings
+requires that permission; backup creation/deletion have their own permissions.
 
 Cluster `spec.backup.storage` is the primary destination. Schedules may select another registered storage. Configure them in the UI or submit a cluster merge patch:
 
@@ -152,6 +177,8 @@ The timestamp is illustrative; replace it with a real point in your reported win
 REST uses `source.backup` or `source.pitrTime`: set exactly one. Both selectors or neither return **400**, `details.field: source`, reason `conflict`. A nonexistent backup returns **404** with its name and source cluster/namespace; the same dependency context is returned for clone creation. Duplicate restore names return **409** `already_exists`. These errors are synchronous: no restore operation is accepted.
 
 Karakoram serializes disruptive cluster work. It disables PITR and, for sharding, coordinates balancer/router holds. Physical restore suppresses automatic mongod/PBM restart on all relevant nodes. Mongod may be offline and PBM may exit successfully as part of recovery; progress is read with PBM storage configuration while MongoDB is unavailable. Karakoram then starts mongod/PBM, releases maintenance, restores system users, resyncs target storage and restores router/balancer state. Logical restores do not use the offline physical lifecycle.
+
+While an in-place restore is Running, cluster phase is **Restoring**, with the operation checkpoint exposed in its message. Successful completion transitions to health observation; terminal failure exposes Degraded with the error. Cancellation is cooperative only before data mutation (including waiting for PBM source inventory); already-started restore is not an undoable operation. Wait for cancellation cleanup and inspect member/agent health before reopening traffic.
 
 After completion verify every member/agent, application authentication, collection data, balancer state, backup inventory and the fresh post-restore base. Do not reopen writers solely because PBM reported `done`. See [physical-restore troubleshooting](../operations.md#troubleshooting-by-symptom).
 

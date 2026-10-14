@@ -52,6 +52,12 @@ const (
 	BackupScheduleTypePhysical BackupScheduleType = "physical"
 )
 
+// Defines values for BackupScheduleInputType.
+const (
+	BackupScheduleInputTypeLogical  BackupScheduleInputType = "logical"
+	BackupScheduleInputTypePhysical BackupScheduleInputType = "physical"
+)
+
 // Defines values for BackupStorageType.
 const (
 	BackupStorageTypeS3 BackupStorageType = "s3"
@@ -59,12 +65,12 @@ const (
 
 // Defines values for CanRequestAction.
 const (
-	Asterisk CanRequestAction = "*"
-	Create   CanRequestAction = "create"
-	Delete   CanRequestAction = "delete"
-	Export   CanRequestAction = "export"
-	Read     CanRequestAction = "read"
-	Update   CanRequestAction = "update"
+	CanRequestActionAsterisk CanRequestAction = "*"
+	CanRequestActionCreate   CanRequestAction = "create"
+	CanRequestActionDelete   CanRequestAction = "delete"
+	CanRequestActionExport   CanRequestAction = "export"
+	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
 // Defines values for ClusterStatusPhase.
@@ -96,8 +102,20 @@ const (
 
 // Defines values for ExposureIpType.
 const (
-	IPV4 ExposureIpType = "IPV4"
-	IPV6 ExposureIpType = "IPV6"
+	ExposureIpTypeIPV4 ExposureIpType = "IPV4"
+	ExposureIpTypeIPV6 ExposureIpType = "IPV6"
+)
+
+// Defines values for ExposureInputIpType.
+const (
+	ExposureInputIpTypeIPV4 ExposureInputIpType = "IPV4"
+	ExposureInputIpTypeIPV6 ExposureInputIpType = "IPV6"
+)
+
+// Defines values for ExposurePatchIpType.
+const (
+	IPV4 ExposurePatchIpType = "IPV4"
+	IPV6 ExposurePatchIpType = "IPV6"
 )
 
 // Defines values for HealthStatus.
@@ -126,6 +144,7 @@ const (
 
 // Defines values for OperationPhase.
 const (
+	OperationPhaseCancelled OperationPhase = "Cancelled"
 	OperationPhaseFailed    OperationPhase = "Failed"
 	OperationPhasePending   OperationPhase = "Pending"
 	OperationPhaseRunning   OperationPhase = "Running"
@@ -135,13 +154,19 @@ const (
 // Defines values for OperationType.
 const (
 	OperationTypeBackup           OperationType = "backup"
+	OperationTypeCreate           OperationType = "create"
+	OperationTypeDelete           OperationType = "delete"
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
+	OperationTypeResume           OperationType = "resume"
 	OperationTypeRotateSystemUser OperationType = "rotate-system-user"
 	OperationTypeRotateTls        OperationType = "rotate-tls"
+	OperationTypeTls              OperationType = "tls"
+	OperationTypeUpdate           OperationType = "update"
+	OperationTypeUpgrade          OperationType = "upgrade"
 )
 
 // Defines values for PermissionEffect.
@@ -157,8 +182,8 @@ const (
 
 // Defines values for ProviderBackupTypes.
 const (
-	Logical  ProviderBackupTypes = "logical"
-	Physical ProviderBackupTypes = "physical"
+	ProviderBackupTypesLogical  ProviderBackupTypes = "logical"
+	ProviderBackupTypesPhysical ProviderBackupTypes = "physical"
 )
 
 // Defines values for ProviderTopologyType.
@@ -185,8 +210,20 @@ const (
 
 // Defines values for ResourcesCpuMode.
 const (
-	DEDICATED ResourcesCpuMode = "DEDICATED"
-	SHARED    ResourcesCpuMode = "SHARED"
+	ResourcesCpuModeDEDICATED ResourcesCpuMode = "DEDICATED"
+	ResourcesCpuModeSHARED    ResourcesCpuMode = "SHARED"
+)
+
+// Defines values for ResourcesInputCpuMode.
+const (
+	ResourcesInputCpuModeDEDICATED ResourcesInputCpuMode = "DEDICATED"
+	ResourcesInputCpuModeSHARED    ResourcesInputCpuMode = "SHARED"
+)
+
+// Defines values for ResourcesPatchCpuMode.
+const (
+	DEDICATED ResourcesPatchCpuMode = "DEDICATED"
+	SHARED    ResourcesPatchCpuMode = "SHARED"
 )
 
 // Defines values for RestorePhase.
@@ -219,15 +256,41 @@ const (
 
 // Defines values for TLSCa.
 const (
-	SelfSigned   TLSCa = "selfSigned"
-	UserProvided TLSCa = "userProvided"
+	TLSCaSelfSigned   TLSCa = "selfSigned"
+	TLSCaUserProvided TLSCa = "userProvided"
 )
 
 // Defines values for TLSMode.
 const (
-	Disabled   TLSMode = "disabled"
-	PreferTLS  TLSMode = "preferTLS"
-	RequireTLS TLSMode = "requireTLS"
+	TLSModeDisabled   TLSMode = "disabled"
+	TLSModePreferTLS  TLSMode = "preferTLS"
+	TLSModeRequireTLS TLSMode = "requireTLS"
+)
+
+// Defines values for TLSInputCa.
+const (
+	TLSInputCaSelfSigned   TLSInputCa = "selfSigned"
+	TLSInputCaUserProvided TLSInputCa = "userProvided"
+)
+
+// Defines values for TLSInputMode.
+const (
+	TLSInputModeDisabled   TLSInputMode = "disabled"
+	TLSInputModePreferTLS  TLSInputMode = "preferTLS"
+	TLSInputModeRequireTLS TLSInputMode = "requireTLS"
+)
+
+// Defines values for TLSPatchCa.
+const (
+	SelfSigned   TLSPatchCa = "selfSigned"
+	UserProvided TLSPatchCa = "userProvided"
+)
+
+// Defines values for TLSPatchMode.
+const (
+	Disabled   TLSPatchMode = "disabled"
+	PreferTLS  TLSPatchMode = "preferTLS"
+	RequireTLS TLSPatchMode = "requireTLS"
 )
 
 // Defines values for TokenStatusSource.
@@ -240,6 +303,18 @@ const (
 const (
 	TopologyTypeReplicaSet TopologyType = "replicaSet"
 	TopologyTypeSharded    TopologyType = "sharded"
+)
+
+// Defines values for TopologyInputType.
+const (
+	TopologyInputTypeReplicaSet TopologyInputType = "replicaSet"
+	TopologyInputTypeSharded    TopologyInputType = "sharded"
+)
+
+// Defines values for TopologyPatchType.
+const (
+	TopologyPatchTypeReplicaSet TopologyPatchType = "replicaSet"
+	TopologyPatchTypeSharded    TopologyPatchType = "sharded"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -278,6 +353,7 @@ const (
 	ListEventsParamsResourceClusterCredentials ListEventsParamsResource = "cluster-credentials"
 	ListEventsParamsResourceClusters           ListEventsParamsResource = "clusters"
 	ListEventsParamsResourceDatabaseUsers      ListEventsParamsResource = "database-users"
+	ListEventsParamsResourceEmpty              ListEventsParamsResource = ""
 	ListEventsParamsResourceNamespaces         ListEventsParamsResource = "namespaces"
 	ListEventsParamsResourceOperations         ListEventsParamsResource = "operations"
 	ListEventsParamsResourceOrphanedVolumes    ListEventsParamsResource = "orphaned-volumes"
@@ -303,6 +379,7 @@ const (
 	StreamEventsParamsResourceClusterCredentials StreamEventsParamsResource = "cluster-credentials"
 	StreamEventsParamsResourceClusters           StreamEventsParamsResource = "clusters"
 	StreamEventsParamsResourceDatabaseUsers      StreamEventsParamsResource = "database-users"
+	StreamEventsParamsResourceEmpty              StreamEventsParamsResource = ""
 	StreamEventsParamsResourceNamespaces         StreamEventsParamsResource = "namespaces"
 	StreamEventsParamsResourceOperations         StreamEventsParamsResource = "operations"
 	StreamEventsParamsResourceOrphanedVolumes    StreamEventsParamsResource = "orphaned-volumes"
@@ -372,14 +449,17 @@ type Backup struct {
 	LastWriteTime *time.Time     `json:"lastWriteTime,omitempty"`
 	Name          string         `json:"name"`
 	Namespace     *NamespaceName `json:"namespace,omitempty"`
-	PbmName       *string        `json:"pbmName,omitempty"`
-	Phase         BackupPhase    `json:"phase"`
-	Schedule      *string        `json:"schedule,omitempty"`
-	Size          *int64         `json:"size,omitempty"`
-	StartedAt     *time.Time     `json:"startedAt,omitempty"`
-	Storage       string         `json:"storage"`
-	Trigger       BackupTrigger  `json:"trigger"`
-	Type          BackupType     `json:"type"`
+
+	// OperationId Durable operation that created this backup.
+	OperationId *string       `json:"operationId,omitempty"`
+	PbmName     *string       `json:"pbmName,omitempty"`
+	Phase       BackupPhase   `json:"phase"`
+	Schedule    *string       `json:"schedule,omitempty"`
+	Size        *int64        `json:"size,omitempty"`
+	StartedAt   *time.Time    `json:"startedAt,omitempty"`
+	Storage     string        `json:"storage"`
+	Trigger     BackupTrigger `json:"trigger"`
+	Type        BackupType    `json:"type"`
 }
 
 // BackupPhase defines model for Backup.Phase.
@@ -415,11 +495,39 @@ type BackupSchedule struct {
 // BackupScheduleType defines model for BackupSchedule.Type.
 type BackupScheduleType string
 
+// BackupScheduleInput defines model for BackupScheduleInput.
+type BackupScheduleInput struct {
+	// Cron Five-field cron expression, evaluated in UTC.
+	Cron        string                  `json:"cron"`
+	Enabled     bool                    `json:"enabled"`
+	Name        string                  `json:"name"`
+	RetainCount int                     `json:"retainCount"`
+	Storage     *string                 `json:"storage,omitempty"`
+	Type        BackupScheduleInputType `json:"type"`
+}
+
+// BackupScheduleInputType defines model for BackupScheduleInput.Type.
+type BackupScheduleInputType string
+
 // BackupSpec defines model for BackupSpec.
 type BackupSpec struct {
 	Pitr      *PITRSpec         `json:"pitr,omitempty"`
 	Schedules *[]BackupSchedule `json:"schedules,omitempty"`
 	Storage   *string           `json:"storage,omitempty"`
+}
+
+// BackupSpecInput defines model for BackupSpecInput.
+type BackupSpecInput struct {
+	Pitr      *PITRSpec              `json:"pitr,omitempty"`
+	Schedules *[]BackupScheduleInput `json:"schedules,omitempty"`
+	Storage   *string                `json:"storage,omitempty"`
+}
+
+// BackupSpecPatch defines model for BackupSpecPatch.
+type BackupSpecPatch struct {
+	Pitr      *PITRSpecPatch         `json:"pitr"`
+	Schedules *[]BackupScheduleInput `json:"schedules"`
+	Storage   *string                `json:"storage"`
 }
 
 // BackupStorage defines model for BackupStorage.
@@ -489,9 +597,12 @@ type Cluster struct {
 	Generation int64          `json:"generation"`
 	Name       string         `json:"name"`
 	Namespace  *NamespaceName `json:"namespace,omitempty"`
-	Spec       ClusterSpec    `json:"spec"`
-	Status     ClusterStatus  `json:"status"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+
+	// OperationId Tracking operation returned on create, PUT, PATCH and resume acceptance.
+	OperationId *string       `json:"operationId,omitempty"`
+	Spec        ClusterSpec   `json:"spec"`
+	Status      ClusterStatus `json:"status"`
+	UpdatedAt   time.Time     `json:"updatedAt"`
 }
 
 // ClusterBackupStatus defines model for ClusterBackupStatus.
@@ -502,6 +613,28 @@ type ClusterBackupStatus struct {
 	PitrWindow *PITRWindow `json:"pitrWindow,omitempty"`
 }
 
+// ClusterInputSpec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+type ClusterInputSpec struct {
+	Backup     *BackupSpecInput `json:"backup,omitempty"`
+	Components *ComponentsInput `json:"components,omitempty"`
+
+	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
+	DataSource *DataSource `json:"dataSource,omitempty"`
+
+	// EngineConfig Validated YAML mongod/mongos overrides.
+	EngineConfig *string         `json:"engineConfig,omitempty"`
+	Exposure     *ExposureInput  `json:"exposure,omitempty"`
+	Monitoring   *MonitoringSpec `json:"monitoring,omitempty"`
+
+	// Provider Required provider identifier; list providers with GET /api/v1/providers.
+	Provider string `json:"provider"`
+
+	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+	Tls      *TLSInput      `json:"tls,omitempty"`
+	Topology *TopologyInput `json:"topology,omitempty"`
+	Version  *string        `json:"version,omitempty"`
+}
+
 // ClusterList defines model for ClusterList.
 type ClusterList struct {
 	Items []Cluster `json:"items"`
@@ -510,8 +643,8 @@ type ClusterList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// ClusterMergePatch RFC 7396 merge patch of the cluster desired spec envelope: {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned name/status/generation/timestamps are rejected. Secret inputs follow TLS write-only fields.
-type ClusterMergePatch map[string]interface{}
+// ClusterMergePatch RFC 7396 merge patch of desired {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned fields are rejected.
+type ClusterMergePatch = map[string]interface{}
 
 // ClusterMetrics defines model for ClusterMetrics.
 type ClusterMetrics struct {
@@ -519,6 +652,28 @@ type ClusterMetrics struct {
 	Series []MetricSeries `json:"series"`
 	Start  time.Time      `json:"start"`
 	Step   string         `json:"step"`
+}
+
+// ClusterPatchSpec defines model for ClusterPatchSpec.
+type ClusterPatchSpec struct {
+	Backup     *BackupSpecPatch `json:"backup"`
+	Components *ComponentsPatch `json:"components"`
+
+	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
+	DataSource *DataSourcePatch `json:"dataSource"`
+
+	// EngineConfig Validated YAML mongod/mongos overrides.
+	EngineConfig *string              `json:"engineConfig"`
+	Exposure     *ExposurePatch       `json:"exposure"`
+	Monitoring   *MonitoringSpecPatch `json:"monitoring"`
+
+	// Provider Required provider identifier; list providers with GET /api/v1/providers.
+	Provider *string `json:"provider"`
+
+	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+	Tls      *TLSPatch      `json:"tls"`
+	Topology *TopologyPatch `json:"topology"`
+	Version  *string        `json:"version"`
 }
 
 // ClusterSpec defines model for ClusterSpec.
@@ -533,7 +688,9 @@ type ClusterSpec struct {
 	EngineConfig *string         `json:"engineConfig,omitempty"`
 	Exposure     *Exposure       `json:"exposure,omitempty"`
 	Monitoring   *MonitoringSpec `json:"monitoring,omitempty"`
-	Provider     string          `json:"provider"`
+
+	// Provider Required provider identifier; list providers with GET /api/v1/providers.
+	Provider string `json:"provider"`
 
 	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
 	Tls      *TLS     `json:"tls,omitempty"`
@@ -550,14 +707,18 @@ type ClusterStatus struct {
 	Members            []Member             `json:"members"`
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
-	Phase              ClusterStatusPhase   `json:"phase"`
+
+	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+	Phase ClusterStatusPhase `json:"phase"`
 
 	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
 	Placement *Placement `json:"placement,omitempty"`
-	Version   *string    `json:"version,omitempty"`
+
+	// Version Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version.
+	Version *string `json:"version,omitempty"`
 }
 
-// ClusterStatusPhase defines model for ClusterStatus.Phase.
+// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 type ClusterStatusPhase string
 
 // Component defines model for Component.
@@ -566,11 +727,39 @@ type Component struct {
 	Resources Resources `json:"resources"`
 }
 
+// ComponentInput defines model for ComponentInput.
+type ComponentInput struct {
+	Replicas  *int            `json:"replicas,omitempty"`
+	Resources *ResourcesInput `json:"resources,omitempty"`
+}
+
+// ComponentPatch defines model for ComponentPatch.
+type ComponentPatch struct {
+	Replicas  *int            `json:"replicas"`
+	Resources *ResourcesPatch `json:"resources"`
+}
+
 // Components defines model for Components.
 type Components struct {
 	ConfigServer *Component `json:"configServer,omitempty"`
 	Engine       Component  `json:"engine"`
 	Router       *Component `json:"router,omitempty"`
+}
+
+// ComponentsInput defines model for ComponentsInput.
+type ComponentsInput struct {
+	// ConfigServer PSMDB config-server replica set: 1, 3, 5 or 7 members.
+	ConfigServer *ConfigServerInput `json:"configServer,omitempty"`
+	Engine       *ComponentInput    `json:"engine,omitempty"`
+	Router       *ComponentInput    `json:"router,omitempty"`
+}
+
+// ComponentsPatch defines model for ComponentsPatch.
+type ComponentsPatch struct {
+	// ConfigServer PSMDB config-server replica set: 1, 3, 5 or 7 members.
+	ConfigServer *ConfigServerPatch `json:"configServer"`
+	Engine       *ComponentPatch    `json:"engine"`
+	Router       *ComponentPatch    `json:"router"`
 }
 
 // Condition defines model for Condition.
@@ -584,6 +773,15 @@ type Condition struct {
 
 // ConditionStatus defines model for Condition.Status.
 type ConditionStatus string
+
+// ConfigServerInput PSMDB config-server replica set: 1, 3, 5 or 7 members.
+type ConfigServerInput = ComponentInput
+
+// ConfigServerPatch PSMDB config-server replica set: 1, 3, 5 or 7 members.
+type ConfigServerPatch struct {
+	Replicas  *int            `json:"replicas"`
+	Resources *ResourcesPatch `json:"resources"`
+}
 
 // Connection Sensitive response. Requires cluster-credentials read separately from clusters read. Server sends Cache-Control: no-store.
 type Connection struct {
@@ -667,8 +865,10 @@ type CreateBackupStorageRequestType string
 
 // CreateClusterRequest defines model for CreateClusterRequest.
 type CreateClusterRequest struct {
-	Name string      `json:"name"`
-	Spec ClusterSpec `json:"spec"`
+	Name string `json:"name"`
+
+	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+	Spec ClusterInputSpec `json:"spec"`
 }
 
 // CreateDatabaseUserRequest Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours.
@@ -729,6 +929,16 @@ type DataSource struct {
 	// Namespace Source namespace; defaults to the target cluster namespace.
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 	PitrTime  *time.Time     `json:"pitrTime,omitempty"`
+}
+
+// DataSourcePatch Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
+type DataSourcePatch struct {
+	Backup  *string `json:"backup"`
+	Cluster *string `json:"cluster"`
+
+	// Namespace Source namespace; defaults to the target cluster namespace.
+	Namespace *NamespaceName `json:"namespace"`
+	PitrTime  *time.Time     `json:"pitrTime"`
 }
 
 // DatabaseRole defines model for DatabaseRole.
@@ -814,13 +1024,39 @@ type EventList struct {
 
 // Exposure defines model for Exposure.
 type Exposure struct {
-	Allowlist *[]string       `json:"allowlist,omitempty"`
-	IpType    *ExposureIpType `json:"ipType,omitempty"`
-	Public    bool            `json:"public"`
+	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	AllowAllAddresses *bool           `json:"allowAllAddresses,omitempty"`
+	Allowlist         *[]string       `json:"allowlist,omitempty"`
+	IpType            *ExposureIpType `json:"ipType,omitempty"`
+	Public            bool            `json:"public"`
 }
 
 // ExposureIpType defines model for Exposure.IpType.
 type ExposureIpType string
+
+// ExposureInput defines model for ExposureInput.
+type ExposureInput struct {
+	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	AllowAllAddresses *bool                `json:"allowAllAddresses,omitempty"`
+	Allowlist         *[]string            `json:"allowlist,omitempty"`
+	IpType            *ExposureInputIpType `json:"ipType,omitempty"`
+	Public            *bool                `json:"public,omitempty"`
+}
+
+// ExposureInputIpType defines model for ExposureInput.IpType.
+type ExposureInputIpType string
+
+// ExposurePatch defines model for ExposurePatch.
+type ExposurePatch struct {
+	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	AllowAllAddresses *bool                `json:"allowAllAddresses"`
+	Allowlist         *[]string            `json:"allowlist"`
+	IpType            *ExposurePatchIpType `json:"ipType"`
+	Public            *bool                `json:"public"`
+}
+
+// ExposurePatchIpType defines model for ExposurePatch.IpType.
+type ExposurePatchIpType string
 
 // Health defines model for Health.
 type Health struct {
@@ -914,6 +1150,11 @@ type MonitoringSpec struct {
 	Enabled bool `json:"enabled"`
 }
 
+// MonitoringSpecPatch defines model for MonitoringSpecPatch.
+type MonitoringSpecPatch struct {
+	Enabled *bool `json:"enabled"`
+}
+
 // Namespace defines model for Namespace.
 type Namespace struct {
 	ClusterCount *int      `json:"clusterCount,omitempty"`
@@ -996,23 +1237,35 @@ type ObservedResources struct {
 // Operation defines model for Operation.
 type Operation struct {
 	// Actor Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor.
-	Actor       *string    `json:"actor,omitempty"`
-	Cluster     string     `json:"cluster"`
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	Actor *string `json:"actor,omitempty"`
+
+	// CancelRequested Cooperative cancellation has been accepted but may still be cleaning up.
+	CancelRequested *bool      `json:"cancelRequested,omitempty"`
+	Cluster         string     `json:"cluster"`
+	CompletedAt     *time.Time `json:"completedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
 
 	// Error Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 	// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 	// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 	// `message` is a human-readable explanation that names the rejected field or resource.
-	Error     *Error         `json:"error,omitempty"`
-	Id        string         `json:"id"`
+	Error *Error `json:"error,omitempty"`
+	Id    string `json:"id"`
+
+	// Message Current stage or error; every terminal operation has a non-empty summary.
 	Message   *string        `json:"message,omitempty"`
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 	Phase     OperationPhase `json:"phase"`
 	Progress  *float32       `json:"progress,omitempty"`
 	StartedAt *time.Time     `json:"startedAt,omitempty"`
-	Type      OperationType  `json:"type"`
+
+	// Step Current durable execution checkpoint or convergence phase.
+	Step   *string         `json:"step,omitempty"`
+	Target OperationTarget `json:"target"`
+
+	// TargetGeneration Cluster generation observed by desired-state operations.
+	TargetGeneration *int64        `json:"targetGeneration,omitempty"`
+	Type             OperationType `json:"type"`
 }
 
 // OperationPhase defines model for Operation.Phase.
@@ -1027,6 +1280,12 @@ type OperationList struct {
 
 	// NextCursor Opaque continuation cursor; absent at the end.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// OperationTarget defines model for OperationTarget.
+type OperationTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // OrphanedVolume defines model for OrphanedVolume.
@@ -1055,6 +1314,12 @@ type OrphanedVolumeList struct {
 type PITRSpec struct {
 	Enabled          bool `json:"enabled"`
 	OplogSpanMinutes *int `json:"oplogSpanMinutes,omitempty"`
+}
+
+// PITRSpecPatch defines model for PITRSpecPatch.
+type PITRSpecPatch struct {
+	Enabled          *bool `json:"enabled"`
+	OplogSpanMinutes *int  `json:"oplogSpanMinutes"`
 }
 
 // PITRWindow Only a continuous PBM-verified restorable interval is reported.
@@ -1200,9 +1465,19 @@ type RelayStatus struct {
 // RelayStatusPhase defines model for RelayStatus.Phase.
 type RelayStatusPhase string
 
-// ReplaceClusterRequest Replaces the full desired spec; server-owned name, generation, status and timestamps cannot be replaced.
+// ReplaceClusterRequest Replaces the full desired spec. Recognized server-owned fields from GET may be round-tripped but are ignored; PATCH rejects them.
 type ReplaceClusterRequest struct {
-	Spec ClusterSpec `json:"spec"`
+	CreatedAt  *string `json:"createdAt,omitempty"`
+	Generation *int    `json:"generation,omitempty"`
+	Name       *string `json:"name,omitempty"`
+
+	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
+	Namespace *NamespaceName `json:"namespace,omitempty"`
+
+	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+	Spec      ClusterInputSpec        `json:"spec"`
+	Status    *map[string]interface{} `json:"status,omitempty"`
+	UpdatedAt *string                 `json:"updatedAt,omitempty"`
 }
 
 // ResetPasswordRequest defines model for ResetPasswordRequest.
@@ -1236,6 +1511,52 @@ type Resources struct {
 // ResourcesCpuMode defines model for Resources.CpuMode.
 type ResourcesCpuMode string
 
+// ResourcesInput defines model for ResourcesInput.
+type ResourcesInput struct {
+	CpuMode *ResourcesInputCpuMode `json:"cpuMode,omitempty"`
+	MaxCpu  *float32               `json:"maxCpu,omitempty"`
+
+	// MaxDisk GiB
+	MaxDisk *float32 `json:"maxDisk,omitempty"`
+
+	// MaxRam GiB
+	MaxRam *float32 `json:"maxRam,omitempty"`
+	MinCpu *float32 `json:"minCpu,omitempty"`
+
+	// MinDisk GiB
+	MinDisk *float32 `json:"minDisk,omitempty"`
+
+	// MinRam GiB
+	MinRam   *float32 `json:"minRam,omitempty"`
+	StartCpu *float32 `json:"startCpu,omitempty"`
+}
+
+// ResourcesInputCpuMode defines model for ResourcesInput.CpuMode.
+type ResourcesInputCpuMode string
+
+// ResourcesPatch defines model for ResourcesPatch.
+type ResourcesPatch struct {
+	CpuMode *ResourcesPatchCpuMode `json:"cpuMode"`
+	MaxCpu  *float32               `json:"maxCpu"`
+
+	// MaxDisk GiB
+	MaxDisk *float32 `json:"maxDisk"`
+
+	// MaxRam GiB
+	MaxRam *float32 `json:"maxRam"`
+	MinCpu *float32 `json:"minCpu"`
+
+	// MinDisk GiB
+	MinDisk *float32 `json:"minDisk"`
+
+	// MinRam GiB
+	MinRam   *float32 `json:"minRam"`
+	StartCpu *float32 `json:"startCpu"`
+}
+
+// ResourcesPatchCpuMode defines model for ResourcesPatch.CpuMode.
+type ResourcesPatchCpuMode string
+
 // Restore defines model for Restore.
 type Restore struct {
 	Cluster     string         `json:"cluster"`
@@ -1243,7 +1564,10 @@ type Restore struct {
 	Error       *string        `json:"error,omitempty"`
 	Name        string         `json:"name"`
 	Namespace   *NamespaceName `json:"namespace,omitempty"`
-	Phase       RestorePhase   `json:"phase"`
+
+	// OperationId Durable operation that created this restore.
+	OperationId *string      `json:"operationId,omitempty"`
+	Phase       RestorePhase `json:"phase"`
 
 	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
 	Source    RestoreSource `json:"source"`
@@ -1350,6 +1674,42 @@ type TLSCa string
 // TLSMode defines model for TLS.Mode.
 type TLSMode string
 
+// TLSInput PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+type TLSInput struct {
+	Ca            *TLSInputCa `json:"ca,omitempty"`
+	CaCertificate *string     `json:"caCertificate,omitempty"`
+	CaPrivateKey  *string     `json:"caPrivateKey,omitempty"`
+
+	// Certificate User-provided PEM certificate chain.
+	Certificate *string       `json:"certificate,omitempty"`
+	Mode        *TLSInputMode `json:"mode,omitempty"`
+	PrivateKey  *string       `json:"privateKey,omitempty"`
+}
+
+// TLSInputCa defines model for TLSInput.Ca.
+type TLSInputCa string
+
+// TLSInputMode defines model for TLSInput.Mode.
+type TLSInputMode string
+
+// TLSPatch PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+type TLSPatch struct {
+	Ca            *TLSPatchCa `json:"ca"`
+	CaCertificate *string     `json:"caCertificate"`
+	CaPrivateKey  *string     `json:"caPrivateKey"`
+
+	// Certificate User-provided PEM certificate chain.
+	Certificate *string       `json:"certificate"`
+	Mode        *TLSPatchMode `json:"mode"`
+	PrivateKey  *string       `json:"privateKey"`
+}
+
+// TLSPatchCa defines model for TLSPatch.Ca.
+type TLSPatchCa string
+
+// TLSPatchMode defines model for TLSPatch.Mode.
+type TLSPatchMode string
+
 // TokenStatus Secret-safe token health; never contains a token or fingerprint.
 type TokenStatus struct {
 	LastError       *string           `json:"lastError,omitempty"`
@@ -1370,6 +1730,24 @@ type Topology struct {
 
 // TopologyType defines model for Topology.Type.
 type TopologyType string
+
+// TopologyInput defines model for TopologyInput.
+type TopologyInput struct {
+	Shards *int               `json:"shards,omitempty"`
+	Type   *TopologyInputType `json:"type,omitempty"`
+}
+
+// TopologyInputType defines model for TopologyInput.Type.
+type TopologyInputType string
+
+// TopologyPatch defines model for TopologyPatch.
+type TopologyPatch struct {
+	Shards *int               `json:"shards"`
+	Type   *TopologyPatchType `json:"type"`
+}
+
+// TopologyPatchType defines model for TopologyPatch.Type.
+type TopologyPatchType string
 
 // UpdateAPITokenRequest defines model for UpdateAPITokenRequest.
 type UpdateAPITokenRequest struct {
@@ -1419,7 +1797,15 @@ type UpdateDatabaseUserRequest struct {
 
 // UpgradePath defines model for UpgradePath.
 type UpgradePath struct {
-	From           string  `json:"from"`
+	From string `json:"from"`
+
+	// RequiresBackup Requires a Succeeded backup of this cluster completed within the
+	// last 24 hours, no earlier than cluster creation or the last known
+	// successful convergence to its current version. Enforced on PUT and
+	// PATCH version changes; missing, stale, unfinished or failed backups
+	// return 409 conflict with reason invalid_state. Create a backup via
+	// POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+	// for Succeeded, and retry. There is no bypass flag.
 	RequiresBackup *bool   `json:"requiresBackup,omitempty"`
 	RequiresFCV    *string `json:"requiresFCV,omitempty"`
 	To             string  `json:"to"`
@@ -1485,11 +1871,23 @@ type Forbidden = Error
 // `message` is a human-readable explanation that names the rejected field or resource.
 type InternalError = Error
 
+// MethodNotAllowed Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type MethodNotAllowed = Error
+
 // NotFound Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type NotFound = Error
+
+// PayloadTooLarge Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type PayloadTooLarge = Error
 
 // Unauthorized Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -1508,6 +1906,12 @@ type Unavailable = Error
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type UnprocessableEntity = Error
+
+// UnsupportedMediaType Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type UnsupportedMediaType = Error
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -1990,10 +2394,10 @@ type ReplaceClusterMemberParams struct {
 
 // GetClusterMetricsParams defines parameters for GetClusterMetrics.
 type GetClusterMetricsParams struct {
-	// Range Lookback from now.
+	// Range Positive Go duration no greater than 24h, for example 30m, 1h or 24h. Days are not a duration unit.
 	Range *string `form:"range,omitempty" json:"range,omitempty"`
 
-	// Step Aggregation interval.
+	// Step Positive Go duration no greater than range. The omitted default 30s is bounded to a shorter requested range.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
@@ -2251,6 +2655,12 @@ type ListOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CancelOperationParams defines parameters for CancelOperation.
+type CancelOperationParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
 // ListOrphanedVolumesParams defines parameters for ListOrphanedVolumes.
@@ -2718,6 +3128,9 @@ type ServerInterface interface {
 	// Read a durable operation
 	// (GET /operations/{operation})
 	GetOperation(w http.ResponseWriter, r *http.Request, operation string)
+	// Request cooperative cancellation of an operation
+	// (POST /operations/{operation}/cancel)
+	CancelOperation(w http.ResponseWriter, r *http.Request, operation string, params CancelOperationParams)
 	// List orphaned platform volumes
 	// (GET /orphaned-volumes)
 	ListOrphanedVolumes(w http.ResponseWriter, r *http.Request, params ListOrphanedVolumesParams)
@@ -7392,6 +7805,63 @@ func (siw *ServerInterfaceWrapper) GetOperation(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// CancelOperation operation middleware
+func (siw *ServerInterfaceWrapper) CancelOperation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "operation" -------------
+	var operation string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operation", r.PathValue("operation"), &operation, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operation", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelOperationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelOperation(w, r, operation, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOrphanedVolumes operation middleware
 func (siw *ServerInterfaceWrapper) ListOrphanedVolumes(w http.ResponseWriter, r *http.Request) {
 
@@ -7905,6 +8375,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/openapi.yaml", wrapper.GetOpenAPISpec)
 	m.HandleFunc("GET "+options.BaseURL+"/operations", wrapper.ListOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/operations/{operation}", wrapper.GetOperation)
+	m.HandleFunc("POST "+options.BaseURL+"/operations/{operation}/cancel", wrapper.CancelOperation)
 	m.HandleFunc("GET "+options.BaseURL+"/orphaned-volumes", wrapper.ListOrphanedVolumes)
 	m.HandleFunc("GET "+options.BaseURL+"/permissions", wrapper.GetPermissions)
 	m.HandleFunc("GET "+options.BaseURL+"/providers", wrapper.ListProviders)
@@ -7919,21 +8390,98 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	return m
 }
 
-type BadRequestJSONResponse Error
+type BadRequestResponseHeaders struct {
+	XRequestID string
+}
+type BadRequestJSONResponse struct {
+	Body Error
 
-type ConflictJSONResponse Error
+	Headers BadRequestResponseHeaders
+}
 
-type ForbiddenJSONResponse Error
+type ConflictResponseHeaders struct {
+	XRequestID string
+}
+type ConflictJSONResponse struct {
+	Body Error
 
-type InternalErrorJSONResponse Error
+	Headers ConflictResponseHeaders
+}
 
-type NotFoundJSONResponse Error
+type ForbiddenResponseHeaders struct {
+	XRequestID string
+}
+type ForbiddenJSONResponse struct {
+	Body Error
 
-type UnauthorizedJSONResponse Error
+	Headers ForbiddenResponseHeaders
+}
+
+type InternalErrorResponseHeaders struct {
+	XRequestID string
+}
+type InternalErrorJSONResponse struct {
+	Body Error
+
+	Headers InternalErrorResponseHeaders
+}
+
+type MethodNotAllowedResponseHeaders struct {
+	Allow      string
+	XRequestID string
+}
+type MethodNotAllowedJSONResponse struct {
+	Body Error
+
+	Headers MethodNotAllowedResponseHeaders
+}
+
+type NotFoundResponseHeaders struct {
+	XRequestID string
+}
+type NotFoundJSONResponse struct {
+	Body Error
+
+	Headers NotFoundResponseHeaders
+}
+
+type PayloadTooLargeResponseHeaders struct {
+	XRequestID string
+}
+type PayloadTooLargeJSONResponse struct {
+	Body Error
+
+	Headers PayloadTooLargeResponseHeaders
+}
+
+type UnauthorizedResponseHeaders struct {
+	XRequestID string
+}
+type UnauthorizedJSONResponse struct {
+	Body Error
+
+	Headers UnauthorizedResponseHeaders
+}
 
 type UnavailableJSONResponse Error
 
-type UnprocessableEntityJSONResponse Error
+type UnprocessableEntityResponseHeaders struct {
+	XRequestID string
+}
+type UnprocessableEntityJSONResponse struct {
+	Body Error
+
+	Headers UnprocessableEntityResponseHeaders
+}
+
+type UnsupportedMediaTypeResponseHeaders struct {
+	XRequestID string
+}
+type UnsupportedMediaTypeJSONResponse struct {
+	Body Error
+
+	Headers UnsupportedMediaTypeResponseHeaders
+}
 
 type ListAccountsRequestObject struct {
 	Params ListAccountsParams
@@ -7943,67 +8491,114 @@ type ListAccountsResponseObject interface {
 	VisitListAccountsResponse(w http.ResponseWriter) error
 }
 
-type ListAccounts200JSONResponse AccountList
+type ListAccounts200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListAccounts200JSONResponse struct {
+	Body    AccountList
+	Headers ListAccounts200ResponseHeaders
+}
 
 func (response ListAccounts200JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAccounts400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListAccounts400JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAccounts401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListAccounts401JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAccounts403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListAccounts403JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAccounts404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListAccounts404JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListAccounts405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListAccounts405JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAccounts409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListAccounts409JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListAccounts413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListAccounts413JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListAccounts415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListAccounts415JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAccounts500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListAccounts500JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAccountRequestObject struct {
@@ -8017,6 +8612,7 @@ type CreateAccountResponseObject interface {
 
 type CreateAccount201ResponseHeaders struct {
 	IdempotentReplayed bool
+	XRequestID         string
 }
 
 type CreateAccount201JSONResponse struct {
@@ -8027,6 +8623,7 @@ type CreateAccount201JSONResponse struct {
 func (response CreateAccount201JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -8036,54 +8633,93 @@ type CreateAccount400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateAccount400JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAccount401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateAccount401JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAccount403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateAccount403JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateAccount404JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateAccount405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateAccount405JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAccount409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateAccount409JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateAccount413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateAccount413JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateAccount415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateAccount415JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAccount500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateAccount500JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAccountRequestObject struct {
@@ -8095,10 +8731,16 @@ type DeleteAccountResponseObject interface {
 	VisitDeleteAccountResponse(w http.ResponseWriter) error
 }
 
+type DeleteAccount204ResponseHeaders struct {
+	XRequestID string
+}
+
 type DeleteAccount204Response struct {
+	Headers DeleteAccount204ResponseHeaders
 }
 
 func (response DeleteAccount204Response) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -8107,54 +8749,93 @@ type DeleteAccount400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteAccount400JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAccount401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteAccount401JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAccount403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteAccount403JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteAccount404JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteAccount405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteAccount405JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAccount409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteAccount409JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteAccount413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteAccount413JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteAccount415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteAccount415JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAccount500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteAccount500JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccountRequestObject struct {
@@ -8165,67 +8846,114 @@ type GetAccountResponseObject interface {
 	VisitGetAccountResponse(w http.ResponseWriter) error
 }
 
-type GetAccount200JSONResponse Account
+type GetAccount200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetAccount200JSONResponse struct {
+	Body    Account
+	Headers GetAccount200ResponseHeaders
+}
 
 func (response GetAccount200JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccount400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetAccount400JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccount401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetAccount401JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccount403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetAccount403JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetAccount404JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAccount405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetAccount405JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccount409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetAccount409JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAccount413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetAccount413JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAccount415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetAccount415JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAccount500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetAccount500JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccountRequestObject struct {
@@ -8238,67 +8966,114 @@ type ReplaceAccountResponseObject interface {
 	VisitReplaceAccountResponse(w http.ResponseWriter) error
 }
 
-type ReplaceAccount200JSONResponse Account
+type ReplaceAccount200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceAccount200JSONResponse struct {
+	Body    Account
+	Headers ReplaceAccount200ResponseHeaders
+}
 
 func (response ReplaceAccount200JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccount400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceAccount400JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccount401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceAccount401JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccount403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceAccount403JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceAccount404JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceAccount405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceAccount405JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccount409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceAccount409JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceAccount413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceAccount413JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceAccount415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceAccount415JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAccount500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceAccount500JSONResponse) VisitReplaceAccountResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResetAccountPasswordRequestObject struct {
@@ -8311,10 +9086,16 @@ type ResetAccountPasswordResponseObject interface {
 	VisitResetAccountPasswordResponse(w http.ResponseWriter) error
 }
 
+type ResetAccountPassword204ResponseHeaders struct {
+	XRequestID string
+}
+
 type ResetAccountPassword204Response struct {
+	Headers ResetAccountPassword204ResponseHeaders
 }
 
 func (response ResetAccountPassword204Response) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -8323,54 +9104,93 @@ type ResetAccountPassword400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ResetAccountPassword400JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResetAccountPassword401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ResetAccountPassword401JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResetAccountPassword403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ResetAccountPassword403JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResetAccountPassword404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ResetAccountPassword404JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ResetAccountPassword405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ResetAccountPassword405JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResetAccountPassword409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ResetAccountPassword409JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ResetAccountPassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ResetAccountPassword413JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ResetAccountPassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ResetAccountPassword415JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResetAccountPassword500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ResetAccountPassword500JSONResponse) VisitResetAccountPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokensRequestObject struct {
@@ -8381,67 +9201,114 @@ type ListAPITokensResponseObject interface {
 	VisitListAPITokensResponse(w http.ResponseWriter) error
 }
 
-type ListAPITokens200JSONResponse APITokenList
+type ListAPITokens200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListAPITokens200JSONResponse struct {
+	Body    APITokenList
+	Headers ListAPITokens200ResponseHeaders
+}
 
 func (response ListAPITokens200JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokens400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListAPITokens400JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokens401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListAPITokens401JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokens403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListAPITokens403JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokens404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListAPITokens404JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListAPITokens405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListAPITokens405JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokens409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListAPITokens409JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListAPITokens413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListAPITokens413JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListAPITokens415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListAPITokens415JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListAPITokens500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListAPITokens500JSONResponse) VisitListAPITokensResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAPITokenRequestObject struct {
@@ -8455,6 +9322,7 @@ type CreateAPITokenResponseObject interface {
 
 type CreateAPIToken201ResponseHeaders struct {
 	IdempotentReplayed bool
+	XRequestID         string
 }
 
 type CreateAPIToken201JSONResponse struct {
@@ -8465,6 +9333,7 @@ type CreateAPIToken201JSONResponse struct {
 func (response CreateAPIToken201JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -8474,54 +9343,93 @@ type CreateAPIToken400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateAPIToken400JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAPIToken401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateAPIToken401JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAPIToken403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateAPIToken403JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAPIToken404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateAPIToken404JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateAPIToken405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateAPIToken405JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAPIToken409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateAPIToken409JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateAPIToken413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateAPIToken413JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateAPIToken415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateAPIToken415JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateAPIToken500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateAPIToken500JSONResponse) VisitCreateAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAPITokenRequestObject struct {
@@ -8533,10 +9441,16 @@ type DeleteAPITokenResponseObject interface {
 	VisitDeleteAPITokenResponse(w http.ResponseWriter) error
 }
 
+type DeleteAPIToken204ResponseHeaders struct {
+	XRequestID string
+}
+
 type DeleteAPIToken204Response struct {
+	Headers DeleteAPIToken204ResponseHeaders
 }
 
 func (response DeleteAPIToken204Response) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -8545,54 +9459,93 @@ type DeleteAPIToken400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteAPIToken400JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAPIToken401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteAPIToken401JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAPIToken403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteAPIToken403JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAPIToken404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteAPIToken404JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteAPIToken405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteAPIToken405JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAPIToken409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteAPIToken409JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteAPIToken413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteAPIToken413JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteAPIToken415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteAPIToken415JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteAPIToken500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteAPIToken500JSONResponse) VisitDeleteAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPITokenRequestObject struct {
@@ -8603,67 +9556,114 @@ type GetAPITokenResponseObject interface {
 	VisitGetAPITokenResponse(w http.ResponseWriter) error
 }
 
-type GetAPIToken200JSONResponse APIToken
+type GetAPIToken200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetAPIToken200JSONResponse struct {
+	Body    APIToken
+	Headers GetAPIToken200ResponseHeaders
+}
 
 func (response GetAPIToken200JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPIToken400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetAPIToken400JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPIToken401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetAPIToken401JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPIToken403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetAPIToken403JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPIToken404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetAPIToken404JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAPIToken405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetAPIToken405JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPIToken409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetAPIToken409JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAPIToken413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetAPIToken413JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAPIToken415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetAPIToken415JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetAPIToken500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetAPIToken500JSONResponse) VisitGetAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPITokenRequestObject struct {
@@ -8676,67 +9676,114 @@ type ReplaceAPITokenResponseObject interface {
 	VisitReplaceAPITokenResponse(w http.ResponseWriter) error
 }
 
-type ReplaceAPIToken200JSONResponse APIToken
+type ReplaceAPIToken200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceAPIToken200JSONResponse struct {
+	Body    APIToken
+	Headers ReplaceAPIToken200ResponseHeaders
+}
 
 func (response ReplaceAPIToken200JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPIToken400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceAPIToken400JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPIToken401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceAPIToken401JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPIToken403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceAPIToken403JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPIToken404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceAPIToken404JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceAPIToken405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceAPIToken405JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPIToken409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceAPIToken409JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceAPIToken413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceAPIToken413JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceAPIToken415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceAPIToken415JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceAPIToken500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceAPIToken500JSONResponse) VisitReplaceAPITokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ChangePasswordRequestObject struct {
@@ -8748,10 +9795,16 @@ type ChangePasswordResponseObject interface {
 	VisitChangePasswordResponse(w http.ResponseWriter) error
 }
 
+type ChangePassword204ResponseHeaders struct {
+	XRequestID string
+}
+
 type ChangePassword204Response struct {
+	Headers ChangePassword204ResponseHeaders
 }
 
 func (response ChangePassword204Response) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -8760,54 +9813,93 @@ type ChangePassword400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ChangePassword400JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ChangePassword401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ChangePassword401JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ChangePassword403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ChangePassword403JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ChangePassword404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ChangePassword404JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ChangePassword405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ChangePassword405JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ChangePassword409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ChangePassword409JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ChangePassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ChangePassword413JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ChangePassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ChangePassword415JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ChangePassword500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ChangePassword500JSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type LoginRequestObject struct {
@@ -8840,63 +9932,83 @@ type Login400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response Login400JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Login401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response Login401JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Login403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response Login403JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Login404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response Login404JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type Login405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response Login405JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Login409JSONResponse struct{ ConflictJSONResponse }
 
 func (response Login409JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type Login413JSONResponse Error
+type Login413JSONResponse struct{ PayloadTooLargeJSONResponse }
 
 func (response Login413JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(413)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type Login415JSONResponse Error
+type Login415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
 
 func (response Login415JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(415)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Login429ResponseHeaders struct {
@@ -8920,9 +10032,10 @@ type Login500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response Login500JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type LogoutRequestObject struct {
@@ -8933,10 +10046,16 @@ type LogoutResponseObject interface {
 	VisitLogoutResponse(w http.ResponseWriter) error
 }
 
+type Logout204ResponseHeaders struct {
+	XRequestID string
+}
+
 type Logout204Response struct {
+	Headers Logout204ResponseHeaders
 }
 
 func (response Logout204Response) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -8945,54 +10064,93 @@ type Logout400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response Logout400JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Logout401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response Logout401JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Logout403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response Logout403JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Logout404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response Logout404JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type Logout405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response Logout405JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Logout409JSONResponse struct{ ConflictJSONResponse }
 
 func (response Logout409JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type Logout413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response Logout413JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type Logout415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response Logout415JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type Logout500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response Logout500JSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUserRequestObject struct {
@@ -9002,67 +10160,114 @@ type GetCurrentUserResponseObject interface {
 	VisitGetCurrentUserResponse(w http.ResponseWriter) error
 }
 
-type GetCurrentUser200JSONResponse CurrentUser
+type GetCurrentUser200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetCurrentUser200JSONResponse struct {
+	Body    CurrentUser
+	Headers GetCurrentUser200ResponseHeaders
+}
 
 func (response GetCurrentUser200JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUser400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetCurrentUser400JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetCurrentUser401JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUser403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetCurrentUser403JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUser404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetCurrentUser404JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCurrentUser405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetCurrentUser405JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUser409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetCurrentUser409JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCurrentUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetCurrentUser413JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCurrentUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetCurrentUser415JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCurrentUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetCurrentUser500JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallbackRequestObject struct {
@@ -9093,54 +10298,93 @@ type OidcCallback400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response OidcCallback400JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallback401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response OidcCallback401JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallback403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response OidcCallback403JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallback404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response OidcCallback404JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type OidcCallback405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response OidcCallback405JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallback409JSONResponse struct{ ConflictJSONResponse }
 
 func (response OidcCallback409JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type OidcCallback413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response OidcCallback413JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type OidcCallback415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response OidcCallback415JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallback500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response OidcCallback500JSONResponse) VisitOidcCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcCallback503JSONResponse struct{ UnavailableJSONResponse }
@@ -9178,54 +10422,93 @@ type OidcLogin400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response OidcLogin400JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcLogin401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response OidcLogin401JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcLogin403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response OidcLogin403JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcLogin404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response OidcLogin404JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type OidcLogin405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response OidcLogin405JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcLogin409JSONResponse struct{ ConflictJSONResponse }
 
 func (response OidcLogin409JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type OidcLogin413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response OidcLogin413JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type OidcLogin415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response OidcLogin415JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcLogin500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response OidcLogin500JSONResponse) VisitOidcLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type OidcLogin503JSONResponse struct{ UnavailableJSONResponse }
@@ -9266,54 +10549,93 @@ type RefreshSession400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response RefreshSession400JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RefreshSession401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response RefreshSession401JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RefreshSession403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response RefreshSession403JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RefreshSession404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RefreshSession404JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshSession405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RefreshSession405JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RefreshSession409JSONResponse struct{ ConflictJSONResponse }
 
 func (response RefreshSession409JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshSession413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RefreshSession413JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RefreshSession415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RefreshSession415JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RefreshSession500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RefreshSession500JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStoragesRequestObject struct {
@@ -9324,67 +10646,114 @@ type ListBackupStoragesResponseObject interface {
 	VisitListBackupStoragesResponse(w http.ResponseWriter) error
 }
 
-type ListBackupStorages200JSONResponse BackupStorageList
+type ListBackupStorages200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListBackupStorages200JSONResponse struct {
+	Body    BackupStorageList
+	Headers ListBackupStorages200ResponseHeaders
+}
 
 func (response ListBackupStorages200JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStorages400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListBackupStorages400JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStorages401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListBackupStorages401JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStorages403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListBackupStorages403JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStorages404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListBackupStorages404JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupStorages405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListBackupStorages405JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStorages409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListBackupStorages409JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupStorages413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListBackupStorages413JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupStorages415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListBackupStorages415JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupStorages500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListBackupStorages500JSONResponse) VisitListBackupStoragesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorageRequestObject struct {
@@ -9398,6 +10767,7 @@ type CreateBackupStorageResponseObject interface {
 
 type CreateBackupStorage201ResponseHeaders struct {
 	IdempotentReplayed bool
+	XRequestID         string
 }
 
 type CreateBackupStorage201JSONResponse struct {
@@ -9408,6 +10778,7 @@ type CreateBackupStorage201JSONResponse struct {
 func (response CreateBackupStorage201JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -9417,45 +10788,83 @@ type CreateBackupStorage400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateBackupStorage400JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorage401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateBackupStorage401JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorage403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateBackupStorage403JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorage404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateBackupStorage404JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupStorage405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateBackupStorage405JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorage409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateBackupStorage409JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupStorage413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateBackupStorage413JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupStorage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateBackupStorage415JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorage422JSONResponse struct {
@@ -9464,18 +10873,20 @@ type CreateBackupStorage422JSONResponse struct {
 
 func (response CreateBackupStorage422JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(422)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupStorage500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateBackupStorage500JSONResponse) VisitCreateBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupStorageRequestObject struct {
@@ -9487,10 +10898,16 @@ type DeleteBackupStorageResponseObject interface {
 	VisitDeleteBackupStorageResponse(w http.ResponseWriter) error
 }
 
+type DeleteBackupStorage204ResponseHeaders struct {
+	XRequestID string
+}
+
 type DeleteBackupStorage204Response struct {
+	Headers DeleteBackupStorage204ResponseHeaders
 }
 
 func (response DeleteBackupStorage204Response) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -9499,54 +10916,93 @@ type DeleteBackupStorage400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteBackupStorage400JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupStorage401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteBackupStorage401JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupStorage403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteBackupStorage403JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupStorage404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteBackupStorage404JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackupStorage405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteBackupStorage405JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupStorage409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteBackupStorage409JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackupStorage413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteBackupStorage413JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackupStorage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteBackupStorage415JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupStorage500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteBackupStorage500JSONResponse) VisitDeleteBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorageRequestObject struct {
@@ -9558,67 +11014,114 @@ type GetBackupStorageResponseObject interface {
 	VisitGetBackupStorageResponse(w http.ResponseWriter) error
 }
 
-type GetBackupStorage200JSONResponse BackupStorage
+type GetBackupStorage200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetBackupStorage200JSONResponse struct {
+	Body    BackupStorage
+	Headers GetBackupStorage200ResponseHeaders
+}
 
 func (response GetBackupStorage200JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorage400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetBackupStorage400JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorage401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetBackupStorage401JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorage403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetBackupStorage403JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorage404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetBackupStorage404JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupStorage405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetBackupStorage405JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorage409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetBackupStorage409JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupStorage413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetBackupStorage413JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupStorage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetBackupStorage415JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupStorage500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetBackupStorage500JSONResponse) VisitGetBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorageRequestObject struct {
@@ -9631,67 +11134,114 @@ type ReplaceBackupStorageResponseObject interface {
 	VisitReplaceBackupStorageResponse(w http.ResponseWriter) error
 }
 
-type ReplaceBackupStorage200JSONResponse BackupStorage
+type ReplaceBackupStorage200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceBackupStorage200JSONResponse struct {
+	Body    BackupStorage
+	Headers ReplaceBackupStorage200ResponseHeaders
+}
 
 func (response ReplaceBackupStorage200JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorage400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceBackupStorage400JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorage401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceBackupStorage401JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorage403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceBackupStorage403JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorage404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceBackupStorage404JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceBackupStorage405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceBackupStorage405JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorage409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceBackupStorage409JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceBackupStorage413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceBackupStorage413JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceBackupStorage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceBackupStorage415JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceBackupStorage500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceBackupStorage500JSONResponse) VisitReplaceBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorageRequestObject struct {
@@ -9703,67 +11253,114 @@ type VerifyBackupStorageResponseObject interface {
 	VisitVerifyBackupStorageResponse(w http.ResponseWriter) error
 }
 
-type VerifyBackupStorage200JSONResponse StorageVerification
+type VerifyBackupStorage200ResponseHeaders struct {
+	XRequestID string
+}
+
+type VerifyBackupStorage200JSONResponse struct {
+	Body    StorageVerification
+	Headers VerifyBackupStorage200ResponseHeaders
+}
 
 func (response VerifyBackupStorage200JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorage400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response VerifyBackupStorage400JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorage401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response VerifyBackupStorage401JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorage403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response VerifyBackupStorage403JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorage404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response VerifyBackupStorage404JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type VerifyBackupStorage405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response VerifyBackupStorage405JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorage409JSONResponse struct{ ConflictJSONResponse }
 
 func (response VerifyBackupStorage409JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type VerifyBackupStorage413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response VerifyBackupStorage413JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type VerifyBackupStorage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response VerifyBackupStorage415JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type VerifyBackupStorage500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response VerifyBackupStorage500JSONResponse) VisitVerifyBackupStorageResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClustersRequestObject struct {
@@ -9774,67 +11371,114 @@ type ListClustersResponseObject interface {
 	VisitListClustersResponse(w http.ResponseWriter) error
 }
 
-type ListClusters200JSONResponse ClusterList
+type ListClusters200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListClusters200JSONResponse struct {
+	Body    ClusterList
+	Headers ListClusters200ResponseHeaders
+}
 
 func (response ListClusters200JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusters400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListClusters400JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusters401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListClusters401JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusters403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListClusters403JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusters404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListClusters404JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusters405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListClusters405JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusters409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListClusters409JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusters413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListClusters413JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusters415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListClusters415JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusters500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListClusters500JSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateClusterRequestObject struct {
@@ -9847,7 +11491,9 @@ type CreateClusterResponseObject interface {
 }
 
 type CreateCluster201ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
+	XRequestID           string
 }
 
 type CreateCluster201JSONResponse struct {
@@ -9858,6 +11504,8 @@ type CreateCluster201JSONResponse struct {
 func (response CreateCluster201JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -9867,45 +11515,83 @@ type CreateCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateCluster400JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateCluster401JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateCluster403JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateCluster404JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateCluster405JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCluster409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateCluster409JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateCluster413JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateCluster415JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCluster422JSONResponse struct {
@@ -9914,18 +11600,20 @@ type CreateCluster422JSONResponse struct {
 
 func (response CreateCluster422JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(422)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateCluster500JSONResponse) VisitCreateClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteClusterRequestObject struct {
@@ -9937,66 +11625,116 @@ type DeleteClusterResponseObject interface {
 	VisitDeleteClusterResponse(w http.ResponseWriter) error
 }
 
-type DeleteCluster202Response struct {
+type DeleteCluster202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
 }
 
-func (response DeleteCluster202Response) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+type DeleteCluster202JSONResponse struct {
+	Body    Operation
+	Headers DeleteCluster202ResponseHeaders
+}
+
+func (response DeleteCluster202JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
-	return nil
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteCluster400JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteCluster401JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteCluster403JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteCluster404JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteCluster405JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteCluster409JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteCluster413JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteCluster415JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteCluster500JSONResponse) VisitDeleteClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterRequestObject struct {
@@ -10008,67 +11746,114 @@ type GetClusterResponseObject interface {
 	VisitGetClusterResponse(w http.ResponseWriter) error
 }
 
-type GetCluster200JSONResponse Cluster
+type GetCluster200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetCluster200JSONResponse struct {
+	Body    Cluster
+	Headers GetCluster200ResponseHeaders
+}
 
 func (response GetCluster200JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetCluster400JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetCluster401JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetCluster403JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetCluster404JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetCluster405JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCluster409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetCluster409JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetCluster413JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetCluster415JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetCluster500JSONResponse) VisitGetClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type PatchClusterRequestObject struct {
@@ -10082,7 +11867,9 @@ type PatchClusterResponseObject interface {
 }
 
 type PatchCluster200ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
+	XRequestID           string
 }
 
 type PatchCluster200JSONResponse struct {
@@ -10093,6 +11880,8 @@ type PatchCluster200JSONResponse struct {
 func (response PatchCluster200JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10102,39 +11891,54 @@ type PatchCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response PatchCluster400JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type PatchCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response PatchCluster401JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type PatchCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response PatchCluster403JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type PatchCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response PatchCluster404JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type PatchCluster409JSONResponse struct{ ConflictJSONResponse }
+type PatchCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response PatchCluster405JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchCluster409JSONResponse Error
 
 func (response PatchCluster409JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -10143,13 +11947,36 @@ func (response PatchCluster409JSONResponse) VisitPatchClusterResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
+type PatchCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response PatchCluster413JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response PatchCluster415JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type PatchCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response PatchCluster500JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterRequestObject struct {
@@ -10163,7 +11990,9 @@ type ReplaceClusterResponseObject interface {
 }
 
 type ReplaceCluster200ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
+	XRequestID           string
 }
 
 type ReplaceCluster200JSONResponse struct {
@@ -10174,6 +12003,8 @@ type ReplaceCluster200JSONResponse struct {
 func (response ReplaceCluster200JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10183,39 +12014,54 @@ type ReplaceCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceCluster400JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceCluster401JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceCluster403JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceCluster404JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
-type ReplaceCluster409JSONResponse struct{ ConflictJSONResponse }
+type ReplaceCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceCluster405JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceCluster409JSONResponse Error
 
 func (response ReplaceCluster409JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -10224,13 +12070,36 @@ func (response ReplaceCluster409JSONResponse) VisitReplaceClusterResponse(w http
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ReplaceCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceCluster413JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceCluster415JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ReplaceCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceCluster500JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackupsRequestObject struct {
@@ -10242,67 +12111,114 @@ type ListBackupsResponseObject interface {
 	VisitListBackupsResponse(w http.ResponseWriter) error
 }
 
-type ListBackups200JSONResponse BackupList
+type ListBackups200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListBackups200JSONResponse struct {
+	Body    BackupList
+	Headers ListBackups200ResponseHeaders
+}
 
 func (response ListBackups200JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackups400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListBackups400JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackups401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListBackups401JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackups403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListBackups403JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackups404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListBackups404JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackups405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListBackups405JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackups409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListBackups409JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackups413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListBackups413JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackups415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListBackups415JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListBackups500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListBackups500JSONResponse) VisitListBackupsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackupRequestObject struct {
@@ -10316,7 +12232,9 @@ type CreateBackupResponseObject interface {
 }
 
 type CreateBackup202ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
+	XRequestID           string
 }
 
 type CreateBackup202JSONResponse struct {
@@ -10327,6 +12245,8 @@ type CreateBackup202JSONResponse struct {
 func (response CreateBackup202JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10336,54 +12256,93 @@ type CreateBackup400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateBackup400JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackup401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateBackup401JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackup403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateBackup403JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackup404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateBackup404JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackup405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateBackup405JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackup409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateBackup409JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackup413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateBackup413JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackup415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateBackup415JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateBackup500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateBackup500JSONResponse) VisitCreateBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackupRequestObject struct {
@@ -10396,19 +12355,35 @@ type DeleteBackupResponseObject interface {
 	VisitDeleteBackupResponse(w http.ResponseWriter) error
 }
 
-type DeleteBackup202JSONResponse Operation
+type DeleteBackup202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type DeleteBackup202JSONResponse struct {
+	Body    Operation
+	Headers DeleteBackup202ResponseHeaders
+}
 
 func (response DeleteBackup202JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackup204ResponseHeaders struct {
+	XRequestID string
 }
 
 type DeleteBackup204Response struct {
+	Headers DeleteBackup204ResponseHeaders
 }
 
 func (response DeleteBackup204Response) VisitDeleteBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -10417,54 +12392,93 @@ type DeleteBackup400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteBackup400JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackup401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteBackup401JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackup403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteBackup403JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackup404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteBackup404JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackup405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteBackup405JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackup409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteBackup409JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackup413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteBackup413JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteBackup415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteBackup415JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteBackup500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteBackup500JSONResponse) VisitDeleteBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackupRequestObject struct {
@@ -10477,67 +12491,114 @@ type GetBackupResponseObject interface {
 	VisitGetBackupResponse(w http.ResponseWriter) error
 }
 
-type GetBackup200JSONResponse Backup
+type GetBackup200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetBackup200JSONResponse struct {
+	Body    Backup
+	Headers GetBackup200ResponseHeaders
+}
 
 func (response GetBackup200JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackup400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetBackup400JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackup401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetBackup401JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackup403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetBackup403JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackup404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetBackup404JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackup405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetBackup405JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackup409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetBackup409JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackup413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetBackup413JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackup415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetBackup415JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetBackup500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetBackup500JSONResponse) VisitGetBackupResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancerRequestObject struct {
@@ -10549,67 +12610,114 @@ type GetClusterBalancerResponseObject interface {
 	VisitGetClusterBalancerResponse(w http.ResponseWriter) error
 }
 
-type GetClusterBalancer200JSONResponse Balancer
+type GetClusterBalancer200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetClusterBalancer200JSONResponse struct {
+	Body    Balancer
+	Headers GetClusterBalancer200ResponseHeaders
+}
 
 func (response GetClusterBalancer200JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancer400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetClusterBalancer400JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancer401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetClusterBalancer401JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancer403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetClusterBalancer403JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancer404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetClusterBalancer404JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterBalancer405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetClusterBalancer405JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancer409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetClusterBalancer409JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterBalancer413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetClusterBalancer413JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterBalancer415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetClusterBalancer415JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterBalancer500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetClusterBalancer500JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancerRequestObject struct {
@@ -10622,67 +12730,114 @@ type ReplaceClusterBalancerResponseObject interface {
 	VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error
 }
 
-type ReplaceClusterBalancer200JSONResponse Balancer
+type ReplaceClusterBalancer200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceClusterBalancer200JSONResponse struct {
+	Body    Balancer
+	Headers ReplaceClusterBalancer200ResponseHeaders
+}
 
 func (response ReplaceClusterBalancer200JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancer400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceClusterBalancer400JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancer401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceClusterBalancer401JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancer403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceClusterBalancer403JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancer404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceClusterBalancer404JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceClusterBalancer405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceClusterBalancer405JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancer409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceClusterBalancer409JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceClusterBalancer413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceClusterBalancer413JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceClusterBalancer415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceClusterBalancer415JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterBalancer500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceClusterBalancer500JSONResponse) VisitReplaceClusterBalancerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnectionRequestObject struct {
@@ -10715,54 +12870,93 @@ type GetClusterConnection400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetClusterConnection400JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnection401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetClusterConnection401JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnection403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetClusterConnection403JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnection404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetClusterConnection404JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterConnection405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetClusterConnection405JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnection409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetClusterConnection409JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetClusterConnection413JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetClusterConnection415JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnection500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetClusterConnection500JSONResponse) VisitGetClusterConnectionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterConnection503JSONResponse struct{ UnavailableJSONResponse }
@@ -10783,67 +12977,114 @@ type ListDatabaseRolesResponseObject interface {
 	VisitListDatabaseRolesResponse(w http.ResponseWriter) error
 }
 
-type ListDatabaseRoles200JSONResponse DatabaseRoleList
+type ListDatabaseRoles200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListDatabaseRoles200JSONResponse struct {
+	Body    DatabaseRoleList
+	Headers ListDatabaseRoles200ResponseHeaders
+}
 
 func (response ListDatabaseRoles200JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseRoles400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListDatabaseRoles400JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseRoles401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListDatabaseRoles401JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseRoles403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListDatabaseRoles403JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseRoles404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListDatabaseRoles404JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseRoles405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListDatabaseRoles405JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseRoles409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListDatabaseRoles409JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseRoles413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListDatabaseRoles413JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseRoles415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListDatabaseRoles415JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseRoles500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListDatabaseRoles500JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseRoleRequestObject struct {
@@ -10858,6 +13099,7 @@ type CreateDatabaseRoleResponseObject interface {
 
 type CreateDatabaseRole201ResponseHeaders struct {
 	IdempotentReplayed bool
+	XRequestID         string
 }
 
 type CreateDatabaseRole201JSONResponse struct {
@@ -10868,6 +13110,7 @@ type CreateDatabaseRole201JSONResponse struct {
 func (response CreateDatabaseRole201JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -10877,54 +13120,93 @@ type CreateDatabaseRole400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateDatabaseRole400JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseRole401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateDatabaseRole401JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseRole403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateDatabaseRole403JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseRole404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateDatabaseRole404JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDatabaseRole405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateDatabaseRole405JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseRole409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateDatabaseRole409JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDatabaseRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateDatabaseRole413JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDatabaseRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateDatabaseRole415JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseRole500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateDatabaseRole500JSONResponse) VisitCreateDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseRoleRequestObject struct {
@@ -10938,10 +13220,16 @@ type DeleteDatabaseRoleResponseObject interface {
 	VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error
 }
 
+type DeleteDatabaseRole204ResponseHeaders struct {
+	XRequestID string
+}
+
 type DeleteDatabaseRole204Response struct {
+	Headers DeleteDatabaseRole204ResponseHeaders
 }
 
 func (response DeleteDatabaseRole204Response) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -10950,54 +13238,93 @@ type DeleteDatabaseRole400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteDatabaseRole400JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseRole401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteDatabaseRole401JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseRole403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteDatabaseRole403JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseRole404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteDatabaseRole404JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteDatabaseRole405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteDatabaseRole405JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseRole409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteDatabaseRole409JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteDatabaseRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteDatabaseRole413JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteDatabaseRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteDatabaseRole415JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseRole500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteDatabaseRole500JSONResponse) VisitDeleteDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRoleRequestObject struct {
@@ -11011,67 +13338,114 @@ type GetDatabaseRoleResponseObject interface {
 	VisitGetDatabaseRoleResponse(w http.ResponseWriter) error
 }
 
-type GetDatabaseRole200JSONResponse DatabaseRole
+type GetDatabaseRole200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetDatabaseRole200JSONResponse struct {
+	Body    DatabaseRole
+	Headers GetDatabaseRole200ResponseHeaders
+}
 
 func (response GetDatabaseRole200JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRole400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetDatabaseRole400JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRole401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetDatabaseRole401JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRole403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetDatabaseRole403JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRole404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetDatabaseRole404JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseRole405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetDatabaseRole405JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRole409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetDatabaseRole409JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetDatabaseRole413JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetDatabaseRole415JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseRole500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetDatabaseRole500JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRoleRequestObject struct {
@@ -11086,67 +13460,114 @@ type ReplaceDatabaseRoleResponseObject interface {
 	VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error
 }
 
-type ReplaceDatabaseRole200JSONResponse DatabaseRole
+type ReplaceDatabaseRole200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceDatabaseRole200JSONResponse struct {
+	Body    DatabaseRole
+	Headers ReplaceDatabaseRole200ResponseHeaders
+}
 
 func (response ReplaceDatabaseRole200JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRole400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceDatabaseRole400JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRole401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceDatabaseRole401JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRole403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceDatabaseRole403JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRole404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceDatabaseRole404JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceDatabaseRole405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceDatabaseRole405JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRole409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceDatabaseRole409JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceDatabaseRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceDatabaseRole413JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceDatabaseRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceDatabaseRole415JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseRole500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceDatabaseRole500JSONResponse) VisitReplaceDatabaseRoleResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsersRequestObject struct {
@@ -11158,67 +13579,114 @@ type ListDatabaseUsersResponseObject interface {
 	VisitListDatabaseUsersResponse(w http.ResponseWriter) error
 }
 
-type ListDatabaseUsers200JSONResponse DatabaseUserList
+type ListDatabaseUsers200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListDatabaseUsers200JSONResponse struct {
+	Body    DatabaseUserList
+	Headers ListDatabaseUsers200ResponseHeaders
+}
 
 func (response ListDatabaseUsers200JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsers400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListDatabaseUsers400JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsers401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListDatabaseUsers401JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsers403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListDatabaseUsers403JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsers404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListDatabaseUsers404JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseUsers405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListDatabaseUsers405JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsers409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListDatabaseUsers409JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseUsers413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListDatabaseUsers413JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseUsers415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListDatabaseUsers415JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListDatabaseUsers500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListDatabaseUsers500JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseUserRequestObject struct {
@@ -11254,54 +13722,93 @@ type CreateDatabaseUser400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateDatabaseUser400JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateDatabaseUser401JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseUser403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateDatabaseUser403JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseUser404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateDatabaseUser404JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDatabaseUser405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateDatabaseUser405JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseUser409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateDatabaseUser409JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDatabaseUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateDatabaseUser413JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateDatabaseUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateDatabaseUser415JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateDatabaseUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateDatabaseUser500JSONResponse) VisitCreateDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseUserRequestObject struct {
@@ -11315,10 +13822,16 @@ type DeleteDatabaseUserResponseObject interface {
 	VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error
 }
 
+type DeleteDatabaseUser204ResponseHeaders struct {
+	XRequestID string
+}
+
 type DeleteDatabaseUser204Response struct {
+	Headers DeleteDatabaseUser204ResponseHeaders
 }
 
 func (response DeleteDatabaseUser204Response) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(204)
 	return nil
 }
@@ -11327,54 +13840,93 @@ type DeleteDatabaseUser400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response DeleteDatabaseUser400JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteDatabaseUser401JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseUser403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteDatabaseUser403JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseUser404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteDatabaseUser404JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteDatabaseUser405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteDatabaseUser405JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseUser409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteDatabaseUser409JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteDatabaseUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteDatabaseUser413JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteDatabaseUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteDatabaseUser415JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteDatabaseUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteDatabaseUser500JSONResponse) VisitDeleteDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUserRequestObject struct {
@@ -11388,67 +13940,114 @@ type GetDatabaseUserResponseObject interface {
 	VisitGetDatabaseUserResponse(w http.ResponseWriter) error
 }
 
-type GetDatabaseUser200JSONResponse DatabaseUser
+type GetDatabaseUser200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetDatabaseUser200JSONResponse struct {
+	Body    DatabaseUser
+	Headers GetDatabaseUser200ResponseHeaders
+}
 
 func (response GetDatabaseUser200JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUser400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetDatabaseUser400JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetDatabaseUser401JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUser403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetDatabaseUser403JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUser404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetDatabaseUser404JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseUser405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetDatabaseUser405JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUser409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetDatabaseUser409JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetDatabaseUser413JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetDatabaseUser415JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetDatabaseUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetDatabaseUser500JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUserRequestObject struct {
@@ -11463,67 +14062,114 @@ type ReplaceDatabaseUserResponseObject interface {
 	VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error
 }
 
-type ReplaceDatabaseUser200JSONResponse DatabaseUser
+type ReplaceDatabaseUser200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceDatabaseUser200JSONResponse struct {
+	Body    DatabaseUser
+	Headers ReplaceDatabaseUser200ResponseHeaders
+}
 
 func (response ReplaceDatabaseUser200JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUser400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceDatabaseUser400JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceDatabaseUser401JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUser403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceDatabaseUser403JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUser404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceDatabaseUser404JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceDatabaseUser405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceDatabaseUser405JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUser409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceDatabaseUser409JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceDatabaseUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceDatabaseUser413JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceDatabaseUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceDatabaseUser415JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceDatabaseUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceDatabaseUser500JSONResponse) VisitReplaceDatabaseUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembersRequestObject struct {
@@ -11535,67 +14181,114 @@ type ListClusterMembersResponseObject interface {
 	VisitListClusterMembersResponse(w http.ResponseWriter) error
 }
 
-type ListClusterMembers200JSONResponse MemberList
+type ListClusterMembers200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListClusterMembers200JSONResponse struct {
+	Body    MemberList
+	Headers ListClusterMembers200ResponseHeaders
+}
 
 func (response ListClusterMembers200JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembers400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListClusterMembers400JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembers401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListClusterMembers401JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembers403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListClusterMembers403JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembers404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListClusterMembers404JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusterMembers405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListClusterMembers405JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembers409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListClusterMembers409JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusterMembers413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListClusterMembers413JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusterMembers415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListClusterMembers415JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterMembers500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListClusterMembers500JSONResponse) VisitListClusterMembersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMemberRequestObject struct {
@@ -11608,67 +14301,114 @@ type GetClusterMemberResponseObject interface {
 	VisitGetClusterMemberResponse(w http.ResponseWriter) error
 }
 
-type GetClusterMember200JSONResponse Member
+type GetClusterMember200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetClusterMember200JSONResponse struct {
+	Body    Member
+	Headers GetClusterMember200ResponseHeaders
+}
 
 func (response GetClusterMember200JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMember400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetClusterMember400JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMember401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetClusterMember401JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMember403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetClusterMember403JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMember404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetClusterMember404JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterMember405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetClusterMember405JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMember409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetClusterMember409JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterMember413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetClusterMember413JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterMember415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetClusterMember415JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMember500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetClusterMember500JSONResponse) VisitGetClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogsRequestObject struct {
@@ -11681,67 +14421,114 @@ type GetMemberLogsResponseObject interface {
 	VisitGetMemberLogsResponse(w http.ResponseWriter) error
 }
 
-type GetMemberLogs200JSONResponse MemberLogs
+type GetMemberLogs200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetMemberLogs200JSONResponse struct {
+	Body    MemberLogs
+	Headers GetMemberLogs200ResponseHeaders
+}
 
 func (response GetMemberLogs200JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogs400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetMemberLogs400JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogs401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetMemberLogs401JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogs403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetMemberLogs403JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogs404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetMemberLogs404JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMemberLogs405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetMemberLogs405JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogs409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetMemberLogs409JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMemberLogs413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetMemberLogs413JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMemberLogs415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetMemberLogs415JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetMemberLogs500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetMemberLogs500JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMemberRequestObject struct {
@@ -11754,67 +14541,116 @@ type ReplaceClusterMemberResponseObject interface {
 	VisitReplaceClusterMemberResponse(w http.ResponseWriter) error
 }
 
-type ReplaceClusterMember202JSONResponse Operation
+type ReplaceClusterMember202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type ReplaceClusterMember202JSONResponse struct {
+	Body    Operation
+	Headers ReplaceClusterMember202ResponseHeaders
+}
 
 func (response ReplaceClusterMember202JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceClusterMember400JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceClusterMember401JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceClusterMember403JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceClusterMember404JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceClusterMember405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceClusterMember405JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceClusterMember409JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceClusterMember413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceClusterMember413JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceClusterMember415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceClusterMember415JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceClusterMember500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceClusterMember500JSONResponse) VisitReplaceClusterMemberResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetricsRequestObject struct {
@@ -11826,67 +14662,114 @@ type GetClusterMetricsResponseObject interface {
 	VisitGetClusterMetricsResponse(w http.ResponseWriter) error
 }
 
-type GetClusterMetrics200JSONResponse ClusterMetrics
+type GetClusterMetrics200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetClusterMetrics200JSONResponse struct {
+	Body    ClusterMetrics
+	Headers GetClusterMetrics200ResponseHeaders
+}
 
 func (response GetClusterMetrics200JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetrics400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetClusterMetrics400JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetrics401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetClusterMetrics401JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetrics403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetClusterMetrics403JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetrics404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetClusterMetrics404JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterMetrics405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetClusterMetrics405JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetrics409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetClusterMetrics409JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterMetrics413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetClusterMetrics413JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterMetrics415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetClusterMetrics415JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterMetrics500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetClusterMetrics500JSONResponse) VisitGetClusterMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperationsRequestObject struct {
@@ -11898,67 +14781,114 @@ type ListClusterOperationsResponseObject interface {
 	VisitListClusterOperationsResponse(w http.ResponseWriter) error
 }
 
-type ListClusterOperations200JSONResponse OperationList
+type ListClusterOperations200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListClusterOperations200JSONResponse struct {
+	Body    OperationList
+	Headers ListClusterOperations200ResponseHeaders
+}
 
 func (response ListClusterOperations200JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperations400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListClusterOperations400JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperations401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListClusterOperations401JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperations403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListClusterOperations403JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperations404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListClusterOperations404JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusterOperations405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListClusterOperations405JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperations409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListClusterOperations409JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusterOperations413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListClusterOperations413JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListClusterOperations415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListClusterOperations415JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListClusterOperations500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListClusterOperations500JSONResponse) VisitListClusterOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindowRequestObject struct {
@@ -11970,67 +14900,114 @@ type GetPITRWindowResponseObject interface {
 	VisitGetPITRWindowResponse(w http.ResponseWriter) error
 }
 
-type GetPITRWindow200JSONResponse PITRWindow
+type GetPITRWindow200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetPITRWindow200JSONResponse struct {
+	Body    PITRWindow
+	Headers GetPITRWindow200ResponseHeaders
+}
 
 func (response GetPITRWindow200JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindow400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetPITRWindow400JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindow401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetPITRWindow401JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindow403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetPITRWindow403JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindow404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetPITRWindow404JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPITRWindow405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetPITRWindow405JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindow409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetPITRWindow409JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPITRWindow413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetPITRWindow413JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPITRWindow415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetPITRWindow415JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPITRWindow500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetPITRWindow500JSONResponse) VisitGetPITRWindowResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacementRequestObject struct {
@@ -12042,67 +15019,114 @@ type GetClusterPlacementResponseObject interface {
 	VisitGetClusterPlacementResponse(w http.ResponseWriter) error
 }
 
-type GetClusterPlacement200JSONResponse Placement
+type GetClusterPlacement200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetClusterPlacement200JSONResponse struct {
+	Body    Placement
+	Headers GetClusterPlacement200ResponseHeaders
+}
 
 func (response GetClusterPlacement200JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacement400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetClusterPlacement400JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacement401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetClusterPlacement401JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacement403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetClusterPlacement403JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacement404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetClusterPlacement404JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterPlacement405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetClusterPlacement405JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacement409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetClusterPlacement409JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterPlacement413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetClusterPlacement413JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterPlacement415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetClusterPlacement415JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterPlacement500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetClusterPlacement500JSONResponse) VisitGetClusterPlacementResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCVRequestObject struct {
@@ -12115,67 +15139,116 @@ type RaiseClusterFCVResponseObject interface {
 	VisitRaiseClusterFCVResponse(w http.ResponseWriter) error
 }
 
-type RaiseClusterFCV202JSONResponse Operation
+type RaiseClusterFCV202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RaiseClusterFCV202JSONResponse struct {
+	Body    Operation
+	Headers RaiseClusterFCV202ResponseHeaders
+}
 
 func (response RaiseClusterFCV202JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response RaiseClusterFCV400JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response RaiseClusterFCV401JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response RaiseClusterFCV403JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RaiseClusterFCV404JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RaiseClusterFCV405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RaiseClusterFCV405JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV409JSONResponse struct{ ConflictJSONResponse }
 
 func (response RaiseClusterFCV409JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RaiseClusterFCV413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RaiseClusterFCV413JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RaiseClusterFCV415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RaiseClusterFCV415JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RaiseClusterFCV500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RaiseClusterFCV500JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartClusterRequestObject struct {
@@ -12187,67 +15260,116 @@ type RestartClusterResponseObject interface {
 	VisitRestartClusterResponse(w http.ResponseWriter) error
 }
 
-type RestartCluster202JSONResponse Operation
+type RestartCluster202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RestartCluster202JSONResponse struct {
+	Body    Operation
+	Headers RestartCluster202ResponseHeaders
+}
 
 func (response RestartCluster202JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response RestartCluster400JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response RestartCluster401JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response RestartCluster403JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RestartCluster404JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RestartCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RestartCluster405JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster409JSONResponse struct{ ConflictJSONResponse }
 
 func (response RestartCluster409JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RestartCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RestartCluster413JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RestartCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RestartCluster415JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RestartCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RestartCluster500JSONResponse) VisitRestartClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestoresRequestObject struct {
@@ -12259,67 +15381,114 @@ type ListRestoresResponseObject interface {
 	VisitListRestoresResponse(w http.ResponseWriter) error
 }
 
-type ListRestores200JSONResponse RestoreList
+type ListRestores200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListRestores200JSONResponse struct {
+	Body    RestoreList
+	Headers ListRestores200ResponseHeaders
+}
 
 func (response ListRestores200JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestores400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListRestores400JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestores401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListRestores401JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestores403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListRestores403JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestores404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListRestores404JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRestores405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListRestores405JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestores409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListRestores409JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRestores413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListRestores413JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListRestores415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListRestores415JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListRestores500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListRestores500JSONResponse) VisitListRestoresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateRestoreRequestObject struct {
@@ -12333,7 +15502,9 @@ type CreateRestoreResponseObject interface {
 }
 
 type CreateRestore202ResponseHeaders struct {
-	IdempotentReplayed bool
+	IdempotentReplayed   bool
+	KarakoramOperationId string
+	XRequestID           string
 }
 
 type CreateRestore202JSONResponse struct {
@@ -12344,6 +15515,8 @@ type CreateRestore202JSONResponse struct {
 func (response CreateRestore202JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -12353,54 +15526,93 @@ type CreateRestore400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateRestore400JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateRestore401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateRestore401JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateRestore403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateRestore403JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateRestore404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CreateRestore404JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRestore405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateRestore405JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateRestore409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateRestore409JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRestore413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateRestore413JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateRestore415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateRestore415JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateRestore500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateRestore500JSONResponse) VisitCreateRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestoreRequestObject struct {
@@ -12413,67 +15625,114 @@ type GetRestoreResponseObject interface {
 	VisitGetRestoreResponse(w http.ResponseWriter) error
 }
 
-type GetRestore200JSONResponse Restore
+type GetRestore200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetRestore200JSONResponse struct {
+	Body    Restore
+	Headers GetRestore200ResponseHeaders
+}
 
 func (response GetRestore200JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestore400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetRestore400JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestore401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetRestore401JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestore403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetRestore403JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestore404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetRestore404JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRestore405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetRestore405JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestore409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetRestore409JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRestore413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetRestore413JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRestore415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetRestore415JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRestore500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetRestore500JSONResponse) VisitGetRestoreResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeClusterRequestObject struct {
@@ -12485,67 +15744,116 @@ type ResumeClusterResponseObject interface {
 	VisitResumeClusterResponse(w http.ResponseWriter) error
 }
 
-type ResumeCluster202JSONResponse Cluster
+type ResumeCluster202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type ResumeCluster202JSONResponse struct {
+	Body    Cluster
+	Headers ResumeCluster202ResponseHeaders
+}
 
 func (response ResumeCluster202JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ResumeCluster400JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ResumeCluster401JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ResumeCluster403JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ResumeCluster404JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ResumeCluster405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ResumeCluster405JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ResumeCluster409JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ResumeCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ResumeCluster413JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ResumeCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ResumeCluster415JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ResumeCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ResumeCluster500JSONResponse) VisitResumeClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLSRequestObject struct {
@@ -12557,67 +15865,116 @@ type RotateClusterTLSResponseObject interface {
 	VisitRotateClusterTLSResponse(w http.ResponseWriter) error
 }
 
-type RotateClusterTLS202JSONResponse Operation
+type RotateClusterTLS202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RotateClusterTLS202JSONResponse struct {
+	Body    Operation
+	Headers RotateClusterTLS202ResponseHeaders
+}
 
 func (response RotateClusterTLS202JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response RotateClusterTLS400JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response RotateClusterTLS401JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response RotateClusterTLS403JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RotateClusterTLS404JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateClusterTLS405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RotateClusterTLS405JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS409JSONResponse struct{ ConflictJSONResponse }
 
 func (response RotateClusterTLS409JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateClusterTLS413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RotateClusterTLS413JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateClusterTLS415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RotateClusterTLS415JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateClusterTLS500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RotateClusterTLS500JSONResponse) VisitRotateClusterTLSResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatusRequestObject struct {
@@ -12629,67 +15986,114 @@ type GetClusterStatusResponseObject interface {
 	VisitGetClusterStatusResponse(w http.ResponseWriter) error
 }
 
-type GetClusterStatus200JSONResponse ClusterStatus
+type GetClusterStatus200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetClusterStatus200JSONResponse struct {
+	Body    ClusterStatus
+	Headers GetClusterStatus200ResponseHeaders
+}
 
 func (response GetClusterStatus200JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatus400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetClusterStatus400JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatus401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetClusterStatus401JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatus403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetClusterStatus403JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatus404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetClusterStatus404JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterStatus405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetClusterStatus405JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatus409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetClusterStatus409JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterStatus413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetClusterStatus413JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetClusterStatus415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetClusterStatus415JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetClusterStatus500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetClusterStatus500JSONResponse) VisitGetClusterStatusResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsersRequestObject struct {
@@ -12701,67 +16105,114 @@ type ListSystemUsersResponseObject interface {
 	VisitListSystemUsersResponse(w http.ResponseWriter) error
 }
 
-type ListSystemUsers200JSONResponse SystemUserList
+type ListSystemUsers200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListSystemUsers200JSONResponse struct {
+	Body    SystemUserList
+	Headers ListSystemUsers200ResponseHeaders
+}
 
 func (response ListSystemUsers200JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsers400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListSystemUsers400JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsers401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListSystemUsers401JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsers403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListSystemUsers403JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsers404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListSystemUsers404JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSystemUsers405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListSystemUsers405JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsers409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListSystemUsers409JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSystemUsers413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListSystemUsers413JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSystemUsers415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListSystemUsers415JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListSystemUsers500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListSystemUsers500JSONResponse) VisitListSystemUsersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUserRequestObject struct {
@@ -12774,67 +16225,116 @@ type RotateSystemUserResponseObject interface {
 	VisitRotateSystemUserResponse(w http.ResponseWriter) error
 }
 
-type RotateSystemUser202JSONResponse Operation
+type RotateSystemUser202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RotateSystemUser202JSONResponse struct {
+	Body    Operation
+	Headers RotateSystemUser202ResponseHeaders
+}
 
 func (response RotateSystemUser202JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response RotateSystemUser400JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response RotateSystemUser401JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response RotateSystemUser403JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RotateSystemUser404JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSystemUser405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RotateSystemUser405JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser409JSONResponse struct{ ConflictJSONResponse }
 
 func (response RotateSystemUser409JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSystemUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RotateSystemUser413JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSystemUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RotateSystemUser415JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateSystemUser500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RotateSystemUser500JSONResponse) VisitRotateSystemUserResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEventsRequestObject struct {
@@ -12845,67 +16345,114 @@ type ListEventsResponseObject interface {
 	VisitListEventsResponse(w http.ResponseWriter) error
 }
 
-type ListEvents200JSONResponse EventList
+type ListEvents200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListEvents200JSONResponse struct {
+	Body    EventList
+	Headers ListEvents200ResponseHeaders
+}
 
 func (response ListEvents200JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEvents400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListEvents400JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEvents401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListEvents401JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEvents403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListEvents403JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEvents404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListEvents404JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListEvents405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListEvents405JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEvents409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListEvents409JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListEvents413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListEvents413JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListEvents415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListEvents415JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListEvents500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListEvents500JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type StreamEventsRequestObject struct {
@@ -12916,8 +16463,13 @@ type StreamEventsResponseObject interface {
 	VisitStreamEventsResponse(w http.ResponseWriter) error
 }
 
+type StreamEvents200ResponseHeaders struct {
+	XRequestID string
+}
+
 type StreamEvents200TexteventStreamResponse struct {
 	Body          io.Reader
+	Headers       StreamEvents200ResponseHeaders
 	ContentLength int64
 }
 
@@ -12926,6 +16478,7 @@ func (response StreamEvents200TexteventStreamResponse) VisitStreamEventsResponse
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
 	}
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
 	if closer, ok := response.Body.(io.ReadCloser); ok {
@@ -12939,54 +16492,93 @@ type StreamEvents400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response StreamEvents400JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type StreamEvents401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response StreamEvents401JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type StreamEvents403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response StreamEvents403JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type StreamEvents404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response StreamEvents404JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StreamEvents405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response StreamEvents405JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type StreamEvents409JSONResponse struct{ ConflictJSONResponse }
 
 func (response StreamEvents409JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StreamEvents413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response StreamEvents413JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type StreamEvents415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response StreamEvents415JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type StreamEvents500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response StreamEvents500JSONResponse) VisitStreamEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealthRequestObject struct {
@@ -12996,67 +16588,114 @@ type GetHealthResponseObject interface {
 	VisitGetHealthResponse(w http.ResponseWriter) error
 }
 
-type GetHealth200JSONResponse Health
+type GetHealth200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetHealth200JSONResponse struct {
+	Body    Health
+	Headers GetHealth200ResponseHeaders
+}
 
 func (response GetHealth200JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealth400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetHealth400JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealth401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetHealth401JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealth403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetHealth403JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealth404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetHealth404JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetHealth405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetHealth405JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealth409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetHealth409JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetHealth413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetHealth413JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetHealth415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetHealth415JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetHealth500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetHealth500JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPrometheusMetricsRequestObject struct {
@@ -13067,13 +16706,21 @@ type GetPrometheusMetricsResponseObject interface {
 	VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error
 }
 
-type GetPrometheusMetrics200TextResponse string
+type GetPrometheusMetrics200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetPrometheusMetrics200TextResponse struct {
+	Body    string
+	Headers GetPrometheusMetrics200ResponseHeaders
+}
 
 func (response GetPrometheusMetrics200TextResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	_, err := w.Write([]byte(response))
+	_, err := w.Write([]byte(response.Body))
 	return err
 }
 
@@ -13081,54 +16728,93 @@ type GetPrometheusMetrics400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetPrometheusMetrics400JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPrometheusMetrics401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetPrometheusMetrics401JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPrometheusMetrics403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetPrometheusMetrics403JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPrometheusMetrics404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetPrometheusMetrics404JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPrometheusMetrics405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetPrometheusMetrics405JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPrometheusMetrics409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetPrometheusMetrics409JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPrometheusMetrics413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetPrometheusMetrics413JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPrometheusMetrics415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetPrometheusMetrics415JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPrometheusMetrics500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetPrometheusMetrics500JSONResponse) VisitGetPrometheusMetricsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListNamespacesRequestObject struct {
@@ -13139,49 +16825,94 @@ type ListNamespacesResponseObject interface {
 	VisitListNamespacesResponse(w http.ResponseWriter) error
 }
 
-type ListNamespaces200JSONResponse NamespaceList
+type ListNamespaces200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListNamespaces200JSONResponse struct {
+	Body    NamespaceList
+	Headers ListNamespaces200ResponseHeaders
+}
 
 func (response ListNamespaces200JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListNamespaces400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListNamespaces400JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListNamespaces401JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListNamespaces403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListNamespaces403JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNamespaces405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListNamespaces405JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNamespaces413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListNamespaces413JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNamespaces415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListNamespaces415JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListNamespaces500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListNamespaces500JSONResponse) VisitListNamespacesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateNamespaceRequestObject struct {
@@ -13195,6 +16926,7 @@ type CreateNamespaceResponseObject interface {
 
 type CreateNamespace201ResponseHeaders struct {
 	IdempotentReplayed bool
+	XRequestID         string
 }
 
 type CreateNamespace201JSONResponse struct {
@@ -13205,6 +16937,7 @@ type CreateNamespace201JSONResponse struct {
 func (response CreateNamespace201JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(201)
 
 	return json.NewEncoder(w).Encode(response.Body)
@@ -13214,36 +16947,73 @@ type CreateNamespace400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CreateNamespace400JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CreateNamespace401JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateNamespace403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CreateNamespace403JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNamespace405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateNamespace405JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateNamespace409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CreateNamespace409JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNamespace413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateNamespace413JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNamespace415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateNamespace415JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateNamespace422JSONResponse struct {
@@ -13252,18 +17022,20 @@ type CreateNamespace422JSONResponse struct {
 
 func (response CreateNamespace422JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(422)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CreateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CreateNamespace500JSONResponse) VisitCreateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteNamespaceRequestObject struct {
@@ -13275,10 +17047,16 @@ type DeleteNamespaceResponseObject interface {
 	VisitDeleteNamespaceResponse(w http.ResponseWriter) error
 }
 
+type DeleteNamespace202ResponseHeaders struct {
+	XRequestID string
+}
+
 type DeleteNamespace202Response struct {
+	Headers DeleteNamespace202ResponseHeaders
 }
 
 func (response DeleteNamespace202Response) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(202)
 	return nil
 }
@@ -13287,45 +17065,83 @@ type DeleteNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response DeleteNamespace401JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteNamespace403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response DeleteNamespace403JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteNamespace404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteNamespace404JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNamespace405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteNamespace405JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteNamespace409JSONResponse struct{ ConflictJSONResponse }
 
 func (response DeleteNamespace409JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNamespace413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteNamespace413JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNamespace415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteNamespace415JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type DeleteNamespace500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response DeleteNamespace500JSONResponse) VisitDeleteNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetNamespaceRequestObject struct {
@@ -13336,49 +17152,104 @@ type GetNamespaceResponseObject interface {
 	VisitGetNamespaceResponse(w http.ResponseWriter) error
 }
 
-type GetNamespace200JSONResponse Namespace
+type GetNamespace200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetNamespace200JSONResponse struct {
+	Body    Namespace
+	Headers GetNamespace200ResponseHeaders
+}
 
 func (response GetNamespace200JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNamespace400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetNamespace400JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetNamespace401JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetNamespace403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetNamespace403JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetNamespace404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetNamespace404JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNamespace405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetNamespace405JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNamespace413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetNamespace413JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNamespace415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetNamespace415JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetNamespace500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetNamespace500JSONResponse) VisitGetNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespaceRequestObject struct {
@@ -13391,58 +17262,104 @@ type UpdateNamespaceResponseObject interface {
 	VisitUpdateNamespaceResponse(w http.ResponseWriter) error
 }
 
-type UpdateNamespace200JSONResponse Namespace
+type UpdateNamespace200ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateNamespace200JSONResponse struct {
+	Body    Namespace
+	Headers UpdateNamespace200ResponseHeaders
+}
 
 func (response UpdateNamespace200JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response UpdateNamespace400JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response UpdateNamespace401JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response UpdateNamespace403JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateNamespace404JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateNamespace405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response UpdateNamespace405JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace409JSONResponse struct{ ConflictJSONResponse }
 
 func (response UpdateNamespace409JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateNamespace413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response UpdateNamespace413JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateNamespace415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response UpdateNamespace415JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace422JSONResponse struct {
@@ -13451,18 +17368,20 @@ type UpdateNamespace422JSONResponse struct {
 
 func (response UpdateNamespace422JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(422)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type UpdateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response UpdateNamespace500JSONResponse) VisitUpdateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceTokenRequestObject struct {
@@ -13475,58 +17394,104 @@ type RotateNamespaceTokenResponseObject interface {
 	VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error
 }
 
-type RotateNamespaceToken200JSONResponse Namespace
+type RotateNamespaceToken200ResponseHeaders struct {
+	XRequestID string
+}
+
+type RotateNamespaceToken200JSONResponse struct {
+	Body    Namespace
+	Headers RotateNamespaceToken200ResponseHeaders
+}
 
 func (response RotateNamespaceToken200JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response RotateNamespaceToken400JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response RotateNamespaceToken401JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response RotateNamespaceToken403JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response RotateNamespaceToken404JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateNamespaceToken405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RotateNamespaceToken405JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken409JSONResponse struct{ ConflictJSONResponse }
 
 func (response RotateNamespaceToken409JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateNamespaceToken413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RotateNamespaceToken413JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateNamespaceToken415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RotateNamespaceToken415JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken422JSONResponse struct {
@@ -13535,18 +17500,20 @@ type RotateNamespaceToken422JSONResponse struct {
 
 func (response RotateNamespaceToken422JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(422)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type RotateNamespaceToken500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RotateNamespaceToken500JSONResponse) VisitRotateNamespaceTokenResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespaceRequestObject struct {
@@ -13558,49 +17525,94 @@ type ValidateNamespaceResponseObject interface {
 	VisitValidateNamespaceResponse(w http.ResponseWriter) error
 }
 
-type ValidateNamespace200JSONResponse Namespace
+type ValidateNamespace200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ValidateNamespace200JSONResponse struct {
+	Body    Namespace
+	Headers ValidateNamespace200ResponseHeaders
+}
 
 func (response ValidateNamespace200JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ValidateNamespace401JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespace403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ValidateNamespace403JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespace404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ValidateNamespace404JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ValidateNamespace405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ValidateNamespace405JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespace409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ValidateNamespace409JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ValidateNamespace413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ValidateNamespace413JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ValidateNamespace415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ValidateNamespace415JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespace422JSONResponse struct {
@@ -13609,18 +17621,20 @@ type ValidateNamespace422JSONResponse struct {
 
 func (response ValidateNamespace422JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(422)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ValidateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ValidateNamespace500JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOpenAPISpecRequestObject struct {
@@ -13663,67 +17677,114 @@ type ListOperationsResponseObject interface {
 	VisitListOperationsResponse(w http.ResponseWriter) error
 }
 
-type ListOperations200JSONResponse OperationList
+type ListOperations200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListOperations200JSONResponse struct {
+	Body    OperationList
+	Headers ListOperations200ResponseHeaders
+}
 
 func (response ListOperations200JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOperations400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListOperations400JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOperations401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListOperations401JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOperations403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListOperations403JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOperations404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListOperations404JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOperations405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListOperations405JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOperations409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListOperations409JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOperations413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListOperations413JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOperations415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListOperations415JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOperations500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListOperations500JSONResponse) VisitListOperationsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperationRequestObject struct {
@@ -13734,67 +17795,200 @@ type GetOperationResponseObject interface {
 	VisitGetOperationResponse(w http.ResponseWriter) error
 }
 
-type GetOperation200JSONResponse Operation
+type GetOperation200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetOperation200JSONResponse struct {
+	Body    Operation
+	Headers GetOperation200ResponseHeaders
+}
 
 func (response GetOperation200JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperation400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetOperation400JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperation401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetOperation401JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperation403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetOperation403JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperation404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetOperation404JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOperation405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetOperation405JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperation409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetOperation409JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOperation413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetOperation413JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOperation415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetOperation415JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetOperation500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetOperation500JSONResponse) VisitGetOperationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperationRequestObject struct {
+	Operation string `json:"operation"`
+	Params    CancelOperationParams
+}
+
+type CancelOperationResponseObject interface {
+	VisitCancelOperationResponse(w http.ResponseWriter) error
+}
+
+type CancelOperation202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type CancelOperation202JSONResponse struct {
+	Body    Operation
+	Headers CancelOperation202ResponseHeaders
+}
+
+func (response CancelOperation202JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CancelOperation400JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CancelOperation401JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CancelOperation403JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CancelOperation404JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CancelOperation409JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CancelOperation500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CancelOperation500JSONResponse) VisitCancelOperationResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOrphanedVolumesRequestObject struct {
@@ -13805,49 +17999,94 @@ type ListOrphanedVolumesResponseObject interface {
 	VisitListOrphanedVolumesResponse(w http.ResponseWriter) error
 }
 
-type ListOrphanedVolumes200JSONResponse OrphanedVolumeList
+type ListOrphanedVolumes200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListOrphanedVolumes200JSONResponse struct {
+	Body    OrphanedVolumeList
+	Headers ListOrphanedVolumes200ResponseHeaders
+}
 
 func (response ListOrphanedVolumes200JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOrphanedVolumes400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListOrphanedVolumes400JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOrphanedVolumes401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListOrphanedVolumes401JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOrphanedVolumes404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListOrphanedVolumes404JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOrphanedVolumes405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListOrphanedVolumes405JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOrphanedVolumes413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListOrphanedVolumes413JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOrphanedVolumes415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListOrphanedVolumes415JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListOrphanedVolumes500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListOrphanedVolumes500JSONResponse) VisitListOrphanedVolumesResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissionsRequestObject struct {
@@ -13857,67 +18096,114 @@ type GetPermissionsResponseObject interface {
 	VisitGetPermissionsResponse(w http.ResponseWriter) error
 }
 
-type GetPermissions200JSONResponse Permissions
+type GetPermissions200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetPermissions200JSONResponse struct {
+	Body    Permissions
+	Headers GetPermissions200ResponseHeaders
+}
 
 func (response GetPermissions200JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissions400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetPermissions400JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissions401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetPermissions401JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissions403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetPermissions403JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissions404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetPermissions404JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPermissions405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetPermissions405JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissions409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetPermissions409JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPermissions413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetPermissions413JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPermissions415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetPermissions415JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetPermissions500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetPermissions500JSONResponse) VisitGetPermissionsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProvidersRequestObject struct {
@@ -13927,67 +18213,114 @@ type ListProvidersResponseObject interface {
 	VisitListProvidersResponse(w http.ResponseWriter) error
 }
 
-type ListProviders200JSONResponse ProviderList
+type ListProviders200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListProviders200JSONResponse struct {
+	Body    ProviderList
+	Headers ListProviders200ResponseHeaders
+}
 
 func (response ListProviders200JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProviders400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ListProviders400JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProviders401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListProviders401JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProviders403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ListProviders403JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProviders404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListProviders404JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListProviders405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListProviders405JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProviders409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ListProviders409JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListProviders413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListProviders413JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListProviders415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListProviders415JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ListProviders500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListProviders500JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProviderRequestObject struct {
@@ -13998,67 +18331,114 @@ type GetProviderResponseObject interface {
 	VisitGetProviderResponse(w http.ResponseWriter) error
 }
 
-type GetProvider200JSONResponse Provider
+type GetProvider200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetProvider200JSONResponse struct {
+	Body    Provider
+	Headers GetProvider200ResponseHeaders
+}
 
 func (response GetProvider200JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProvider400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetProvider400JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProvider401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetProvider401JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProvider403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetProvider403JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProvider404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetProvider404JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetProvider405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetProvider405JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProvider409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetProvider409JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetProvider413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetProvider413JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetProvider415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetProvider415JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetProvider500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetProvider500JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermissionRequestObject struct {
@@ -14070,67 +18450,114 @@ type CheckPermissionResponseObject interface {
 	VisitCheckPermissionResponse(w http.ResponseWriter) error
 }
 
-type CheckPermission200JSONResponse CanResponse
+type CheckPermission200ResponseHeaders struct {
+	XRequestID string
+}
+
+type CheckPermission200JSONResponse struct {
+	Body    CanResponse
+	Headers CheckPermission200ResponseHeaders
+}
 
 func (response CheckPermission200JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermission400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response CheckPermission400JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermission401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response CheckPermission401JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermission403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response CheckPermission403JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermission404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response CheckPermission404JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CheckPermission405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CheckPermission405JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermission409JSONResponse struct{ ConflictJSONResponse }
 
 func (response CheckPermission409JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CheckPermission413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CheckPermission413JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CheckPermission415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CheckPermission415JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type CheckPermission500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response CheckPermission500JSONResponse) VisitCheckPermissionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicyRequestObject struct {
@@ -14140,67 +18567,114 @@ type GetRBACPolicyResponseObject interface {
 	VisitGetRBACPolicyResponse(w http.ResponseWriter) error
 }
 
-type GetRBACPolicy200JSONResponse RBACPolicy
+type GetRBACPolicy200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetRBACPolicy200JSONResponse struct {
+	Body    RBACPolicy
+	Headers GetRBACPolicy200ResponseHeaders
+}
 
 func (response GetRBACPolicy200JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicy400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetRBACPolicy400JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetRBACPolicy401JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicy403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetRBACPolicy403JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicy404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetRBACPolicy404JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRBACPolicy405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetRBACPolicy405JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicy409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetRBACPolicy409JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRBACPolicy413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetRBACPolicy413JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetRBACPolicy415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetRBACPolicy415JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetRBACPolicy500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetRBACPolicy500JSONResponse) VisitGetRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicyRequestObject struct {
@@ -14212,67 +18686,114 @@ type ReplaceRBACPolicyResponseObject interface {
 	VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error
 }
 
-type ReplaceRBACPolicy200JSONResponse RBACPolicy
+type ReplaceRBACPolicy200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceRBACPolicy200JSONResponse struct {
+	Body    RBACPolicy
+	Headers ReplaceRBACPolicy200ResponseHeaders
+}
 
 func (response ReplaceRBACPolicy200JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicy400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceRBACPolicy400JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceRBACPolicy401JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicy403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceRBACPolicy403JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicy404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceRBACPolicy404JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRBACPolicy405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceRBACPolicy405JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicy409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceRBACPolicy409JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRBACPolicy413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceRBACPolicy413JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceRBACPolicy415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceRBACPolicy415JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceRBACPolicy500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceRBACPolicy500JSONResponse) VisitReplaceRBACPolicyResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettingsRequestObject struct {
@@ -14282,67 +18803,114 @@ type GetSettingsResponseObject interface {
 	VisitGetSettingsResponse(w http.ResponseWriter) error
 }
 
-type GetSettings200JSONResponse Settings
+type GetSettings200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetSettings200JSONResponse struct {
+	Body    Settings
+	Headers GetSettings200ResponseHeaders
+}
 
 func (response GetSettings200JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettings400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetSettings400JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettings401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetSettings401JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettings403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetSettings403JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettings404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetSettings404JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSettings405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetSettings405JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettings409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetSettings409JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSettings413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetSettings413JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSettings415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetSettings415JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetSettings500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetSettings500JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettingsRequestObject struct {
@@ -14354,67 +18922,114 @@ type ReplaceSettingsResponseObject interface {
 	VisitReplaceSettingsResponse(w http.ResponseWriter) error
 }
 
-type ReplaceSettings200JSONResponse Settings
+type ReplaceSettings200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceSettings200JSONResponse struct {
+	Body    Settings
+	Headers ReplaceSettings200ResponseHeaders
+}
 
 func (response ReplaceSettings200JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettings400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ReplaceSettings400JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettings401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ReplaceSettings401JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettings403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response ReplaceSettings403JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettings404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ReplaceSettings404JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceSettings405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceSettings405JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettings409JSONResponse struct{ ConflictJSONResponse }
 
 func (response ReplaceSettings409JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceSettings413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceSettings413JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceSettings415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceSettings415JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type ReplaceSettings500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceSettings500JSONResponse) VisitReplaceSettingsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersionRequestObject struct {
@@ -14424,67 +19039,114 @@ type GetVersionResponseObject interface {
 	VisitGetVersionResponse(w http.ResponseWriter) error
 }
 
-type GetVersion200JSONResponse Version
+type GetVersion200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetVersion200JSONResponse struct {
+	Body    Version
+	Headers GetVersion200ResponseHeaders
+}
 
 func (response GetVersion200JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(200)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersion400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response GetVersion400JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(400)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersion401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response GetVersion401JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(401)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersion403JSONResponse struct{ ForbiddenJSONResponse }
 
 func (response GetVersion403JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(403)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersion404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetVersion404JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(404)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetVersion405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetVersion405JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersion409JSONResponse struct{ ConflictJSONResponse }
 
 func (response GetVersion409JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(409)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetVersion413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetVersion413JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetVersion415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetVersion415JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 type GetVersion500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response GetVersion500JSONResponse) VisitGetVersionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
 
-	return json.NewEncoder(w).Encode(response)
+	return json.NewEncoder(w).Encode(response.Body)
 }
 
 // StrictServerInterface represents all server handlers.
@@ -14726,6 +19388,9 @@ type StrictServerInterface interface {
 	// Read a durable operation
 	// (GET /operations/{operation})
 	GetOperation(ctx context.Context, request GetOperationRequestObject) (GetOperationResponseObject, error)
+	// Request cooperative cancellation of an operation
+	// (POST /operations/{operation}/cancel)
+	CancelOperation(ctx context.Context, request CancelOperationRequestObject) (CancelOperationResponseObject, error)
 	// List orphaned platform volumes
 	// (GET /orphaned-volumes)
 	ListOrphanedVolumes(ctx context.Context, request ListOrphanedVolumesRequestObject) (ListOrphanedVolumesResponseObject, error)
@@ -17060,6 +21725,33 @@ func (sh *strictHandler) GetOperation(w http.ResponseWriter, r *http.Request, op
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOperationResponseObject); ok {
 		if err := validResponse.VisitGetOperationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelOperation operation middleware
+func (sh *strictHandler) CancelOperation(w http.ResponseWriter, r *http.Request, operation string, params CancelOperationParams) {
+	var request CancelOperationRequestObject
+
+	request.Operation = operation
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelOperation(ctx, request.(CancelOperationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelOperation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelOperationResponseObject); ok {
+		if err := validResponse.VisitCancelOperationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

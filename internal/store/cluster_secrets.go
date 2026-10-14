@@ -53,6 +53,9 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 	if c.Status.Phase == "" {
 		c.Status.Phase = domain.PhaseCreating
 	}
+	if c.Status.Phase == domain.PhaseCreating && c.Status.Message == "" {
+		c.Status.Message = "Creating: queued platform provisioning"
+	}
 	spec, err := json.Marshal(c.Spec)
 	if err != nil {
 		return err
@@ -88,6 +91,9 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 		return typed(err)
 	}
 	if err = writeClusterValues(ctx, tx, c.Ref().Key(), sealed); err != nil {
+		return err
+	}
+	if err = acceptClusterOperation(ctx, tx, c.Ref()); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -141,6 +147,9 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 		return err
 	}
 	if err = writeClusterValues(ctx, tx, name, sealed); err != nil {
+		return err
+	}
+	if err = acceptClusterOperation(ctx, tx, ref); err != nil {
 		return err
 	}
 	return tx.Commit()

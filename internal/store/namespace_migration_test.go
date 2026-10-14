@@ -304,13 +304,18 @@ func seedNamespaceMigrationDatabase(t *testing.T, path string, sealer *secrets.S
 	for i, policy := range f.policies {
 		exec("INSERT INTO policies(position,data) VALUES(?,?)", i, marshal(policy))
 	}
+	f.backup.OperationID = "op-backup"
+	f.restore.OperationID = "op-restore"
+	f.ops[0].Target = domain.OperationTarget{Kind: "backup", Name: "snapshot"}
+	f.ops[0].Message = "backup completed successfully"
+	f.ops[1].Target = domain.OperationTarget{Kind: "restore", Name: "recovery"}
 	return f
 }
 
 func assertNamespaceMigrationFixture(t *testing.T, s *Store, f namespaceMigrationFixture) {
 	t.Helper()
 	ctx := context.Background()
-	assertNamespaceMigrationNames(t, s.reader, []string{"001.sql", "002.sql", "003.sql", "004.sql", "005_idempotency.sql"})
+	assertNamespaceMigrationNames(t, s.reader, []string{"001.sql", "002.sql", "003.sql", "004.sql", "005_idempotency.sql", "006_operations.sql"})
 	clusters, err := s.ListClusters(ctx, domain.DefaultNamespace)
 	assertNamespaceMigrationValue(t, "default clusters", clusters, f.clusters, err)
 	for _, want := range f.clusters {

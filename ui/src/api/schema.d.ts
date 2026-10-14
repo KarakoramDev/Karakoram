@@ -360,7 +360,10 @@ export type paths = {
         delete: operations["deleteCluster"];
         options?: never;
         head?: never;
-        /** Apply an RFC 7396 cluster merge patch */
+        /**
+         * Apply an RFC 7396 cluster merge patch
+         * @description Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation.
+         */
         patch: operations["patchCluster"];
         trace?: never;
     };
@@ -1239,6 +1242,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/operations/{operation}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request cooperative cancellation of an operation
+         * @description Pending work is cancelled immediately. Running work is cancelled only at provider-supported safe checkpoints; unsafe or terminal states return 409 conflict with details.reason invalid_state. Requires clusters update permission on the operation's persisted namespace/cluster, resolved by the handler. Cancellation never rolls back accepted desired state.
+         */
+        post: operations["cancelOperation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orphaned-volumes": {
         parameters: {
             query?: {
@@ -1453,6 +1478,8 @@ export type components = {
             lastWriteTime?: string;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
+            /** @description Durable operation that created this backup. */
+            readonly operationId?: string;
             pbmName?: string;
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed" | "Deleting";
@@ -1484,11 +1511,32 @@ export type components = {
             /** @enum {string} */
             type: "logical" | "physical";
         };
+        BackupScheduleInput: {
+            /** @description Five-field cron expression, evaluated in UTC. */
+            cron: string;
+            /** @default true */
+            enabled: boolean;
+            name: string;
+            retainCount: number;
+            storage?: string;
+            /** @enum {string} */
+            type: "logical" | "physical";
+        };
         BackupSpec: {
             pitr?: components["schemas"]["PITRSpec"];
             schedules?: components["schemas"]["BackupSchedule"][];
             storage?: string;
         };
+        BackupSpecInput: {
+            pitr?: components["schemas"]["PITRSpec"];
+            schedules?: components["schemas"]["BackupScheduleInput"][];
+            storage?: string;
+        };
+        BackupSpecPatch: {
+            pitr?: components["schemas"]["PITRSpecPatch"];
+            schedules?: components["schemas"]["BackupScheduleInput"][] | null;
+            storage?: string | null;
+        } | null;
         BackupStorage: {
             bucket: string;
             /** Format: date-time */
@@ -1544,6 +1592,8 @@ export type components = {
             generation: number;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
+            /** @description Tracking operation returned on create, PUT, PATCH and resume acceptance. */
+            readonly operationId?: string;
             spec: components["schemas"]["ClusterSpec"];
             status: components["schemas"]["ClusterStatus"];
             /** Format: date-time */
@@ -1553,14 +1603,29 @@ export type components = {
             lastBackup?: string;
             pitrWindow?: components["schemas"]["PITRWindow"];
         };
+        /** @description Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid. */
+        ClusterInputSpec: {
+            backup?: components["schemas"]["BackupSpecInput"];
+            components?: components["schemas"]["ComponentsInput"];
+            dataSource?: components["schemas"]["DataSource"];
+            /** @description Validated YAML mongod/mongos overrides. */
+            engineConfig?: string;
+            exposure?: components["schemas"]["ExposureInput"];
+            monitoring?: components["schemas"]["MonitoringSpec"];
+            /** @description Required provider identifier; list providers with GET /api/v1/providers. */
+            provider: string;
+            tls?: components["schemas"]["TLSInput"];
+            topology?: components["schemas"]["TopologyInput"];
+            version?: string;
+        };
         ClusterList: {
             items: components["schemas"]["Cluster"][];
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
-        /** @description RFC 7396 merge patch of the cluster desired spec envelope: {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned name/status/generation/timestamps are rejected. Secret inputs follow TLS write-only fields. */
+        /** @description RFC 7396 merge patch of desired {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned fields are rejected. */
         ClusterMergePatch: {
-            [key: string]: unknown;
+            spec: components["schemas"]["ClusterPatchSpec"];
         };
         ClusterMetrics: {
             /** Format: date-time */
@@ -1570,6 +1635,20 @@ export type components = {
             start: string;
             step: string;
         };
+        ClusterPatchSpec: {
+            backup?: components["schemas"]["BackupSpecPatch"];
+            components?: components["schemas"]["ComponentsPatch"];
+            dataSource?: components["schemas"]["DataSourcePatch"];
+            /** @description Validated YAML mongod/mongos overrides. */
+            engineConfig?: string | null;
+            exposure?: components["schemas"]["ExposurePatch"];
+            monitoring?: components["schemas"]["MonitoringSpecPatch"];
+            /** @description Required provider identifier; list providers with GET /api/v1/providers. */
+            provider?: string | null;
+            tls?: components["schemas"]["TLSPatch"];
+            topology?: components["schemas"]["TopologyPatch"];
+            version?: string | null;
+        };
         ClusterSpec: {
             backup?: components["schemas"]["BackupSpec"];
             components: components["schemas"]["Components"];
@@ -1578,7 +1657,7 @@ export type components = {
             engineConfig?: string;
             exposure?: components["schemas"]["Exposure"];
             monitoring?: components["schemas"]["MonitoringSpec"];
-            /** @default psmdb */
+            /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
             tls?: components["schemas"]["TLS"];
             topology: components["schemas"]["Topology"];
@@ -1593,20 +1672,42 @@ export type components = {
             message?: string;
             /** Format: int64 */
             observedGeneration: number;
-            /** @enum {string} */
+            /**
+             * @description Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+             * @enum {string}
+             */
             phase: "Creating" | "Initializing" | "Ready" | "Updating" | "Scaling" | "Upgrading" | "Restoring" | "Degraded" | "Error" | "Deleting" | "Suspended";
             placement?: components["schemas"]["Placement"];
+            /** @description Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version. */
             version?: string;
         };
         Component: {
             replicas: number;
             resources: components["schemas"]["Resources"];
         };
+        ComponentInput: {
+            replicas?: number;
+            resources?: components["schemas"]["ResourcesInput"];
+        };
+        ComponentPatch: {
+            replicas?: number | null;
+            resources?: components["schemas"]["ResourcesPatch"];
+        } | null;
         Components: {
             configServer?: components["schemas"]["Component"];
             engine: components["schemas"]["Component"];
             router?: components["schemas"]["Component"];
         };
+        ComponentsInput: {
+            configServer?: components["schemas"]["ConfigServerInput"];
+            engine?: components["schemas"]["ComponentInput"];
+            router?: components["schemas"]["ComponentInput"];
+        };
+        ComponentsPatch: {
+            configServer?: components["schemas"]["ConfigServerPatch"];
+            engine?: components["schemas"]["ComponentPatch"];
+            router?: components["schemas"]["ComponentPatch"];
+        } | null;
         Condition: {
             /** Format: date-time */
             lastTransitionTime: string;
@@ -1616,6 +1717,16 @@ export type components = {
             status: "True" | "False" | "Unknown";
             type: string;
         };
+        /** @description PSMDB config-server replica set: 1, 3, 5 or 7 members. */
+        ConfigServerInput: {
+            replicas?: number;
+            resources?: components["schemas"]["ResourcesInput"];
+        };
+        /** @description PSMDB config-server replica set: 1, 3, 5 or 7 members. */
+        ConfigServerPatch: {
+            replicas?: number | null;
+            resources?: components["schemas"]["ResourcesPatch"];
+        } | null;
         /** @description Sensitive response. Requires cluster-credentials read separately from clusters read. Server sends Cache-Control: no-store. */
         Connection: {
             caCertificate?: string;
@@ -1678,7 +1789,7 @@ export type components = {
         };
         CreateClusterRequest: {
             name: string;
-            spec: components["schemas"]["ClusterSpec"];
+            spec: components["schemas"]["ClusterInputSpec"];
         };
         CreatedAPIToken: {
             /** @description kk_ prefixed bearer token, returned by creation and matching Idempotency-Key replays within 24 hours. Store securely; later GETs cannot recover it. */
@@ -1745,6 +1856,15 @@ export type components = {
             /** Format: date-time */
             pitrTime?: string;
         };
+        /** @description Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time. */
+        DataSourcePatch: {
+            backup?: string | null;
+            cluster?: string | null;
+            /** @description Source namespace; defaults to the target cluster namespace. */
+            namespace?: components["schemas"]["NamespaceName"] | null;
+            /** Format: date-time */
+            pitrTime?: string | null;
+        } | null;
         /**
          * @description Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
          *     `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -1793,6 +1913,8 @@ export type components = {
             nextCursor?: string;
         };
         Exposure: {
+            /** @description Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType. */
+            allowAllAddresses?: boolean;
             allowlist?: string[];
             /**
              * @default IPV6
@@ -1802,6 +1924,30 @@ export type components = {
             /** @default false */
             public: boolean;
         };
+        ExposureInput: {
+            /** @description Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType. */
+            allowAllAddresses?: boolean;
+            allowlist?: string[];
+            /**
+             * @default IPV6
+             * @enum {string}
+             */
+            ipType: "IPV6" | "IPV4";
+            /** @default false */
+            public: boolean;
+        };
+        ExposurePatch: {
+            /** @description Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType. */
+            allowAllAddresses?: boolean | null;
+            allowlist?: string[] | null;
+            /**
+             * @default IPV6
+             * @enum {string|null}
+             */
+            ipType: "IPV6" | "IPV4" | null;
+            /** @default false */
+            public: boolean | null;
+        } | null;
         Health: {
             database: boolean;
             /** @enum {string} */
@@ -1877,6 +2023,10 @@ export type components = {
             /** @default true */
             enabled: boolean;
         };
+        MonitoringSpecPatch: {
+            /** @default true */
+            enabled: boolean | null;
+        } | null;
         Namespace: {
             readonly clusterCount: number;
             /** Format: date-time */
@@ -1941,6 +2091,8 @@ export type components = {
         Operation: {
             /** @description Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor. */
             actor?: string;
+            /** @description Cooperative cancellation has been accepted but may still be cleaning up. */
+            cancelRequested?: boolean;
             cluster: string;
             /** Format: date-time */
             completedAt?: string;
@@ -1948,20 +2100,33 @@ export type components = {
             createdAt: string;
             error?: components["schemas"]["Error"];
             id: string;
+            /** @description Current stage or error; every terminal operation has a non-empty summary. */
             message?: string;
             readonly namespace: components["schemas"]["NamespaceName"];
             /** @enum {string} */
-            phase: "Pending" | "Running" | "Succeeded" | "Failed";
+            phase: "Pending" | "Running" | "Succeeded" | "Failed" | "Cancelled";
             progress?: number;
             /** Format: date-time */
             startedAt?: string;
+            /** @description Current durable execution checkpoint or convergence phase. */
+            step?: string;
+            target: components["schemas"]["OperationTarget"];
+            /**
+             * Format: int64
+             * @description Cluster generation observed by desired-state operations.
+             */
+            targetGeneration?: number;
             /** @enum {string} */
-            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "replace-member" | "rotate-system-user" | "rotate-tls";
+            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "replace-member" | "rotate-system-user" | "rotate-tls" | "create" | "update" | "tls" | "upgrade" | "delete" | "resume";
         };
         OperationList: {
             items: components["schemas"]["Operation"][];
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
+        };
+        OperationTarget: {
+            kind: string;
+            name: string;
         };
         OrphanedVolume: {
             attempts: number;
@@ -2002,6 +2167,11 @@ export type components = {
             /** @default 10 */
             oplogSpanMinutes: number;
         };
+        PITRSpecPatch: {
+            enabled?: boolean | null;
+            /** @default 10 */
+            oplogSpanMinutes: number | null;
+        } | null;
         /** @description Only a continuous PBM-verified restorable interval is reported. */
         PITRWindow: {
             available: boolean;
@@ -2103,9 +2273,17 @@ export type components = {
             serviceId?: string;
             version?: string;
         };
-        /** @description Replaces the full desired spec; server-owned name, generation, status and timestamps cannot be replaced. */
+        /** @description Replaces the full desired spec. Recognized server-owned fields from GET may be round-tripped but are ignored; PATCH rejects them. */
         ReplaceClusterRequest: {
-            spec: components["schemas"]["ClusterSpec"];
+            readonly createdAt?: string;
+            readonly generation?: number;
+            readonly name?: string;
+            namespace?: components["schemas"]["NamespaceName"];
+            spec: components["schemas"]["ClusterInputSpec"];
+            readonly status?: {
+                [key: string]: unknown;
+            };
+            readonly updatedAt?: string;
         };
         ResetPasswordRequest: {
             /** @default true */
@@ -2127,6 +2305,36 @@ export type components = {
             minRam: number;
             startCpu?: number;
         };
+        ResourcesInput: {
+            /** @enum {string} */
+            cpuMode?: "SHARED" | "DEDICATED";
+            maxCpu?: number;
+            /** @description GiB */
+            maxDisk?: number;
+            /** @description GiB */
+            maxRam?: number;
+            minCpu?: number;
+            /** @description GiB */
+            minDisk?: number;
+            /** @description GiB */
+            minRam?: number;
+            startCpu?: number;
+        };
+        ResourcesPatch: {
+            /** @enum {string|null} */
+            cpuMode?: "SHARED" | "DEDICATED" | null;
+            maxCpu?: number | null;
+            /** @description GiB */
+            maxDisk?: number | null;
+            /** @description GiB */
+            maxRam?: number | null;
+            minCpu?: number | null;
+            /** @description GiB */
+            minDisk?: number | null;
+            /** @description GiB */
+            minRam?: number | null;
+            startCpu?: number | null;
+        } | null;
         Restore: {
             cluster: string;
             /** Format: date-time */
@@ -2134,6 +2342,8 @@ export type components = {
             error?: string;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
+            /** @description Durable operation that created this restore. */
+            readonly operationId?: string;
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed";
             source: components["schemas"]["RestoreSource"];
@@ -2217,6 +2427,46 @@ export type components = {
             /** Format: password */
             privateKey?: string;
         };
+        /** @description PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only. */
+        TLSInput: {
+            /**
+             * @default selfSigned
+             * @enum {string}
+             */
+            ca: "selfSigned" | "userProvided";
+            caCertificate?: string;
+            /** Format: password */
+            caPrivateKey?: string;
+            /** @description User-provided PEM certificate chain. */
+            certificate?: string;
+            /**
+             * @default requireTLS
+             * @enum {string}
+             */
+            mode: "preferTLS" | "requireTLS" | "disabled";
+            /** Format: password */
+            privateKey?: string;
+        };
+        /** @description PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only. */
+        TLSPatch: {
+            /**
+             * @default selfSigned
+             * @enum {string|null}
+             */
+            ca: "selfSigned" | "userProvided" | null;
+            caCertificate?: string | null;
+            /** Format: password */
+            caPrivateKey?: string | null;
+            /** @description User-provided PEM certificate chain. */
+            certificate?: string | null;
+            /**
+             * @default requireTLS
+             * @enum {string|null}
+             */
+            mode: "preferTLS" | "requireTLS" | "disabled" | null;
+            /** Format: password */
+            privateKey?: string | null;
+        } | null;
         /** @description Secret-safe token health; never contains a token or fingerprint. */
         TokenStatus: {
             lastError?: string;
@@ -2233,6 +2483,16 @@ export type components = {
             /** @enum {string} */
             type: "replicaSet" | "sharded";
         };
+        TopologyInput: {
+            shards?: number;
+            /** @enum {string} */
+            type?: "replicaSet" | "sharded";
+        };
+        TopologyPatch: {
+            shards?: number | null;
+            /** @enum {string|null} */
+            type?: "replicaSet" | "sharded" | null;
+        } | null;
         UpdateAccountRequest: {
             enabled: boolean;
             mustChangePassword: boolean;
@@ -2272,6 +2532,15 @@ export type components = {
         };
         UpgradePath: {
             from: string;
+            /**
+             * @description Requires a Succeeded backup of this cluster completed within the
+             *     last 24 hours, no earlier than cluster creation or the last known
+             *     successful convergence to its current version. Enforced on PUT and
+             *     PATCH version changes; missing, stale, unfinished or failed backups
+             *     return 409 conflict with reason invalid_state. Create a backup via
+             *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+             *     for Succeeded, and retry. There is no bypass flag.
+             */
             requiresBackup?: boolean;
             requiresFCV?: string;
             to: string;
@@ -2291,6 +2560,7 @@ export type components = {
         /** @description Invalid request, query, cursor, or resource configuration. */
         BadRequest: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2305,6 +2575,7 @@ export type components = {
          */
         Conflict: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2314,6 +2585,7 @@ export type components = {
         /** @description Authenticated caller lacks permission or the CSRF check failed. */
         Forbidden: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2323,6 +2595,18 @@ export type components = {
         /** @description Unexpected server error; response does not contain secret material. */
         InternalError: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description method_not_allowed: the route exists but does not support this method. */
+        MethodNotAllowed: {
+            headers: {
+                Allow?: string;
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2332,6 +2616,17 @@ export type components = {
         /** @description The requested resource does not exist or is not visible to the caller. */
         NotFound: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description payload_too_large: body exceeds the 2 MiB limit. */
+        PayloadTooLarge: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2341,6 +2636,7 @@ export type components = {
         /** @description Missing, expired or invalid authentication. */
         Unauthorized: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2359,6 +2655,17 @@ export type components = {
         /** @description Invalid namespace token, project mismatch or duplicate project. */
         UnprocessableEntity: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description unsupported_media_type: use a Content-Type declared for the operation. */
+        UnsupportedMediaType: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
             };
             content: {
@@ -2395,6 +2702,8 @@ export type components = {
     headers: {
         /** @description Present and true when the stored successful response was replayed. */
         IdempotentReplayed: true;
+        /** @description Correlation identifier echoed from a valid X-Request-ID request header or generated by the server. */
+        RequestID: string;
     };
     pathItems: never;
 };
@@ -2417,6 +2726,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2427,7 +2738,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2462,6 +2776,8 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2472,7 +2788,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2490,6 +2809,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2500,7 +2821,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2525,6 +2849,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2535,7 +2861,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2556,6 +2885,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2564,7 +2895,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2589,6 +2923,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2597,7 +2933,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2618,6 +2957,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2628,7 +2969,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2663,6 +3007,8 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2673,7 +3019,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2691,6 +3040,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2701,7 +3052,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2726,6 +3080,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2736,7 +3092,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2757,6 +3116,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2765,7 +3126,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2788,6 +3152,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2796,7 +3162,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2831,25 +3200,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
-            /** @description Request exceeds the 2 MiB body limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Login requires application/json. */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             /** @description Login temporarily throttled. Wait for the indicated delay before retrying. */
             429: {
                 headers: {
@@ -2888,6 +3242,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2896,7 +3252,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2912,6 +3271,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2922,7 +3283,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2953,7 +3317,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["Unavailable"];
         };
@@ -2983,7 +3350,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["Unavailable"];
         };
@@ -3015,7 +3385,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3038,6 +3411,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3048,7 +3423,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3086,6 +3464,8 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3096,7 +3476,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
@@ -3118,6 +3501,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3128,7 +3513,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3156,6 +3544,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3166,7 +3556,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3190,6 +3583,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -3198,7 +3593,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3222,6 +3620,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3232,7 +3632,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3255,6 +3658,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3265,7 +3670,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3303,6 +3711,10 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Durable operation ID for the accepted request. */
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3313,7 +3725,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
@@ -3336,6 +3751,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3346,7 +3763,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3387,6 +3807,9 @@ export interface operations {
             200: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3397,7 +3820,27 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            405: components["responses"]["MethodNotAllowed"];
+            /**
+             * @description Conflicting cluster state or idempotency key. A version change on a
+             *     catalog path with requiresBackup needs a Succeeded backup of this
+             *     cluster completed within the last 24 hours, no earlier than cluster
+             *     creation or the last known successful convergence to its current
+             *     version. Otherwise returns conflict with details resource=cluster,
+             *     name={cluster}, reason=invalid_state. Create a backup via
+             *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+             *     for Succeeded, and retry. There is no bypass flag.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3424,15 +3867,23 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3473,6 +3924,9 @@ export interface operations {
             200: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3483,7 +3937,27 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            405: components["responses"]["MethodNotAllowed"];
+            /**
+             * @description Conflicting cluster state or idempotency key. A version change on a
+             *     catalog path with requiresBackup needs a Succeeded backup of this
+             *     cluster completed within the last 24 hours, no earlier than cluster
+             *     creation or the last known successful convergence to its current
+             *     version. Otherwise returns conflict with details resource=cluster,
+             *     name={cluster}, reason=invalid_state. Create a backup via
+             *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+             *     for Succeeded, and retry. There is no bypass flag.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3509,6 +3983,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3519,7 +3995,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3556,10 +4035,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted; track the returned operation. */
+            /** @description Accepted; track Backup.operationId or the Karakoram-Operation-Id header. Clusters not yet formed and active are rejected with 409 and reason invalid_state. */
             202: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3570,7 +4052,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3593,6 +4078,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3603,7 +4090,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3629,6 +4119,9 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3638,6 +4131,8 @@ export interface operations {
             /** @description Retained snapshot objects and record removed, or already absent. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -3646,7 +4141,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3668,6 +4166,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3678,7 +4178,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3707,6 +4210,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3717,7 +4222,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3751,7 +4259,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["Unavailable"];
         };
@@ -3778,6 +4289,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3788,7 +4301,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3829,6 +4345,8 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3839,7 +4357,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3863,6 +4384,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3873,7 +4396,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3904,6 +4430,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3914,7 +4442,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3941,6 +4472,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -3949,7 +4482,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3975,6 +4511,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3985,7 +4523,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4038,7 +4579,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4062,6 +4606,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4072,7 +4618,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4103,6 +4652,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4113,7 +4664,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4140,6 +4694,8 @@ export interface operations {
             /** @description Successful response. */
             204: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -4148,7 +4704,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4170,6 +4729,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4180,7 +4741,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4203,6 +4767,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4213,7 +4779,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4240,6 +4809,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4250,7 +4821,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4276,6 +4850,9 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4286,7 +4863,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4295,9 +4875,9 @@ export interface operations {
             query?: {
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes. */
                 namespace?: components["parameters"]["NamespaceQuery"];
-                /** @description Lookback from now. */
+                /** @description Positive Go duration no greater than 24h, for example 30m, 1h or 24h. Days are not a duration unit. */
                 range?: string;
-                /** @description Aggregation interval. */
+                /** @description Positive Go duration no greater than range. The omitted default 30s is bounded to a shorter requested range. */
                 step?: string;
             };
             header?: never;
@@ -4312,6 +4892,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4322,7 +4904,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4349,6 +4934,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4359,7 +4946,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4381,6 +4971,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4391,7 +4983,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4413,6 +5008,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4423,7 +5020,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4452,6 +5052,9 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4462,7 +5065,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4487,6 +5093,9 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4497,7 +5106,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4523,6 +5135,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4533,7 +5147,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4570,10 +5187,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted; track the returned operation. */
+            /** @description Accepted; track Restore.operationId or the Karakoram-Operation-Id header. */
             202: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4584,7 +5204,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4607,6 +5230,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4617,7 +5242,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4639,9 +5267,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Accepted; track the returned operation. */
+            /** @description Accepted; track Cluster.operationId or the Karakoram-Operation-Id header. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4652,7 +5283,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4677,6 +5311,9 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4687,7 +5324,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4709,6 +5349,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4719,7 +5361,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4741,6 +5386,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4751,7 +5398,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4777,6 +5427,9 @@ export interface operations {
             /** @description Accepted; track the returned operation. */
             202: {
                 headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4787,7 +5440,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4807,7 +5463,7 @@ export interface operations {
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -4820,6 +5476,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4830,7 +5488,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4846,7 +5507,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -4862,6 +5523,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4872,7 +5535,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4888,6 +5554,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4898,7 +5566,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4917,6 +5588,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4927,7 +5600,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4948,6 +5624,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4957,6 +5635,9 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            405: components["responses"]["MethodNotAllowed"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4991,6 +5672,8 @@ export interface operations {
             201: {
                 headers: {
                     "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5000,7 +5683,10 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
@@ -5020,15 +5706,21 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Namespace"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5050,6 +5742,8 @@ export interface operations {
             /** @description Namespace removal accepted; relay cleanup continues asynchronously. */
             202: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -5057,7 +5751,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5083,6 +5780,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5093,7 +5792,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
@@ -5120,6 +5822,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5130,7 +5834,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
@@ -5153,6 +5860,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5162,7 +5871,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
@@ -5211,6 +5923,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5221,7 +5935,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5239,6 +5956,43 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    cancelOperation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation accepted; a Running operation remains Running until cooperative cleanup completes. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5268,6 +6022,8 @@ export interface operations {
             /** @description Orphaned volumes, including an empty items array when none are visible. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5277,6 +6033,9 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5292,6 +6051,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5302,7 +6063,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5318,6 +6082,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5328,7 +6094,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5346,6 +6115,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5356,7 +6127,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5379,6 +6153,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5389,7 +6165,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5405,6 +6184,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5415,7 +6196,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5438,6 +6222,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5448,7 +6234,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5464,6 +6253,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5474,7 +6265,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5497,6 +6291,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5507,7 +6303,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -5523,6 +6322,8 @@ export interface operations {
             /** @description Successful response. */
             200: {
                 headers: {
+                    /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5533,7 +6334,10 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

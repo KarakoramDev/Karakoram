@@ -17,6 +17,8 @@ import { Badge, Callout, ErrorBlock, Loading, Menu, MenuItem, PageHeader, Tabs }
 import { useToast } from '@/components/ui/Toast';
 import { PhaseBadge, topologySummary } from '../cluster-utils';
 import { colocatedGroups, maintenanceCopy, observedVersion } from './detail-state';
+import { clusterPath } from '../cluster-path';
+import { OperationNotice } from '@/components/OperationNotice';
 
 export interface ClusterContext {
   cluster: Cluster;
@@ -29,11 +31,6 @@ export interface ClusterContext {
 
 export function useClusterContext(): ClusterContext {
   return useOutletContext<ClusterContext>();
-}
-
-/** Route prefix of a cluster's detail pages. */
-export function clusterPath(namespace: string, name: string): string {
-  return `/clusters/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`;
 }
 
 const TAB_SEGMENTS: Record<string, true> = { topology: true, upgrades: true, backups: true, restores: true, users: true, monitoring: true, events: true, operations: true, delete: true };
@@ -62,11 +59,11 @@ export function ClusterDetailLayout() {
       if (kind === 'rotate-tls') return unwrap(api.POST('/clusters/{cluster}/rotate-tls', path));
       return unwrap(api.POST('/clusters/{cluster}/resume', path));
     },
-    onSuccess: (_r, kind) => {
+    onSuccess: (result, kind) => {
       submission.reset();
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
-      toast.success(kind === 'resume' ? 'Resuming cluster.' : kind === 'restart' ? 'Rolling restart started.' : 'TLS rotation started.');
+      toast.success(<OperationNotice operationId={'operationId' in result ? result.operationId : 'id' in result ? result.id : undefined}>{kind === 'resume' ? 'Resuming cluster.' : kind === 'restart' ? 'Rolling restart started.' : 'TLS rotation started.'}</OperationNotice>);
       setConfirm(null);
       if (kind !== 'resume') navigate(`${base}/operations`);
     },

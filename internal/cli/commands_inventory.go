@@ -91,6 +91,7 @@ var commandSpecs = []commandSpec{
 	{"operations cluster <cluster>", "listClusterOperations", 1, false, []queryFlag{{"limit", "limit", "int"}, {"cursor", "cursor", "string"}, {"phase", "phase", "string"}}},
 	{"operations get <id>", "getOperation", 1, false, []queryFlag{}},
 	{"operations wait <id>", "getOperation", 1, false, []queryFlag{}},
+	{"operations cancel <id>", "cancelOperation", 1, false, []queryFlag{}},
 	{"events list", "listEvents", 0, false, []queryFlag{{"limit", "limit", "int"}, {"cursor", "cursor", "string"}, {"cluster", "cluster", "string"}, {"type", "type", "string"}, {"operation", "operationId", "string"}, {"actor", "actor", "string"}, {"resource", "resource", "string"}, {"order", "order", "string"}}},
 	{"events watch", "streamEvents", 0, false, []queryFlag{{"cluster", "cluster", "string"}, {"type", "type", "string"}, {"operation", "operationId", "string"}, {"actor", "actor", "string"}, {"resource", "resource", "string"}, {"cursor", "cursor", "string"}, {"last-event-id", "Last-Event-ID", "string"}}},
 	{"auth refresh", "refreshSession", 0, false, []queryFlag{}},

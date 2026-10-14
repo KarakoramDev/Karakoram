@@ -13,6 +13,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, TextField } from '@/components/ui/Field';
 import { Callout, Card, ErrorBlock, Loading, Time, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
+import { OperationNotice } from '@/components/OperationNotice';
 import { BackupPicker, PitrPicker, SourceClusterPicker } from '../ClusterWizard';
 import { OpPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
@@ -148,7 +149,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, onClose }: { n
       ),
     onSuccess: (r) => {
       submission.reset();
-      toast.success(`Restore ${r.name} started.`);
+      toast.success(<OperationNotice operationId={r.operationId}>Restore {r.name} started.</OperationNotice>);
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, cluster) });
       onClose();
       navigate(`${base}/operations`);

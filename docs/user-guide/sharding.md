@@ -10,6 +10,9 @@ A sharded Karakoram cluster contains:
 
 Engine and config-server sets accept 1/3/5/7 members. The provider accepts 1–128 shards and 1–32 router containers. These are validation bounds, not a claim that a maximum-sized deployment fits your project or has been load-tested. Each mongod gets its own runtime/volume; the mongos service is horizontally scalable and has no durable database volume.
 
+Explicit zero is rejected in API and CLI requests, including `--shards 0`; it is never changed to one. If sharded counts are omitted, provider defaults are one shard, three engine members per shard, three config-server members and one router. Config servers accept **1, 3, 5 or 7** members, the same set as engine replica sets. Resource minimums are whole CPU cores at least 1, RAM 0.5 GiB and persistent disk 5 GiB; invalid bounds return a field-specific error.
+
+
 Select the project's [namespace](namespaces.md) in the UI or add `-n NAME` to
 the commands below. Every config/shard/router service stays in that project;
 cross-project management uses its relay, not cross-project database replication.

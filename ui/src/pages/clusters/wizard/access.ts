@@ -28,7 +28,11 @@ export function coversAllAddresses(exposure: Schemas['Exposure'] | undefined): b
   return Boolean(exposure?.public && exposure.allowlist?.some((entry) => cidrFamily(entry) && Number(entry.split('/')[1]) === 0));
 }
 
-/** Confirmation is form state only until the API adds its explicit acknowledgement field. */
+/** Serialize acknowledgement only for the currently confirmed all-address exposure. */
+export function wireExposure(exposure: Schemas['Exposure'], allAddressesConfirmed: boolean): Schemas['Exposure'] {
+  return { ...exposure, allowAllAddresses: allAddressesConfirmed && coversAllAddresses(exposure) };
+}
+
 export function validateExposure(exposure: Schemas['Exposure'] | undefined, allAddressesConfirmed = false): string[] {
   if (!exposure?.public) return [];
   const entries = exposure.allowlist ?? [];

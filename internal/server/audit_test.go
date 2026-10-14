@@ -403,7 +403,7 @@ func TestNondefaultClusterMutationActorsAndAuditScope(t *testing.T) {
 	if err != nil || cluster.RequestedBy != p.Actor() {
 		t.Fatal("nondefault desired generation lost request actor", cluster, err)
 	}
-	op := decodeNamespaceResponse[api.Operation](t, call(s, "POST", "/api/v1/clusters/prod/restart?namespace=dev", `{}`, token), 202)
+	op := decodeNamespaceResponse[api.Operation](t, call(s, "POST", "/api/v1/clusters/prod/restart?namespace=dev", "", token), 202)
 	if value(op.Actor) != p.Actor() || value(op.Namespace) != "dev" {
 		t.Fatal("nondefault operation lost actor or namespace", op)
 	}

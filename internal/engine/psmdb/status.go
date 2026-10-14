@@ -42,8 +42,17 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	if e != nil {
 		return domain.ClusterStatus{}, e
 	}
-	v := domain.ClusterStatus{Phase: phase(s), Version: rc.Cluster.Spec.Version, ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Connection: connection(rc.Cluster, s), Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}}
+	v := domain.ClusterStatus{Phase: phase(s), ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Connection: connection(rc.Cluster, s), Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}}
+	if rc.Cluster.Generation == 1 && rc.Cluster.Status.ObservedGeneration == 0 && (v.Phase == domain.PhaseScaling || v.Phase == domain.PhaseUpdating) {
+		v.Phase = domain.PhaseCreating
+	}
 	v.Message = s.platformFailureMessage()
+	if v.Message == "" && v.Phase != domain.PhaseReady {
+		v.Message = fmt.Sprintf("%s: stage %s; waiting for database members", v.Phase, s.Phase)
+		if s.Pending != nil {
+			v.Message = fmt.Sprintf("%s: platform %s for %s", v.Phase, s.Pending.Action, s.Pending.Member)
+		}
+	}
 	if s.Retry != nil {
 		if r := s.PlatformRetries[platformRetryKey(s.Retry)]; r != nil && r.CPUModeCooldown {
 			v.Conditions = append(v.Conditions, domain.Condition{Type: "PlatformCooldown", Status: "True", Reason: "CPUModeChangeTooRecent", Message: v.Message, LastTransitionTime: now(rc)})
@@ -58,6 +67,18 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	}
 	if s.Suspended {
 		v.Phase = domain.PhaseSuspended
+		v.ObservedGeneration = rc.Cluster.Generation
+		v.Message = "Runtime suspended; retained volumes are available for resume"
+		for _, member := range rc.Cluster.Status.Members {
+			member.State, member.Health, member.Agent.Healthy = "SUSPENDED", false, false
+			member.Agent.Message, member.PublicHost = "Runtime suspended; observations are historical", ""
+			v.Members = append(v.Members, member)
+		}
+		if len(v.Members) == 0 {
+			for _, m := range ordered(s) {
+				v.Members = append(v.Members, domain.MemberStatus{Name: m.Name, Set: m.Set, Role: "unknown", State: "SUSPENDED", Agent: domain.AgentStatus{Message: "Runtime suspended"}})
+			}
+		}
 		return v, nil
 	}
 	v.Connection.PublicHosts = nil
@@ -94,12 +115,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		}
 		_ = c.Disconnect(ctx)
 	}
-	allHealthy := true
+	allHealthy := len(s.Members) > 0
 	for _, m := range ordered(s) {
-		if m.Removing {
-			continue
-		}
-		ms := domain.MemberStatus{Name: m.Name, Set: m.Set, Role: "unknown", Version: m.Version, State: "UNKNOWN"}
+		ms := domain.MemberStatus{Name: m.Name, Set: m.Set, Role: "unknown", State: "UNKNOWN"}
 		if r, ok := autoscaling[m.Name]; ok {
 			ms.Autoscaling = &r
 		}
@@ -112,6 +130,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.PlacementGroup = st.HostFingerprint
 		} else {
 			ms.Agent.Message = e.Error()
+			v.Conditions = append(v.Conditions, domain.Condition{Type: "Observation/" + m.Name, Status: "Unknown", Reason: "AgentUnavailable", Message: "Member " + m.Name + " runtime version and process health could not be observed: " + e.Error(), LastTransitionTime: now(rc)})
 		}
 		if m.Role == agentapi.RoleRouter {
 			ms.Role = "router"
@@ -159,6 +178,13 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				}
 			}
 		}
+		if m.Removing {
+			ms.State, ms.Health = "LEAVING", false
+			ms.Agent.Message = "Member is leaving; runtime remains visible until removal completes"
+		}
+		if ms.Version != "" && (v.Version == "" || newer(v.Version, ms.Version)) {
+			v.Version = ms.Version
+		}
 		v.Members = append(v.Members, ms)
 		allHealthy = allHealthy && ms.Health
 	}
@@ -171,9 +197,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	if allHealthy {
 		health = "True"
 	}
-	v.Conditions = append(v.Conditions, domain.Condition{Type: "Healthy", Status: health, LastTransitionTime: now(rc)})
+	v.Conditions = append(v.Conditions, domain.Condition{Type: "Healthy", Status: health, Reason: "MemberHealth", Message: fmt.Sprintf("%d members observed; unhealthy or leaving members remain visible", len(v.Members)), LastTransitionTime: now(rc)})
 	if !allHealthy && v.Phase == domain.PhaseReady {
 		v.Phase = domain.PhaseDegraded
+		v.Message = "One or more members are unhealthy or cannot be observed; inspect member and replication conditions"
 	}
 	if rc.Cluster.Spec.Backup.Storage != "" && s.Phase == "ready" {
 		env, e := p.pbmEnv(ctx, rc, s)
@@ -185,6 +212,14 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			v.Conditions = append(v.Conditions, domain.Condition{Type: "Backup", Status: "False", Reason: "InventoryUnavailable", Message: e.Error(), LastTransitionTime: now(rc)})
 		} else {
 			v.Backup = backup
+		}
+	}
+	for i := range v.Conditions {
+		for _, old := range rc.Cluster.Status.Conditions {
+			if old.Type == v.Conditions[i].Type && old.Status == v.Conditions[i].Status && old.Reason == v.Conditions[i].Reason {
+				v.Conditions[i].LastTransitionTime = old.LastTransitionTime
+				break
+			}
 		}
 	}
 	return v, nil

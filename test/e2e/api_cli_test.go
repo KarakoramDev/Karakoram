@@ -82,7 +82,7 @@ func testAPIWorkflow(t *testing.T) {
 	spec := s.privateSpec(1)
 	spec.Backup = &api.BackupSpec{Storage: ptr(storage)}
 	var created api.Cluster
-	run(api.CreateClusterRequest{Name: name, Spec: spec}, &created, "clusters", "create", "-f", "-")
+	run(clusterWriteEnvelope{Name: name, Spec: spec}, &created, "clusters", "create", "-f", "-")
 	if created.Name != name {
 		t.Fatal("CLI cluster create name mismatch")
 	}
@@ -133,7 +133,7 @@ func testAPIWorkflow(t *testing.T) {
 	s.snapshot(name+"-cli-backups", backups)
 	restoreName := s.name()
 	var restore api.Restore
-	run(api.CreateRestoreRequest{Name: restoreName, Source: api.RestoreSource{Backup: ptr(backupName), SourceCluster: name}}, &restore, "restores", "create", name, "-f", "-")
+	run(api.CreateRestoreRequest{Name: restoreName, Source: api.RestoreSource{Backup: ptr(backupName), SourceCluster: ptr(name)}}, &restore, "restores", "create", name, "-f", "-")
 	s.waitRestore(name, restoreName)
 	run(nil, &restore, "restores", "get", name, restoreName)
 	if restore.Phase != api.RestorePhaseSucceeded {
@@ -218,7 +218,7 @@ func testAPIWorkflow(t *testing.T) {
 		t.Fatal("CLI policy read empty")
 	}
 	var can api.CanResponse
-	run(api.CanRequest{Resource: "clusters", Action: api.Read, Object: name}, &can, "rbac", "can", "-f", "-")
+	run(api.CanRequest{Resource: "clusters", Action: api.CanRequestActionRead, Object: name}, &can, "rbac", "can", "-f", "-")
 	if !can.Allowed {
 		t.Fatal("CLI permission check denied administrator")
 	}

@@ -27,7 +27,12 @@ karactl clusters members demo
 
 Use the version currently advertised by your installation, not an arbitrary apt version. The CLI supplies its own resource defaults; explicit bounds above keep this example at 1 GiB RAM and 5 GiB persistent disk per member. The provider's omitted-field defaults are also 1 GB RAM/5 GB disk, while CLI convenience defaults allow larger maxima. CPU is expressed in cores; RAM/disk fields are GiB in the public API.
 
+REST create requires `spec.provider`; omitted provider is not inferred. Omitted counts/resources use catalog defaults, but explicitly supplied zero is rejected. PSMDB CPU bounds are whole cores at least 1; RAM bounds are at least 0.5 GiB and disk bounds at least 5 GiB, with every maximum at least its minimum. Request bodies reject unknown fields, including YAML misspellings submitted through `karactl -f`; inspect the named field in the returned error before retrying.
+
+
 Creation is asynchronous: services are imported, artifacts deployed, agents obtain protected config, the set is initiated and system users are established. `--wait` follows observed cluster-generation convergence. Ready TCP alone is not replica-set health.
+
+Create acceptance returns `operationId` and `Karakoram-Operation-Id`; save that ID and use `karactl operations wait ID` if the initial wait times out. Resource, replica, exposure, TLS and version updates also have tracking operations. Their current `step`/`message` describe convergence, and a newer change cancels older tracking with the superseding ID. Status messages expose the current provisioning stage instead of calling initial formation scaling.
 
 ## Observe health
 
@@ -42,6 +47,8 @@ karactl events list --cluster demo
 Inspect phase/message/conditions, observedGeneration, member health/state/role, agent connectivity/configVersion, binary version and lag. A caught-up secondary is different from a service merely marked ACTIVE by Zerops. The cluster overview and topology tabs expose these observations; [monitoring](monitoring.md) adds time series.
 
 Default status connection URIs omit passwords. [Explicit connection reveal](users-tls-access.md#connection-details) requires a separate permission; use application-specific users for workloads. Follow the [complete application TLS recipe](users-tls-access.md#connect-an-application-user-with-tls) to create `appwriter@appdb`, export `ca.pem`, build a URI with `authSource=appdb` and `replicaSet=rs0`, and connect with mongosh or PyMongo. Run private connections from a service in the database's Zerops project, not an ordinary workstation. For public seeds, read the [replica-set discovery caveat](users-tls-access.md#public-exposure-and-discovery) before assuming external failover works.
+
+`spec.version` is desired; `status.version` comes from observed runtime versions, not the requested upgrade target. Unavailable observations are explicitly unknown, not proof that the target is deployed. Members leaving or blocked from leaving stay visible as non-healthy until their runtime is gone. Condition transition timestamps change only when status or reason changes, not every observation.
 
 ## Add, remove and replace members
 
@@ -69,5 +76,7 @@ karactl clusters delete demo --wait
 ```
 
 With `keepVolumes`, the cluster remains `Suspended`, retains secrets/volume identity and can resume by recreating its runtimes. Keeping volumes does not automatically keep backups: specify both flags if you want both. Without retained volumes, deletion is not resumable. With `--keep-backups`, backup records, snapshot provenance and protected physical-recovery credentials survive full deletion: use `karactl backups list/get/delete` with the original cluster name, or create a new compatible cluster with `spec.dataSource` referencing a retained successful snapshot. See [retained-backup management and cloning](backups-and-restore.md#retained-backups-after-full-cluster-deletion). Retained backups do not recreate the deleted resource or volumes; preserve control-plane state and its encryption key for disaster recovery.
+
+DELETE returns a 202 Operation body and tracking header; its success means runtime suspension or full cleanup has completed. Suspended members report `SUSPENDED`, non-healthy/disconnected agents and an observed suspension generation; historical allocation is not a running service. Resume returns a Cluster with its new `operationId`. Running deletion cannot be cancelled safely; inspect its message/events and repair the blocking dependency. See the [API async contract](api.md#declarative-updates-and-asynchronous-work) for bounded operation deadlines and cancellation limits.
 
 Normal scale-down/replacement removes the retired member's volume; cluster deletion retention is not a per-member retention option. Cleanup of recovery objects runs before removing agents that PBM needs. See [backups and restore](backups-and-restore.md) and [operations](../operations.md).

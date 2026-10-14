@@ -31,13 +31,15 @@ func (e *attributedError) Unwrap() error { return e.error }
 
 // Options configures serialized reconciliation and retry delays.
 type Options struct {
-	Store          *store.Store
-	Registry       *engine.Registry
-	Namespaces     engine.Namespaces
-	Context        engine.Context
-	ResyncInterval time.Duration
-	BackoffMin     time.Duration
-	BackoffMax     time.Duration
+	Store               *store.Store
+	Registry            *engine.Registry
+	Namespaces          engine.Namespaces
+	Context             engine.Context
+	ResyncInterval      time.Duration
+	BackoffMin          time.Duration
+	BackoffMax          time.Duration
+	OperationRetryLimit int
+	OperationTimeouts   map[string]time.Duration
 }
 type worker struct {
 	trigger chan struct{}
@@ -66,6 +68,9 @@ func New(opts Options) (*Manager, error) {
 	}
 	if opts.BackoffMax <= 0 {
 		opts.BackoffMax = time.Minute
+	}
+	if opts.OperationRetryLimit <= 0 {
+		opts.OperationRetryLimit = DefaultOperationRetryLimit
 	}
 	if opts.BackoffMin > opts.BackoffMax {
 		opts.BackoffMin = opts.BackoffMax
@@ -229,6 +234,9 @@ func (m *Manager) record(ctx context.Context, event domain.Event) error {
 		event.Actor = store.Actor(ctx)
 	}
 	if event.Cluster != "" {
+		if event.Operation == "" {
+			event.Operation, _ = ctx.Value(operationEventKey{}).(string)
+		}
 		if event.Resource == "" {
 			event.Resource = "clusters"
 		}
@@ -259,6 +267,7 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
 	actor := "reconciler"
 	operation := ""
+	var trackingDeadline time.Time
 	defer func() {
 		if err != nil && !errors.Is(err, errClusterGone) {
 			err = &attributedError{error: err, actor: actor, operation: operation}
@@ -271,6 +280,36 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if err != nil {
 		return 0, err
 	}
+	ops, lookupErr := m.opts.Store.ListOperations(ctx, c.Ref(), domain.PhasePending, domain.PhaseRunning)
+	if lookupErr != nil {
+		return 0, lookupErr
+	}
+	for i := range ops {
+		op := &ops[i]
+		if !domain.IsConvergenceOperation(op.Kind) || op.TargetGeneration != c.Generation {
+			continue
+		}
+		if m.operationFailure(op, nil) {
+			if err = m.opts.Store.UpdateOperation(ctx, op); err != nil {
+				return 0, err
+			}
+			continue
+		}
+		trackingDeadline = op.CreatedAt.Add(m.operationTimeout(op))
+		operation = op.ID
+		if op.Phase == domain.PhasePending {
+			now := m.opts.Context.Clock.Now()
+			op.Phase, op.StartedAt = domain.PhaseRunning, &now
+			if err = m.opts.Store.UpdateOperation(ctx, op); err != nil {
+				return 0, err
+			}
+		}
+	}
+	defer func() {
+		if !errors.Is(err, errClusterGone) {
+			err = errors.Join(err, m.trackingOperations(ctx, c, err))
+		}
+	}()
 	// Capture attribution before synchronization advances ObservedGeneration.
 	// A completed generation must not claim later automatic health changes.
 	if c.Deleting || c.Status.ObservedGeneration < c.Generation {
@@ -279,6 +318,9 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		}
 	}
 	ctx = store.WithActor(ctx, actor)
+	if operation != "" {
+		ctx = context.WithValue(ctx, operationEventKey{}, operation)
+	}
 	p, err := m.opts.Registry.Get(c.Spec.Provider)
 	if err != nil {
 		return 0, err
@@ -287,15 +329,24 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	rc.Cluster = c
 	rc.Events = m
 	previous := c.Status.Phase
+	providerCtx := ctx
+	if !trackingDeadline.IsZero() {
+		var cancel context.CancelFunc
+		providerCtx, cancel = context.WithTimeout(ctx, trackingDeadline.Sub(rc.Clock.Now()))
+		defer cancel()
+	}
 	if c.Deleting {
 		c.Status.Phase = domain.PhaseDeleting
+		if c.Status.Message == "" {
+			c.Status.Message = "Removing platform runtime services and owned backup data"
+		}
 		if err = m.state(ctx, c, previous); err != nil {
 			return 0, err
 		}
-		if err = m.resolve(ctx, &rc); err != nil {
+		if err = m.resolve(providerCtx, &rc); err != nil {
 			return 0, err
 		}
-		done, cleanupErr := p.Cleanup(ctx, &rc, c.DeleteOptions)
+		done, cleanupErr := p.Cleanup(providerCtx, &rc, c.DeleteOptions)
 		if err = m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 			return 0, err
 		}
@@ -322,9 +373,8 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if c.Status.Phase == domain.PhaseSuspended {
 		return 0, nil
 	}
-	if err = m.resolve(ctx, &rc); err != nil {
-		return 0, err
-	}
+	// Claim before resolving dependencies so namespace failures consume the
+	// operation's bounded budget rather than leaving it Running indefinitely.
 	// Resume active work before convergence: restore may deliberately have every
 	// database process stopped, making ordinary Sync/Status unsafe or impossible.
 	op, err := m.opts.Store.ClaimRunningOperation(ctx, ref)
@@ -338,7 +388,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if !errors.Is(err, store.ErrNotFound) {
 		return 0, err
 	}
-	result, syncErr := m.synchronize(ctx, p, &rc)
+	result, syncErr := m.synchronize(providerCtx, p, &rc)
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}
@@ -372,7 +422,7 @@ func (m *Manager) resolve(ctx context.Context, rc *engine.Context) error {
 		found := false
 		for i := range c.Status.Conditions {
 			if c.Status.Conditions[i].Type == condition.Type {
-				if c.Status.Conditions[i].Status == condition.Status && c.Status.Conditions[i].Message == condition.Message {
+				if c.Status.Conditions[i].Status == condition.Status && c.Status.Conditions[i].Reason == condition.Reason {
 					condition.LastTransitionTime = c.Status.Conditions[i].LastTransitionTime
 				}
 				c.Status.Conditions[i] = condition
@@ -418,6 +468,22 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	}
 	status, statusErr := p.Status(ctx, rc)
 	if statusErr == nil {
+		status.Version = observedVersion(status.Members)
+		if rc.Cluster.Generation == 1 && observedGeneration == 0 && (status.Phase == domain.PhaseScaling || status.Phase == domain.PhaseUpdating) {
+			status.Phase = domain.PhaseCreating
+		}
+		if status.Message == "" && status.Phase != domain.PhaseReady && status.Phase != domain.PhaseDegraded {
+			status.Message = fmt.Sprintf("%s: observing platform services and member formation", status.Phase)
+		}
+		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
+		if status.Phase == domain.PhaseDegraded && status.Message == "" {
+			status.Message = "Member health is degraded; inspect conditions and member observations"
+		}
+		for i := range status.Conditions {
+			if status.Conditions[i].Message == "" {
+				status.Conditions[i].Message = fmt.Sprintf("%s: %s (%s)", status.Phase, status.Conditions[i].Type, status.Conditions[i].Reason)
+			}
+		}
 		// Observation is owned by reconciliation, not provider health snapshots.
 		// Automatic retries must not make an applied request appear pending again.
 		status.ObservedGeneration = observedGeneration
@@ -435,29 +501,90 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		actor = "reconciler"
 	}
 	ctx = store.WithActor(ctx, actor)
+	ctx = context.WithValue(ctx, operationEventKey{}, op.ID)
 	c := rc.Cluster
 	previous := c.Status.Phase
-	if err := m.resolve(ctx, rc); err != nil {
-		return 0, err
+	deadline := op.CreatedAt.Add(m.operationTimeout(op))
+	callCtx, cancel := context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
+	defer cancel()
+	var opResult engine.OpResult
+	var opErr error
+	if op.Kind == domain.OperationRestore {
+		c.Status.Phase, c.Status.Message = domain.PhaseRestoring, "Restoring data; normal database traffic may be unavailable"
+		if previous != domain.PhaseRestoring {
+			if err := m.state(ctx, c, previous); err != nil {
+				return 0, err
+			}
+			previous = domain.PhaseRestoring
+		}
 	}
-	opResult, opErr := p.RunOperation(ctx, rc, op)
+	if m.operationFailure(op, nil) {
+		opResult.Done = true
+		opErr = errors.New(op.Message)
+	} else if err := m.resolve(callCtx, rc); err != nil {
+		opErr = err
+	} else if op.CancelRequested {
+		if canceller, ok := p.(engine.OperationCanceller); ok {
+			opResult, opErr = canceller.CancelOperation(callCtx, rc, op)
+			if opResult.Done && opErr == nil {
+				op.Phase = domain.PhaseCancelled
+			}
+		} else {
+			opErr = errors.New("Provider no longer supports cancellation of this operation")
+		}
+	} else {
+		opResult, opErr = p.RunOperation(callCtx, rc, op)
+	}
 	if opResult.Checkpoint != nil {
 		op.Checkpoint = opResult.Checkpoint
 	}
 	if opResult.Step != "" {
 		op.Step = opResult.Step
 	}
-	op.Message = opResult.Message
+	if op.Kind == domain.OperationRestore && !opResult.Done && opResult.Message != "" {
+		c.Status.Message = "Restoring: " + opResult.Message
+	}
+	if opResult.Message != "" {
+		op.Message = opResult.Message
+	}
+	if opResult.Message == "" {
+		op.Message = op.Kind + ": executing checkpoint " + op.Step
+	}
 	if opErr != nil {
 		op.Message = opErr.Error()
 	}
+	if op.Kind == domain.OperationRestore && !opResult.Done {
+		c.Status.Phase = domain.PhaseRestoring
+		if opErr != nil {
+			c.Status.Message = "Restoring: " + opErr.Error()
+		}
+	}
+	if !opResult.Done && m.operationFailure(op, opErr) {
+		opResult.Done = true
+		opErr = errors.New(op.Message)
+	}
 	if opResult.Done {
-		op.Phase = domain.PhaseSucceeded
+		if op.Phase != domain.PhaseCancelled {
+			op.Phase = domain.PhaseSucceeded
+		}
 		if opErr != nil {
 			op.Phase = domain.PhaseFailed
 		}
 		now := rc.Clock.Now()
 		op.CompletedAt = &now
+		if opErr == nil {
+			if op.Phase == domain.PhaseCancelled {
+				op.Message = op.Kind + " cancelled safely at checkpoint " + op.Step
+			} else {
+				op.Message = op.Kind + " completed successfully"
+			}
+		}
+		if op.Kind == domain.OperationRestore {
+			c.Status.Phase, c.Status.Message = domain.PhaseUpdating, "Restore finished; observing database health"
+			if opErr != nil {
+				c.Status.Phase, c.Status.Message = domain.PhaseDegraded, op.Message
+			}
+		}
 	}
 	// Provisioning needed by an operation is opt-in and follows RunOperation,
 	// using its new checkpoint rather than unrelated ordinary convergence.
@@ -478,6 +605,9 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	}
 	if opResult.Done {
 		event := domain.Event{Namespace: c.Namespace, Cluster: c.Name, Operation: op.ID, Type: "Normal", Reason: "OperationSucceeded", Message: op.Kind + " completed"}
+		if op.Phase == domain.PhaseCancelled {
+			event.Reason, event.Message = "OperationCancelled", op.Message
+		}
 		if opErr != nil {
 			event.Type = "Warning"
 			event.Reason = "OperationFailed"

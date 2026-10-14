@@ -61,7 +61,7 @@ func (s *suite) storage() string {
 	s.snapshot(name+"-storage-verification", verified)
 	return name
 }
-func (s *suite) backup(name, storage string, kind api.CreateBackupRequestType) api.Backup {
+func (s *suite) backup(name, storage string, kind string) api.Backup {
 	backup := s.name()
 	var b api.Backup
 	s.expect(&b, 202)(s.client.CreateBackup(s.ctx, name, &api.CreateBackupParams{Namespace: s.namespace}, api.CreateBackupRequest{Name: backup, Storage: storage, Type: kind}))

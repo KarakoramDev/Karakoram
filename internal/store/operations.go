@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -18,6 +19,20 @@ func prepareOperation(ctx context.Context, op *domain.Operation) error {
 	op.Namespace = domain.NormalizedNamespace(op.Namespace)
 	if err := (domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}).Validate(); err != nil {
 		return err
+	}
+	if op.Target.Kind == "" {
+		op.Target = domain.OperationTarget{Kind: "cluster", Name: op.Cluster}
+		var payload map[string]string
+		_ = json.Unmarshal(op.Payload, &payload)
+		if name := payload["backup"]; name != "" {
+			op.Target = domain.OperationTarget{Kind: "backup", Name: name}
+		} else if name := payload["restore"]; name != "" {
+			op.Target = domain.OperationTarget{Kind: "restore", Name: name}
+		} else if name := payload["member"]; name != "" {
+			op.Target = domain.OperationTarget{Kind: "member", Name: name}
+		} else if name := payload["user"]; name != "" {
+			op.Target = domain.OperationTarget{Kind: "system-user", Name: name}
+		}
 	}
 	if op.Actor == "" {
 		op.Actor = Actor(ctx)
@@ -36,6 +51,9 @@ func prepareOperation(ctx context.Context, op *domain.Operation) error {
 	op.UpdatedAt = now
 	if op.Phase == "" {
 		op.Phase = domain.PhasePending
+	}
+	if op.Message == "" && op.Phase == domain.PhasePending {
+		op.Message = "Queued " + op.Kind + " for " + op.Target.Kind + " " + op.Target.Name
 	}
 	return nil
 }
@@ -67,23 +85,26 @@ func (s *Store) ListOperations(ctx context.Context, ref domain.ClusterRef, phase
 	if err := ref.Validate(); err != nil {
 		return nil, err
 	}
-	ops, err := listClusterRecords[domain.Operation](ctx, s, "operation", ref)
-	if err != nil {
-		return nil, err
-	}
 	if len(phases) == 0 {
-		return ops, nil
+		return listClusterRecords[domain.Operation](ctx, s, "operation", ref)
 	}
-	out := ops[:0]
-	for _, op := range ops {
-		for _, phase := range phases {
-			if op.Phase == phase {
-				out = append(out, op)
-				break
-			}
+	filter, scopeArgs := clusterRecordFilter(ref)
+	args := make([]any, 0, len(scopeArgs)+len(phases))
+	args = append(args, scopeArgs...)
+	var query strings.Builder
+	query.Grow(128 + len(filter) + 2*len(phases))
+	query.WriteString("SELECT data FROM records WHERE kind='operation'")
+	query.WriteString(filter)
+	query.WriteString(" AND phase IN (")
+	for i, phase := range phases {
+		if i != 0 {
+			query.WriteByte(',')
 		}
+		query.WriteByte('?')
+		args = append(args, string(phase))
 	}
-	return out, nil
+	query.WriteString(") ORDER BY created,key")
+	return listQuery[domain.Operation](ctx, s, query.String(), args...)
 }
 
 // UpdateOperation persists changes to operation.
@@ -92,7 +113,30 @@ func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error
 		return err
 	}
 	op.UpdatedAt = time.Now().UTC()
-	return s.update(ctx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase))
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND key=?", op.ID).Scan(&raw); err != nil {
+		return typed(err)
+	}
+	var current domain.Operation
+	if err = json.Unmarshal(raw, &current); err != nil {
+		return err
+	}
+	if current.Terminal() {
+		return nil
+	} // Never overwrite retirement or a concurrent cancellation.
+	op.CancelRequested = op.CancelRequested || current.CancelRequested
+	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), false); err != nil {
+		return err
+	}
+	if err = finalizeOperationRecord(ctx, tx, op); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // UpdateOperationAndClusterState commits the checkpoint together with the
@@ -111,6 +155,15 @@ func (s *Store) UpdateOperationAndClusterState(ctx context.Context, op *domain.O
 	}
 	defer tx.Rollback()
 	op.UpdatedAt = time.Now().UTC()
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND key=?", op.ID).Scan(&raw); err != nil {
+		return typed(err)
+	}
+	var current domain.Operation
+	if err = json.Unmarshal(raw, &current); err != nil {
+		return err
+	}
+	op.CancelRequested = op.CancelRequested || current.CancelRequested
 	data, err := json.Marshal(op)
 	if err != nil {
 		return err
@@ -120,6 +173,9 @@ func (s *Store) UpdateOperationAndClusterState(ctx context.Context, op *domain.O
 		return err
 	}
 	if err = updateClusterState(ctx, tx, c); err != nil {
+		return err
+	}
+	if err = finalizeOperationRecord(ctx, tx, op); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -156,11 +212,17 @@ func retireOperations(ctx context.Context, tx *sql.Tx, cluster, message string) 
 	now := time.Now().UTC()
 	for i := range ops {
 		op := &ops[i]
+		if _, tracking := ctx.Value(operationContextKey{}).(*domain.Operation); tracking && domain.IsConvergenceOperation(op.Kind) {
+			continue // The accepting mutation names the superseding operation.
+		}
 		op.Phase = domain.PhaseFailed
 		op.Message = message
 		op.CompletedAt = &now
 		op.UpdatedAt = now
 		if err = put(ctx, tx, "operation", cluster, op.ID, op, "", "", string(op.Phase), false); err != nil {
+			return err
+		}
+		if err = finalizeOperationRecord(ctx, tx, op); err != nil {
 			return err
 		}
 	}
@@ -192,7 +254,7 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 	}
 	defer tx.Rollback()
 	var data []byte
-	err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND (? OR phase='Running') ORDER BY CASE phase WHEN 'Running' THEN 0 ELSE 1 END,created,key LIMIT 1", cluster, includePending).Scan(&data)
+	err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.targetGeneration') IS NULL AND (? OR phase='Running') ORDER BY CASE phase WHEN 'Running' THEN 0 ELSE 1 END,created,key LIMIT 1", cluster, includePending).Scan(&data)
 	if err != nil {
 		return nil, typed(err)
 	}
@@ -224,6 +286,8 @@ func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
+	backup.OperationID = op.ID
+	op.Target = domain.OperationTarget{Kind: "backup", Name: backup.Name}
 	if backup.CreatedAt.IsZero() {
 		backup.CreatedAt = time.Now().UTC()
 	}
@@ -252,6 +316,8 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
+	restore.OperationID = op.ID
+	op.Target = domain.OperationTarget{Kind: "restore", Name: restore.Name}
 	if restore.CreatedAt.IsZero() {
 		restore.CreatedAt = time.Now().UTC()
 	}
@@ -285,13 +351,46 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 		return err
 	}
 	defer tx.Rollback()
+	ref := domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='backup' AND scope=? AND key=?", ref.Key(), backup.Name).Scan(&raw); err != nil {
+		return typed(err)
+	}
+	if err = json.Unmarshal(raw, backup); err != nil {
+		return err
+	}
+	op.Target = domain.OperationTarget{Kind: "backup", Name: backup.Name}
+	if backup.PBMName == "" && (backup.Phase == domain.PhaseFailed || backup.Phase == domain.PhasePending) {
+		var active int
+		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind')='backup' AND json_extract(data,'$.target.kind')='backup' AND json_extract(data,'$.target.name')=?", ref.Key(), backup.Name).Scan(&active); err != nil {
+			return err
+		}
+		if active != 0 {
+			return &domain.ResourceError{Resource: "backup", Name: backup.Name, Reason: domain.ReasonInvalidState, State: string(backup.Phase), Err: ErrConflict, Message: fmt.Sprintf("Backup %s still has active work; cancel its operation before deleting it", backup.Name)}
+		}
+		r, err := tx.ExecContext(ctx, "DELETE FROM records WHERE kind='backup' AND scope=? AND key=?", ref.Key(), backup.Name)
+		if err = affected(r, err); err != nil {
+			return err
+		}
+		if backup.RecoveryIdentity != "" {
+			if _, err = tx.ExecContext(ctx, "DELETE FROM records WHERE kind='secret' AND scope=? AND key='users/userAdmin'", domain.ClusterRef{Namespace: backup.Namespace, Name: backup.RecoveryIdentity}.Key()); err != nil {
+				return err
+			}
+		}
+		stamp := time.Now().UTC()
+		op.Phase, op.Message, op.StartedAt, op.CompletedAt = domain.PhaseSucceeded, "Removed never-started backup record "+backup.Name, &stamp, &stamp
+		if err = put(ctx, tx, "operation", ref.Key(), op.ID, op, "", "", string(op.Phase), true); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
 	previousPhase := backup.Phase
 	backup.Phase = domain.PhaseDeleting
 	data, err := json.Marshal(backup)
 	if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE records SET data=?,phase='Deleting',updated=? WHERE kind='backup' AND scope=? AND key=? AND phase='Succeeded'", data, time.Now().UTC().UnixNano(), domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}.Key(), backup.Name)
+	result, err := tx.ExecContext(ctx, "UPDATE records SET data=?,phase='Deleting',updated=? WHERE kind='backup' AND scope=? AND key=? AND phase IN ('Succeeded','Failed')", data, time.Now().UTC().UnixNano(), ref.Key(), backup.Name)
 	if err != nil {
 		return err
 	}

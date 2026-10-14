@@ -49,7 +49,7 @@ func setInternal(c *domain.Cluster, key string, v any) error {
 }
 func opResult(cp operationState, done bool, step string) (engine.OpResult, error) {
 	b, e := json.Marshal(cp)
-	return engine.OpResult{Done: done, Step: step, Checkpoint: b, RequeueAfter: 5 * time.Second}, e
+	return engine.OpResult{Done: done, Step: step, Message: "Executing " + strings.ReplaceAll(step, "-", " "), Checkpoint: b, RequeueAfter: 5 * time.Second}, e
 }
 
 // RunOperation resumes imperative operations from durable, secret-free checkpoints.
@@ -166,6 +166,10 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		version := payload["version"]
 		if e := p.ValidateFCV(ctx, rc, version); e != nil {
 			return engine.OpResult{Done: true, Step: "fcv-rejected", Message: e.Error()}, e
+		}
+		if cp.Stage != "apply-fcv" {
+			cp.Stage = "apply-fcv"
+			return opResult(cp, false, "fcv-ready")
 		}
 		sets := []string{"rs0"}
 		if rc.Cluster.Spec.Topology.Type == "sharded" {

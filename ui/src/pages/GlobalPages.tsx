@@ -54,7 +54,7 @@ export function OperationsPage() {
   const items = (ops.data?.items ?? []).filter((o) => (filter === 'all' ? true : filter === 'active' ? o.phase === 'Running' || o.phase === 'Pending' : o.phase === 'Failed'));
   return (
     <div className="page">
-      <PageHeader title="Operations" description={`Durable, resumable operations: backups, restores, restarts, rotations${namespace ? ` in namespace ${namespace}` : ''}.`} />
+      <PageHeader title="Operations" description={`Track cluster changes, backups, restores and maintenance${namespace ? ` in namespace ${namespace}` : ''}. Open an operation for its target, progress and cancellation status.`} />
       <Card
         flush
         title="Operations"

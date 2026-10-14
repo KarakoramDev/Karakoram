@@ -100,7 +100,7 @@ func TestMultiNamespace(t *testing.T) {
 		t.Fatal("database user was not created")
 	}
 	scoped.put(name, "namespace-proof", "original")
-	backup := scoped.backup(name, storage, api.CreateBackupRequestTypeLogical)
+	backup := scoped.backup(name, storage, "logical")
 	cloneSpec := scoped.cluster(name).Spec
 	cloneSpec.Backup = nil // Storage references are local to the source namespace.
 	cloneSpec.DataSource = &api.DataSource{Cluster: name, Namespace: &namespace, Backup: &backup.Name}
@@ -166,12 +166,12 @@ func (s *suite) namespaceRBAC(namespace, source, clone string, cloneSpec api.Clu
 	denied := s.name()
 	scoped := s.inNamespace(namespace)
 	scoped.cleanupCluster(denied)
-	s.expect(nil, 403)(client.CreateCluster(s.ctx, &api.CreateClusterParams{Namespace: &namespace}, api.CreateClusterRequest{Name: denied, Spec: scoped.privateSpec(3)}))
+	s.expect(nil, 403)(client.CreateClusterWithBody(s.ctx, &api.CreateClusterParams{Namespace: &namespace}, "application/json", s.clusterBody(clusterWriteEnvelope{Name: denied, Spec: scoped.privateSpec(3)})))
 	deniedClone := s.name()
 	s.inNamespace("default").cleanupCluster(deniedClone)
-	s.expect(nil, 403)(client.CreateCluster(s.ctx, &api.CreateClusterParams{Namespace: ptr("default")}, api.CreateClusterRequest{Name: deniedClone, Spec: cloneSpec}))
+	s.expect(nil, 403)(client.CreateClusterWithBody(s.ctx, &api.CreateClusterParams{Namespace: ptr("default")}, "application/json", s.clusterBody(clusterWriteEnvelope{Name: deniedClone, Spec: cloneSpec})))
 	var permission api.CanResponse
-	s.expect(&permission)(s.client.CheckPermission(s.ctx, &api.CheckPermissionParams{}, api.CanRequest{Subject: &subject, Resource: "backups", Action: api.Export, Object: namespace + "/" + source}))
+	s.expect(&permission)(s.client.CheckPermission(s.ctx, &api.CheckPermissionParams{}, api.CanRequest{Subject: &subject, Resource: "backups", Action: api.CanRequestActionExport, Object: namespace + "/" + source}))
 	if permission.Allowed {
 		s.t.Fatal("read-only namespace policy granted backup export")
 	}

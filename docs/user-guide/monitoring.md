@@ -15,6 +15,17 @@ karactl clusters members demo
 
 Ranges/steps are Go-duration forms such as `1h`, `30m`, `30s`; the metrics API permits a positive range at most 24 hours and a positive step no greater than the range. The default range is one hour, step thirty seconds. JSON `series` has member/name/unit/labels and timestamped points. Counter series are converted to reset-aware rates; a graph missing data is not evidence of a healthy zero.
 
+The UI offers **15m / 1h / 6h / 24h**, with steps **15s / 30s / 2m / 10m**,
+respectively. Selection is saved as `range` in the page URL; refreshing or sharing
+it preserves the range (default **1h**). Use external Prometheus for retention
+beyond 24 hours rather than expecting a seven-day built-in query.
+
+Charts show member/series legends and label recognized state codes, including
+MongoDB replica member states and `up`/`pbm.up` Down/Up values. Every plotted
+value is averaged over its step. Fractional state-code values represent a
+mixture of sampled states in that bucket, not a newly defined state; correlate
+them with member status and events instead of reading them as exact transitions.
+
 Clusters with the same name in different namespaces have independent metric history and member usage. Select the cluster's namespace for JSON queries (`?namespace=<name>` in the API, or `karactl --namespace <name> clusters metrics ...`); omitted namespace selects `default`.
 
 Member status/roles/lag and agent connectivity remain separate from charts. Monitoring failure cannot prove the database is unavailable, and a connected exporter cannot prove quorum. Normal database health uses authenticated provider observation; platform exec readiness only probes local TCP availability.

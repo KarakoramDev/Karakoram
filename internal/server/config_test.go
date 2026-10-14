@@ -150,7 +150,7 @@ func TestTLSInputsStayWriteOnlyAndRejectCAReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	certificate, key := string(ca.CertPEM), string(ca.KeyPEM)
-	spec := api.ClusterSpec{Provider: "fake", Version: "8.0", Topology: api.Topology{Type: "replicaSet"}, Tls: &api.TLS{Ca: "userProvided", Mode: "requireTLS", CaCertificate: &certificate, CaPrivateKey: &key}}
+	spec := api.ClusterInputSpec{Provider: "fake", Version: ptr("8.0"), Tls: &api.TLSInput{Ca: ptr(api.TLSInputCa("userProvided")), Mode: ptr(api.TLSInputMode("requireTLS")), CaCertificate: &certificate, CaPrivateKey: &key}}
 	body, err := json.Marshal(api.CreateClusterRequest{Name: "tlsdemo", Spec: spec})
 	if err != nil {
 		t.Fatal(err)

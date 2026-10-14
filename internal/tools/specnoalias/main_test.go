@@ -63,3 +63,9 @@ func TestRewriteRejectsCycles(t *testing.T) {
 		t.Fatal("accepted cyclic alias")
 	}
 }
+
+func TestRepositorySpecificationHasNoAliases(t *testing.T) {
+	if err := run(filepath.Join("..", "..", "..", "api", "openapi.yaml"), true); err != nil {
+		t.Fatal(err)
+	}
+}

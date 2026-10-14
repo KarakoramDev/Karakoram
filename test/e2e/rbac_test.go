@@ -53,11 +53,11 @@ func TestRBAC(t *testing.T) {
 		s.expect(nil, 403)(operate.ListAccounts(s.ctx, &api.ListAccountsParams{}))
 		s.expect(nil, 403)(operate.CreateAccount(s.ctx, &api.CreateAccountParams{}, api.CreateAccountRequest{Name: s.name(), Password: ptr(s.name() + s.name())}))
 		var b api.Backup
-		s.expect(&b, 202)(operate.CreateBackup(s.ctx, name, &api.CreateBackupParams{}, api.CreateBackupRequest{Name: s.name(), Storage: storage, Type: api.CreateBackupRequestTypeLogical}))
+		s.expect(&b, 202)(operate.CreateBackup(s.ctx, name, &api.CreateBackupParams{}, api.CreateBackupRequest{Name: s.name(), Storage: storage, Type: "logical"}))
 		s.waitBackup(name, b.Name)
 		subject := "user:" + viewer
 		var can api.CanResponse
-		request := api.CanRequest{Subject: &subject, Resource: "cluster-credentials", Action: api.Read, Object: name}
+		request := api.CanRequest{Subject: &subject, Resource: "cluster-credentials", Action: api.CanRequestActionRead, Object: name}
 		s.expect(&can)(s.client.CheckPermission(s.ctx, &api.CheckPermissionParams{}, request))
 		if can.Allowed {
 			t.Fatal("viewer can reveal credentials before policy grant")
@@ -186,7 +186,7 @@ func TestRBAC(t *testing.T) {
 			t.Fatal("OIDC callback did not establish the expected test identity/groups")
 		}
 		var can api.CanResponse
-		s.expect(&can)(signedIn.CheckPermission(s.ctx, &api.CheckPermissionParams{XKarakoramCSRF: user.CsrfToken}, api.CanRequest{Resource: "clusters", Action: api.Read, Object: "demo"}))
+		s.expect(&can)(signedIn.CheckPermission(s.ctx, &api.CheckPermissionParams{XKarakoramCSRF: user.CsrfToken}, api.CanRequest{Resource: "clusters", Action: api.CanRequestActionRead, Object: "demo"}))
 		if !can.Allowed {
 			t.Fatal("OIDC group binding did not grant viewer permission")
 		}

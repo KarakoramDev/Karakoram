@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"net/http"
 	"strconv"
@@ -61,18 +62,52 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 			return fail(403, "forbidden", "Permission denied")
 		}
 		return ok(operationAPI(*o))
+	case "CancelOperation":
+		op, err := s.Store.GetOperation(ctx, in.Operation)
+		if err != nil {
+			return s.failure(err)
+		}
+		if !s.allowed(ctx, "clusters", "update", clusterObject(op.Namespace, op.Cluster)) {
+			return fail(403, "forbidden", "Cluster write permission is required to cancel operation "+op.ID)
+		}
+		if op.Terminal() {
+			return failDetails(409, "conflict", "Operation "+op.ID+" is "+string(op.Phase)+" and cannot be cancelled", map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
+		}
+		if op.Phase == domain.PhaseRunning {
+			c, err := s.Store.GetCluster(ctx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster})
+			if err != nil {
+				return s.failure(err)
+			}
+			p, err := s.Registry.Get(c.Spec.Provider)
+			if err != nil {
+				return s.failure(err)
+			}
+			canceller, ok := p.(engine.OperationCanceller)
+			if !ok || domain.IsConvergenceOperation(op.Kind) {
+				return failDetails(409, "conflict", "Operation "+op.ID+" ("+op.Kind+") cannot be cancelled safely once Running; accepted desired state and deletion are not rolled back", map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
+			}
+			if err = canceller.CanCancelOperation(op); err != nil {
+				return failDetails(409, "conflict", err.Error(), map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
+			}
+		}
+		cancelled, err := s.Store.RequestOperationCancellation(ctx, op.ID, op)
+		if err != nil {
+			return s.failure(err)
+		}
+		s.trigger(ctx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster})
+		return response{status: 202, body: operationAPI(*cancelled), operationID: op.ID}
 	case "ListEvents":
 		limit := 100
 		if raw := q.Get("limit"); raw != "" {
 			n, err := strconv.Atoi(raw)
 			if err != nil || n < 1 || n > 500 {
-				return invalid()
+				return invalidField("limit", domain.ReasonOutOfRange, "limit must be an integer from 1 to 500")
 			}
 			limit = n
 		}
 		position, err := eventCursor(q.Get("cursor"))
 		if err != nil {
-			return invalid()
+			return invalidField("cursor", domain.ReasonInvalid, "cursor must be a cursor returned by the preceding page or a nonnegative event ID")
 		}
 		descending := false
 		switch q.Get("order") {
@@ -80,7 +115,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		case "desc":
 			descending = true
 		default:
-			return invalid()
+			return invalidField("order", domain.ReasonInvalid, "order must be asc or desc")
 		}
 		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
 		for {
@@ -132,20 +167,9 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		if s.Monitoring == nil {
 			return fail(503, "unavailable", "Monitoring unavailable")
 		}
-		lookback := time.Hour
-		step := 30 * time.Second
-		var err error
-		if v := q.Get("range"); v != "" {
-			lookback, err = time.ParseDuration(v)
-			if err != nil || lookback <= 0 || lookback > 24*time.Hour {
-				return invalid()
-			}
-		}
-		if v := q.Get("step"); v != "" {
-			step, err = time.ParseDuration(v)
-			if err != nil || step <= 0 || step > lookback {
-				return invalid()
-			}
+		lookback, step, err := metricsDurations(q.Get("range"), q.Get("step"))
+		if err != nil {
+			return s.failure(err)
 		}
 		end := time.Now().UTC()
 		start := end.Add(-lookback)
@@ -215,7 +239,7 @@ func (s *Server) stream(ctx context.Context) response {
 	}
 	since, err := eventCursor(cursor)
 	if err != nil {
-		return invalid()
+		return invalidField("cursor", domain.ReasonInvalid, "cursor must be a cursor returned by the preceding page or a nonnegative event ID")
 	}
 	return response{noStore: true, serve: func(w http.ResponseWriter) error {
 		ch, cancel := s.Hub.Subscribe(namespaceFilter(ctx), q.Get("cluster"))

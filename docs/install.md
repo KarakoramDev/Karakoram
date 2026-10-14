@@ -33,15 +33,40 @@ the Go toolchain/module registries and npm.
 
 ### Build provenance for local pushes
 
-`zcli service push --no-git` uploads source without `.git`. Set **build-time**
-`KARAKORAM_VERSION` (a release tag or source-build label) and
-`KARAKORAM_COMMIT` (the full or abbreviated source revision) in the Zerops
-service's build environment **before pushing**. Setting runtime variables after
-deployment cannot change the metadata linked into the executable. Obtain the
-values from your checkout, for example `git describe --tags --always` and
-`git rev-parse HEAD`, then configure those literal values for the remote build.
-The pipeline prefers `KARAKORAM_COMMIT` over Git discovery, so these values work
-even when the remote source archive has no Git metadata.
+`zcli service push --no-git` uploads source without `.git`. Before pushing,
+obtain the release tag/source label and source revision from the checkout:
+
+```sh
+git describe --tags --always
+git rev-parse HEAD
+```
+
+Add those **literal values** under `build.envVariables` in the `zerops.yaml`
+that you pass to `--zerops-yaml-path`, preserving its existing `base`,
+`buildCommands`, `deployFiles`, `deploy` and `run` settings. For example, the
+relevant part of that file becomes:
+
+```yaml
+zerops:
+  - setup: karakoram
+    build:
+      envVariables:
+        KARAKORAM_VERSION: v0.x.y
+        KARAKORAM_COMMIT: <git rev-parse HEAD>
+```
+
+Replace `v0.x.y` with the chosen release tag/source label and
+`<git rev-parse HEAD>` with the command's actual output; neither is an instruction
+for the remote build to run Git. This is an excerpt to merge into the existing
+file, not a replacement pipeline.
+
+The existing Go `buildCommands` reads `KARAKORAM_VERSION` and `KARAKORAM_COMMIT`
+from the **build environment** and links them into the binary's version/commit
+fields. The explicit commit wins over `git rev-parse --short HEAD` discovery.
+Without these inputs, a no-Git archive falls back to `dev`/`unknown`;
+`run.envVariables`, shell variables set only on your workstation, or runtime
+variables changed after deployment do not supply these remote build inputs or
+relink the executable.
 
 Local builds accept the same names:
 
@@ -127,7 +152,9 @@ zcli project service-import deploy/zerops/import-local.yaml -P "$PROJECT_ID"
 
 In the Zerops dashboard open the newly created **karakoram → Environment
 variables → Secret variables**, edit `KARAKORAM_ZEROPS_TOKEN`, and paste the
-project token. Keep both generated Karakoram secrets unchanged. Then deploy:
+project token. Keep both generated Karakoram secrets unchanged. Add the
+[build provenance values](#build-provenance-for-local-pushes) to the local
+`zerops.yaml`, then deploy:
 
 ```sh
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \

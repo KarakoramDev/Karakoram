@@ -49,6 +49,10 @@ karactl db-roles get demo appdb appreader
 
 Deleting a custom role that is still assigned to any user or inherited by another custom role returns **409** with reason `invalid_state`, naming the dependent identities. Remove those role references explicitly using user/role updates, then retry the same DELETE; there is no force-delete parameter. This prevents MongoDB's native `dropRole` behavior from silently stripping user assignments.
 
+The UI's role-deletion dialog lists known assigned users and inheriting roles.
+It does not automatically revoke their references. Edit those identities first;
+the server repeats the dependency check even if the dialog's data is stale.
+
 ## System users and rotation
 
 Each cluster has independently generated passwords for these reserved accounts in `admin`:
@@ -72,6 +76,9 @@ karactl operations cluster demo
 Rotation is a durable operation: passwords are changed per set and local backup/monitor credentials reloaded member by member. Follow the operation to success. Do not manually reset these users behind the provider; it must retain usable credentials. System-user listings do not reveal passwords. Connection reveal currently returns **databaseAdmin only**, not every system account or any application password.
 
 After the rotation operation succeeds, system-user listings return that account's `lastRotatedAt` in UTC. The timestamp is durable provider state and survives control-plane restarts; a failed or still-running rotation does not advance it.
+
+The Web UI displays this field as **Last rotated** in the **Users** tab's
+system-user table; an absent timestamp means no successful rotation is recorded.
 
 ## Keyfile
 
@@ -126,6 +133,14 @@ karactl clusters connection demo --reveal
 ```
 
 The endpoint requires `read` on **`cluster-credentials`**, separate from reading `clusters`, and sends `Cache-Control: no-store`. Treat its databaseAdmin password/credential-bearing URI as a secret. This is an administrative credential, not the application's normal identity. Application clients should use their own user's auth database and password, URL-encode credentials, and set TLS with the downloaded CA. Sharded clients connect to mongos; replica-set clients use discovered members and `replicaSet=rs0`.
+
+In the UI, revealed CA PEM remains visible in a selectable text field, with
+**Copy CA** and **Download ca.pem** controls. If clipboard access fails, select
+the visible PEM or download the file, preserving its line breaks. Expand
+**How to connect (MongoDB)** for the `mongosh`/driver snippets with `ca.pem`;
+these start from an administrative URI, so replace the identity/authentication
+database with your scoped application's values. The CA path is relative to the
+client process. The public replica-set discovery warning still applies.
 
 Select the cluster's namespace (`karactl -n prod clusters connection orders
 --reveal` or `?namespace=prod`). Private hosts belong to **that namespace's
@@ -258,6 +273,10 @@ spec:
 ```
 
 The documentation prefix above is an example, not a usable client network. Replace it with the smallest real authorized client CIDR. Apply via `clusters patch -f FILE --wait`. Public member ports are distinct because members share the project public IP. Sharded exposure publishes mongos only; config/shard members remain private. Disabling exposure removes owned public routes. Keep TLS required and verify actual allowed and denied client reachability.
+
+Every allowlist entry must be a valid CIDR of the configured `ipType`: IPv6 for `IPV6`, IPv4 for `IPV4`. A family mismatch is rejected before public routing is changed. Entries covering every address (`::/0`, `0.0.0.0/0`, including noncanonical equivalents) are rejected unless you explicitly send **`spec.exposure.allowAllAddresses: true`** (default false). This acknowledgement does not bypass family validation, TLS or authentication. Prefer a restricted range; the web UI asks for confirmation when an all-address range is entered. An error names the offending entry, such as `spec.exposure.allowlist.0`.
+The wizard and exposure editor send that acknowledgement only while the confirmation is checked and the current public allowlist contains an all-address CIDR. Changing exposure settings clears the confirmation; private or restricted exposure never inherits an earlier acknowledgement.
+
 
 **Use layered access controls.** An IP allowlist is defense in depth, not a substitute for authentication. Prefer private access; when public access is needed, retain `requireTLS` and strong credentials and verify allowed and denied client access for your deployment. See [networking limitations](../limitations.md#access-and-networking).
 

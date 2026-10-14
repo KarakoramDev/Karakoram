@@ -349,7 +349,7 @@ func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 		t.Fatal(op, err)
 	}
 	c, err := s.GetCluster(ctx, domain.ClusterRef{Name: "demo"})
-	if err != nil || c.Status.Phase != domain.PhaseRestoring || string(c.Internal) != `{"processes":"recovered"}` {
+	if err != nil || c.Status.Phase != domain.PhaseUpdating || string(c.Internal) != `{"processes":"recovered"}` {
 		t.Fatal(c, err)
 	}
 	if _, err = m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err == nil {

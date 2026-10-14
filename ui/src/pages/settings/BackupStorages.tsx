@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import { storageTransport } from '@/components/ui/presentation';
 import { deleteWithReconciliation } from './storage-outcome';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
+import { storageFailureLabel } from './storage-verification';
 type Storage = Schemas['BackupStorage'];
 
 export function BackupStoragesPage() {
@@ -128,7 +129,7 @@ export function BackupStoragesPage() {
                             Verify
                           </Button>
                         )}
-                        {v && v !== 'pending' ? <div className="xs faint">{v.message}<div>Checked <Time iso={v.checkedAt} /></div>{s.updatedAt && Date.parse(s.updatedAt) > Date.parse(v.checkedAt) ? <div>Configuration changed since this check. Verify again.</div> : null}</div> : !v ? <div className="xs faint">Not checked in this session.</div> : null}
+                        {v && v !== 'pending' ? <div className="xs faint">{v.failureReason ? <strong>{storageFailureLabel(v.failureReason)}: </strong> : null}{v.message}<div>Checked <Time iso={v.checkedAt} /></div>{s.updatedAt && Date.parse(s.updatedAt) > Date.parse(v.checkedAt) ? <div>Configuration changed since this check. Verify again.</div> : null}</div> : !v ? <div className="xs faint">Not checked in this session.</div> : null}
                       </td>
                       <td className="small">
                         <Time iso={s.updatedAt} />

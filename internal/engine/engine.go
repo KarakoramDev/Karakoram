@@ -41,6 +41,14 @@ type OperationSyncPolicy interface {
 	SyncDuringOperation(op *domain.Operation) bool
 }
 
+// OperationCanceller is optional: only the serialized worker executes cancellation.
+// CanCancelOperation must be side-effect free and explain unsafe checkpoints.
+// CancelOperation cooperatively restores safe invariants before returning Done.
+type OperationCanceller interface {
+	CanCancelOperation(*domain.Operation) error
+	CancelOperation(context.Context, *Context, *domain.Operation) (OpResult, error)
+}
+
 // Result requests a delay before the next level-triggered reconciliation.
 type Result struct{ RequeueAfter time.Duration }
 

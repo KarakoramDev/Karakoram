@@ -34,8 +34,12 @@ func TestNamespaceNameAndRequiredFieldDiagnostics(t *testing.T) {
 	s, token := namespaceTestServer(t)
 	for _, name := range []string{"x", "Upper", "1namespace", "bad_name", "trailing-", strings.Repeat("a", 33)} {
 		body := fmt.Sprintf(`{"name":%q,"projectId":"project-extra","token":"private-value"}`, name)
-		e := requireDependencyError(t, call(s, "POST", "/api/v1/namespaces", body, token), 400, "invalid_request", map[string]string{"field": "name", "reason": "invalid"})
-		if !strings.Contains(e.Message, "2–32") || !strings.Contains(e.Message, "start with a letter") || strings.Contains(e.Message, "private-value") {
+		reason := "invalid"
+		if len(name) < 2 || len(name) > 32 {
+			reason = "out_of_range"
+		}
+		e := requireDependencyError(t, call(s, "POST", "/api/v1/namespaces", body, token), 400, "invalid_request", map[string]string{"field": "name", "reason": reason})
+		if !strings.Contains(e.Message, "2–32") || !strings.Contains(e.Message, "letter") || strings.Contains(e.Message, "private-value") {
 			t.Fatal(e)
 		}
 	}
@@ -136,6 +140,8 @@ func TestStorageFieldConflictAndVerificationDiagnostics(t *testing.T) {
 		reason := "invalid"
 		if name == "" {
 			reason = "required"
+		} else if len(name) > 128 {
+			reason = "out_of_range"
 		}
 		requireDependencyError(t, call(s, "POST", "/api/v1/backup-storages", string(raw), token), 400, "invalid_request", map[string]string{"field": "name", "reason": reason})
 	}

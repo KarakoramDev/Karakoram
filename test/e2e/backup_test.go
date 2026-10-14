@@ -43,8 +43,8 @@ func (s *suite) exerciseRecovery(name, storage string, extraProof func(string)) 
 	}
 	s.put(name, "backup-proof", "original")
 	backups := []api.Backup{
-		s.backup(name, storage, api.CreateBackupRequestTypeLogical),
-		s.backup(name, storage, api.CreateBackupRequestTypePhysical),
+		s.backup(name, storage, "logical"),
+		s.backup(name, storage, "physical"),
 	}
 	inventory := s.inventory(name)
 	s.snapshot(name+"-inventory", inventory)
@@ -59,14 +59,14 @@ func (s *suite) exerciseRecovery(name, storage string, extraProof func(string)) 
 			s.t.Fatalf("inventory omitted successful %s backup %s", b.Type, b.Name)
 		}
 		s.put(name, "backup-proof", "mutated")
-		s.restore(name, api.RestoreSource{Backup: ptr(b.Name), SourceCluster: name})
+		s.restore(name, api.RestoreSource{Backup: ptr(b.Name), SourceCluster: ptr(name)})
 		proof(name)
 		spec := s.cluster(name).Spec
 		spec.DataSource = &api.DataSource{Cluster: name, Backup: ptr(b.Name)}
 		clone := s.create(spec)
 		proof(clone)
 		// A clone must use its own reconciled system identities, not just start.
-		s.backup(clone, storage, api.CreateBackupRequestTypeLogical)
+		s.backup(clone, storage, "logical")
 		s.assertMetrics(clone)
 		if !s.keep {
 			s.deleteCluster(clone, false)
@@ -74,7 +74,7 @@ func (s *suite) exerciseRecovery(name, storage string, extraProof func(string)) 
 	}
 	s.update(name, func(spec *api.ClusterSpec) { spec.Backup.Pitr = &api.PITRSpec{Enabled: true, OplogSpanMinutes: ptr(1)} })
 	// A fresh logical base is required after physical in-place recovery.
-	s.backup(name, storage, api.CreateBackupRequestTypeLogical)
+	s.backup(name, storage, "logical")
 	s.put(name, "pitr-proof", "before-target")
 	target := s.mongoTime(name)
 	s.waitPITR(name, target)
@@ -92,7 +92,7 @@ func (s *suite) exerciseRecovery(name, storage string, extraProof func(string)) 
 	if !s.keep {
 		s.deleteCluster(clone, false)
 	}
-	s.restore(name, api.RestoreSource{PitrTime: &target, SourceCluster: name})
+	s.restore(name, api.RestoreSource{PitrTime: &target, SourceCluster: ptr(name)})
 	s.proof(name, "pitr-proof", "before-target")
 	s.absent(name, "after-target-only")
 	proof(name)
@@ -127,7 +127,7 @@ func (s *suite) exerciseRetention(name, storage string) {
 	s.t.Helper()
 	schedule := s.name()
 	s.update(name, func(spec *api.ClusterSpec) {
-		spec.Backup.Schedules = ptr([]api.BackupSchedule{{Name: schedule, Cron: "*/5 * * * *", Enabled: true, RetainCount: 2, Storage: storage, Type: api.BackupScheduleTypeLogical}})
+		spec.Backup.Schedules = ptr([]api.BackupSchedule{{Name: schedule, Cron: "*/5 * * * *", Enabled: true, RetainCount: 2, Storage: ptr(storage), Type: api.BackupScheduleTypeLogical}})
 	})
 	seen := map[string]bool{}
 	s.poll("three scheduled runs and retainCount=2", 30*time.Minute, func() bool {

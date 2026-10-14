@@ -5,6 +5,8 @@ package psmdb
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -21,6 +23,23 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		return false, e
 	}
 	defer func() {
+		message := "Deleting: removing owned backup data, runtime services and persistent resources"
+		if !s.CleanupBackups && !opts.KeepBackups {
+			message = "Deleting: cleaning backup inventory and storage"
+		}
+		if s.Pending != nil {
+			message = fmt.Sprintf("Deleting: waiting for platform %s for %s", s.Pending.Action, s.Pending.Member)
+		}
+		if s.CleanupSecrets {
+			message = "Deleting: finalizing resource removal"
+		}
+		if detail := s.platformFailureMessage(); detail != "" {
+			message = detail
+		}
+		if err != nil {
+			message = err.Error()
+		}
+		rc.Cluster.Status.Message = message
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
 		}
@@ -104,6 +123,49 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
 		if e != nil {
 			return false, e
+		}
+		started := s.PBMStorage != "" || s.PBMHash != ""
+		for _, b := range backups {
+			started = started || b.PBMName != "" || b.StartedAt != nil
+		}
+		if inventory, ok := rc.Store.(interface {
+			ListOperations(context.Context, domain.ClusterRef, ...domain.Phase) ([]domain.Operation, error)
+		}); ok {
+			operations, e := inventory.ListOperations(ctx, rc.Cluster.Ref())
+			if e != nil {
+				return false, e
+			}
+			for _, operation := range operations {
+				if operation.Kind != domain.OperationBackup {
+					continue
+				}
+				var checkpoint struct {
+					Step string `json:"step"`
+				}
+				if len(operation.Checkpoint) > 0 {
+					if e = json.Unmarshal(operation.Checkpoint, &checkpoint); e != nil {
+						return false, e
+					}
+					// A start receipt may exist even if recording its PBM name failed.
+					started = started || (checkpoint.Step != "" && checkpoint.Step != "configure")
+				}
+			}
+		} else {
+			started = true
+		}
+		if !started {
+			for _, b := range backups {
+				if b.RecoveryIdentity != "" {
+					if e = rc.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); e != nil && !missing(e) {
+						return false, e
+					}
+				}
+				if e = rc.Store.DeleteBackup(ctx, rc.Cluster.Ref(), b.Name); e != nil && !missing(e) {
+					return false, e
+				}
+			}
+			s.CleanupBackups = true
+			return false, nil
 		}
 		for _, b := range backups {
 			if b.Storage != "" && !slices.Contains(storages, b.Storage) {

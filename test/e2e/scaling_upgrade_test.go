@@ -51,7 +51,7 @@ func TestScalingUpgrade(t *testing.T) {
 			}
 			for _, m := range members.Items {
 				r := m.Autoscaling
-				if r == nil || r.CpuMode != api.SHARED || r.MinCpu != 2 || r.MaxCpu != 2 || r.MinRam != 0.5 || r.MaxRam != 0.5 || r.StartCpu == nil || *r.StartCpu != 2 {
+				if r == nil || r.CpuMode != api.ResourcesCpuModeSHARED || r.MinCpu != 2 || r.MaxCpu != 2 || r.MinRam != 0.5 || r.MaxRam != 0.5 || r.StartCpu == nil || *r.StartCpu != 2 {
 					return false
 				}
 				if m.Resources == nil || m.Resources.CpuCores <= 0 || m.Resources.MemoryGB <= 0 {
@@ -138,15 +138,15 @@ func TestScalingUpgrade(t *testing.T) {
 	t.Run("CPUMode", func(t *testing.T) {
 		s := newSuite(t, false)
 		name := s.create(s.privateSpec(1))
-		for _, mode := range []api.ResourcesCpuMode{api.DEDICATED, api.SHARED} {
+		for _, mode := range []api.ResourcesCpuMode{api.ResourcesCpuModeDEDICATED, api.ResourcesCpuModeSHARED} {
 			c := s.cluster(name)
 			c.Spec.Components.Engine.Resources.CpuMode = mode
 			var updated api.Cluster
-			s.expect(&updated)(s.client.ReplaceCluster(s.ctx, name, &api.ReplaceClusterParams{}, api.ReplaceClusterRequest{Spec: c.Spec}))
+			s.expect(&updated)(s.client.ReplaceClusterWithBody(s.ctx, name, &api.ReplaceClusterParams{}, "application/json", s.clusterBody(clusterWriteEnvelope{Spec: c.Spec})))
 			// The platform may rate-limit CPU-mode changes; the second change
 			// proves automatic convergence through a scheduled retry.
 			timeout := operationTimeout
-			if mode == api.SHARED {
+			if mode == api.ResourcesCpuModeSHARED {
 				timeout = 75 * time.Minute
 			}
 			s.poll(name+" cpuMode="+string(mode)+" Ready", timeout, func() bool {
@@ -194,7 +194,7 @@ func (s *suite) upgradeVersions(fromMajor, toMajor string) (string, string) {
 	p := s.provider()
 	var from, to string
 	for _, v := range p.Versions {
-		if v.Status != api.Supported {
+		if v.Status != api.ProviderVersionStatusSupported {
 			continue
 		}
 		if v.Major == fromMajor && (from == "" || versionLess(v.Version, from)) {
@@ -368,7 +368,7 @@ func (s *suite) rollingUpgrade(name, version string) {
 	cluster := s.cluster(name)
 	cluster.Spec.Version = version
 	var updated api.Cluster
-	s.expect(&updated)(s.client.ReplaceCluster(s.ctx, name, &api.ReplaceClusterParams{}, api.ReplaceClusterRequest{Spec: cluster.Spec}))
+	s.expect(&updated)(s.client.ReplaceClusterWithBody(s.ctx, name, &api.ReplaceClusterParams{}, "application/json", s.clusterBody(clusterWriteEnvelope{Spec: cluster.Spec})))
 	upgraded := map[string]bool{}
 	order := []string{}
 	s.poll("secondary-first rolling upgrade", operationTimeout, func() bool {

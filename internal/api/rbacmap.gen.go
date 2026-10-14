@@ -22,6 +22,7 @@ type RBACRule struct {
 // OperationRBAC is the complete OpenAPI operation-ID authorization inventory.
 // Treat it as immutable; a missing operation ID must fail closed.
 var OperationRBAC = map[string]RBACRule{
+	"cancelOperation":        {Resource: "clusters", Action: "update", ObjectParam: "*", Public: false},
 	"changePassword":         {Resource: "accounts", Action: "update", ObjectParam: "*", Public: false},
 	"checkPermission":        {Resource: "rbac", Action: "read", ObjectParam: "*", Public: false},
 	"createAPIToken":         {Resource: "api-tokens", Action: "create", ObjectParam: "*", Public: false},

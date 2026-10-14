@@ -167,11 +167,64 @@ its advertised `limit`/`cursor` parameters.
 
 Cluster create accepts `{name, spec}`; PUT replaces full desired `{spec}`. PATCH accepts a JSON merge patch containing **only** `{spec: {...}}`. Name, status, timestamps and generation are server-owned. Merge-patch arrays replace the old arrays in full. Mutations persist intent and trigger reconciliation; a returned cluster or HTTP 201 is not a completed deployment.
 
-Imperative operations return durable asynchronous work, commonly HTTP 202. Poll `/operations/{id}` until `Succeeded` or `Failed`, also inspect Backup/Restore and cluster status. Operation phases are `Pending`, `Running`, `Succeeded`, `Failed`. Requested engine version and observed deployed version/FCV differ during rollout. Read observedGeneration before concluding a desired change has converged.
+Every accepted create, PUT/PATCH (including scale/resources/exposure/TLS/version), resume and delete has a durable Operation. Cluster mutations return `Cluster.operationId`; backup and restore acceptance returns `Backup.operationId` and `Restore.operationId`. All these responses, and imperative operation responses, also set **`Karakoram-Operation-Id`**. Cluster DELETE returns **202 with an Operation body**, not an empty response. Poll `/operations/{id}` until `Succeeded`, `Failed` or `Cancelled`; also inspect inventory and cluster status. `target: {kind, name}` identifies the affected cluster, backup, restore, member or user. `step` and `message` describe the current checkpoint; `startedAt`/`completedAt` allow exact elapsed durations. Every terminal message includes a summary, including success.
+
+Desired-state operations observe their `targetGeneration`; they succeed when that generation is observed and the cluster is Ready, or Degraded with an explanatory message. A newer mutation cancels superseded tracking records with the newer operation ID in the message. Deletion succeeds only when removal (or requested suspension) completes. Tracking records do not block the imperative queue or roll back desired state. `spec.version` is the requested version; `status.version` is observed from runtime members (the oldest observed member during a mixed-version rollout), and is absent when observation is unavailable. Inspect member versions and FCV before declaring an upgrade complete.
+
+Operations have bounded ownership: **20 retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. Validation/unsupported errors fail immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
+
+Request bodies are validated before decoding or accepting work. Unknown fields (including nested spelling mistakes), wrong types, unsupported enum values, invalid bounds and trailing JSON data return **400** `invalid_request` with `details.field` (a dotted JSON path or parameter name) and `details.reason`. Explicit zero counts/resources are errors, not requests for defaults. `spec.provider` is required: list offered engines with `GET /api/v1/providers`. Omitted version, topology, components and resource fields use that provider's catalog defaults. For PSMDB these are the catalog default version, `replicaSet`, three engine/config-server members, one router, one shard, SHARED CPU with min/max 1 core, min/max 1 GiB RAM and min/max 5 GiB disk. PUT may round-trip recognized server-owned fields from GET, which are ignored; PATCH accepts only the spec envelope.
+
+Generated Go create/PUT bodies use `ClusterInputSpec` and pointer-valued optional topology/component/resource fields. Leave pointers unset to request defaults; a pointer to zero is an explicit invalid value. `ClusterSpec` remains the complete read model. An omitted resource maximum follows its effective corresponding minimum, including when that minimum was explicitly supplied.
+
+Supply the operation's declared `Content-Type`: normally `application/json`; cluster PATCH declares `application/merge-patch+json`. The current CLI and UI send that merge-patch media type; for older callers the server also interprets `application/json` on cluster PATCH as the same merge patch. Missing or unsupported media types on requests with bodies return **415** `unsupported_media_type`. Bodies exceeding **2 MiB**, including chunked bodies, return **413** `payload_too_large`. A known route with an unsupported method returns **405** `method_not_allowed` with an `Allow` header; an unknown API route stays **404**.
+
+Every API response echoes **`X-Request-ID`**. You may supply an identifier of 1–128 characters from `[A-Za-z0-9._:-]`; an absent, invalid or repeated header is replaced with a generated ID. Include this ID when reporting an error: it also appears as `request_id` in the request log. Do not include credentials or other secrets in identifiers.
+This is an optional transport header, not a generated operation parameter. Go clients can set it with `client.WithRequestEditorFn`; ordinary calls do not need an extra params argument solely for request correlation.
 
 Each Operation exposes its initiating `actor`. Desired-state writes persist attribution with the cluster generation so subsequent reconciliation and resulting operations/events retain that generation's actor. Local actors use persisted account names; OIDC actors add `(oidc: issuerURL)` from the verified account issuer. Bearer actors identify owner plus token name and ID, never its secret. Autonomous work uses system actors such as `reconciler`, `scheduler`, `system:startup` or `system` (orphan-volume janitor). See [audit attribution](../security.md#audit-attribution-and-durability).
 
-Network disconnect or client wait timeout does not cancel server work. Do not submit a second restore simply because a reply was lost: node receipts may intentionally report an ambiguous initiation requiring observation/operator recovery. No cancel-every-operation endpoint or universal exactly-once mutation guarantee is supplied.
+Network disconnect or client wait timeout does not cancel server work. Retain the returned operation ID and resume observation with `karactl operations wait ID`; do not resubmit create/restore merely because waiting stopped. Node receipts may intentionally report ambiguous initiation requiring observation/operator recovery.
+
+### Cancel an operation
+
+`POST /api/v1/operations/{id}/cancel` (or `karactl operations cancel ID`)
+requires **clusters/update** on the operation's persisted namespace/cluster
+object. The ID resolves that scope; no namespace override is needed. An accepted
+request returns **202 Operation** plus **`Karakoram-Operation-Id`**:
+
+- **Pending:** becomes **Cancelled** immediately. Cancelling Pending tracking
+  does **not** undo accepted desired state.
+- **Running:** only provider-supported safe checkpoints are cancellable.
+  Acceptance sets **`cancelRequested: true`**; the operation remains Running
+  until cooperative cleanup completes. Poll the same ID to a terminal phase,
+  rather than treating HTTP 202 as completed cancellation.
+- **Terminal or unsafe/unsupported Running work:** returns **409 `conflict`**
+  with **`details.reason: invalid_state`**, `resource: operation`, its ID as
+  `name`, and a state/checkpoint explanation. A checkpoint can change between
+  reading an operation and cancelling it; inspect the new state before retrying.
+
+PSMDB supports backup cancellation, FCV before the `apply-fcv` checkpoint, and
+restore before data mutation (including PBM source inventory waits). A restore
+already initiating/applying data, deletion, Running desired-state tracking,
+restart/replacement/rotation and unsupported-provider work cannot be safely
+aborted. A cancelled backup/restore inventory entry is **Failed** with the
+cancellation summary. Cancellation is not rollback and does not undo work
+already performed.
+
+With the bearer token/origin from the [curl bootstrap](#copyable-curl-bootstrap):
+
+```sh
+OPERATION_ID='the-operation-id'
+curl --fail-with-body --silent --show-error -X POST \
+  -H "Authorization: Bearer $KARAKORAM_TOKEN" \
+  "$SERVER/api/v1/operations/$OPERATION_ID/cancel"
+karactl operations wait "$OPERATION_ID"
+```
+
+`operations wait` reports Cancelled as a non-successful terminal result. There
+is no universal cancel/rollback or exactly-once mutation guarantee; operation
+retry/deadline budgets above still bound ownership while cleanup is pending.
 
 ## Safe retries with Idempotency-Key
 
@@ -238,6 +291,10 @@ Events are listed oldest-first by default, so following `nextCursor` replays his
 
 Events expose `actor`, optional string **`resource`**/**`target`**, and `namespace` for namespace-scoped activity (omitted for global installation activity). Cluster-management events use `resource: "clusters"`, `target` equal to the cluster name, and retain `cluster`. Orphan-volume janitor events retain the original namespace/cluster but use resource `orphaned-volumes` and target equal to the volume hostname. Namespace-management and relay lifecycle records omit `cluster`, retain `namespace` and use resource `namespaces`. Other audit records use the affected resource (for example `accounts`, `rbac`, `settings`, `api-tokens`, `auth` or `backup-storages`) and target. Older events may omit attribution/resource/target. Every successful mutation and credential reveal is audited using safe action metadata, not request/response bodies or secrets. Login/OIDC success/failure and logout have authentication-owned events. All audit activity shares the durable event history and indefinite retention described in [security](../security.md#audit-attribution-and-durability).
 
+Invalid `limit`, `cursor` and `order` errors name the parameter and accepted values. Do not construct list cursors yourself: return the server's cursor unchanged. Events additionally accept nonnegative numeric event IDs for replay.
+
+Cluster metrics use positive Go-style durations (`30s`, `5m`, `1h`, `24h`), not `7d`: `range` is at most **24h**, and `step` must not exceed that range. When omitted, range defaults to `1h` and step to `30s` (bounded to a shorter explicitly requested range).
+
 `GET /api/v1/events/stream` uses `text/event-stream`, numeric event IDs and the **stored event type verbatim** as the frame's `event:` field. Current severity/audit categories are **`Normal`**, **`Warning`** and **`Audit`**; lifecycle detail is in **`reason`** (for example `ClusterReady`, `OperationFailed`, `LoginSucceeded`). The list and stream **`type` filter matches these stored values**, not `cluster.updated` or `operation.updated`. Clients must tolerate additional stored types. Reconnect with `Last-Event-ID`, or an explicit `cursor` query (which takes precedence), to replay authorized durable events. Filters include namespace/cluster/type/operationId and the same exact, case-sensitive actor/resource intersections as the list; preserve all filters on reconnect. SSE live delivery does not replace persisted operation/status queries.
 
 ```text
@@ -265,8 +322,10 @@ Structured errors are `{code, message, details?}`; do not rely on English messag
 | 401 | Missing/invalid/expired authentication; login errors intentionally hide account existence |
 | 403 | RBAC/ownership denial, failed CSRF, or `password_change_required` |
 | 404 | Missing/not-visible resource or API route |
+| 405 | Known route but unsupported method (`method_not_allowed`); inspect `Allow` |
 | 409 | Conflicting resource state/operation or unsupported action reported as conflict |
 | 413 | Request exceeds the current 2 MiB body limit |
+| 415 | Missing/unsupported request Content-Type (`unsupported_media_type`) |
 | 422 | Namespace token/project or relay-hostname validation failed |
 | 429 | `rate_limited` login backoff; retry after the header/body delay |
 | 500 | Unexpected server error, deliberately generic public response |
@@ -430,16 +489,17 @@ From the repository root:
 ```sh
 make generate
 make openapi-check
-# TypeScript generation is separate:
+# Standalone TypeScript generation (make openapi-check also runs this):
 (cd ui && npm ci && npm run gen:api)
 ```
 
 Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, then the owned RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation uses the lockfile's openapi-typescript and writes `ui/src/api/schema.d.ts`. Do not hand-edit generated artifacts.
 
-`make openapi-check` regenerates/diffs the Go API/client/RBAC paths; it is not a TypeScript-drift or live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.
+`make openapi-check` rejects YAML aliases and regenerates/diffs the Go API/client/RBAC paths and `ui/src/api/schema.d.ts`; UI dependencies must already be installed. This is a drift check, not a live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.
 
-For consumers whose YAML parser limits alias expansion, maintainers can normalize
-the source without changing its OpenAPI meaning:
+The checked-in specification has no YAML anchors or aliases, so consumers can
+use parsers with conservative alias-expansion limits. After editing a document
+that introduces aliases, normalize it without changing its OpenAPI meaning:
 
 ```sh
 go run ./internal/tools/specnoalias
@@ -449,6 +509,7 @@ go generate ./api/...
 ```
 
 The tool preserves existing `#/components/responses/...` references rather than
-copying error schemas. `-check` exits nonzero if any YAML anchor or alias remains,
-so it can guard a normalized specification in CI.
+copying error schemas. `-check` exits nonzero if any YAML anchor or alias remains.
+The repository regression test checks the published source and fails if aliases
+are reintroduced.
 

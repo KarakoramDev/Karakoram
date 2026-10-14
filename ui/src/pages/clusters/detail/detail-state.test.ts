@@ -2,7 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assignedUsers, certificateDownload, clusterEmptyCopy, colocatedGroups, credentialDatabaseLabel, FCV_GUIDANCE, fcvObservation, generationState, latestSuccessfulBackup, maintenanceCopy, observedVersion, passwordValid, psmdbConnect, refreshSubmissionBody, requireUpgradeBackup, scalingReview } from './detail-state.ts';
+import { assignedRoles, assignedUsers, certificateDownload, clusterEmptyCopy, colocatedGroups, credentialDatabaseLabel, FCV_GUIDANCE, fcvObservation, generationState, latestSuccessfulBackup, maintenanceCopy, observedVersion, passwordValid, psmdbConnect, refreshSubmissionBody, requireUpgradeBackup, scalingReview } from './detail-state.ts';
 import { fetchBackupInventory } from './backup-inventory.ts';
 
 const resources = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 5, maxDisk: 10 };
@@ -55,6 +55,15 @@ test('password minimum counts Unicode codepoints and supports omitted passwords'
 });
 test('role deletion identifies only users assigned the matching database role', () => {
   assert.deepEqual(assignedUsers([{ username: 'app', database: 'shop', roles: [{ role: 'reader', db: 'shop' }] }, { username: 'other', database: 'admin', roles: [{ role: 'reader', db: 'admin' }] }], { name: 'reader', database: 'shop' }), ['app@shop']);
+});
+test('role deletion identifies inherited assignments by role name and database', () => {
+  const roles = [
+    { name: 'manager', database: 'admin', roles: [{ role: 'reader', db: 'shop' }] },
+    { name: 'other', database: 'shop', roles: [{ role: 'reader', db: 'admin' }] },
+    { name: 'unassigned', database: 'shop', roles: [] },
+  ];
+  assert.deepEqual(assignedRoles(roles, { name: 'reader', database: 'shop' }), ['manager@admin']);
+  assert.deepEqual(assignedRoles(roles, { name: 'missing', database: 'shop' }), []);
 });
 test('permission-aware empty state explains access without inviting unauthorized creation', () => {
   assert.match(clusterEmptyCopy(false).message, /Ask an administrator/);

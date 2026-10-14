@@ -45,6 +45,7 @@ func TestCookieCSRFAndAPITokenFlows(t *testing.T) {
 	}
 	send := func(path, csrf string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", path, strings.NewReader(`{"name":"cookie-token"}`))
+		r.Header.Set("Content-Type", "application/json")
 		for _, c := range cookies {
 			r.AddCookie(c)
 		}
@@ -164,6 +165,7 @@ func TestMustChangePasswordRestrictedToRecovery(t *testing.T) {
 		}
 	}
 	r := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(`{"currentPassword":"first-test-password","newPassword":"changed-test-password"}`))
+	r.Header.Set("Content-Type", "application/json")
 	for _, c := range cookies {
 		r.AddCookie(c)
 	}
@@ -194,7 +196,7 @@ func TestClusterPatchOperationPayloadsAndDeleteIntent(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	ops, err := s.Store.ListOperations(context.Background(), domain.ClusterRef{Name: "prod"})
-	if err != nil || len(ops) != 1 || ops[0].Kind != "raise-fcv" || string(ops[0].Payload) != `{"version":"8.0"}` {
+	if err != nil || len(ops) != 2 || ops[1].Kind != "raise-fcv" || string(ops[1].Payload) != `{"version":"8.0"}` {
 		t.Fatal(ops, err)
 	}
 	if w = call(s, "DELETE", "/api/v1/clusters/prod?keepVolumes=true&keepBackups=true", "", token); w.Code != 202 {
