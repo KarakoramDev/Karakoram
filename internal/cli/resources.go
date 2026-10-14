@@ -30,12 +30,17 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			name  string
 			value float64
 		}{{"min-cpu", 1}, {"max-cpu", 2}, {"min-ram", 1}, {"max-ram", 2}, {"min-disk", 5}, {"max-disk", 10}, {"start-cpu", 1}} {
-			c.Flags().Float64(r.name, r.value, "Resource size (RAM/disk in GiB)")
+			unit := "Resource size in GiB"
+			if strings.Contains(r.name, "cpu") {
+				unit = "CPU cores"
+			}
+			c.Flags().Float64(r.name, r.value, unit)
 		}
 		c.Flags().String("component", "engine", "Scale resources of engine, configServer or router")
 		if strings.HasPrefix(s.path, "clusters create") {
+			c.Long = "Create a cluster. Convenience flags use PSMDB defaults; --provider defaults to psmdb.\nFor other providers, presets or optional components, submit the complete JSON/YAML body with -f.\nRun karactl providers get <provider> -o json to inspect versions, presets and components,\nthen copy a preset spec into a body containing name and spec. There is no --preset flag."
 			c.Flags().String("provider", "psmdb", "Engine provider")
-			c.Flags().String("version", "", "Exact engine version (see providers get psmdb)")
+			c.Flags().String("version", "", "Exact engine version (see providers get <provider>)")
 			c.Flags().String("topology", "replicaSet", "replicaSet or sharded")
 			c.Flags().String("backup-storage", "", "Default backup storage")
 			c.Flags().StringArray("schedule", nil, "Schedule: NAME=CRON,type=logical|physical,retain=COUNT[,storage=NAME]")
@@ -68,7 +73,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("source-cluster", "", "Source cluster (defaults to target)")
 		c.Flags().String("source-namespace", "", "Source namespace (defaults to target namespace)")
 		c.Flags().String("into-new", "", "Clone source spec and restore into a new cluster")
-	case strings.HasPrefix(s.path, "operations wait"):
+	case strings.HasPrefix(s.path, "operations wait"), s.path == "clusters wait <cluster>":
 		c.Flags().Duration("timeout", 30*time.Minute, "Maximum wait duration")
 	case s.operation == "checkPermission":
 		c.Flags().String("resource", "", "RBAC resource")

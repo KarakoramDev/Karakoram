@@ -15,25 +15,56 @@ karactl --context production logout
 
 Login prompts without echo on a terminal, starts a temporary password session, creates an owner-scoped API token, saves it and closes the browser-style session. Finish a forced password change in the UI before CLI login. Login saves the selected context as current. There is no separate `contexts` command: `--context NAME` selects a saved connection, and login creates/updates it. An explicitly selected nonexistent context is rejected outside login.
 
+With non-terminal stdin, login reads the password from the first line. For example, pipe a secret manager's output or redirect a protected file:
+
+```sh
+karactl --server https://YOUR-SUBDOMAIN --context production login --username admin < password.txt
+```
+
+Do not put passwords in arguments or shell history. Re-login saves the replacement token before revoking the previously saved context token, including when changing that context's server. Revocation is best effort: a warning means the new context is usable but the old token must be revoked separately.
+
 Contexts live at `~/.config/karakoram/config.yaml` (independent of XDG overrides), in owner-only files (0600) and a newly created directory (0700). Each holds server, token, tokenID and an optional namespace. Protect it like a credential. Server/token precedence is **explicit flags > KARAKORAM_SERVER/KARAKORAM_TOKEN > selected saved context**. Namespace precedence for object commands is **`--namespace/-n` > context namespace > `default`**; collection commands without an explicit `-n` include all authorized namespaces. With no explicit context selection, the saved currentContext is used, otherwise `default`. Server URLs may use the origin or end in `/api/v1`; root health/metrics still use the installation base.
 
 For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret manager. Avoid `--token` in process listings/history. Karakoram API tokens are not Zerops integration tokens. Logout normally revokes the matching saved CLI token before clearing local credentials; `logout --local` deliberately leaves server authority active. With an overriding token, do not assume logout revoked a different saved token—revoke its ID explicitly when needed.
 
 ## Requests, output and waits
 
-- `-o table` is default; `-o json`/`-o yaml` preserve structured responses for automation.
+- `-o table` is default; nested values are summarized rather than embedded JSON. Provider tables summarize versions and preset names; status conditions appear as rows and member resources as named values. Use `-o json`/`-o yaml` for the unchanged full structured response.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. Use protected input for secret fields. When supplied, the file defines the request body instead of convenience body flags.
 - Cluster **create** files contain `name` and `spec`; **edit** replaces the full `spec` and can open the configured editor when no file is supplied; **patch/scale/upgrade** files have `{spec: {...}}` merge-patch shape. Arrays such as schedules are replaced, not appended.
+- Convenience create flags default to the `psmdb` provider and its topology/resource defaults. For another provider, presets or optional components, run `karactl providers get <provider> -o json`, copy a preset's `spec` into a JSON/YAML body with `name` and `spec`, customize components, then submit with `clusters create -f FILE`. There is no `--preset` flag.
 - `rbac policy set -f FILE` is the exception: the file contains raw policy CSV.
-- `clusters connection NAME --reveal` deliberately displays databaseAdmin credentials. Do not capture it in logs.
-- Cluster mutations with `--wait` observe operation completion and cluster generation. Default timeout is thirty minutes; `--timeout` changes it. A wait timeout does not cancel server work. Inspect status before another submission.
+- `clusters connection NAME` prints a password-free endpoint/TLS summary without requiring credentials-read permission. CA availability is not checked on this path; TLS-disabled clusters report that no CA is configured. Add `--reveal` to display sensitive engine credentials, copyable URIs and the CA as a multiline PEM block. Do not capture revealed output in logs.
+- `karactl clusters ca NAME > ca.pem` exports only the PEM to stdout, regardless of output format. It uses the existing connection API and requires its separate `cluster-credentials:read` permission. Use `-n NAMESPACE` as with other cluster commands; an unavailable CA is an error.
+- Cluster mutations with `--wait` immediately report acceptance and the cluster/generation or operation ID on stderr, then print phase/message changes and a progress heartbeat every fifteen seconds. Default timeout is thirty minutes; `--timeout` changes it. Timeout or interruption does not cancel server work. The error includes a non-mutating resume command: `karactl clusters wait NAME --timeout 30m` observes the current desired generation (or deletion/suspension), and `karactl operations wait ID --timeout 30m` observes a persisted operation. Keep the same context/server and namespace; never repeat create merely to resume waiting.
 - Backup/restore creation returns accepted records; inspect the corresponding Operation and record with `operations wait ID`, `backups get` or `restores get`. Those creation commands do not have an invented `--wait` flag.
 - `events watch` streams SSE, supports replay/filter flags, and runs until interrupted. `operations wait` polls a persisted operation until its terminal phase.
+- `events list --order asc|desc` selects oldest/newest-first ordering. The server's default applies when the flag is omitted.
+- `completion bash|zsh|fish|powershell` generates a shell script without loading configuration or contacting a server.
+- `tokens revoke ID` is an alias of `tokens delete ID`, with identical confirmation and exit behavior.
 - Events and Operations show the initiating `actor` alongside `namespace` in table/JSON/YAML output, including cluster-scoped views and event watch. `events list --actor VALUE --resource VALUE` and `events watch --actor VALUE --resource VALUE` add exact, case-sensitive AND filters that compose with `--namespace/-n`; omit a flag to leave it unrestricted. Cluster records require `events:read` or `audit:read` on `<namespace>/<cluster>`, namespace-level audit requires `audit:read` on `<namespace>`, and global installation audit requires it on `*`. Use the full persisted account/token actor string and preserve all filters with `--cursor`.
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
 Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
+
+## Safety and exit statuses
+
+Deleting clusters, backups, storages, API tokens, accounts, namespaces, database users or roles prompts **Type the name to confirm** when stdin is a terminal. The same safeguard applies to in-place restores, member replacement, compatibility-version raises, system-user/TLS/namespace-token rotation and account password resets. For compound identities, type the final argument (the backup/member/user/role); in-place restore asks for the target cluster. `--yes` / `-y` skips confirmation. Non-terminal stdin does not prompt, preserving automation behavior. Declining or reaching EOF without confirmation exits non-zero without submitting the mutation. Repeated deletion of a cluster already Deleting reports that deletion is already underway; it does not imply that cleanup has finished.
+
+Every failure exits non-zero, including a successful HTTP storage-verification response with `verified: false`. Output retains the verification message. Server errors print their human message plus available field, reason and resource details on stderr; command-line mistakes also print usage on stderr.
+
+| Exit status | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Generic failure, including failed operations, declined confirmation and failed storage verification |
+| 2 | Usage error: unknown/missing subcommand, invalid arguments or flags |
+| 3 | Resource not found (HTTP 404) |
+| 4 | Resource conflict (HTTP 409) |
+| 5 | Authentication or permission failure (HTTP 401/403) |
+| 6 | Request validation/media error (HTTP 400/415/422) |
+| 7 | Wait deadline exceeded or HTTP timeout (408/504); accepted work may continue |
+
 
 ## Orphaned platform volumes
 
@@ -76,6 +107,7 @@ karactl
     balancer
       get <cluster>
       set <cluster>
+    ca <cluster>
     connection <cluster>
     create [name]
     delete <cluster>
@@ -95,6 +127,7 @@ karactl
     scale <cluster>
     status <cluster>
     upgrade <cluster>
+    wait <cluster>
   completion
     bash
     fish
@@ -167,6 +200,7 @@ karactl
     delete <id>
     get <id>
     list
+    revoke <id> (alias of delete)
     set <id>
   version
   whoami
@@ -188,7 +222,7 @@ karactl
 
 ## Command-specific flags
 
-Commands absent below have no additional non-help flags. Query flags only reach the API when explicitly supplied; help defaults do not necessarily change existing resources. For full request schemas see [OpenAPI](../../api/openapi.yaml).
+Commands absent below have no additional flags except confirmation: destructive commands described above accept `-y, --yes`. Query flags only reach the API when explicitly supplied; help defaults do not necessarily change existing resources. For full request schemas see [OpenAPI](../../api/openapi.yaml).
 
 ### `karactl accounts change-password`
 
@@ -264,6 +298,13 @@ Commands absent below have no additional non-help flags. Query flags only reach 
       --reveal   Explicitly display database credentials
 ```
 
+### `karactl clusters wait`
+
+```text
+      --timeout duration   Maximum wait duration (default 30m0s)
+```
+
+
 ### `karactl clusters create`
 
 ```text
@@ -277,13 +318,13 @@ Commands absent below have no additional non-help flags. Query flags only reach 
       --from-backup string       Seed from a backup
       --from-pitr string         Seed from RFC3339 point in time
       --ip-type string           Public IP type: IPV6 or IPV4 (default "IPV6")
-      --max-cpu float            Resource size (RAM/disk in GiB) (default 2)
-      --max-disk float           Resource size (RAM/disk in GiB) (default 10)
-      --max-ram float            Resource size (RAM/disk in GiB) (default 2)
+      --max-cpu float            CPU cores (default 2)
+      --max-disk float           Resource size in GiB (default 10)
+      --max-ram float            Resource size in GiB (default 2)
       --members int              Engine replicas per replica set (default 3)
-      --min-cpu float            Resource size (RAM/disk in GiB) (default 1)
-      --min-disk float           Resource size (RAM/disk in GiB) (default 5)
-      --min-ram float            Resource size (RAM/disk in GiB) (default 1)
+      --min-cpu float            CPU cores (default 1)
+      --min-disk float           Resource size in GiB (default 5)
+      --min-ram float            Resource size in GiB (default 1)
       --monitoring               Enable monitoring (default true)
       --oplog-span-minutes int   PITR oplog slice interval (default 10)
       --pitr                     Enable continuous point-in-time recovery
@@ -293,11 +334,11 @@ Commands absent below have no additional non-help flags. Query flags only reach 
       --schedule stringArray     Schedule: NAME=CRON,type=logical|physical,retain=COUNT[,storage=NAME]
       --shards int               Shard count (default 1)
       --source-cluster string    Source cluster for initial data
-      --start-cpu float          Resource size (RAM/disk in GiB) (default 1)
+      --start-cpu float          CPU cores (default 1)
       --timeout duration         Maximum wait duration (default 30m0s)
       --tls-mode string          disabled, preferTLS or requireTLS (default "requireTLS")
       --topology string          replicaSet or sharded (default "replicaSet")
-      --version string           Exact engine version (see providers get psmdb)
+      --version string           Exact engine version (see providers get <provider>)
       --wait                     Wait for operation completion and observed cluster generation
 ```
 
@@ -392,16 +433,16 @@ Commands absent below have no additional non-help flags. Query flags only reach 
       --config-servers int   Config-server replicas (default 3)
       --cpu-mode string      SHARED or DEDICATED (default "SHARED")
   -f, --file string          API request YAML/JSON file ('-' for stdin)
-      --max-cpu float        Resource size (RAM/disk in GiB) (default 2)
-      --max-disk float       Resource size (RAM/disk in GiB) (default 10)
-      --max-ram float        Resource size (RAM/disk in GiB) (default 2)
+      --max-cpu float        CPU cores (default 2)
+      --max-disk float       Resource size in GiB (default 10)
+      --max-ram float        Resource size in GiB (default 2)
       --members int          Engine replicas per replica set (default 3)
-      --min-cpu float        Resource size (RAM/disk in GiB) (default 1)
-      --min-disk float       Resource size (RAM/disk in GiB) (default 5)
-      --min-ram float        Resource size (RAM/disk in GiB) (default 1)
+      --min-cpu float        CPU cores (default 1)
+      --min-disk float       Resource size in GiB (default 5)
+      --min-ram float        Resource size in GiB (default 1)
       --routers int          Router replicas (default 2)
       --shards int           Shard count (default 1)
-      --start-cpu float      Resource size (RAM/disk in GiB) (default 1)
+      --start-cpu float      CPU cores (default 1)
       --timeout duration     Maximum wait duration (default 30m0s)
       --wait                 Wait for operation completion and observed cluster generation
 ```
@@ -484,6 +525,7 @@ Commands absent below have no additional non-help flags. Query flags only reach 
       --cluster string     API cluster parameter
       --cursor string      API cursor parameter
       --limit int          API limit parameter (default 100)
+      --order string       Event order: asc or desc (server default when omitted)
       --operation string   API operationId parameter
       --resource string    API resource parameter
       --type string        API type parameter

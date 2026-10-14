@@ -18,6 +18,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,6 +27,8 @@ type Options struct {
 	ConfigPath string
 	In         io.Reader
 	Out, Err   io.Writer
+	// IsTerminal overrides stdin TTY detection for embedding and tests.
+	IsTerminal func(io.Reader) bool
 }
 
 type app struct {
@@ -54,7 +57,9 @@ func NewCommand(o Options) *cobra.Command {
 		o.Err = os.Stderr
 	}
 	a := &app{opts: o}
-	root := &cobra.Command{Use: "karactl", Short: "Operate Karakoram clusters and control-plane resources", SilenceUsage: true, SilenceErrors: true}
+	root := groupCommand("karactl", "Operate Karakoram clusters and control-plane resources")
+	root.SilenceUsage, root.SilenceErrors = true, true
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usageError("%s", err) })
 	root.SetIn(o.In)
 	root.SetOut(o.Out)
 	root.SetErr(o.Err)
@@ -69,10 +74,17 @@ func NewCommand(o Options) *cobra.Command {
 	f.BoolVar(&a.insecure, "insecure-skip-tls-verify", false, "Disable server certificate verification (unsafe)")
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error { return a.connect(cmd) }
 	a.addCommands(root)
+	a.addCompletion(root)
+	wrapCommandArgs(root)
 	return root
 }
 
 func (a *app) connect(cmd *cobra.Command) error {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "completion" || c.Name() == "__complete" || c.Name() == "__completeNoDesc" || c.Annotations["local"] == "true" && c == cmd {
+			return nil
+		}
+	}
 	if a.format != "table" && a.format != "json" && a.format != "yaml" {
 		return fmt.Errorf("unsupported output format %q", a.format)
 	}
@@ -208,14 +220,26 @@ func decodeResponse(resp *http.Response) (any, error) {
 		return map[string]any{"location": resp.Header.Get("Location"), "status": resp.StatusCode}, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var apiErr client.Error
-		if json.Unmarshal(b, &apiErr) == nil && apiErr.Message != "" {
-			return nil, fmt.Errorf("HTTP %d: %s: %s", resp.StatusCode, apiErr.Code, apiErr.Message)
+		var apiErr struct {
+			Code    string         `json:"code"`
+			Message string         `json:"message"`
+			Details map[string]any `json:"details"`
 		}
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+		if json.Unmarshal(b, &apiErr) == nil && apiErr.Message != "" {
+			message := fmt.Sprintf("HTTP %d: %s: %s", resp.StatusCode, apiErr.Code, apiErr.Message)
+			for _, key := range sortedKeys(apiErr.Details) {
+				message += fmt.Sprintf("\n  %s: %s", key, cell(apiErr.Details[key]))
+			}
+			return nil, apiFailure(resp.StatusCode, message)
+		}
+		return nil, apiFailure(resp.StatusCode, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode)))
 	}
 	if len(b) == 0 {
-		return map[string]any{"status": "ok"}, nil
+		result := map[string]any{"status": "ok"}
+		if id := resp.Header.Get("Karakoram-Operation-Id"); id != "" {
+			result["operationId"] = id
+		}
+		return result, nil
 	}
 	if !strings.Contains(resp.Header.Get("Content-Type"), "json") {
 		return string(b), nil
@@ -223,6 +247,11 @@ func decodeResponse(resp *http.Response) (any, error) {
 	var v any
 	if err = json.Unmarshal(b, &v); err != nil {
 		return nil, err
+	}
+	if id := resp.Header.Get("Karakoram-Operation-Id"); id != "" {
+		if object, ok := v.(map[string]any); ok && object["operationId"] == nil {
+			object["operationId"] = id
+		}
 	}
 	return v, nil
 }
@@ -261,4 +290,12 @@ func pollPause(ctx context.Context) error {
 	case <-t.C:
 		return nil
 	}
+}
+
+func (a *app) terminal() bool {
+	if a.opts.IsTerminal != nil {
+		return a.opts.IsTerminal(a.opts.In)
+	}
+	f, ok := a.opts.In.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }

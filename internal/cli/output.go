@@ -70,9 +70,30 @@ func cell(v any) string {
 	}
 	if str, ok := v.(string); ok {
 		s = str
+	} else if m, ok := v.(map[string]any); ok {
+		parts := make([]string, 0, len(m))
+		for _, key := range sortedKeys(m) {
+			parts = append(parts, key+"="+cell(m[key]))
+		}
+		s = strings.Join(parts, "; ")
+	} else if values, ok := v.([]any); ok {
+		parts := make([]string, 0, len(values))
+		for _, value := range values {
+			if m, ok := value.(map[string]any); ok {
+				if name, ok := m["name"].(string); ok {
+					parts = append(parts, name)
+					continue
+				}
+				if version, ok := m["version"].(string); ok {
+					parts = append(parts, version)
+					continue
+				}
+			}
+			parts = append(parts, cell(value))
+		}
+		s = strings.Join(parts, ", ")
 	} else {
-		b, _ := json.Marshal(v)
-		s = string(b)
+		s = fmt.Sprint(v)
 	}
 	return strings.Map(func(r rune) rune {
 		if r < ' ' || r == 127 {
