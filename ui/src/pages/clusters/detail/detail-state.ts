@@ -47,6 +47,10 @@ export function assignedUsers(users: { username: string; database: string; roles
   return users.filter((u) => u.roles.some((r) => r.role === role.name && r.db === role.database)).map((u) => `${u.username}@${u.database}`);
 }
 
+export function assignedRoles(roles: { name: string; database: string; roles: { role: string; db: string }[] }[], role: { name: string; database: string }): string[] {
+  return roles.filter((r) => r.roles.some((inherited) => inherited.role === role.name && inherited.db === role.database)).map((r) => `${r.name}@${r.database}`);
+}
+
 export function clusterEmptyCopy(canCreate: boolean): { title: string; message: string } {
   return canCreate ? { title: 'No clusters yet', message: 'Create a database cluster to get started.' } : { title: 'No accessible clusters', message: 'No clusters are accessible to your account in this scope. Ask an administrator for access; you do not have permission to create clusters.' };
 }

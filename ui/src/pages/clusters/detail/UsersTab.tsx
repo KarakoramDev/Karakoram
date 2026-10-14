@@ -13,7 +13,7 @@ import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Ti
 import { useToast } from '@/components/ui/Toast';
 import { OperationNotice } from '@/components/OperationNotice';
 import { useClusterContext } from './ClusterDetail';
-import { assignedUsers, passwordValid } from './detail-state';
+import { assignedRoles, assignedUsers, passwordValid } from './detail-state';
 import { useSubmissionKey } from './use-submission-key';
 
 type DBUser = Schemas['DatabaseUser'];
@@ -270,8 +270,9 @@ export function UsersTab() {
         <p className="small">Open connections authenticated as this user are closed.</p>
       </ConfirmDialog>
       <ConfirmDialog open={deleteRole !== null} onClose={() => { setDeleteRole(null); delRole.reset(); }} onConfirm={() => deleteRole && delRole.mutateAsync(deleteRole)} title={`Delete role ${deleteRole?.name ?? ''}`} confirmLabel="Delete" danger busy={delRole.isPending} error={delRole.error}>
-        <p className="small">Deleting this role removes it from users holding it, and they lose its privileges immediately. Remove assignments first if the server requires it.</p>
+        <p className="small">Remove this role's assignments from all users and roles before deleting it. Deletion is refused while any assignments remain; privileges are never removed automatically.</p>
         {deleteRole && users.data ? <p className="small">Assigned users: {assignedUsers(users.data.items, deleteRole).join(', ') || 'none'}</p> : <p className="small">User assignments could not be loaded; review them before deleting.</p>}
+        {deleteRole && roles.data ? <p className="small">Dependent roles: {assignedRoles(roles.data.items, deleteRole).join(', ') || 'none'}</p> : <p className="small">Role assignments could not be loaded; review them before deleting.</p>}
       </ConfirmDialog>
       <ConfirmDialog open={rotate !== null} onClose={() => { setRotate(null); rotateUser.reset(); submission.reset(); }} onConfirm={() => rotate && rotateUser.mutateAsync(rotate)} title={`Rotate ${rotate?.name ?? ''} password`} confirmLabel="Rotate" busy={rotateUser.isPending} error={rotateUser.error}>
         <p className="small">
