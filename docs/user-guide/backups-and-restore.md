@@ -90,6 +90,8 @@ For applications outside this repository, see the [Go client installation and us
 
 Missing storage dependencies return **404** with `details.resource: backupStorage` and the requested name. A duplicate backup name returns **409** `already_exists`; state conflicts identify the backup and its current state. Unsupported `type` returns **400** naming the field and listing the provider's supported types; do not assume every engine supports logical/physical backups. A PITR-window request for an engine without PITR returns an explicit unsupported-capability error naming that engine.
 
+Active work is matched to the operation's recorded backup target. When it blocks deletion, the **409** error retains `details.resource: backup`, the backup name and its current `details.state`, and directs you to cancel the operation first.
+
 ## Schedules and count retention
 
 Cluster `spec.backup.storage` is the primary destination. Schedules may select another registered storage. Configure them in the UI or submit a cluster merge patch:

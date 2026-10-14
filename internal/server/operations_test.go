@@ -127,6 +127,9 @@ func TestBackupRestoreTrackingAndNotReadyRejection(t *testing.T) {
 func TestCancellationAuthorizesPersistedClusterAndRejectsUnsafeRunning(t *testing.T) {
 	s, _, admin := testServer(t)
 	ctx := context.Background()
+	if err := s.Store.CreateNamespace(ctx, &domain.Namespace{Name: "other", ProjectID: "project-other", Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
 	op := &domain.Operation{Cluster: "prod", Kind: domain.OperationRestart}
 	if err := s.Store.EnqueueOperation(ctx, op); err != nil {
 		t.Fatal(err)
@@ -141,7 +144,11 @@ func TestCancellationAuthorizesPersistedClusterAndRejectsUnsafeRunning(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := call(s, "POST", "/api/v1/operations/"+op.ID+"/cancel?namespace=other", "", limited)
+	w := call(s, "POST", "/api/v1/operations/"+op.ID+"/cancel?namespace=missing", "", limited)
+	if w.Code != 404 || !strings.Contains(w.Body.String(), `"resource":"namespace"`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = call(s, "POST", "/api/v1/operations/"+op.ID+"/cancel?namespace=other", "", limited)
 	if w.Code != 202 || !strings.Contains(w.Body.String(), `"phase":"Cancelled"`) || w.Header().Get("Karakoram-Operation-Id") != op.ID {
 		t.Fatal(w.Code, w.Body.String())
 	}

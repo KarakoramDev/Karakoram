@@ -362,11 +362,11 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 	op.Target = domain.OperationTarget{Kind: "backup", Name: backup.Name}
 	if backup.PBMName == "" && (backup.Phase == domain.PhaseFailed || backup.Phase == domain.PhasePending) {
 		var active int
-		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind')='backup' AND json_extract(data,'$.payload.backup')=?", ref.Key(), backup.Name).Scan(&active); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind')='backup' AND json_extract(data,'$.target.kind')='backup' AND json_extract(data,'$.target.name')=?", ref.Key(), backup.Name).Scan(&active); err != nil {
 			return err
 		}
 		if active != 0 {
-			return domain.Conflict("backup", backup.Name, domain.ReasonInvalidState, ErrConflict, "Backup %s still has active work; cancel its operation before deleting it", backup.Name)
+			return &domain.ResourceError{Resource: "backup", Name: backup.Name, Reason: domain.ReasonInvalidState, State: string(backup.Phase), Err: ErrConflict, Message: fmt.Sprintf("Backup %s still has active work; cancel its operation before deleting it", backup.Name)}
 		}
 		r, err := tx.ExecContext(ctx, "DELETE FROM records WHERE kind='backup' AND scope=? AND key=?", ref.Key(), backup.Name)
 		if err = affected(r, err); err != nil {
