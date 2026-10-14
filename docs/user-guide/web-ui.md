@@ -35,6 +35,12 @@ each screen, or **Back** to revise a previous screen. Invalid input keeps you
 on the affected step with field errors; review errors must be resolved before
 creation.
 
+Cluster names must be 2–12 lowercase letters/digits beginning with a letter and
+unique in the target namespace; invalid names are rejected rather than silently
+lowercased. Schedule **Retain (count)** must be an integer of at least one.
+Entering zero keeps the value visible with an inline error instead of changing
+it to one.
+
 | Screen | Fields and choices |
 | --- | --- |
 | **Basics** | Target namespace (selected automatically when only one is available), cluster name, engine, exact version, topology and optional preset. Unavailable catalog versions cannot be selected. |
@@ -42,7 +48,7 @@ creation.
 | **Resources** | CPU mode, minimum/maximum CPU cores, optional start CPU and minimum/maximum RAM in GiB for each component. Data-bearing components also have minimum/maximum disk in GiB. Sharded clusters have separate shard-member, config-server and router resource editors; routers have no durable data-disk editor. |
 | **Backups** | Primary namespace-local storage or None; provider-supported backup schedules (name, five-field UTC cron, type, storage, positive retain count, enabled); PITR and oplog slice interval where supported; optional seed data from a backup or recovery time, including source namespace/cluster. |
 | **Access & TLS** | TLS mode, managed or supplied CA, certificate inputs, private/public exposure, IP family and client CIDR allowlist, plus per-member monitoring. A supplied CA needs its certificate and signing private key; supplied server certificate/key are an optional matching pair. |
-| **Review** | Namespace/name, engine/version, complete topology, each component's resource bounds, backup storage/schedules/PITR, optional seed source, TLS/CA source, exposure/IP family/allowlist and monitoring. Review also summarizes the aggregate infrastructure footprint and placement limitations and links to Zerops pricing; no live monetary quote or host-separation guarantee is implied. |
+| **Review** | Namespace/name, engine/version, complete topology, each component's resource bounds, backup storage/schedules/PITR, optional seed source, TLS/CA source, exposure/IP family/allowlist and monitoring. Review also summarizes total runtime instances and CPU/RAM, data-volume count/capacity and additional runtime disks separately, plus engine configuration and placement limitations. Its Zerops pricing link is not a live monetary quote or host-separation guarantee. |
 
 The current MongoDB catalog offers **Custom** (no preset), **dev** (one member,
 1 GiB RAM, no database redundancy), **prod** (three voting members, without a
