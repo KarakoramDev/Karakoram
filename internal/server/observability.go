@@ -101,13 +101,13 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		if raw := q.Get("limit"); raw != "" {
 			n, err := strconv.Atoi(raw)
 			if err != nil || n < 1 || n > 500 {
-				return invalid()
+				return invalidField("limit", domain.ReasonOutOfRange, "limit must be an integer from 1 to 500")
 			}
 			limit = n
 		}
 		position, err := eventCursor(q.Get("cursor"))
 		if err != nil {
-			return invalid()
+			return invalidField("cursor", domain.ReasonInvalid, "cursor must be a cursor returned by the preceding page or a nonnegative event ID")
 		}
 		descending := false
 		switch q.Get("order") {
@@ -115,7 +115,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		case "desc":
 			descending = true
 		default:
-			return invalid()
+			return invalidField("order", domain.ReasonInvalid, "order must be asc or desc")
 		}
 		out := page[api.Event]{Items: make([]api.Event, 0, limit)}
 		for {
@@ -167,20 +167,9 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 		if s.Monitoring == nil {
 			return fail(503, "unavailable", "Monitoring unavailable")
 		}
-		lookback := time.Hour
-		step := 30 * time.Second
-		var err error
-		if v := q.Get("range"); v != "" {
-			lookback, err = time.ParseDuration(v)
-			if err != nil || lookback <= 0 || lookback > 24*time.Hour {
-				return invalid()
-			}
-		}
-		if v := q.Get("step"); v != "" {
-			step, err = time.ParseDuration(v)
-			if err != nil || step <= 0 || step > lookback {
-				return invalid()
-			}
+		lookback, step, err := metricsDurations(q.Get("range"), q.Get("step"))
+		if err != nil {
+			return s.failure(err)
 		}
 		end := time.Now().UTC()
 		start := end.Add(-lookback)
@@ -250,7 +239,7 @@ func (s *Server) stream(ctx context.Context) response {
 	}
 	since, err := eventCursor(cursor)
 	if err != nil {
-		return invalid()
+		return invalidField("cursor", domain.ReasonInvalid, "cursor must be a cursor returned by the preceding page or a nonnegative event ID")
 	}
 	return response{noStore: true, serve: func(w http.ResponseWriter) error {
 		ch, cancel := s.Hub.Subscribe(namespaceFilter(ctx), q.Get("cluster"))

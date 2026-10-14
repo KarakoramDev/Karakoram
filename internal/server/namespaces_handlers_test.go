@@ -75,7 +75,7 @@ func TestNamespaceDefaultsAndSameNameIsolation(t *testing.T) {
 	}
 	for _, namespace := range []string{"default", "dev"} {
 		path := "/api/v1/clusters/prod/restart?namespace=" + namespace
-		decodeNamespaceResponse[api.Operation](t, call(s, "POST", path, `{}`, admin), 202)
+		decodeNamespaceResponse[api.Operation](t, call(s, "POST", path, "", admin), 202)
 		ops := decodeNamespaceResponse[api.OperationList](t, call(s, "GET", "/api/v1/clusters/prod/operations?namespace="+namespace, "", admin), 200)
 		expected := 1
 		if namespace == "dev" {

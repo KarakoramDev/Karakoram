@@ -6,6 +6,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -247,19 +248,19 @@ func (s *suite) poll(label string, timeout time.Duration, check func() bool) {
 
 func (s *suite) provider() api.Provider {
 	var p api.Provider
-	s.expect(&p)(s.client.GetProvider(s.ctx, "psmdb"))
+	s.expect(&p)(s.client.GetProvider(s.ctx, "psmdb", nil))
 	return p
 }
 func (s *suite) version(major string) string {
 	p := s.provider()
 	for _, v := range p.Versions {
-		if v.Major == major && v.Default && v.Status == api.Supported {
+		if v.Major == major && v.Default && v.Status == api.ProviderVersionStatusSupported {
 			return v.Version
 		}
 	}
 	var chosen string
 	for _, v := range p.Versions {
-		if v.Major == major && v.Status == api.Supported {
+		if v.Major == major && v.Status == api.ProviderVersionStatusSupported {
 			chosen = v.Version
 		}
 	}
@@ -270,23 +271,38 @@ func (s *suite) version(major string) string {
 }
 
 func smallResources() api.Resources {
-	return api.Resources{CpuMode: api.SHARED, MinCpu: 1, MaxCpu: 1, MinRam: 1, MaxRam: 1, MinDisk: 5, MaxDisk: 5}
+	return api.Resources{CpuMode: api.ResourcesCpuModeSHARED, MinCpu: 1, MaxCpu: 1, MinRam: 1, MaxRam: 1, MinDisk: 5, MaxDisk: 5}
 }
 func (s *suite) spec(replicas int) api.ClusterSpec {
 	spec := s.privateSpec(replicas)
-	spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.IPV6), Allowlist: ptr([]string{requireCIDR(s.t)})}
+	spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.ExposureIpTypeIPV6), Allowlist: ptr([]string{requireCIDR(s.t)})}
 	return spec
 }
 func (s *suite) privateSpec(replicas int) api.ClusterSpec {
-	return api.ClusterSpec{Provider: "psmdb", Version: s.version("8.0"), Topology: api.Topology{Type: api.TopologyTypeReplicaSet}, Components: api.Components{Engine: api.Component{Replicas: replicas, Resources: smallResources()}}, Tls: &api.TLS{Mode: api.RequireTLS, Ca: api.SelfSigned}, Exposure: &api.Exposure{Public: false}, Monitoring: &api.MonitoringSpec{Enabled: true}}
+	return api.ClusterSpec{Provider: "psmdb", Version: s.version("8.0"), Topology: api.Topology{Type: api.TopologyTypeReplicaSet}, Components: api.Components{Engine: api.Component{Replicas: replicas, Resources: smallResources()}}, Tls: &api.TLS{Mode: api.TLSModeRequireTLS, Ca: api.TLSCaSelfSigned}, Exposure: &api.Exposure{Public: false}, Monitoring: &api.MonitoringSpec{Enabled: true}}
 }
 func ptr[T any](v T) *T { return &v }
+
+// clusterWriteEnvelope also exercises the supported GET-spec round trip.
+type clusterWriteEnvelope struct {
+	Name string          `json:"name,omitempty"`
+	Spec api.ClusterSpec `json:"spec"`
+}
+
+func (s *suite) clusterBody(body clusterWriteEnvelope) io.Reader {
+	s.t.Helper()
+	data, err := json.Marshal(body)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return bytes.NewReader(data)
+}
 
 func (s *suite) create(spec api.ClusterSpec) string {
 	name := s.name()
 	s.cleanupCluster(name)
 	var c api.Cluster
-	s.expect(&c, 201)(s.client.CreateCluster(s.ctx, &api.CreateClusterParams{Namespace: s.namespace}, api.CreateClusterRequest{Name: name, Spec: spec}))
+	s.expect(&c, 201)(s.client.CreateClusterWithBody(s.ctx, &api.CreateClusterParams{Namespace: s.namespace}, "application/json", s.clusterBody(clusterWriteEnvelope{Name: name, Spec: spec})))
 	s.t.Logf("created cluster=%s generation=%d phase=%s", name, c.Generation, c.Status.Phase)
 	s.ready(name)
 	return name
@@ -332,7 +348,7 @@ func (s *suite) update(name string, edit func(*api.ClusterSpec)) api.Cluster {
 	c := s.cluster(name)
 	edit(&c.Spec)
 	var changed api.Cluster
-	s.expect(&changed)(s.client.ReplaceCluster(s.ctx, name, &api.ReplaceClusterParams{Namespace: s.namespace}, api.ReplaceClusterRequest{Spec: c.Spec}))
+	s.expect(&changed)(s.client.ReplaceClusterWithBody(s.ctx, name, &api.ReplaceClusterParams{Namespace: s.namespace}, "application/json", s.clusterBody(clusterWriteEnvelope{Spec: c.Spec})))
 	return s.ready(name)
 }
 func (s *suite) operation(r *http.Response, err error) {
@@ -342,7 +358,7 @@ func (s *suite) operation(r *http.Response, err error) {
 		s.t.Fatal("operation response omitted id")
 	}
 	s.poll("operation "+op.Id, convergenceTimeout, func() bool {
-		s.expect(&op)(s.client.GetOperation(s.ctx, op.Id))
+		s.expect(&op)(s.client.GetOperation(s.ctx, op.Id, nil))
 		s.t.Logf("operation=%s type=%s phase=%s", op.Id, op.Type, op.Phase)
 		if op.Phase == api.OperationPhaseFailed {
 			s.snapshot("operation-failed", op)

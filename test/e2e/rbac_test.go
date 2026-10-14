@@ -25,7 +25,7 @@ func TestRBAC(t *testing.T) {
 		spec.Backup = &api.BackupSpec{Storage: ptr(storage)}
 		name := s.create(spec)
 		var original api.RBACPolicy
-		s.expect(&original)(s.client.GetRBACPolicy(s.ctx))
+		s.expect(&original)(s.client.GetRBACPolicy(s.ctx, nil))
 		s.t.Cleanup(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -53,11 +53,11 @@ func TestRBAC(t *testing.T) {
 		s.expect(nil, 403)(operate.ListAccounts(s.ctx, &api.ListAccountsParams{}))
 		s.expect(nil, 403)(operate.CreateAccount(s.ctx, &api.CreateAccountParams{}, api.CreateAccountRequest{Name: s.name(), Password: ptr(s.name() + s.name())}))
 		var b api.Backup
-		s.expect(&b, 202)(operate.CreateBackup(s.ctx, name, &api.CreateBackupParams{}, api.CreateBackupRequest{Name: s.name(), Storage: storage, Type: api.CreateBackupRequestTypeLogical}))
+		s.expect(&b, 202)(operate.CreateBackup(s.ctx, name, &api.CreateBackupParams{}, api.CreateBackupRequest{Name: s.name(), Storage: storage, Type: "logical"}))
 		s.waitBackup(name, b.Name)
 		subject := "user:" + viewer
 		var can api.CanResponse
-		request := api.CanRequest{Subject: &subject, Resource: "cluster-credentials", Action: api.Read, Object: name}
+		request := api.CanRequest{Subject: &subject, Resource: "cluster-credentials", Action: api.CanRequestActionRead, Object: name}
 		s.expect(&can)(s.client.CheckPermission(s.ctx, &api.CheckPermissionParams{}, request))
 		if can.Allowed {
 			t.Fatal("viewer can reveal credentials before policy grant")
@@ -108,7 +108,7 @@ func TestRBAC(t *testing.T) {
 		if err != nil || issuerURL.Host == "" {
 			t.Fatal("invalid OIDC issuer URL")
 		}
-		r, err := s.client.GetAccount(s.ctx, "oidctest")
+		r, err := s.client.GetAccount(s.ctx, "oidctest", nil)
 		if err != nil {
 			t.Fatal("read existing OIDC account failed")
 		}
@@ -125,7 +125,7 @@ func TestRBAC(t *testing.T) {
 			})
 		}
 		var original api.Settings
-		s.expect(&original)(s.client.GetSettings(s.ctx))
+		s.expect(&original)(s.client.GetSettings(s.ctx, nil))
 		t.Cleanup(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -159,7 +159,7 @@ func TestRBAC(t *testing.T) {
 		}
 		t.Log("OIDC login returned 302 to configured test issuer with PKCE")
 		var policy api.RBACPolicy
-		s.expect(&policy)(s.client.GetRBACPolicy(s.ctx))
+		s.expect(&policy)(s.client.GetRBACPolicy(s.ctx, nil))
 		t.Cleanup(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -181,19 +181,19 @@ func TestRBAC(t *testing.T) {
 		}
 		signedIn := s.newClient("", s.base+"/api/v1", browser)
 		var user api.CurrentUser
-		s.expect(&user)(signedIn.GetCurrentUser(s.ctx))
+		s.expect(&user)(signedIn.GetCurrentUser(s.ctx, nil))
 		if user.Name != "oidctest" || len(user.Groups) != 1 || user.Groups[0] != "karakoram-admins" {
 			t.Fatal("OIDC callback did not establish the expected test identity/groups")
 		}
 		var can api.CanResponse
-		s.expect(&can)(signedIn.CheckPermission(s.ctx, &api.CheckPermissionParams{XKarakoramCSRF: user.CsrfToken}, api.CanRequest{Resource: "clusters", Action: api.Read, Object: "demo"}))
+		s.expect(&can)(signedIn.CheckPermission(s.ctx, &api.CheckPermissionParams{XKarakoramCSRF: user.CsrfToken}, api.CanRequest{Resource: "clusters", Action: api.CanRequestActionRead, Object: "demo"}))
 		if !can.Allowed {
 			t.Fatal("OIDC group binding did not grant viewer permission")
 		}
-		s.expect(nil, 403)(signedIn.GetRBACPolicy(s.ctx))
+		s.expect(nil, 403)(signedIn.GetRBACPolicy(s.ctx, nil))
 		t.Logf("OIDC callback established session user=%s groups=%v with group-based viewer permission", user.Name, user.Groups)
 		s.expect(nil, 204)(signedIn.Logout(s.ctx, &api.LogoutParams{XKarakoramCSRF: user.CsrfToken}))
-		s.expect(nil, 401)(signedIn.GetCurrentUser(s.ctx))
+		s.expect(nil, 401)(signedIn.GetCurrentUser(s.ctx, nil))
 	})
 }
 
@@ -210,7 +210,7 @@ func (s *suite) account() (string, string) {
 	})
 	var account api.Account
 	s.expect(&account, 201)(s.client.CreateAccount(s.ctx, &api.CreateAccountParams{}, api.CreateAccountRequest{Name: name, Password: &password, Enabled: ptr(true), MustChangePassword: ptr(false)}))
-	s.expect(&account)(s.client.GetAccount(s.ctx, name))
+	s.expect(&account)(s.client.GetAccount(s.ctx, name, nil))
 	if account.Name != name {
 		s.t.Fatal("local account read mismatch")
 	}
@@ -236,12 +236,12 @@ func (s *suite) accountToken(name, password string) *api.Client {
 	}
 	client := s.newClient(*created.Secret, s.base+"/api/v1", nil)
 	var current api.CurrentUser
-	s.expect(&current)(client.GetCurrentUser(s.ctx))
+	s.expect(&current)(client.GetCurrentUser(s.ctx, nil))
 	if current.Name != name {
 		s.t.Fatal("API token acts as wrong account")
 	}
 	var metadata api.APIToken
-	s.expect(&metadata)(session.GetAPIToken(s.ctx, created.Token.Id))
+	s.expect(&metadata)(session.GetAPIToken(s.ctx, created.Token.Id, nil))
 	if metadata.Owner != name {
 		s.t.Fatal("API token metadata owner mismatch")
 	}
@@ -253,7 +253,7 @@ func (s *suite) accountToken(name, password string) *api.Client {
 	}
 	// Revoke the first token and prove the same bearer cannot authenticate.
 	s.expect(nil, 204)(session.DeleteAPIToken(s.ctx, created.Token.Id, &api.DeleteAPITokenParams{XKarakoramCSRF: login.CsrfToken}))
-	s.expect(nil, 401)(client.GetCurrentUser(s.ctx))
+	s.expect(nil, 401)(client.GetCurrentUser(s.ctx, nil))
 	s.expect(&created, 201)(session.CreateAPIToken(s.ctx, &api.CreateAPITokenParams{XKarakoramCSRF: login.CsrfToken}, api.CreateAPITokenRequest{Name: s.name()}))
 	if created.Secret == nil || *created.Secret == "" {
 		s.t.Fatal("replacement token omitted secret")

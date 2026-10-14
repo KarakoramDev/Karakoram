@@ -13,6 +13,9 @@ replication stopped. Cluster identity and operation history include namespace.
 
 Cluster component resources express desired Zerops autoscaling bounds: `cpuMode` (`SHARED`/`DEDICATED`), min/max CPU cores, min/max RAM, min/max disk and optional start CPU. RAM/disk are GiB in the API. The provider requires RAM at least 0.5 GB, persistent disk at least 5 GB, positive CPU and valid min/max bounds. The normal provider default is 1 GB RAM, not a production sizing recommendation for every workload.
 
+CPU bounds are whole numbers of cores, at least **1**; every maximum must be at least its corresponding minimum, and start CPU must lie within the CPU bounds. Explicit zero for replicas, shards, CPU, RAM, disk or backup schedule retain counts is rejected, never silently replaced with a default. Omission, not zero, selects documented provider defaults. PATCH validates only supplied fields before merging and validates the resulting desired configuration before accepting it. Unsupported versions identify the provider and offered versions; query `/api/v1/providers` for your installation's current catalog.
+
+
 ```sh
 karactl clusters scale demo --min-cpu 1 --max-cpu 2 \
   --min-ram 2 --max-ram 2 --cpu-mode SHARED --wait

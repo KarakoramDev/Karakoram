@@ -60,7 +60,7 @@ export function UpgradesTab() {
     mutationFn: async (version: string) => {
       const path = paths.find((p) => p.versions.some((v) => v.version === version));
       requireUpgradeBackup(Boolean(path?.path.requiresBackup), Boolean(lastSuccessful));
-      return unwrap(api.PATCH('/clusters/{cluster}', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } }, body: { spec: { version } } }));
+      return unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: { version } } }));
     },
     onSuccess: (c) => {
       submission.reset();

@@ -20,8 +20,11 @@ func resourceDecimal(v float32) float64 {
 	return d
 }
 
-func resourcesDomain(r api.Resources) domain.Resources {
-	o := domain.Resources{CPUMode: string(r.CpuMode), MinCPU: resourceDecimal(r.MinCpu), MaxCPU: resourceDecimal(r.MaxCpu), MinRAM: resourceDecimal(r.MinRam), MaxRAM: resourceDecimal(r.MaxRam), MinDisk: resourceDecimal(r.MinDisk), MaxDisk: resourceDecimal(r.MaxDisk)}
+func resourcesDomain(r *api.ResourcesInput) domain.Resources {
+	if r == nil {
+		return domain.Resources{}
+	}
+	o := domain.Resources{CPUMode: string(value(r.CpuMode)), MinCPU: resourceDecimal(value(r.MinCpu)), MaxCPU: resourceDecimal(value(r.MaxCpu)), MinRAM: resourceDecimal(value(r.MinRam)), MaxRAM: resourceDecimal(value(r.MaxRam)), MinDisk: resourceDecimal(value(r.MinDisk)), MaxDisk: resourceDecimal(value(r.MaxDisk))}
 	if r.StartCpu != nil {
 		o.StartCPU = ptr(resourceDecimal(*r.StartCpu))
 	}
@@ -34,19 +37,26 @@ func resourcesAPI(r domain.Resources) api.Resources {
 	}
 	return o
 }
-func componentDomain(c api.Component) domain.ComponentSpec {
-	return domain.ComponentSpec{Replicas: c.Replicas, Resources: resourcesDomain(c.Resources)}
+func componentDomain(c *api.ComponentInput) domain.ComponentSpec {
+	if c == nil {
+		return domain.ComponentSpec{}
+	}
+	return domain.ComponentSpec{Replicas: value(c.Replicas), Resources: resourcesDomain(c.Resources)}
 }
 func componentAPI(c domain.ComponentSpec) api.Component {
 	return api.Component{Replicas: c.Replicas, Resources: resourcesAPI(c.Resources)}
 }
-func specDomain(a api.ClusterSpec) domain.ClusterSpec {
-	s := domain.ClusterSpec{Provider: a.Provider, Version: a.Version, Topology: domain.Topology{Type: string(a.Topology.Type), Shards: value(a.Topology.Shards)}, Components: domain.Components{Engine: componentDomain(a.Components.Engine)}, EngineConfig: value(a.EngineConfig)}
-	if a.Components.ConfigServer != nil {
-		s.Components.ConfigServer = componentDomain(*a.Components.ConfigServer)
+func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
+	// Presence is retained in the generated input model: the validator rejects
+	// explicit zero before conversion, while nil values remain provider defaults.
+	s := domain.ClusterSpec{Provider: a.Provider, Version: value(a.Version), EngineConfig: value(a.EngineConfig)}
+	if a.Topology != nil {
+		s.Topology = domain.Topology{Type: string(value(a.Topology.Type)), Shards: value(a.Topology.Shards)}
 	}
-	if a.Components.Router != nil {
-		s.Components.Router = componentDomain(*a.Components.Router)
+	if a.Components != nil {
+		s.Components.Engine = componentDomain(a.Components.Engine)
+		s.Components.ConfigServer = componentDomain(a.Components.ConfigServer)
+		s.Components.Router = componentDomain(a.Components.Router)
 	}
 	if a.Backup != nil {
 		s.Backup.Storage = value(a.Backup.Storage)
@@ -61,10 +71,10 @@ func specDomain(a api.ClusterSpec) domain.ClusterSpec {
 		}
 	}
 	if a.Tls != nil {
-		s.TLS = domain.TLSConfig{Mode: string(a.Tls.Mode), CA: string(a.Tls.Ca)}
+		s.TLS = domain.TLSConfig{Mode: string(value(a.Tls.Mode)), CA: string(value(a.Tls.Ca))}
 	}
 	if a.Exposure != nil {
-		s.Exposure = domain.Exposure{Public: a.Exposure.Public, IPType: string(value(a.Exposure.IpType)), Allowlist: value(a.Exposure.Allowlist)}
+		s.Exposure = domain.Exposure{Public: value(a.Exposure.Public), IPType: string(value(a.Exposure.IpType)), Allowlist: value(a.Exposure.Allowlist), AllowAllAddresses: value(a.Exposure.AllowAllAddresses)}
 	}
 	if a.Monitoring != nil {
 		s.Monitoring.Enabled = a.Monitoring.Enabled
@@ -96,6 +106,7 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	if s.Exposure.IPType != "" {
 		a.Exposure.IpType = ptr(api.ExposureIpType(s.Exposure.IPType))
 	}
+	a.Exposure.AllowAllAddresses = ptr(s.Exposure.AllowAllAddresses)
 	if s.Topology.Type == "sharded" {
 		a.Topology.Shards = &s.Topology.Shards
 		a.Components.ConfigServer = ptr(componentAPI(s.Components.ConfigServer))

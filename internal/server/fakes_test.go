@@ -43,6 +43,15 @@ func (*fakeProvider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Components.Engine.Replicas == 0 {
 		s.Components.Engine.Replicas = 3
 	}
+	if s.Components.Engine.Resources.CPUMode == "" {
+		s.Components.Engine.Resources = domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}
+	}
+	if s.Exposure.IPType == "" {
+		s.Exposure.IPType = "IPV6"
+	}
+	if s.Backup.PITR.OplogSpanMinutes == 0 {
+		s.Backup.PITR.OplogSpanMinutes = 10
+	}
 	if s.TLS.Mode == "" {
 		s.TLS.Mode = "requireTLS"
 	}

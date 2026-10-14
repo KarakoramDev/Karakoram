@@ -38,12 +38,12 @@ func TestCreateClusterRejectsInvalidIdentityBeforeLookup(t *testing.T) {
 	s.namespaces = unavailableNamespaces{}
 	for _, name := range []string{"prod:orders", "prod/orders", "", "a", "Orders", "orders-prod", "orders1234567"} {
 		for _, query := range []string{"", "?namespace=dev"} {
-			body, err := json.Marshal(api.CreateClusterRequest{Name: name, Spec: api.ClusterSpec{Provider: "fake", Version: "8.0", Topology: api.Topology{Type: "replicaSet"}}})
+			body, err := json.Marshal(api.CreateClusterRequest{Name: name, Spec: api.ClusterInputSpec{Provider: "fake"}})
 			if err != nil {
 				t.Fatal(err)
 			}
 			got := decodeNamespaceResponse[api.Error](t, call(s, "POST", "/api/v1/clusters"+query, string(body), admin), 400)
-			if got.Code != "invalid_request" || !strings.Contains(got.Message, "cluster name") {
+			if got.Code != "invalid_request" || got.Details == nil || (*got.Details)["field"] != "name" {
 				t.Fatalf("name %q%s: %+v", name, query, got)
 			}
 		}
@@ -95,7 +95,7 @@ func TestInvalidPathIdentitiesCannotReadRetainedBackups(t *testing.T) {
 				continue
 			}
 			w := call(s, method, path, "", token)
-			if w.Code != 404 && w.Code != 403 {
+			if w.Code != 400 {
 				t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body.String())
 			}
 		}
@@ -105,7 +105,7 @@ func TestInvalidPathIdentitiesCannotReadRetainedBackups(t *testing.T) {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
 		}
 	}
-	if w := call(s, "GET", "/api/v1/namespaces/prod:orders", "", token); w.Code != 404 {
+	if w := call(s, "GET", "/api/v1/namespaces/prod:orders", "", token); w.Code != 400 {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }
@@ -356,7 +356,7 @@ func TestCrossNamespaceCloneFromSucceededLogicalBackup(t *testing.T) {
 	cloneSpec := sourceAPI.Spec
 	cloneSpec.Backup = nil
 	cloneSpec.DataSource = &api.DataSource{Namespace: ptr("prod"), Cluster: source.Name, Backup: &backupAPI.Name}
-	body, err := json.Marshal(api.CreateClusterRequest{Name: "copy", Spec: cloneSpec})
+	body, err := json.Marshal(map[string]any{"name": "copy", "spec": cloneSpec})
 	if err != nil {
 		t.Fatal(err)
 	}

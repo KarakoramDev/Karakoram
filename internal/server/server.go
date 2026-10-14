@@ -237,7 +237,7 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 			if id == "login" {
 				kind, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 				if err != nil || kind != "application/json" {
-					return fail(415, "invalid_request", "Login requires application/json"), nil
+					return failDetails(415, "unsupported_media_type", "Content-Type must be application/json for login", map[string]any{"field": "Content-Type", "reason": domain.ReasonUnsupported}), nil
 				}
 			}
 		}
@@ -330,17 +330,12 @@ func (m operationMux) HandleFunc(pattern string, handler func(http.ResponseWrite
 func (s *Server) Handler() http.Handler {
 	strict := api.NewStrictHandlerWithOptions(s, []api.StrictMiddlewareFunc{s.middleware}, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			status := 400
-			var large *http.MaxBytesError
-			if errors.As(err, &large) {
-				status = 413
-			}
 			var timestamp *time.ParseError
 			if errors.As(err, &timestamp) && (r.URL.Path == "/api/v1/api-tokens" || strings.HasPrefix(r.URL.Path, "/api/v1/api-tokens/")) {
 				_ = invalidField("expiresAt", domain.ReasonInvalid, "expiresAt must be a valid RFC 3339 timestamp").write(w)
 				return
 			}
-			_ = fail(status, "invalid_request", "Invalid request body").write(w)
+			_ = decoderFailure(err).write(w)
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			// Streaming headers have already been sent; never append JSON to SSE
@@ -361,14 +356,22 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("GET /relay/v1/connect", s.RelayHandler)
 	}
 	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: operationMux{mux}, ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-		_ = fail(400, "invalid_request", "Invalid request parameters").write(w)
+		_ = parameterFailure(err).write(w)
 	}})
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		_ = fail(404, "not_found", "API route not found").write(w)
 	})
 	mux.Handle("/", ui.Handler())
+	validated := s.validationMiddleware(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
+		id := requestID(r)
+		w.Header().Set("X-Request-ID", id)
+		r.Header.Set("X-Request-ID", id)
+		defer func() {
+			// Route patterns contain no names, credentials or query values.
+			s.Logger.Info("HTTP request", "request_id", id, "method", r.Method, "route", r.Pattern, "duration", time.Since(started))
+		}()
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -377,7 +380,7 @@ func (s *Server) Handler() http.Handler {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		if r.ContentLength > 2<<20 {
-			_ = fail(413, "invalid_request", "Request body exceeds the size limit").write(w)
+			_ = fail(413, "payload_too_large", "body exceeds the 2 MiB size limit").write(w)
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
@@ -386,9 +389,7 @@ func (s *Server) Handler() http.Handler {
 		if !readable {
 			return
 		}
-		mux.ServeHTTP(w, r)
-		// The route pattern has no path values, query strings, cookies or credentials.
-		s.Logger.Info("HTTP request", "method", r.Method, "route", r.Pattern, "duration", time.Since(started))
+		validated.ServeHTTP(w, r)
 	})
 }
 
@@ -403,7 +404,7 @@ func paginate[T any](ctx context.Context, items []T) (page[T], error) {
 	if v := q.Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 500 {
-			return page[T]{}, engine.ErrInvalid
+			return page[T]{}, domain.InvalidField("limit", domain.ReasonOutOfRange, "limit must be an integer from 1 to 500")
 		}
 		limit = n
 	}
@@ -411,11 +412,11 @@ func paginate[T any](ctx context.Context, items []T) (page[T], error) {
 	if v := q.Get("cursor"); v != "" {
 		b, err := base64.RawURLEncoding.DecodeString(v)
 		if err != nil {
-			return page[T]{}, engine.ErrInvalid
+			return page[T]{}, domain.InvalidField("cursor", domain.ReasonInvalid, "cursor must be a cursor returned by the preceding page")
 		}
 		offset, err = strconv.Atoi(string(b))
 		if err != nil || offset < 0 {
-			return page[T]{}, engine.ErrInvalid
+			return page[T]{}, domain.InvalidField("cursor", domain.ReasonInvalid, "cursor must encode a nonnegative page offset")
 		}
 	}
 	if offset > len(items) {

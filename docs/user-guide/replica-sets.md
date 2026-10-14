@@ -27,6 +27,9 @@ karactl clusters members demo
 
 Use the version currently advertised by your installation, not an arbitrary apt version. The CLI supplies its own resource defaults; explicit bounds above keep this example at 1 GiB RAM and 5 GiB persistent disk per member. The provider's omitted-field defaults are also 1 GB RAM/5 GB disk, while CLI convenience defaults allow larger maxima. CPU is expressed in cores; RAM/disk fields are GiB in the public API.
 
+REST create requires `spec.provider`; omitted provider is not inferred. Omitted counts/resources use catalog defaults, but explicitly supplied zero is rejected. PSMDB CPU bounds are whole cores at least 1; RAM bounds are at least 0.5 GiB and disk bounds at least 5 GiB, with every maximum at least its minimum. Request bodies reject unknown fields, including YAML misspellings submitted through `karactl -f`; inspect the named field in the returned error before retrying.
+
+
 Creation is asynchronous: services are imported, artifacts deployed, agents obtain protected config, the set is initiated and system users are established. `--wait` follows observed cluster-generation convergence. Ready TCP alone is not replica-set health.
 
 Create acceptance returns `operationId` and `Karakoram-Operation-Id`; save that ID and use `karactl operations wait ID` if the initial wait times out. Resource, replica, exposure, TLS and version updates also have tracking operations. Their current `step`/`message` describe convergence, and a newer change cancels older tracking with the superseding ID. Status messages expose the current provisioning stage instead of calling initial formation scaling.

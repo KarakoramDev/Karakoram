@@ -51,7 +51,11 @@ func TestAPITokenSelfServiceOwnership(t *testing.T) {
 		}
 	}
 	for _, method := range []string{"GET", "PUT", "DELETE"} {
-		if r := call(s, method, "/api/v1/api-tokens/"+other.ID, `{"name":"changed"}`, viewer); r.Code != 403 {
+		body := ""
+		if method == "PUT" {
+			body = `{"name":"changed"}`
+		}
+		if r := call(s, method, "/api/v1/api-tokens/"+other.ID, body, viewer); r.Code != 403 {
 			t.Fatalf("%s another owner's token HTTP %d", method, r.Code)
 		}
 	}

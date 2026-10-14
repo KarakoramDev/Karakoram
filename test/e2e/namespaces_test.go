@@ -34,7 +34,7 @@ func TestMultiNamespace(t *testing.T) {
 		t.Fatal("the test namespace must not be default")
 	}
 	var registered api.Namespace
-	response, err := s.client.GetNamespace(s.ctx, namespace)
+	response, err := s.client.GetNamespace(s.ctx, namespace, nil)
 	if err != nil {
 		t.Fatal("read namespace transport failed")
 	}
@@ -53,7 +53,7 @@ func TestMultiNamespace(t *testing.T) {
 		s.expect(&registered, 201)(s.client.CreateNamespace(s.ctx, &api.CreateNamespaceParams{}, api.NamespaceCreate{Name: namespace, ProjectId: project, Token: &token, Description: ptr("Multi-project end-to-end test")}))
 	}
 	s.poll("namespace relay ready", 15*time.Minute, func() bool {
-		s.expect(&registered)(s.client.GetNamespace(s.ctx, namespace))
+		s.expect(&registered)(s.client.GetNamespace(s.ctx, namespace, nil))
 		if registered.Phase == api.NamespacePhaseError {
 			t.Fatal("namespace entered Error")
 		}
@@ -100,7 +100,7 @@ func TestMultiNamespace(t *testing.T) {
 		t.Fatal("database user was not created")
 	}
 	scoped.put(name, "namespace-proof", "original")
-	backup := scoped.backup(name, storage, api.CreateBackupRequestTypeLogical)
+	backup := scoped.backup(name, storage, "logical")
 	cloneSpec := scoped.cluster(name).Spec
 	cloneSpec.Backup = nil // Storage references are local to the source namespace.
 	cloneSpec.DataSource = &api.DataSource{Cluster: name, Namespace: &namespace, Backup: &backup.Name}
@@ -120,7 +120,7 @@ func TestMultiNamespace(t *testing.T) {
 	s.namespaceRBAC(namespace, name, clone, cloneSpec)
 
 	var before, after api.Namespace
-	s.expect(&before)(s.client.GetNamespace(s.ctx, namespace))
+	s.expect(&before)(s.client.GetNamespace(s.ctx, namespace, nil))
 	if before.Relay.ConnectedSince == nil || !before.Relay.Connected || before.Phase != api.NamespacePhaseReady {
 		t.Fatal("relay is not connected before token rotation")
 	}
@@ -137,7 +137,7 @@ func TestMultiNamespace(t *testing.T) {
 		t.Fatal("test context expired during rotation observation")
 	case <-time.After(35 * time.Second):
 	}
-	s.expect(&after)(s.client.GetNamespace(s.ctx, namespace))
+	s.expect(&after)(s.client.GetNamespace(s.ctx, namespace, nil))
 	assertRotation(after)
 	s.expect(nil, 409)(s.client.DeleteNamespace(s.ctx, namespace, &api.DeleteNamespaceParams{}))
 }
@@ -145,7 +145,7 @@ func TestMultiNamespace(t *testing.T) {
 func (s *suite) namespaceRBAC(namespace, source, clone string, cloneSpec api.ClusterSpec) {
 	s.t.Helper()
 	var original api.RBACPolicy
-	s.expect(&original)(s.client.GetRBACPolicy(s.ctx))
+	s.expect(&original)(s.client.GetRBACPolicy(s.ctx, nil))
 	s.t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -166,12 +166,12 @@ func (s *suite) namespaceRBAC(namespace, source, clone string, cloneSpec api.Clu
 	denied := s.name()
 	scoped := s.inNamespace(namespace)
 	scoped.cleanupCluster(denied)
-	s.expect(nil, 403)(client.CreateCluster(s.ctx, &api.CreateClusterParams{Namespace: &namespace}, api.CreateClusterRequest{Name: denied, Spec: scoped.privateSpec(3)}))
+	s.expect(nil, 403)(client.CreateClusterWithBody(s.ctx, &api.CreateClusterParams{Namespace: &namespace}, "application/json", s.clusterBody(clusterWriteEnvelope{Name: denied, Spec: scoped.privateSpec(3)})))
 	deniedClone := s.name()
 	s.inNamespace("default").cleanupCluster(deniedClone)
-	s.expect(nil, 403)(client.CreateCluster(s.ctx, &api.CreateClusterParams{Namespace: ptr("default")}, api.CreateClusterRequest{Name: deniedClone, Spec: cloneSpec}))
+	s.expect(nil, 403)(client.CreateClusterWithBody(s.ctx, &api.CreateClusterParams{Namespace: ptr("default")}, "application/json", s.clusterBody(clusterWriteEnvelope{Name: deniedClone, Spec: cloneSpec})))
 	var permission api.CanResponse
-	s.expect(&permission)(s.client.CheckPermission(s.ctx, &api.CheckPermissionParams{}, api.CanRequest{Subject: &subject, Resource: "backups", Action: api.Export, Object: namespace + "/" + source}))
+	s.expect(&permission)(s.client.CheckPermission(s.ctx, &api.CheckPermissionParams{}, api.CanRequest{Subject: &subject, Resource: "backups", Action: api.CanRequestActionExport, Object: namespace + "/" + source}))
 	if permission.Allowed {
 		s.t.Fatal("read-only namespace policy granted backup export")
 	}
@@ -187,7 +187,7 @@ func (s *suite) cleanupNamespace(namespace string) {
 	defer cancel()
 	accepted := false
 	for {
-		response, err := s.client.GetNamespace(ctx, namespace)
+		response, err := s.client.GetNamespace(ctx, namespace, nil)
 		if err != nil {
 			s.t.Error("namespace teardown transport failure")
 			return

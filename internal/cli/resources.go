@@ -148,6 +148,9 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		}
 		if cmd.Flags().Changed("shards") {
 			n, _ := cmd.Flags().GetInt("shards")
+			if n < 1 || n > 128 {
+				return nil, fmt.Errorf("--shards must be from 1 to 128")
+			}
 			spec["topology"] = map[string]any{"shards": n}
 		}
 		if len(spec) == 0 {
@@ -266,6 +269,9 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	t := map[string]any{"type": topology}
 	if topology == "sharded" {
 		shards, _ := cmd.Flags().GetInt("shards")
+		if shards < 1 || shards > 128 {
+			return nil, fmt.Errorf("--shards must be from 1 to 128")
+		}
 		t["shards"] = shards
 		for flag, key := range map[string]string{"config-servers": "configServer", "routers": "router"} {
 			replicas, _ := cmd.Flags().GetInt(flag)

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
@@ -196,7 +195,7 @@ func clusterVersionRequest(t *testing.T, method string, spec domain.ClusterSpec,
 	var body any = map[string]any{"spec": map[string]any{"version": version}}
 	if method == "PUT" {
 		spec.Version = version
-		body = api.ReplaceClusterRequest{Spec: specAPI(spec)}
+		body = map[string]any{"spec": specAPI(spec)}
 	}
 	data, err := json.Marshal(body)
 	if err != nil {

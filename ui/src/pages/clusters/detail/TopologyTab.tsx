@@ -148,7 +148,7 @@ export function TopologyTab() {
   errors.push(...validateTLS(draft.tls, true), ...validateExposure(draft.exposure, !patch.exposure || allAddressesConfirmed));
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
+    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
     onSuccess: (c) => {
       submission.reset();
       queryClient.setQueryData(keys.cluster(namespace, name), c);

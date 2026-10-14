@@ -45,6 +45,7 @@ func TestCookieCSRFAndAPITokenFlows(t *testing.T) {
 	}
 	send := func(path, csrf string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", path, strings.NewReader(`{"name":"cookie-token"}`))
+		r.Header.Set("Content-Type", "application/json")
 		for _, c := range cookies {
 			r.AddCookie(c)
 		}
@@ -164,6 +165,7 @@ func TestMustChangePasswordRestrictedToRecovery(t *testing.T) {
 		}
 	}
 	r := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(`{"currentPassword":"first-test-password","newPassword":"changed-test-password"}`))
+	r.Header.Set("Content-Type", "application/json")
 	for _, c := range cookies {
 		r.AddCookie(c)
 	}

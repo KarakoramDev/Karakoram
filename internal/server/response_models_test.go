@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/version"
 )
@@ -38,7 +39,15 @@ func TestAbsentResponseValuesAreOmittedOrEmptyArrays(t *testing.T) {
 		t.Fatal("configured PITR span lost")
 	}
 	spec = specAPI(domain.ClusterSpec{Backup: domain.BackupConfig{Storage: "archive", Schedules: []domain.BackupSchedule{{Name: "daily", RetainCount: 1}}}})
-	if (*spec.Backup.Schedules)[0].Storage != nil || specDomain(spec).Backup.Schedules[0].Storage != "" {
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input api.ClusterInputSpec
+	if err := json.Unmarshal(raw, &input); err != nil {
+		t.Fatal(err)
+	}
+	if (*spec.Backup.Schedules)[0].Storage != nil || specDomain(input).Backup.Schedules[0].Storage != "" {
 		t.Fatal("an inherited schedule storage override must be omitted and round-trip as absent")
 	}
 }

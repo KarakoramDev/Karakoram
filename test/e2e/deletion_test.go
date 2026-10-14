@@ -90,7 +90,7 @@ func TestDeletionChoices(t *testing.T) {
 			spec.Backup = &api.BackupSpec{Storage: ptr(storage)}
 			name := s.create(spec)
 			s.put(name, "suspend-proof", "durable")
-			backup := s.backup(name, storage, api.CreateBackupRequestTypeLogical)
+			backup := s.backup(name, storage, "logical")
 			if backup.PbmName == nil || *backup.PbmName == "" {
 				t.Fatal("backup omitted PBM snapshot identity")
 			}
@@ -119,7 +119,7 @@ func TestDeletionChoices(t *testing.T) {
 				s.ready(name)
 				s.proof(name, "suspend-proof", "durable")
 				if choice.backups {
-					s.restore(name, api.RestoreSource{Backup: ptr(backup.Name), SourceCluster: name})
+					s.restore(name, api.RestoreSource{Backup: ptr(backup.Name), SourceCluster: ptr(name)})
 					s.proof(name, "suspend-proof", "durable")
 				} else {
 					s.expect(nil, 404)(s.client.GetBackup(s.ctx, name, backup.Name, nil))

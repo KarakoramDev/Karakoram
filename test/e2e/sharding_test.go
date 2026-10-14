@@ -74,7 +74,7 @@ func TestSharding(t *testing.T) {
 func (s *suite) shardedSpec(public bool) api.ClusterSpec {
 	spec := s.privateSpec(1)
 	if public {
-		spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.IPV6), Allowlist: ptr([]string{requireCIDR(s.t)})}
+		spec.Exposure = &api.Exposure{Public: true, IpType: ptr(api.ExposureIpTypeIPV6), Allowlist: ptr([]string{requireCIDR(s.t)})}
 	}
 	spec.Topology = api.Topology{Type: api.TopologyTypeSharded, Shards: ptr(2)}
 	configReplicas := 0

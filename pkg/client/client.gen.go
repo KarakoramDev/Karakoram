@@ -54,6 +54,12 @@ const (
 	BackupScheduleTypePhysical BackupScheduleType = "physical"
 )
 
+// Defines values for BackupScheduleInputType.
+const (
+	BackupScheduleInputTypeLogical  BackupScheduleInputType = "logical"
+	BackupScheduleInputTypePhysical BackupScheduleInputType = "physical"
+)
+
 // Defines values for BackupStorageType.
 const (
 	BackupStorageTypeS3 BackupStorageType = "s3"
@@ -98,8 +104,20 @@ const (
 
 // Defines values for ExposureIpType.
 const (
-	IPV4 ExposureIpType = "IPV4"
-	IPV6 ExposureIpType = "IPV6"
+	ExposureIpTypeIPV4 ExposureIpType = "IPV4"
+	ExposureIpTypeIPV6 ExposureIpType = "IPV6"
+)
+
+// Defines values for ExposureInputIpType.
+const (
+	ExposureInputIpTypeIPV4 ExposureInputIpType = "IPV4"
+	ExposureInputIpTypeIPV6 ExposureInputIpType = "IPV6"
+)
+
+// Defines values for ExposurePatchIpType.
+const (
+	IPV4 ExposurePatchIpType = "IPV4"
+	IPV6 ExposurePatchIpType = "IPV6"
 )
 
 // Defines values for HealthStatus.
@@ -166,8 +184,8 @@ const (
 
 // Defines values for ProviderBackupTypes.
 const (
-	Logical  ProviderBackupTypes = "logical"
-	Physical ProviderBackupTypes = "physical"
+	ProviderBackupTypesLogical  ProviderBackupTypes = "logical"
+	ProviderBackupTypesPhysical ProviderBackupTypes = "physical"
 )
 
 // Defines values for ProviderTopologyType.
@@ -194,8 +212,20 @@ const (
 
 // Defines values for ResourcesCpuMode.
 const (
-	DEDICATED ResourcesCpuMode = "DEDICATED"
-	SHARED    ResourcesCpuMode = "SHARED"
+	ResourcesCpuModeDEDICATED ResourcesCpuMode = "DEDICATED"
+	ResourcesCpuModeSHARED    ResourcesCpuMode = "SHARED"
+)
+
+// Defines values for ResourcesInputCpuMode.
+const (
+	ResourcesInputCpuModeDEDICATED ResourcesInputCpuMode = "DEDICATED"
+	ResourcesInputCpuModeSHARED    ResourcesInputCpuMode = "SHARED"
+)
+
+// Defines values for ResourcesPatchCpuMode.
+const (
+	DEDICATED ResourcesPatchCpuMode = "DEDICATED"
+	SHARED    ResourcesPatchCpuMode = "SHARED"
 )
 
 // Defines values for RestorePhase.
@@ -228,15 +258,41 @@ const (
 
 // Defines values for TLSCa.
 const (
-	SelfSigned   TLSCa = "selfSigned"
-	UserProvided TLSCa = "userProvided"
+	TLSCaSelfSigned   TLSCa = "selfSigned"
+	TLSCaUserProvided TLSCa = "userProvided"
 )
 
 // Defines values for TLSMode.
 const (
-	Disabled   TLSMode = "disabled"
-	PreferTLS  TLSMode = "preferTLS"
-	RequireTLS TLSMode = "requireTLS"
+	TLSModeDisabled   TLSMode = "disabled"
+	TLSModePreferTLS  TLSMode = "preferTLS"
+	TLSModeRequireTLS TLSMode = "requireTLS"
+)
+
+// Defines values for TLSInputCa.
+const (
+	TLSInputCaSelfSigned   TLSInputCa = "selfSigned"
+	TLSInputCaUserProvided TLSInputCa = "userProvided"
+)
+
+// Defines values for TLSInputMode.
+const (
+	TLSInputModeDisabled   TLSInputMode = "disabled"
+	TLSInputModePreferTLS  TLSInputMode = "preferTLS"
+	TLSInputModeRequireTLS TLSInputMode = "requireTLS"
+)
+
+// Defines values for TLSPatchCa.
+const (
+	SelfSigned   TLSPatchCa = "selfSigned"
+	UserProvided TLSPatchCa = "userProvided"
+)
+
+// Defines values for TLSPatchMode.
+const (
+	Disabled   TLSPatchMode = "disabled"
+	PreferTLS  TLSPatchMode = "preferTLS"
+	RequireTLS TLSPatchMode = "requireTLS"
 )
 
 // Defines values for TokenStatusSource.
@@ -249,6 +305,18 @@ const (
 const (
 	TopologyTypeReplicaSet TopologyType = "replicaSet"
 	TopologyTypeSharded    TopologyType = "sharded"
+)
+
+// Defines values for TopologyInputType.
+const (
+	TopologyInputTypeReplicaSet TopologyInputType = "replicaSet"
+	TopologyInputTypeSharded    TopologyInputType = "sharded"
+)
+
+// Defines values for TopologyPatchType.
+const (
+	TopologyPatchTypeReplicaSet TopologyPatchType = "replicaSet"
+	TopologyPatchTypeSharded    TopologyPatchType = "sharded"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -287,6 +355,7 @@ const (
 	ListEventsParamsResourceClusterCredentials ListEventsParamsResource = "cluster-credentials"
 	ListEventsParamsResourceClusters           ListEventsParamsResource = "clusters"
 	ListEventsParamsResourceDatabaseUsers      ListEventsParamsResource = "database-users"
+	ListEventsParamsResourceEmpty              ListEventsParamsResource = ""
 	ListEventsParamsResourceNamespaces         ListEventsParamsResource = "namespaces"
 	ListEventsParamsResourceOperations         ListEventsParamsResource = "operations"
 	ListEventsParamsResourceOrphanedVolumes    ListEventsParamsResource = "orphaned-volumes"
@@ -312,6 +381,7 @@ const (
 	StreamEventsParamsResourceClusterCredentials StreamEventsParamsResource = "cluster-credentials"
 	StreamEventsParamsResourceClusters           StreamEventsParamsResource = "clusters"
 	StreamEventsParamsResourceDatabaseUsers      StreamEventsParamsResource = "database-users"
+	StreamEventsParamsResourceEmpty              StreamEventsParamsResource = ""
 	StreamEventsParamsResourceNamespaces         StreamEventsParamsResource = "namespaces"
 	StreamEventsParamsResourceOperations         StreamEventsParamsResource = "operations"
 	StreamEventsParamsResourceOrphanedVolumes    StreamEventsParamsResource = "orphaned-volumes"
@@ -427,11 +497,39 @@ type BackupSchedule struct {
 // BackupScheduleType defines model for BackupSchedule.Type.
 type BackupScheduleType string
 
+// BackupScheduleInput defines model for BackupScheduleInput.
+type BackupScheduleInput struct {
+	// Cron Five-field cron expression, evaluated in UTC.
+	Cron        string                  `json:"cron"`
+	Enabled     bool                    `json:"enabled"`
+	Name        string                  `json:"name"`
+	RetainCount int                     `json:"retainCount"`
+	Storage     *string                 `json:"storage,omitempty"`
+	Type        BackupScheduleInputType `json:"type"`
+}
+
+// BackupScheduleInputType defines model for BackupScheduleInput.Type.
+type BackupScheduleInputType string
+
 // BackupSpec defines model for BackupSpec.
 type BackupSpec struct {
 	Pitr      *PITRSpec         `json:"pitr,omitempty"`
 	Schedules *[]BackupSchedule `json:"schedules,omitempty"`
 	Storage   *string           `json:"storage,omitempty"`
+}
+
+// BackupSpecInput defines model for BackupSpecInput.
+type BackupSpecInput struct {
+	Pitr      *PITRSpec              `json:"pitr,omitempty"`
+	Schedules *[]BackupScheduleInput `json:"schedules,omitempty"`
+	Storage   *string                `json:"storage,omitempty"`
+}
+
+// BackupSpecPatch defines model for BackupSpecPatch.
+type BackupSpecPatch struct {
+	Pitr      *PITRSpecPatch         `json:"pitr"`
+	Schedules *[]BackupScheduleInput `json:"schedules"`
+	Storage   *string                `json:"storage"`
 }
 
 // BackupStorage defines model for BackupStorage.
@@ -517,6 +615,28 @@ type ClusterBackupStatus struct {
 	PitrWindow *PITRWindow `json:"pitrWindow,omitempty"`
 }
 
+// ClusterInputSpec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+type ClusterInputSpec struct {
+	Backup     *BackupSpecInput `json:"backup,omitempty"`
+	Components *ComponentsInput `json:"components,omitempty"`
+
+	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
+	DataSource *DataSource `json:"dataSource,omitempty"`
+
+	// EngineConfig Validated YAML mongod/mongos overrides.
+	EngineConfig *string         `json:"engineConfig,omitempty"`
+	Exposure     *ExposureInput  `json:"exposure,omitempty"`
+	Monitoring   *MonitoringSpec `json:"monitoring,omitempty"`
+
+	// Provider Required provider identifier; list providers with GET /api/v1/providers.
+	Provider string `json:"provider"`
+
+	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+	Tls      *TLSInput      `json:"tls,omitempty"`
+	Topology *TopologyInput `json:"topology,omitempty"`
+	Version  *string        `json:"version,omitempty"`
+}
+
 // ClusterList defines model for ClusterList.
 type ClusterList struct {
 	Items []Cluster `json:"items"`
@@ -525,8 +645,8 @@ type ClusterList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// ClusterMergePatch RFC 7396 merge patch of the cluster desired spec envelope: {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned name/status/generation/timestamps are rejected. Secret inputs follow TLS write-only fields.
-type ClusterMergePatch map[string]interface{}
+// ClusterMergePatch RFC 7396 merge patch of desired {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned fields are rejected.
+type ClusterMergePatch = map[string]interface{}
 
 // ClusterMetrics defines model for ClusterMetrics.
 type ClusterMetrics struct {
@@ -534,6 +654,28 @@ type ClusterMetrics struct {
 	Series []MetricSeries `json:"series"`
 	Start  time.Time      `json:"start"`
 	Step   string         `json:"step"`
+}
+
+// ClusterPatchSpec defines model for ClusterPatchSpec.
+type ClusterPatchSpec struct {
+	Backup     *BackupSpecPatch `json:"backup"`
+	Components *ComponentsPatch `json:"components"`
+
+	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
+	DataSource *DataSourcePatch `json:"dataSource"`
+
+	// EngineConfig Validated YAML mongod/mongos overrides.
+	EngineConfig *string              `json:"engineConfig"`
+	Exposure     *ExposurePatch       `json:"exposure"`
+	Monitoring   *MonitoringSpecPatch `json:"monitoring"`
+
+	// Provider Required provider identifier; list providers with GET /api/v1/providers.
+	Provider *string `json:"provider"`
+
+	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+	Tls      *TLSPatch      `json:"tls"`
+	Topology *TopologyPatch `json:"topology"`
+	Version  *string        `json:"version"`
 }
 
 // ClusterSpec defines model for ClusterSpec.
@@ -548,7 +690,9 @@ type ClusterSpec struct {
 	EngineConfig *string         `json:"engineConfig,omitempty"`
 	Exposure     *Exposure       `json:"exposure,omitempty"`
 	Monitoring   *MonitoringSpec `json:"monitoring,omitempty"`
-	Provider     string          `json:"provider"`
+
+	// Provider Required provider identifier; list providers with GET /api/v1/providers.
+	Provider string `json:"provider"`
 
 	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
 	Tls      *TLS     `json:"tls,omitempty"`
@@ -585,11 +729,39 @@ type Component struct {
 	Resources Resources `json:"resources"`
 }
 
+// ComponentInput defines model for ComponentInput.
+type ComponentInput struct {
+	Replicas  *int            `json:"replicas,omitempty"`
+	Resources *ResourcesInput `json:"resources,omitempty"`
+}
+
+// ComponentPatch defines model for ComponentPatch.
+type ComponentPatch struct {
+	Replicas  *int            `json:"replicas"`
+	Resources *ResourcesPatch `json:"resources"`
+}
+
 // Components defines model for Components.
 type Components struct {
 	ConfigServer *Component `json:"configServer,omitempty"`
 	Engine       Component  `json:"engine"`
 	Router       *Component `json:"router,omitempty"`
+}
+
+// ComponentsInput defines model for ComponentsInput.
+type ComponentsInput struct {
+	// ConfigServer PSMDB config-server replica set: 1, 3, 5 or 7 members.
+	ConfigServer *ConfigServerInput `json:"configServer,omitempty"`
+	Engine       *ComponentInput    `json:"engine,omitempty"`
+	Router       *ComponentInput    `json:"router,omitempty"`
+}
+
+// ComponentsPatch defines model for ComponentsPatch.
+type ComponentsPatch struct {
+	// ConfigServer PSMDB config-server replica set: 1, 3, 5 or 7 members.
+	ConfigServer *ConfigServerPatch `json:"configServer"`
+	Engine       *ComponentPatch    `json:"engine"`
+	Router       *ComponentPatch    `json:"router"`
 }
 
 // Condition defines model for Condition.
@@ -603,6 +775,15 @@ type Condition struct {
 
 // ConditionStatus defines model for Condition.Status.
 type ConditionStatus string
+
+// ConfigServerInput PSMDB config-server replica set: 1, 3, 5 or 7 members.
+type ConfigServerInput = ComponentInput
+
+// ConfigServerPatch PSMDB config-server replica set: 1, 3, 5 or 7 members.
+type ConfigServerPatch struct {
+	Replicas  *int            `json:"replicas"`
+	Resources *ResourcesPatch `json:"resources"`
+}
 
 // Connection Sensitive response. Requires cluster-credentials read separately from clusters read. Server sends Cache-Control: no-store.
 type Connection struct {
@@ -686,8 +867,10 @@ type CreateBackupStorageRequestType string
 
 // CreateClusterRequest defines model for CreateClusterRequest.
 type CreateClusterRequest struct {
-	Name string      `json:"name"`
-	Spec ClusterSpec `json:"spec"`
+	Name string `json:"name"`
+
+	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+	Spec ClusterInputSpec `json:"spec"`
 }
 
 // CreateDatabaseUserRequest Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours.
@@ -748,6 +931,16 @@ type DataSource struct {
 	// Namespace Source namespace; defaults to the target cluster namespace.
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 	PitrTime  *time.Time     `json:"pitrTime,omitempty"`
+}
+
+// DataSourcePatch Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
+type DataSourcePatch struct {
+	Backup  *string `json:"backup"`
+	Cluster *string `json:"cluster"`
+
+	// Namespace Source namespace; defaults to the target cluster namespace.
+	Namespace *NamespaceName `json:"namespace"`
+	PitrTime  *time.Time     `json:"pitrTime"`
 }
 
 // DatabaseRole defines model for DatabaseRole.
@@ -833,13 +1026,39 @@ type EventList struct {
 
 // Exposure defines model for Exposure.
 type Exposure struct {
-	Allowlist *[]string       `json:"allowlist,omitempty"`
-	IpType    *ExposureIpType `json:"ipType,omitempty"`
-	Public    bool            `json:"public"`
+	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	AllowAllAddresses *bool           `json:"allowAllAddresses,omitempty"`
+	Allowlist         *[]string       `json:"allowlist,omitempty"`
+	IpType            *ExposureIpType `json:"ipType,omitempty"`
+	Public            bool            `json:"public"`
 }
 
 // ExposureIpType defines model for Exposure.IpType.
 type ExposureIpType string
+
+// ExposureInput defines model for ExposureInput.
+type ExposureInput struct {
+	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	AllowAllAddresses *bool                `json:"allowAllAddresses,omitempty"`
+	Allowlist         *[]string            `json:"allowlist,omitempty"`
+	IpType            *ExposureInputIpType `json:"ipType,omitempty"`
+	Public            *bool                `json:"public,omitempty"`
+}
+
+// ExposureInputIpType defines model for ExposureInput.IpType.
+type ExposureInputIpType string
+
+// ExposurePatch defines model for ExposurePatch.
+type ExposurePatch struct {
+	// AllowAllAddresses Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+	AllowAllAddresses *bool                `json:"allowAllAddresses"`
+	Allowlist         *[]string            `json:"allowlist"`
+	IpType            *ExposurePatchIpType `json:"ipType"`
+	Public            *bool                `json:"public"`
+}
+
+// ExposurePatchIpType defines model for ExposurePatch.IpType.
+type ExposurePatchIpType string
 
 // Health defines model for Health.
 type Health struct {
@@ -931,6 +1150,11 @@ type MetricSeries struct {
 // MonitoringSpec defines model for MonitoringSpec.
 type MonitoringSpec struct {
 	Enabled bool `json:"enabled"`
+}
+
+// MonitoringSpecPatch defines model for MonitoringSpecPatch.
+type MonitoringSpecPatch struct {
+	Enabled *bool `json:"enabled"`
 }
 
 // Namespace defines model for Namespace.
@@ -1094,6 +1318,12 @@ type PITRSpec struct {
 	OplogSpanMinutes *int `json:"oplogSpanMinutes,omitempty"`
 }
 
+// PITRSpecPatch defines model for PITRSpecPatch.
+type PITRSpecPatch struct {
+	Enabled          *bool `json:"enabled"`
+	OplogSpanMinutes *int  `json:"oplogSpanMinutes"`
+}
+
 // PITRWindow Only a continuous PBM-verified restorable interval is reported.
 type PITRWindow struct {
 	Available bool       `json:"available"`
@@ -1237,9 +1467,19 @@ type RelayStatus struct {
 // RelayStatusPhase defines model for RelayStatus.Phase.
 type RelayStatusPhase string
 
-// ReplaceClusterRequest Replaces the full desired spec; server-owned name, generation, status and timestamps cannot be replaced.
+// ReplaceClusterRequest Replaces the full desired spec. Recognized server-owned fields from GET may be round-tripped but are ignored; PATCH rejects them.
 type ReplaceClusterRequest struct {
-	Spec ClusterSpec `json:"spec"`
+	CreatedAt  *string `json:"createdAt,omitempty"`
+	Generation *int    `json:"generation,omitempty"`
+	Name       *string `json:"name,omitempty"`
+
+	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
+	Namespace *NamespaceName `json:"namespace,omitempty"`
+
+	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+	Spec      ClusterInputSpec        `json:"spec"`
+	Status    *map[string]interface{} `json:"status,omitempty"`
+	UpdatedAt *string                 `json:"updatedAt,omitempty"`
 }
 
 // ResetPasswordRequest defines model for ResetPasswordRequest.
@@ -1272,6 +1512,52 @@ type Resources struct {
 
 // ResourcesCpuMode defines model for Resources.CpuMode.
 type ResourcesCpuMode string
+
+// ResourcesInput defines model for ResourcesInput.
+type ResourcesInput struct {
+	CpuMode *ResourcesInputCpuMode `json:"cpuMode,omitempty"`
+	MaxCpu  *float32               `json:"maxCpu,omitempty"`
+
+	// MaxDisk GiB
+	MaxDisk *float32 `json:"maxDisk,omitempty"`
+
+	// MaxRam GiB
+	MaxRam *float32 `json:"maxRam,omitempty"`
+	MinCpu *float32 `json:"minCpu,omitempty"`
+
+	// MinDisk GiB
+	MinDisk *float32 `json:"minDisk,omitempty"`
+
+	// MinRam GiB
+	MinRam   *float32 `json:"minRam,omitempty"`
+	StartCpu *float32 `json:"startCpu,omitempty"`
+}
+
+// ResourcesInputCpuMode defines model for ResourcesInput.CpuMode.
+type ResourcesInputCpuMode string
+
+// ResourcesPatch defines model for ResourcesPatch.
+type ResourcesPatch struct {
+	CpuMode *ResourcesPatchCpuMode `json:"cpuMode"`
+	MaxCpu  *float32               `json:"maxCpu"`
+
+	// MaxDisk GiB
+	MaxDisk *float32 `json:"maxDisk"`
+
+	// MaxRam GiB
+	MaxRam *float32 `json:"maxRam"`
+	MinCpu *float32 `json:"minCpu"`
+
+	// MinDisk GiB
+	MinDisk *float32 `json:"minDisk"`
+
+	// MinRam GiB
+	MinRam   *float32 `json:"minRam"`
+	StartCpu *float32 `json:"startCpu"`
+}
+
+// ResourcesPatchCpuMode defines model for ResourcesPatch.CpuMode.
+type ResourcesPatchCpuMode string
 
 // Restore defines model for Restore.
 type Restore struct {
@@ -1390,6 +1676,42 @@ type TLSCa string
 // TLSMode defines model for TLS.Mode.
 type TLSMode string
 
+// TLSInput PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+type TLSInput struct {
+	Ca            *TLSInputCa `json:"ca,omitempty"`
+	CaCertificate *string     `json:"caCertificate,omitempty"`
+	CaPrivateKey  *string     `json:"caPrivateKey,omitempty"`
+
+	// Certificate User-provided PEM certificate chain.
+	Certificate *string       `json:"certificate,omitempty"`
+	Mode        *TLSInputMode `json:"mode,omitempty"`
+	PrivateKey  *string       `json:"privateKey,omitempty"`
+}
+
+// TLSInputCa defines model for TLSInput.Ca.
+type TLSInputCa string
+
+// TLSInputMode defines model for TLSInput.Mode.
+type TLSInputMode string
+
+// TLSPatch PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
+type TLSPatch struct {
+	Ca            *TLSPatchCa `json:"ca"`
+	CaCertificate *string     `json:"caCertificate"`
+	CaPrivateKey  *string     `json:"caPrivateKey"`
+
+	// Certificate User-provided PEM certificate chain.
+	Certificate *string       `json:"certificate"`
+	Mode        *TLSPatchMode `json:"mode"`
+	PrivateKey  *string       `json:"privateKey"`
+}
+
+// TLSPatchCa defines model for TLSPatch.Ca.
+type TLSPatchCa string
+
+// TLSPatchMode defines model for TLSPatch.Mode.
+type TLSPatchMode string
+
 // TokenStatus Secret-safe token health; never contains a token or fingerprint.
 type TokenStatus struct {
 	LastError       *string           `json:"lastError,omitempty"`
@@ -1410,6 +1732,24 @@ type Topology struct {
 
 // TopologyType defines model for Topology.Type.
 type TopologyType string
+
+// TopologyInput defines model for TopologyInput.
+type TopologyInput struct {
+	Shards *int               `json:"shards,omitempty"`
+	Type   *TopologyInputType `json:"type,omitempty"`
+}
+
+// TopologyInputType defines model for TopologyInput.Type.
+type TopologyInputType string
+
+// TopologyPatch defines model for TopologyPatch.
+type TopologyPatch struct {
+	Shards *int               `json:"shards"`
+	Type   *TopologyPatchType `json:"type"`
+}
+
+// TopologyPatchType defines model for TopologyPatch.Type.
+type TopologyPatchType string
 
 // UpdateAPITokenRequest defines model for UpdateAPITokenRequest.
 type UpdateAPITokenRequest struct {
@@ -1509,6 +1849,9 @@ type NamespacePath = NamespaceName
 // NamespaceQuery Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
 type NamespaceQuery = NamespaceName
 
+// RequestID defines model for RequestID.
+type RequestID = string
+
 // BadRequest Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
@@ -1533,11 +1876,23 @@ type Forbidden = Error
 // `message` is a human-readable explanation that names the rejected field or resource.
 type InternalError = Error
 
+// MethodNotAllowed Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type MethodNotAllowed = Error
+
 // NotFound Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type NotFound = Error
+
+// PayloadTooLarge Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type PayloadTooLarge = Error
 
 // Unauthorized Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -1557,6 +1912,12 @@ type Unavailable = Error
 // `message` is a human-readable explanation that names the rejected field or resource.
 type UnprocessableEntity = Error
 
+// UnsupportedMediaType Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type UnsupportedMediaType = Error
+
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -1564,6 +1925,9 @@ type ListAccountsParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAccountParams defines parameters for CreateAccount.
@@ -1580,24 +1944,42 @@ type CreateAccountParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteAccountParams defines parameters for DeleteAccount.
 type DeleteAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetAccountParams defines parameters for GetAccount.
+type GetAccountParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceAccountParams defines parameters for ReplaceAccount.
 type ReplaceAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ResetAccountPasswordParams defines parameters for ResetAccountPassword.
 type ResetAccountPasswordParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListAPITokensParams defines parameters for ListAPITokens.
@@ -1607,6 +1989,9 @@ type ListAPITokensParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAPITokenParams defines parameters for CreateAPIToken.
@@ -1623,54 +2008,93 @@ type CreateAPITokenParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteAPITokenParams defines parameters for DeleteAPIToken.
 type DeleteAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetAPITokenParams defines parameters for GetAPIToken.
+type GetAPITokenParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceAPITokenParams defines parameters for ReplaceAPIToken.
 type ReplaceAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ChangePasswordParams defines parameters for ChangePassword.
 type ChangePasswordParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // LoginParams defines parameters for Login.
 type LoginParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetCurrentUserParams defines parameters for GetCurrentUser.
+type GetCurrentUserParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // OidcCallbackParams defines parameters for OidcCallback.
 type OidcCallbackParams struct {
 	Code  string `form:"code" json:"code"`
 	State string `form:"state" json:"state"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // OidcLoginParams defines parameters for OidcLogin.
 type OidcLoginParams struct {
 	// ReturnTo Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
 	ReturnTo *string `form:"returnTo,omitempty" json:"returnTo,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RefreshSessionParams defines parameters for RefreshSession.
 type RefreshSessionParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListBackupStoragesParams defines parameters for ListBackupStorages.
@@ -1683,6 +2107,9 @@ type ListBackupStoragesParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateBackupStorageParams defines parameters for CreateBackupStorage.
@@ -1702,6 +2129,9 @@ type CreateBackupStorageParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteBackupStorageParams defines parameters for DeleteBackupStorage.
@@ -1711,12 +2141,18 @@ type DeleteBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetBackupStorageParams defines parameters for GetBackupStorage.
 type GetBackupStorageParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceBackupStorageParams defines parameters for ReplaceBackupStorage.
@@ -1726,6 +2162,9 @@ type ReplaceBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // VerifyBackupStorageParams defines parameters for VerifyBackupStorage.
@@ -1735,6 +2174,9 @@ type VerifyBackupStorageParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClustersParams defines parameters for ListClusters.
@@ -1747,6 +2189,9 @@ type ListClustersParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateClusterParams defines parameters for CreateCluster.
@@ -1766,6 +2211,9 @@ type CreateClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteClusterParams defines parameters for DeleteCluster.
@@ -1778,12 +2226,18 @@ type DeleteClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterParams defines parameters for GetCluster.
 type GetClusterParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // PatchClusterParams defines parameters for PatchCluster.
@@ -1803,6 +2257,9 @@ type PatchClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
@@ -1822,6 +2279,9 @@ type ReplaceClusterParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListBackupsParams defines parameters for ListBackups.
@@ -1834,6 +2294,9 @@ type ListBackupsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateBackupParams defines parameters for CreateBackup.
@@ -1853,6 +2316,9 @@ type CreateBackupParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteBackupParams defines parameters for DeleteBackup.
@@ -1862,18 +2328,27 @@ type DeleteBackupParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetBackupParams defines parameters for GetBackup.
 type GetBackupParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterBalancerParams defines parameters for GetClusterBalancer.
 type GetClusterBalancerParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceClusterBalancerParams defines parameters for ReplaceClusterBalancer.
@@ -1883,12 +2358,18 @@ type ReplaceClusterBalancerParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterConnectionParams defines parameters for GetClusterConnection.
 type GetClusterConnectionParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListDatabaseRolesParams defines parameters for ListDatabaseRoles.
@@ -1901,6 +2382,9 @@ type ListDatabaseRolesParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateDatabaseRoleParams defines parameters for CreateDatabaseRole.
@@ -1920,6 +2404,9 @@ type CreateDatabaseRoleParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteDatabaseRoleParams defines parameters for DeleteDatabaseRole.
@@ -1929,12 +2416,18 @@ type DeleteDatabaseRoleParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetDatabaseRoleParams defines parameters for GetDatabaseRole.
 type GetDatabaseRoleParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceDatabaseRoleParams defines parameters for ReplaceDatabaseRole.
@@ -1944,6 +2437,9 @@ type ReplaceDatabaseRoleParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListDatabaseUsersParams defines parameters for ListDatabaseUsers.
@@ -1956,6 +2452,9 @@ type ListDatabaseUsersParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateDatabaseUserParams defines parameters for CreateDatabaseUser.
@@ -1975,6 +2474,9 @@ type CreateDatabaseUserParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteDatabaseUserParams defines parameters for DeleteDatabaseUser.
@@ -1984,12 +2486,18 @@ type DeleteDatabaseUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetDatabaseUserParams defines parameters for GetDatabaseUser.
 type GetDatabaseUserParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceDatabaseUserParams defines parameters for ReplaceDatabaseUser.
@@ -1999,18 +2507,27 @@ type ReplaceDatabaseUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClusterMembersParams defines parameters for ListClusterMembers.
 type ListClusterMembersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterMemberParams defines parameters for GetClusterMember.
 type GetClusterMemberParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetMemberLogsParams defines parameters for GetMemberLogs.
@@ -2022,6 +2539,9 @@ type GetMemberLogsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetMemberLogsParamsProcess defines parameters for GetMemberLogs.
@@ -2034,18 +2554,24 @@ type ReplaceClusterMemberParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterMetricsParams defines parameters for GetClusterMetrics.
 type GetClusterMetricsParams struct {
-	// Range Lookback from now.
+	// Range Positive Go duration no greater than 24h, for example 30m, 1h or 24h. Days are not a duration unit.
 	Range *string `form:"range,omitempty" json:"range,omitempty"`
 
-	// Step Aggregation interval.
+	// Step Positive Go duration no greater than range. The omitted default 30s is bounded to a shorter requested range.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
@@ -2059,18 +2585,27 @@ type ListClusterOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetPITRWindowParams defines parameters for GetPITRWindow.
 type GetPITRWindowParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterPlacementParams defines parameters for GetClusterPlacement.
 type GetClusterPlacementParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
@@ -2080,6 +2615,9 @@ type RaiseClusterFCVParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RestartClusterParams defines parameters for RestartCluster.
@@ -2089,6 +2627,9 @@ type RestartClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListRestoresParams defines parameters for ListRestores.
@@ -2101,6 +2642,9 @@ type ListRestoresParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateRestoreParams defines parameters for CreateRestore.
@@ -2120,12 +2664,18 @@ type CreateRestoreParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetRestoreParams defines parameters for GetRestore.
 type GetRestoreParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ResumeClusterParams defines parameters for ResumeCluster.
@@ -2135,6 +2685,9 @@ type ResumeClusterParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
@@ -2144,18 +2697,27 @@ type RotateClusterTLSParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // GetClusterStatusParams defines parameters for GetClusterStatus.
 type GetClusterStatusParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListSystemUsersParams defines parameters for ListSystemUsers.
 type ListSystemUsersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateSystemUserParams defines parameters for RotateSystemUser.
@@ -2165,6 +2727,9 @@ type RotateSystemUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListEventsParams defines parameters for ListEvents.
@@ -2191,6 +2756,9 @@ type ListEventsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListEventsParamsOrder defines parameters for ListEvents.
@@ -2224,6 +2792,9 @@ type StreamEventsParams struct {
 
 	// LastEventID SSE reconnection cursor; used when cursor is absent.
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // StreamEventsParamsType defines parameters for StreamEvents.
@@ -2232,10 +2803,19 @@ type StreamEventsParamsType string
 // StreamEventsParamsResource defines parameters for StreamEvents.
 type StreamEventsParamsResource string
 
+// GetHealthParams defines parameters for GetHealth.
+type GetHealthParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
 // GetPrometheusMetricsParams defines parameters for GetPrometheusMetrics.
 type GetPrometheusMetricsParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListNamespacesParams defines parameters for ListNamespaces.
@@ -2245,6 +2825,9 @@ type ListNamespacesParams struct {
 
 	// Cursor Opaque cursor returned by the preceding page.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateNamespaceParams defines parameters for CreateNamespace.
@@ -2261,30 +2844,51 @@ type CreateNamespaceParams struct {
 	// in-flight duplicates return 409 with reason invalid_state. Only 2xx
 	// responses are retained. Use a fresh key for each new intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // DeleteNamespaceParams defines parameters for DeleteNamespace.
 type DeleteNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetNamespaceParams defines parameters for GetNamespace.
+type GetNamespaceParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // UpdateNamespaceParams defines parameters for UpdateNamespace.
 type UpdateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // RotateNamespaceTokenParams defines parameters for RotateNamespaceToken.
 type RotateNamespaceTokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ValidateNamespaceParams defines parameters for ValidateNamespace.
 type ValidateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ListOperationsParams defines parameters for ListOperations.
@@ -2299,6 +2903,15 @@ type ListOperationsParams struct {
 
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetOperationParams defines parameters for GetOperation.
+type GetOperationParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CancelOperationParams defines parameters for CancelOperation.
@@ -2311,24 +2924,72 @@ type CancelOperationParams struct {
 type ListOrphanedVolumesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetPermissionsParams defines parameters for GetPermissions.
+type GetPermissionsParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// ListProvidersParams defines parameters for ListProviders.
+type ListProvidersParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetProviderParams defines parameters for GetProvider.
+type GetProviderParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CheckPermissionParams defines parameters for CheckPermission.
 type CheckPermissionParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetRBACPolicyParams defines parameters for GetRBACPolicy.
+type GetRBACPolicyParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceRBACPolicyParams defines parameters for ReplaceRBACPolicy.
 type ReplaceRBACPolicyParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetSettingsParams defines parameters for GetSettings.
+type GetSettingsParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // ReplaceSettingsParams defines parameters for ReplaceSettings.
 type ReplaceSettingsParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
+// GetVersionParams defines parameters for GetVersion.
+type GetVersionParams struct {
+	// XRequestID A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
@@ -2618,7 +3279,7 @@ type ClientInterface interface {
 	DeleteAccount(ctx context.Context, account string, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAccount request
-	GetAccount(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAccount(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceAccountWithBody request with any body
 	ReplaceAccountWithBody(ctx context.Context, account string, params *ReplaceAccountParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2642,7 +3303,7 @@ type ClientInterface interface {
 	DeleteAPIToken(ctx context.Context, token string, params *DeleteAPITokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAPIToken request
-	GetAPIToken(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAPIToken(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceAPITokenWithBody request with any body
 	ReplaceAPITokenWithBody(ctx context.Context, token string, params *ReplaceAPITokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2663,7 +3324,7 @@ type ClientInterface interface {
 	Logout(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentUser request
-	GetCurrentUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetCurrentUser(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OidcCallback request
 	OidcCallback(ctx context.Context, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2848,7 +3509,7 @@ type ClientInterface interface {
 	StreamEvents(ctx context.Context, params *StreamEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth request
-	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHealth(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPrometheusMetrics request
 	GetPrometheusMetrics(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2865,7 +3526,7 @@ type ClientInterface interface {
 	DeleteNamespace(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNamespace request
-	GetNamespace(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetNamespace(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateNamespaceWithBody request with any body
 	UpdateNamespaceWithBody(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2887,7 +3548,7 @@ type ClientInterface interface {
 	ListOperations(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOperation request
-	GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOperation(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelOperation request
 	CancelOperation(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2896,13 +3557,13 @@ type ClientInterface interface {
 	ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetPermissions request
-	GetPermissions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetPermissions(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProviders request
-	ListProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListProviders(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetProvider request
-	GetProvider(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetProvider(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CheckPermissionWithBody request with any body
 	CheckPermissionWithBody(ctx context.Context, params *CheckPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2910,7 +3571,7 @@ type ClientInterface interface {
 	CheckPermission(ctx context.Context, params *CheckPermissionParams, body CheckPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRBACPolicy request
-	GetRBACPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetRBACPolicy(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceRBACPolicyWithBody request with any body
 	ReplaceRBACPolicyWithBody(ctx context.Context, params *ReplaceRBACPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2918,7 +3579,7 @@ type ClientInterface interface {
 	ReplaceRBACPolicy(ctx context.Context, params *ReplaceRBACPolicyParams, body ReplaceRBACPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSettings request
-	GetSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSettings(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceSettingsWithBody request with any body
 	ReplaceSettingsWithBody(ctx context.Context, params *ReplaceSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2926,7 +3587,7 @@ type ClientInterface interface {
 	ReplaceSettings(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVersion request
-	GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetVersion(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2977,8 +3638,8 @@ func (c *Client) DeleteAccount(ctx context.Context, account string, params *Dele
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAccount(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAccountRequest(c.Server, account)
+func (c *Client) GetAccount(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountRequest(c.Server, account, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3085,8 +3746,8 @@ func (c *Client) DeleteAPIToken(ctx context.Context, token string, params *Delet
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAPIToken(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAPITokenRequest(c.Server, token)
+func (c *Client) GetAPIToken(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAPITokenRequest(c.Server, token, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3181,8 +3842,8 @@ func (c *Client) Logout(ctx context.Context, params *LogoutParams, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetCurrentUser(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetCurrentUserRequest(c.Server)
+func (c *Client) GetCurrentUser(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCurrentUserRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3973,8 +4634,8 @@ func (c *Client) StreamEvents(ctx context.Context, params *StreamEventsParams, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetHealthRequest(c.Server)
+func (c *Client) GetHealth(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHealthRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4045,8 +4706,8 @@ func (c *Client) DeleteNamespace(ctx context.Context, namespace NamespacePath, p
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetNamespace(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetNamespaceRequest(c.Server, namespace)
+func (c *Client) GetNamespace(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNamespaceRequest(c.Server, namespace, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4141,8 +4802,8 @@ func (c *Client) ListOperations(ctx context.Context, params *ListOperationsParam
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetOperation(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOperationRequest(c.Server, operation)
+func (c *Client) GetOperation(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOperationRequest(c.Server, operation, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4177,8 +4838,8 @@ func (c *Client) ListOrphanedVolumes(ctx context.Context, params *ListOrphanedVo
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetPermissions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetPermissionsRequest(c.Server)
+func (c *Client) GetPermissions(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPermissionsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4189,8 +4850,8 @@ func (c *Client) GetPermissions(ctx context.Context, reqEditors ...RequestEditor
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListProviders(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListProvidersRequest(c.Server)
+func (c *Client) ListProviders(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListProvidersRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4201,8 +4862,8 @@ func (c *Client) ListProviders(ctx context.Context, reqEditors ...RequestEditorF
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetProvider(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetProviderRequest(c.Server, provider)
+func (c *Client) GetProvider(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProviderRequest(c.Server, provider, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4237,8 +4898,8 @@ func (c *Client) CheckPermission(ctx context.Context, params *CheckPermissionPar
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetRBACPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetRBACPolicyRequest(c.Server)
+func (c *Client) GetRBACPolicy(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRBACPolicyRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4273,8 +4934,8 @@ func (c *Client) ReplaceRBACPolicy(ctx context.Context, params *ReplaceRBACPolic
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSettingsRequest(c.Server)
+func (c *Client) GetSettings(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSettingsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4309,8 +4970,8 @@ func (c *Client) ReplaceSettings(ctx context.Context, params *ReplaceSettingsPar
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVersionRequest(c.Server)
+func (c *Client) GetVersion(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVersionRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4383,6 +5044,21 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -4447,6 +5123,17 @@ func NewCreateAccountRequestWithBody(server string, params *CreateAccountParams,
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -4496,13 +5183,24 @@ func NewDeleteAccountRequest(server string, account string, params *DeleteAccoun
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetAccountRequest generates requests for GetAccount
-func NewGetAccountRequest(server string, account string) (*http.Request, error) {
+func NewGetAccountRequest(server string, account string, params *GetAccountParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4530,6 +5228,21 @@ func NewGetAccountRequest(server string, account string) (*http.Request, error) 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -4592,6 +5305,17 @@ func NewReplaceAccountRequestWithBody(server string, account string, params *Rep
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -4652,6 +5376,17 @@ func NewResetAccountPasswordRequestWithBody(server string, account string, param
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -4721,6 +5456,21 @@ func NewListAPITokensRequest(server string, params *ListAPITokensParams) (*http.
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -4785,6 +5535,17 @@ func NewCreateAPITokenRequestWithBody(server string, params *CreateAPITokenParam
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -4834,13 +5595,24 @@ func NewDeleteAPITokenRequest(server string, token string, params *DeleteAPIToke
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetAPITokenRequest generates requests for GetAPIToken
-func NewGetAPITokenRequest(server string, token string) (*http.Request, error) {
+func NewGetAPITokenRequest(server string, token string, params *GetAPITokenParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4868,6 +5640,21 @@ func NewGetAPITokenRequest(server string, token string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -4930,6 +5717,17 @@ func NewReplaceAPITokenRequestWithBody(server string, token string, params *Repl
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -4983,6 +5781,17 @@ func NewChangePasswordRequestWithBody(server string, params *ChangePasswordParam
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -5040,6 +5849,17 @@ func NewLoginRequestWithBody(server string, params *LoginParams, contentType str
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -5082,13 +5902,24 @@ func NewLogoutRequest(server string, params *LogoutParams) (*http.Request, error
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetCurrentUserRequest generates requests for GetCurrentUser
-func NewGetCurrentUserRequest(server string) (*http.Request, error) {
+func NewGetCurrentUserRequest(server string, params *GetCurrentUserParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5109,6 +5940,21 @@ func NewGetCurrentUserRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -5168,6 +6014,21 @@ func NewOidcCallbackRequest(server string, params *OidcCallbackParams) (*http.Re
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -5217,6 +6078,21 @@ func NewOidcLoginRequest(server string, params *OidcLoginParams) (*http.Request,
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -5255,6 +6131,17 @@ func NewRefreshSessionRequest(server string, params *RefreshSessionParams) (*htt
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -5338,6 +6225,21 @@ func NewListBackupStoragesRequest(server string, params *ListBackupStoragesParam
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -5426,6 +6328,17 @@ func NewCreateBackupStorageRequestWithBody(server string, params *CreateBackupSt
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -5497,6 +6410,17 @@ func NewDeleteBackupStorageRequest(server string, storage string, params *Delete
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -5553,6 +6477,21 @@ func NewGetBackupStorageRequest(server string, storage string, params *GetBackup
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -5637,6 +6576,17 @@ func NewReplaceBackupStorageRequestWithBody(server string, storage string, param
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -5706,6 +6656,17 @@ func NewVerifyBackupStorageRequest(server string, storage string, params *Verify
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -5789,6 +6750,21 @@ func NewListClustersRequest(server string, params *ListClustersParams) (*http.Re
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -5875,6 +6851,17 @@ func NewCreateClusterRequestWithBody(server string, params *CreateClusterParams,
 			}
 
 			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
 		}
 
 	}
@@ -5980,6 +6967,17 @@ func NewDeleteClusterRequest(server string, cluster ClusterPath, params *DeleteC
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -6036,6 +7034,21 @@ func NewGetClusterRequest(server string, cluster ClusterPath, params *GetCluster
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6129,6 +7142,17 @@ func NewPatchClusterRequestWithBody(server string, cluster ClusterPath, params *
 			}
 
 			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
 		}
 
 	}
@@ -6226,6 +7250,17 @@ func NewReplaceClusterRequestWithBody(server string, cluster ClusterPath, params
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -6314,6 +7349,21 @@ func NewListBackupsRequest(server string, cluster ClusterPath, params *ListBacku
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6409,6 +7459,17 @@ func NewCreateBackupRequestWithBody(server string, cluster ClusterPath, params *
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -6487,6 +7548,17 @@ func NewDeleteBackupRequest(server string, cluster ClusterPath, backup string, p
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -6552,6 +7624,21 @@ func NewGetBackupRequest(server string, cluster ClusterPath, backup string, para
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -6606,6 +7693,21 @@ func NewGetClusterBalancerRequest(server string, cluster ClusterPath, params *Ge
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6690,6 +7792,17 @@ func NewReplaceClusterBalancerRequestWithBody(server string, cluster ClusterPath
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -6746,6 +7859,21 @@ func NewGetClusterConnectionRequest(server string, cluster ClusterPath, params *
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6834,6 +7962,21 @@ func NewListDatabaseRolesRequest(server string, cluster ClusterPath, params *Lis
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6929,6 +8072,17 @@ func NewCreateDatabaseRoleRequestWithBody(server string, cluster ClusterPath, pa
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -7014,6 +8168,17 @@ func NewDeleteDatabaseRoleRequest(server string, cluster ClusterPath, database s
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -7084,6 +8249,21 @@ func NewGetDatabaseRoleRequest(server string, cluster ClusterPath, database stri
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7182,6 +8362,17 @@ func NewReplaceDatabaseRoleRequestWithBody(server string, cluster ClusterPath, d
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -7270,6 +8461,21 @@ func NewListDatabaseUsersRequest(server string, cluster ClusterPath, params *Lis
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7365,6 +8571,17 @@ func NewCreateDatabaseUserRequestWithBody(server string, cluster ClusterPath, pa
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -7450,6 +8667,17 @@ func NewDeleteDatabaseUserRequest(server string, cluster ClusterPath, database s
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -7520,6 +8748,21 @@ func NewGetDatabaseUserRequest(server string, cluster ClusterPath, database stri
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7618,6 +8861,17 @@ func NewReplaceDatabaseUserRequestWithBody(server string, cluster ClusterPath, d
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -7674,6 +8928,21 @@ func NewListClusterMembersRequest(server string, cluster ClusterPath, params *Li
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7737,6 +9006,21 @@ func NewGetClusterMemberRequest(server string, cluster ClusterPath, member strin
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7866,6 +9150,21 @@ func NewGetMemberLogsRequest(server string, cluster ClusterPath, member string, 
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -7940,6 +9239,17 @@ func NewReplaceClusterMemberRequest(server string, cluster ClusterPath, member s
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -8030,6 +9340,21 @@ func NewGetClusterMetricsRequest(server string, cluster ClusterPath, params *Get
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8136,6 +9461,21 @@ func NewListClusterOperationsRequest(server string, cluster ClusterPath, params 
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -8192,6 +9532,21 @@ func NewGetPITRWindowRequest(server string, cluster ClusterPath, params *GetPITR
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -8246,6 +9601,21 @@ func NewGetClusterPlacementRequest(server string, cluster ClusterPath, params *G
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8330,6 +9700,17 @@ func NewRaiseClusterFCVRequestWithBody(server string, cluster ClusterPath, param
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8399,6 +9780,17 @@ func NewRestartClusterRequest(server string, cluster ClusterPath, params *Restar
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -8489,6 +9881,21 @@ func NewListRestoresRequest(server string, cluster ClusterPath, params *ListRest
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8584,6 +9991,17 @@ func NewCreateRestoreRequestWithBody(server string, cluster ClusterPath, params 
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -8647,6 +10065,21 @@ func NewGetRestoreRequest(server string, cluster ClusterPath, restore string, pa
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8716,6 +10149,17 @@ func NewResumeClusterRequest(server string, cluster ClusterPath, params *ResumeC
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -8789,6 +10233,17 @@ func NewRotateClusterTLSRequest(server string, cluster ClusterPath, params *Rota
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8847,6 +10302,21 @@ func NewGetClusterStatusRequest(server string, cluster ClusterPath, params *GetC
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -8901,6 +10371,21 @@ func NewListSystemUsersRequest(server string, cluster ClusterPath, params *ListS
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8977,6 +10462,17 @@ func NewRotateSystemUserRequest(server string, cluster ClusterPath, user string,
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -9158,6 +10654,21 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -9316,13 +10827,24 @@ func NewStreamEventsRequest(server string, params *StreamEventsParams) (*http.Re
 			req.Header.Set("Last-Event-ID", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetHealthRequest generates requests for GetHealth
-func NewGetHealthRequest(server string) (*http.Request, error) {
+func NewGetHealthRequest(server string, params *GetHealthParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9343,6 +10865,21 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -9392,6 +10929,21 @@ func NewGetPrometheusMetricsRequest(server string, params *GetPrometheusMetricsP
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -9459,6 +11011,21 @@ func NewListNamespacesRequest(server string, params *ListNamespacesParams) (*htt
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -9523,6 +11090,17 @@ func NewCreateNamespaceRequestWithBody(server string, params *CreateNamespacePar
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam2 string
+
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam2)
+		}
+
 	}
 
 	return req, nil
@@ -9572,13 +11150,24 @@ func NewDeleteNamespaceRequest(server string, namespace NamespacePath, params *D
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetNamespaceRequest generates requests for GetNamespace
-func NewGetNamespaceRequest(server string, namespace NamespacePath) (*http.Request, error) {
+func NewGetNamespaceRequest(server string, namespace NamespacePath, params *GetNamespaceParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9606,6 +11195,21 @@ func NewGetNamespaceRequest(server string, namespace NamespacePath) (*http.Reque
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -9666,6 +11270,17 @@ func NewUpdateNamespaceRequestWithBody(server string, namespace NamespacePath, p
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -9730,6 +11345,17 @@ func NewRotateNamespaceTokenRequestWithBody(server string, namespace NamespacePa
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9777,6 +11403,17 @@ func NewValidateNamespaceRequest(server string, namespace NamespacePath, params 
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
 		}
 
 	}
@@ -9921,11 +11558,26 @@ func NewListOperationsRequest(server string, params *ListOperationsParams) (*htt
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetOperationRequest generates requests for GetOperation
-func NewGetOperationRequest(server string, operation string) (*http.Request, error) {
+func NewGetOperationRequest(server string, operation string, params *GetOperationParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9953,6 +11605,21 @@ func NewGetOperationRequest(server string, operation string) (*http.Request, err
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10053,11 +11720,26 @@ func NewListOrphanedVolumesRequest(server string, params *ListOrphanedVolumesPar
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetPermissionsRequest generates requests for GetPermissions
-func NewGetPermissionsRequest(server string) (*http.Request, error) {
+func NewGetPermissionsRequest(server string, params *GetPermissionsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10080,11 +11762,26 @@ func NewGetPermissionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewListProvidersRequest generates requests for ListProviders
-func NewListProvidersRequest(server string) (*http.Request, error) {
+func NewListProvidersRequest(server string, params *ListProvidersParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10107,11 +11804,26 @@ func NewListProvidersRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetProviderRequest generates requests for GetProvider
-func NewGetProviderRequest(server string, provider string) (*http.Request, error) {
+func NewGetProviderRequest(server string, provider string, params *GetProviderParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10139,6 +11851,21 @@ func NewGetProviderRequest(server string, provider string) (*http.Request, error
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10194,13 +11921,24 @@ func NewCheckPermissionRequestWithBody(server string, params *CheckPermissionPar
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetRBACPolicyRequest generates requests for GetRBACPolicy
-func NewGetRBACPolicyRequest(server string) (*http.Request, error) {
+func NewGetRBACPolicyRequest(server string, params *GetRBACPolicyParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10221,6 +11959,21 @@ func NewGetRBACPolicyRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10276,13 +12029,24 @@ func NewReplaceRBACPolicyRequestWithBody(server string, params *ReplaceRBACPolic
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetSettingsRequest generates requests for GetSettings
-func NewGetSettingsRequest(server string) (*http.Request, error) {
+func NewGetSettingsRequest(server string, params *GetSettingsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10303,6 +12067,21 @@ func NewGetSettingsRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10358,13 +12137,24 @@ func NewReplaceSettingsRequestWithBody(server string, params *ReplaceSettingsPar
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.XRequestID != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam1)
+		}
+
 	}
 
 	return req, nil
 }
 
 // NewGetVersionRequest generates requests for GetVersion
-func NewGetVersionRequest(server string) (*http.Request, error) {
+func NewGetVersionRequest(server string, params *GetVersionParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10385,6 +12175,21 @@ func NewGetVersionRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XRequestID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Request-ID", runtime.ParamLocationHeader, *params.XRequestID)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Request-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10445,7 +12250,7 @@ type ClientWithResponsesInterface interface {
 	DeleteAccountWithResponse(ctx context.Context, account string, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
 
 	// GetAccountWithResponse request
-	GetAccountWithResponse(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*GetAccountResponse, error)
+	GetAccountWithResponse(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*GetAccountResponse, error)
 
 	// ReplaceAccountWithBodyWithResponse request with any body
 	ReplaceAccountWithBodyWithResponse(ctx context.Context, account string, params *ReplaceAccountParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceAccountResponse, error)
@@ -10469,7 +12274,7 @@ type ClientWithResponsesInterface interface {
 	DeleteAPITokenWithResponse(ctx context.Context, token string, params *DeleteAPITokenParams, reqEditors ...RequestEditorFn) (*DeleteAPITokenResponse, error)
 
 	// GetAPITokenWithResponse request
-	GetAPITokenWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error)
+	GetAPITokenWithResponse(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error)
 
 	// ReplaceAPITokenWithBodyWithResponse request with any body
 	ReplaceAPITokenWithBodyWithResponse(ctx context.Context, token string, params *ReplaceAPITokenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceAPITokenResponse, error)
@@ -10490,7 +12295,7 @@ type ClientWithResponsesInterface interface {
 	LogoutWithResponse(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
 	// GetCurrentUserWithResponse request
-	GetCurrentUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error)
+	GetCurrentUserWithResponse(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error)
 
 	// OidcCallbackWithResponse request
 	OidcCallbackWithResponse(ctx context.Context, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error)
@@ -10675,7 +12480,7 @@ type ClientWithResponsesInterface interface {
 	StreamEventsWithResponse(ctx context.Context, params *StreamEventsParams, reqEditors ...RequestEditorFn) (*StreamEventsResponse, error)
 
 	// GetHealthWithResponse request
-	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+	GetHealthWithResponse(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
 	// GetPrometheusMetricsWithResponse request
 	GetPrometheusMetricsWithResponse(ctx context.Context, params *GetPrometheusMetricsParams, reqEditors ...RequestEditorFn) (*GetPrometheusMetricsResponse, error)
@@ -10692,7 +12497,7 @@ type ClientWithResponsesInterface interface {
 	DeleteNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *DeleteNamespaceParams, reqEditors ...RequestEditorFn) (*DeleteNamespaceResponse, error)
 
 	// GetNamespaceWithResponse request
-	GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error)
+	GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error)
 
 	// UpdateNamespaceWithBodyWithResponse request with any body
 	UpdateNamespaceWithBodyWithResponse(ctx context.Context, namespace NamespacePath, params *UpdateNamespaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateNamespaceResponse, error)
@@ -10714,7 +12519,7 @@ type ClientWithResponsesInterface interface {
 	ListOperationsWithResponse(ctx context.Context, params *ListOperationsParams, reqEditors ...RequestEditorFn) (*ListOperationsResponse, error)
 
 	// GetOperationWithResponse request
-	GetOperationWithResponse(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
+	GetOperationWithResponse(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*GetOperationResponse, error)
 
 	// CancelOperationWithResponse request
 	CancelOperationWithResponse(ctx context.Context, operation string, params *CancelOperationParams, reqEditors ...RequestEditorFn) (*CancelOperationResponse, error)
@@ -10723,13 +12528,13 @@ type ClientWithResponsesInterface interface {
 	ListOrphanedVolumesWithResponse(ctx context.Context, params *ListOrphanedVolumesParams, reqEditors ...RequestEditorFn) (*ListOrphanedVolumesResponse, error)
 
 	// GetPermissionsWithResponse request
-	GetPermissionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error)
+	GetPermissionsWithResponse(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error)
 
 	// ListProvidersWithResponse request
-	ListProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error)
+	ListProvidersWithResponse(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error)
 
 	// GetProviderWithResponse request
-	GetProviderWithResponse(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*GetProviderResponse, error)
+	GetProviderWithResponse(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*GetProviderResponse, error)
 
 	// CheckPermissionWithBodyWithResponse request with any body
 	CheckPermissionWithBodyWithResponse(ctx context.Context, params *CheckPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CheckPermissionResponse, error)
@@ -10737,7 +12542,7 @@ type ClientWithResponsesInterface interface {
 	CheckPermissionWithResponse(ctx context.Context, params *CheckPermissionParams, body CheckPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*CheckPermissionResponse, error)
 
 	// GetRBACPolicyWithResponse request
-	GetRBACPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error)
+	GetRBACPolicyWithResponse(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error)
 
 	// ReplaceRBACPolicyWithBodyWithResponse request with any body
 	ReplaceRBACPolicyWithBodyWithResponse(ctx context.Context, params *ReplaceRBACPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRBACPolicyResponse, error)
@@ -10745,7 +12550,7 @@ type ClientWithResponsesInterface interface {
 	ReplaceRBACPolicyWithResponse(ctx context.Context, params *ReplaceRBACPolicyParams, body ReplaceRBACPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRBACPolicyResponse, error)
 
 	// GetSettingsWithResponse request
-	GetSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error)
+	GetSettingsWithResponse(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error)
 
 	// ReplaceSettingsWithBodyWithResponse request with any body
 	ReplaceSettingsWithBodyWithResponse(ctx context.Context, params *ReplaceSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceSettingsResponse, error)
@@ -10753,7 +12558,7 @@ type ClientWithResponsesInterface interface {
 	ReplaceSettingsWithResponse(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceSettingsResponse, error)
 
 	// GetVersionWithResponse request
-	GetVersionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVersionResponse, error)
+	GetVersionWithResponse(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*GetVersionResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -10764,7 +12569,10 @@ type ListAccountsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10792,7 +12600,10 @@ type CreateAccountResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10819,7 +12630,10 @@ type DeleteAccountResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10847,7 +12661,10 @@ type GetAccountResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10875,7 +12692,10 @@ type ReplaceAccountResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10902,7 +12722,10 @@ type ResetAccountPasswordResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10930,7 +12753,10 @@ type ListAPITokensResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10958,7 +12784,10 @@ type CreateAPITokenResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -10985,7 +12814,10 @@ type DeleteAPITokenResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11013,7 +12845,10 @@ type GetAPITokenResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11041,7 +12876,10 @@ type ReplaceAPITokenResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11068,7 +12906,10 @@ type ChangePasswordResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11096,9 +12937,10 @@ type LoginResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
-	JSON413      *Error
-	JSON415      *Error
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON429      *Error
 	JSON500      *InternalError
 }
@@ -11126,7 +12968,10 @@ type LogoutResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11154,7 +12999,10 @@ type GetCurrentUserResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11181,7 +13029,10 @@ type OidcCallbackResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 	JSON503      *Unavailable
 }
@@ -11209,7 +13060,10 @@ type OidcLoginResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 	JSON503      *Unavailable
 }
@@ -11238,7 +13092,10 @@ type RefreshSessionResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11266,7 +13123,10 @@ type ListBackupStoragesResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11294,7 +13154,10 @@ type CreateBackupStorageResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
@@ -11322,7 +13185,10 @@ type DeleteBackupStorageResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11350,7 +13216,10 @@ type GetBackupStorageResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11378,7 +13247,10 @@ type ReplaceBackupStorageResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11406,7 +13278,10 @@ type VerifyBackupStorageResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11434,7 +13309,10 @@ type ListClustersResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11462,7 +13340,10 @@ type CreateClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
@@ -11491,7 +13372,10 @@ type DeleteClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11519,7 +13403,10 @@ type GetClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11547,7 +13434,10 @@ type PatchClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Error
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11575,7 +13465,10 @@ type ReplaceClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Error
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11603,7 +13496,10 @@ type ListBackupsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11631,7 +13527,10 @@ type CreateBackupResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11659,7 +13558,10 @@ type DeleteBackupResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11687,7 +13589,10 @@ type GetBackupResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11715,7 +13620,10 @@ type GetClusterBalancerResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11743,7 +13651,10 @@ type ReplaceClusterBalancerResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11771,7 +13682,10 @@ type GetClusterConnectionResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 	JSON503      *Unavailable
 }
@@ -11800,7 +13714,10 @@ type ListDatabaseRolesResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11828,7 +13745,10 @@ type CreateDatabaseRoleResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11855,7 +13775,10 @@ type DeleteDatabaseRoleResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11883,7 +13806,10 @@ type GetDatabaseRoleResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11911,7 +13837,10 @@ type ReplaceDatabaseRoleResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11939,7 +13868,10 @@ type ListDatabaseUsersResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11967,7 +13899,10 @@ type CreateDatabaseUserResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -11994,7 +13929,10 @@ type DeleteDatabaseUserResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12022,7 +13960,10 @@ type GetDatabaseUserResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12050,7 +13991,10 @@ type ReplaceDatabaseUserResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12078,7 +14022,10 @@ type ListClusterMembersResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12106,7 +14053,10 @@ type GetClusterMemberResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12134,7 +14084,10 @@ type GetMemberLogsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12162,7 +14115,10 @@ type ReplaceClusterMemberResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12190,7 +14146,10 @@ type GetClusterMetricsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12218,7 +14177,10 @@ type ListClusterOperationsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12246,7 +14208,10 @@ type GetPITRWindowResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12274,7 +14239,10 @@ type GetClusterPlacementResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12302,7 +14270,10 @@ type RaiseClusterFCVResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12330,7 +14301,10 @@ type RestartClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12358,7 +14332,10 @@ type ListRestoresResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12386,7 +14363,10 @@ type CreateRestoreResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12414,7 +14394,10 @@ type GetRestoreResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12442,7 +14425,10 @@ type ResumeClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12470,7 +14456,10 @@ type RotateClusterTLSResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12498,7 +14487,10 @@ type GetClusterStatusResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12526,7 +14518,10 @@ type ListSystemUsersResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12554,7 +14549,10 @@ type RotateSystemUserResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12582,7 +14580,10 @@ type ListEventsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12609,7 +14610,10 @@ type StreamEventsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12637,7 +14641,10 @@ type GetHealthResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12664,7 +14671,10 @@ type GetPrometheusMetricsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12691,6 +14701,9 @@ type ListNamespacesResponse struct {
 	JSON400      *BadRequest
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
+	JSON405      *MethodNotAllowed
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12717,7 +14730,10 @@ type CreateNamespaceResponse struct {
 	JSON400      *BadRequest
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
@@ -12744,7 +14760,10 @@ type DeleteNamespaceResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12768,9 +14787,13 @@ type GetNamespaceResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Namespace
+	JSON400      *BadRequest
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12798,7 +14821,10 @@ type UpdateNamespaceResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
@@ -12827,7 +14853,10 @@ type RotateNamespaceTokenResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
@@ -12855,7 +14884,10 @@ type ValidateNamespaceResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON422      *UnprocessableEntity
 	JSON500      *InternalError
 }
@@ -12906,7 +14938,10 @@ type ListOperationsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12934,7 +14969,10 @@ type GetOperationResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -12989,6 +15027,9 @@ type ListOrphanedVolumesResponse struct {
 	JSON400      *BadRequest
 	JSON401      *Unauthorized
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13016,7 +15057,10 @@ type GetPermissionsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13044,7 +15088,10 @@ type ListProvidersResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13072,7 +15119,10 @@ type GetProviderResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13100,7 +15150,10 @@ type CheckPermissionResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13128,7 +15181,10 @@ type GetRBACPolicyResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13156,7 +15212,10 @@ type ReplaceRBACPolicyResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13184,7 +15243,10 @@ type GetSettingsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13212,7 +15274,10 @@ type ReplaceSettingsResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13240,7 +15305,10 @@ type GetVersionResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
 	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
 }
 
@@ -13296,8 +15364,8 @@ func (c *ClientWithResponses) DeleteAccountWithResponse(ctx context.Context, acc
 }
 
 // GetAccountWithResponse request returning *GetAccountResponse
-func (c *ClientWithResponses) GetAccountWithResponse(ctx context.Context, account string, reqEditors ...RequestEditorFn) (*GetAccountResponse, error) {
-	rsp, err := c.GetAccount(ctx, account, reqEditors...)
+func (c *ClientWithResponses) GetAccountWithResponse(ctx context.Context, account string, params *GetAccountParams, reqEditors ...RequestEditorFn) (*GetAccountResponse, error) {
+	rsp, err := c.GetAccount(ctx, account, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -13374,8 +15442,8 @@ func (c *ClientWithResponses) DeleteAPITokenWithResponse(ctx context.Context, to
 }
 
 // GetAPITokenWithResponse request returning *GetAPITokenResponse
-func (c *ClientWithResponses) GetAPITokenWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error) {
-	rsp, err := c.GetAPIToken(ctx, token, reqEditors...)
+func (c *ClientWithResponses) GetAPITokenWithResponse(ctx context.Context, token string, params *GetAPITokenParams, reqEditors ...RequestEditorFn) (*GetAPITokenResponse, error) {
+	rsp, err := c.GetAPIToken(ctx, token, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -13443,8 +15511,8 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, params *Lo
 }
 
 // GetCurrentUserWithResponse request returning *GetCurrentUserResponse
-func (c *ClientWithResponses) GetCurrentUserWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error) {
-	rsp, err := c.GetCurrentUser(ctx, reqEditors...)
+func (c *ClientWithResponses) GetCurrentUserWithResponse(ctx context.Context, params *GetCurrentUserParams, reqEditors ...RequestEditorFn) (*GetCurrentUserResponse, error) {
+	rsp, err := c.GetCurrentUser(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14024,8 +16092,8 @@ func (c *ClientWithResponses) StreamEventsWithResponse(ctx context.Context, para
 }
 
 // GetHealthWithResponse request returning *GetHealthResponse
-func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
-	rsp, err := c.GetHealth(ctx, reqEditors...)
+func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, params *GetHealthParams, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
+	rsp, err := c.GetHealth(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14077,8 +16145,8 @@ func (c *ClientWithResponses) DeleteNamespaceWithResponse(ctx context.Context, n
 }
 
 // GetNamespaceWithResponse request returning *GetNamespaceResponse
-func (c *ClientWithResponses) GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error) {
-	rsp, err := c.GetNamespace(ctx, namespace, reqEditors...)
+func (c *ClientWithResponses) GetNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *GetNamespaceParams, reqEditors ...RequestEditorFn) (*GetNamespaceResponse, error) {
+	rsp, err := c.GetNamespace(ctx, namespace, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14147,8 +16215,8 @@ func (c *ClientWithResponses) ListOperationsWithResponse(ctx context.Context, pa
 }
 
 // GetOperationWithResponse request returning *GetOperationResponse
-func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, operation string, reqEditors ...RequestEditorFn) (*GetOperationResponse, error) {
-	rsp, err := c.GetOperation(ctx, operation, reqEditors...)
+func (c *ClientWithResponses) GetOperationWithResponse(ctx context.Context, operation string, params *GetOperationParams, reqEditors ...RequestEditorFn) (*GetOperationResponse, error) {
+	rsp, err := c.GetOperation(ctx, operation, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14174,8 +16242,8 @@ func (c *ClientWithResponses) ListOrphanedVolumesWithResponse(ctx context.Contex
 }
 
 // GetPermissionsWithResponse request returning *GetPermissionsResponse
-func (c *ClientWithResponses) GetPermissionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error) {
-	rsp, err := c.GetPermissions(ctx, reqEditors...)
+func (c *ClientWithResponses) GetPermissionsWithResponse(ctx context.Context, params *GetPermissionsParams, reqEditors ...RequestEditorFn) (*GetPermissionsResponse, error) {
+	rsp, err := c.GetPermissions(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14183,8 +16251,8 @@ func (c *ClientWithResponses) GetPermissionsWithResponse(ctx context.Context, re
 }
 
 // ListProvidersWithResponse request returning *ListProvidersResponse
-func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error) {
-	rsp, err := c.ListProviders(ctx, reqEditors...)
+func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, params *ListProvidersParams, reqEditors ...RequestEditorFn) (*ListProvidersResponse, error) {
+	rsp, err := c.ListProviders(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14192,8 +16260,8 @@ func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, req
 }
 
 // GetProviderWithResponse request returning *GetProviderResponse
-func (c *ClientWithResponses) GetProviderWithResponse(ctx context.Context, provider string, reqEditors ...RequestEditorFn) (*GetProviderResponse, error) {
-	rsp, err := c.GetProvider(ctx, provider, reqEditors...)
+func (c *ClientWithResponses) GetProviderWithResponse(ctx context.Context, provider string, params *GetProviderParams, reqEditors ...RequestEditorFn) (*GetProviderResponse, error) {
+	rsp, err := c.GetProvider(ctx, provider, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14218,8 +16286,8 @@ func (c *ClientWithResponses) CheckPermissionWithResponse(ctx context.Context, p
 }
 
 // GetRBACPolicyWithResponse request returning *GetRBACPolicyResponse
-func (c *ClientWithResponses) GetRBACPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error) {
-	rsp, err := c.GetRBACPolicy(ctx, reqEditors...)
+func (c *ClientWithResponses) GetRBACPolicyWithResponse(ctx context.Context, params *GetRBACPolicyParams, reqEditors ...RequestEditorFn) (*GetRBACPolicyResponse, error) {
+	rsp, err := c.GetRBACPolicy(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14244,8 +16312,8 @@ func (c *ClientWithResponses) ReplaceRBACPolicyWithResponse(ctx context.Context,
 }
 
 // GetSettingsWithResponse request returning *GetSettingsResponse
-func (c *ClientWithResponses) GetSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error) {
-	rsp, err := c.GetSettings(ctx, reqEditors...)
+func (c *ClientWithResponses) GetSettingsWithResponse(ctx context.Context, params *GetSettingsParams, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error) {
+	rsp, err := c.GetSettings(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14270,8 +16338,8 @@ func (c *ClientWithResponses) ReplaceSettingsWithResponse(ctx context.Context, p
 }
 
 // GetVersionWithResponse request returning *GetVersionResponse
-func (c *ClientWithResponses) GetVersionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVersionResponse, error) {
-	rsp, err := c.GetVersion(ctx, reqEditors...)
+func (c *ClientWithResponses) GetVersionWithResponse(ctx context.Context, params *GetVersionParams, reqEditors ...RequestEditorFn) (*GetVersionResponse, error) {
+	rsp, err := c.GetVersion(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -14327,12 +16395,33 @@ func ParseListAccountsResponse(rsp *http.Response) (*ListAccountsResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14395,12 +16484,33 @@ func ParseCreateAccountResponse(rsp *http.Response) (*CreateAccountResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14456,12 +16566,33 @@ func ParseDeleteAccountResponse(rsp *http.Response) (*DeleteAccountResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14524,12 +16655,33 @@ func ParseGetAccountResponse(rsp *http.Response) (*GetAccountResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14592,12 +16744,33 @@ func ParseReplaceAccountResponse(rsp *http.Response) (*ReplaceAccountResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14653,12 +16826,33 @@ func ParseResetAccountPasswordResponse(rsp *http.Response) (*ResetAccountPasswor
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14721,12 +16915,33 @@ func ParseListAPITokensResponse(rsp *http.Response) (*ListAPITokensResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14789,12 +17004,33 @@ func ParseCreateAPITokenResponse(rsp *http.Response) (*CreateAPITokenResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14850,12 +17086,33 @@ func ParseDeleteAPITokenResponse(rsp *http.Response) (*DeleteAPITokenResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14918,12 +17175,33 @@ func ParseGetAPITokenResponse(rsp *http.Response) (*GetAPITokenResponse, error) 
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -14986,12 +17264,33 @@ func ParseReplaceAPITokenResponse(rsp *http.Response) (*ReplaceAPITokenResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15047,12 +17346,33 @@ func ParseChangePasswordResponse(rsp *http.Response) (*ChangePasswordResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15115,6 +17435,13 @@ func ParseLoginResponse(rsp *http.Response) (*LoginResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15123,14 +17450,14 @@ func ParseLoginResponse(rsp *http.Response) (*LoginResponse, error) {
 		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
-		var dest Error
+		var dest PayloadTooLarge
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
-		var dest Error
+		var dest UnsupportedMediaType
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -15197,12 +17524,33 @@ func ParseLogoutResponse(rsp *http.Response) (*LogoutResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15265,12 +17613,33 @@ func ParseGetCurrentUserResponse(rsp *http.Response) (*GetCurrentUserResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15326,12 +17695,33 @@ func ParseOidcCallbackResponse(rsp *http.Response) (*OidcCallbackResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15394,12 +17784,33 @@ func ParseOidcLoginResponse(rsp *http.Response) (*OidcLoginResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15469,12 +17880,33 @@ func ParseRefreshSessionResponse(rsp *http.Response) (*RefreshSessionResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15537,12 +17969,33 @@ func ParseListBackupStoragesResponse(rsp *http.Response) (*ListBackupStoragesRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15605,12 +18058,33 @@ func ParseCreateBackupStorageResponse(rsp *http.Response) (*CreateBackupStorageR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest UnprocessableEntity
@@ -15673,12 +18147,33 @@ func ParseDeleteBackupStorageResponse(rsp *http.Response) (*DeleteBackupStorageR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15741,12 +18236,33 @@ func ParseGetBackupStorageResponse(rsp *http.Response) (*GetBackupStorageRespons
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15809,12 +18325,33 @@ func ParseReplaceBackupStorageResponse(rsp *http.Response) (*ReplaceBackupStorag
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15877,12 +18414,33 @@ func ParseVerifyBackupStorageResponse(rsp *http.Response) (*VerifyBackupStorageR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -15945,12 +18503,33 @@ func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16013,12 +18592,33 @@ func ParseCreateClusterResponse(rsp *http.Response) (*CreateClusterResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest UnprocessableEntity
@@ -16088,12 +18688,33 @@ func ParseDeleteClusterResponse(rsp *http.Response) (*DeleteClusterResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16156,12 +18777,33 @@ func ParseGetClusterResponse(rsp *http.Response) (*GetClusterResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16224,12 +18866,33 @@ func ParsePatchClusterResponse(rsp *http.Response) (*PatchClusterResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16292,12 +18955,33 @@ func ParseReplaceClusterResponse(rsp *http.Response) (*ReplaceClusterResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16360,12 +19044,33 @@ func ParseListBackupsResponse(rsp *http.Response) (*ListBackupsResponse, error) 
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16428,12 +19133,33 @@ func ParseCreateBackupResponse(rsp *http.Response) (*CreateBackupResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16496,12 +19222,33 @@ func ParseDeleteBackupResponse(rsp *http.Response) (*DeleteBackupResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16564,12 +19311,33 @@ func ParseGetBackupResponse(rsp *http.Response) (*GetBackupResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16632,12 +19400,33 @@ func ParseGetClusterBalancerResponse(rsp *http.Response) (*GetClusterBalancerRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16700,12 +19489,33 @@ func ParseReplaceClusterBalancerResponse(rsp *http.Response) (*ReplaceClusterBal
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16768,12 +19578,33 @@ func ParseGetClusterConnectionResponse(rsp *http.Response) (*GetClusterConnectio
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16843,12 +19674,33 @@ func ParseListDatabaseRolesResponse(rsp *http.Response) (*ListDatabaseRolesRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16911,12 +19763,33 @@ func ParseCreateDatabaseRoleResponse(rsp *http.Response) (*CreateDatabaseRoleRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -16972,12 +19845,33 @@ func ParseDeleteDatabaseRoleResponse(rsp *http.Response) (*DeleteDatabaseRoleRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17040,12 +19934,33 @@ func ParseGetDatabaseRoleResponse(rsp *http.Response) (*GetDatabaseRoleResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17108,12 +20023,33 @@ func ParseReplaceDatabaseRoleResponse(rsp *http.Response) (*ReplaceDatabaseRoleR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17176,12 +20112,33 @@ func ParseListDatabaseUsersResponse(rsp *http.Response) (*ListDatabaseUsersRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17244,12 +20201,33 @@ func ParseCreateDatabaseUserResponse(rsp *http.Response) (*CreateDatabaseUserRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17305,12 +20283,33 @@ func ParseDeleteDatabaseUserResponse(rsp *http.Response) (*DeleteDatabaseUserRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17373,12 +20372,33 @@ func ParseGetDatabaseUserResponse(rsp *http.Response) (*GetDatabaseUserResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17441,12 +20461,33 @@ func ParseReplaceDatabaseUserResponse(rsp *http.Response) (*ReplaceDatabaseUserR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17509,12 +20550,33 @@ func ParseListClusterMembersResponse(rsp *http.Response) (*ListClusterMembersRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17577,12 +20639,33 @@ func ParseGetClusterMemberResponse(rsp *http.Response) (*GetClusterMemberRespons
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17645,12 +20728,33 @@ func ParseGetMemberLogsResponse(rsp *http.Response) (*GetMemberLogsResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17713,12 +20817,33 @@ func ParseReplaceClusterMemberResponse(rsp *http.Response) (*ReplaceClusterMembe
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17781,12 +20906,33 @@ func ParseGetClusterMetricsResponse(rsp *http.Response) (*GetClusterMetricsRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17849,12 +20995,33 @@ func ParseListClusterOperationsResponse(rsp *http.Response) (*ListClusterOperati
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17917,12 +21084,33 @@ func ParseGetPITRWindowResponse(rsp *http.Response) (*GetPITRWindowResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -17985,12 +21173,33 @@ func ParseGetClusterPlacementResponse(rsp *http.Response) (*GetClusterPlacementR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18053,12 +21262,33 @@ func ParseRaiseClusterFCVResponse(rsp *http.Response) (*RaiseClusterFCVResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18121,12 +21351,33 @@ func ParseRestartClusterResponse(rsp *http.Response) (*RestartClusterResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18189,12 +21440,33 @@ func ParseListRestoresResponse(rsp *http.Response) (*ListRestoresResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18257,12 +21529,33 @@ func ParseCreateRestoreResponse(rsp *http.Response) (*CreateRestoreResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18325,12 +21618,33 @@ func ParseGetRestoreResponse(rsp *http.Response) (*GetRestoreResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18393,12 +21707,33 @@ func ParseResumeClusterResponse(rsp *http.Response) (*ResumeClusterResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18461,12 +21796,33 @@ func ParseRotateClusterTLSResponse(rsp *http.Response) (*RotateClusterTLSRespons
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18529,12 +21885,33 @@ func ParseGetClusterStatusResponse(rsp *http.Response) (*GetClusterStatusRespons
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18597,12 +21974,33 @@ func ParseListSystemUsersResponse(rsp *http.Response) (*ListSystemUsersResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18665,12 +22063,33 @@ func ParseRotateSystemUserResponse(rsp *http.Response) (*RotateSystemUserRespons
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18733,12 +22152,33 @@ func ParseListEventsResponse(rsp *http.Response) (*ListEventsResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18794,12 +22234,33 @@ func ParseStreamEventsResponse(rsp *http.Response) (*StreamEventsResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18862,12 +22323,33 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18923,12 +22405,33 @@ func ParseGetPrometheusMetricsResponse(rsp *http.Response) (*GetPrometheusMetric
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -18984,6 +22487,27 @@ func ParseListNamespacesResponse(rsp *http.Response) (*ListNamespacesResponse, e
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19038,12 +22562,33 @@ func ParseCreateNamespaceResponse(rsp *http.Response) (*CreateNamespaceResponse,
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest UnprocessableEntity
@@ -19099,12 +22644,33 @@ func ParseDeleteNamespaceResponse(rsp *http.Response) (*DeleteNamespaceResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19139,6 +22705,13 @@ func ParseGetNamespaceResponse(rsp *http.Response) (*GetNamespaceResponse, error
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthorized
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19159,6 +22732,27 @@ func ParseGetNamespaceResponse(rsp *http.Response) (*GetNamespaceResponse, error
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19221,12 +22815,33 @@ func ParseUpdateNamespaceResponse(rsp *http.Response) (*UpdateNamespaceResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest UnprocessableEntity
@@ -19296,12 +22911,33 @@ func ParseRotateNamespaceTokenResponse(rsp *http.Response) (*RotateNamespaceToke
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest UnprocessableEntity
@@ -19364,12 +23000,33 @@ func ParseValidateNamespaceResponse(rsp *http.Response) (*ValidateNamespaceRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest UnprocessableEntity
@@ -19465,12 +23122,33 @@ func ParseListOperationsResponse(rsp *http.Response) (*ListOperationsResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19533,12 +23211,33 @@ func ParseGetOperationResponse(rsp *http.Response) (*GetOperationResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19662,6 +23361,27 @@ func ParseListOrphanedVolumesResponse(rsp *http.Response) (*ListOrphanedVolumesR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19723,12 +23443,33 @@ func ParseGetPermissionsResponse(rsp *http.Response) (*GetPermissionsResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19791,12 +23532,33 @@ func ParseListProvidersResponse(rsp *http.Response) (*ListProvidersResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19859,12 +23621,33 @@ func ParseGetProviderResponse(rsp *http.Response) (*GetProviderResponse, error) 
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19927,12 +23710,33 @@ func ParseCheckPermissionResponse(rsp *http.Response) (*CheckPermissionResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19995,12 +23799,33 @@ func ParseGetRBACPolicyResponse(rsp *http.Response) (*GetRBACPolicyResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -20063,12 +23888,33 @@ func ParseReplaceRBACPolicyResponse(rsp *http.Response) (*ReplaceRBACPolicyRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -20131,12 +23977,33 @@ func ParseGetSettingsResponse(rsp *http.Response) (*GetSettingsResponse, error) 
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -20199,12 +24066,33 @@ func ParseReplaceSettingsResponse(rsp *http.Response) (*ReplaceSettingsResponse,
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -20267,12 +24155,33 @@ func ParseGetVersionResponse(rsp *http.Response) (*GetVersionResponse, error) {
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError

@@ -90,6 +90,8 @@ paths:
                 additionalProperties: true
                 description: The OpenAPI document serialized as YAML.
   /auth/login:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: login
       tags:
@@ -100,6 +102,12 @@ paths:
         passwords receive the same 429 response and retry delay.
       x-karakoram-rbac: public
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': &id001
           $ref: '#/components/responses/BadRequest'
         '401': &id002
@@ -141,18 +149,6 @@ paths:
                 type: string
         '500':
           $ref: '#/components/responses/InternalError'
-        '413':
-          description: Request exceeds the 2 MiB body limit.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '415':
-          description: Login requires application/json.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
       security: []
       parameters:
       - $ref: '#/components/parameters/CSRF'
@@ -163,6 +159,8 @@ paths:
             schema:
               $ref: '#/components/schemas/LoginRequest'
   /auth/logout:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: logout
       tags:
@@ -173,12 +171,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -187,6 +196,8 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /auth/refresh:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: refreshSession
       tags:
@@ -197,6 +208,12 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -222,6 +239,8 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /auth/me:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getCurrentUser
       tags:
@@ -232,12 +251,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -248,6 +278,8 @@ paths:
       description: 'Self-service: returns only the caller, independent of administrative
         accounts read policy.'
   /auth/change-password:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: changePassword
       tags:
@@ -258,12 +290,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -279,6 +322,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ChangePasswordRequest'
   /auth/oidc/login:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: oidcLogin
       tags:
@@ -286,6 +331,12 @@ paths:
       summary: Begin OIDC authorization code login with PKCE
       x-karakoram-rbac: public
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -311,6 +362,8 @@ paths:
           type: string
         description: Accepted UI return-path hint; currently ignored. Successful OIDC authentication redirects to the installation root.
   /auth/oidc/callback:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: oidcCallback
       tags:
@@ -318,6 +371,12 @@ paths:
       summary: Exchange OIDC authorization code and establish a cookie session
       x-karakoram-rbac: public
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -353,6 +412,8 @@ paths:
           type: string
         required: true
   /version:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getVersion
       tags:
@@ -360,12 +421,23 @@ paths:
       summary: Read server build and API version
       x-karakoram-rbac: public
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -375,6 +447,8 @@ paths:
           $ref: '#/components/responses/InternalError'
       security: []
   /healthz:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getHealth
       tags:
@@ -382,12 +456,23 @@ paths:
       summary: Read control-plane health
       x-karakoram-rbac: public
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -400,6 +485,8 @@ paths:
       - url: /
         description: Root-level control-plane endpoint, outside /api/v1.
   /settings:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getSettings
       tags:
@@ -410,12 +497,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -433,12 +531,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -455,6 +564,8 @@ paths:
             schema:
               $ref: '#/components/schemas/Settings'
   /permissions:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getPermissions
       tags:
@@ -465,12 +576,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -481,6 +603,8 @@ paths:
       description: 'Self-service: returns permissions for the current subject and
         its OIDC groups. Lists elsewhere are filtered per object.'
   /rbac/policy:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: getRBACPolicy
       tags:
@@ -491,12 +615,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -514,12 +649,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -536,6 +682,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RBACPolicy'
   /rbac/can:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     post:
       operationId: checkPermission
       tags:
@@ -546,12 +694,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -570,6 +729,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CanRequest'
   /accounts:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listAccounts
       tags:
@@ -580,12 +741,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -606,6 +778,12 @@ paths:
         action: create
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -614,6 +792,10 @@ paths:
         '201':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
           content:
@@ -633,6 +815,7 @@ paths:
               $ref: '#/components/schemas/CreateAccountRequest'
   /accounts/{account}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - name: account
       in: path
       schema: &id006
@@ -650,12 +833,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -673,12 +867,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -704,12 +909,23 @@ paths:
         action: delete
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -717,6 +933,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /accounts/{account}/reset-password:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - name: account
       in: path
       schema: *id006
@@ -731,12 +948,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -749,6 +977,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ResetPasswordRequest'
   /api-tokens:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listAPITokens
       tags:
@@ -759,12 +989,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -785,6 +1026,12 @@ paths:
         action: create
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -793,6 +1040,10 @@ paths:
         '201':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
           content:
@@ -812,6 +1063,7 @@ paths:
               $ref: '#/components/schemas/CreateAPITokenRequest'
   /api-tokens/{token}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - name: token
       in: path
       schema: *id006
@@ -826,12 +1078,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -849,12 +1112,23 @@ paths:
         action: update
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -880,18 +1154,31 @@ paths:
         action: delete
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
       parameters:
       - $ref: '#/components/parameters/CSRF'
   /providers:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listProviders
       tags:
@@ -902,12 +1189,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -917,6 +1215,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /providers/{provider}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - name: provider
       in: path
       schema: *id006
@@ -931,12 +1230,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -945,6 +1255,8 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
   /namespaces:
+    parameters:
+    - $ref: '#/components/parameters/RequestID'
     get:
       operationId: listNamespaces
       tags: [Namespaces]
@@ -956,7 +1268,18 @@ paths:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -990,9 +1313,19 @@ paths:
             schema:
               $ref: '#/components/schemas/NamespaceCreate'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '201':
           description: Registered; relay deployment continues asynchronously.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
           content:
@@ -1013,6 +1346,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /namespaces/{namespace}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespacePath'
     get:
       operationId: getNamespace
@@ -1020,7 +1354,20 @@ paths:
       summary: Read namespace project, token status and relay health
       x-karakoram-rbac: {resource: namespaces, action: read, object: namespace}
       responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1050,7 +1397,18 @@ paths:
             schema:
               $ref: '#/components/schemas/NamespaceUpdate'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1082,7 +1440,18 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '202':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Namespace removal accepted; relay cleanup continues asynchronously.
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1096,6 +1465,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /namespaces/{namespace}/token:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespacePath'
     put:
       operationId: rotateNamespaceToken
@@ -1114,7 +1484,18 @@ paths:
             schema:
               $ref: '#/components/schemas/NamespaceTokenRotate'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1136,6 +1517,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /namespaces/{namespace}/validate:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespacePath'
     post:
       operationId: validateNamespace
@@ -1145,7 +1527,18 @@ paths:
       parameters:
       - $ref: '#/components/parameters/CSRF'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1165,6 +1558,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listClusters
@@ -1176,12 +1570,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1204,6 +1609,12 @@ paths:
         action: create
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1214,6 +1625,10 @@ paths:
         '201':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
             Karakoram-Operation-Id:
@@ -1241,6 +1656,7 @@ paths:
               $ref: '#/components/schemas/CreateClusterRequest'
   /clusters/{cluster}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1253,12 +1669,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1276,6 +1703,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1297,6 +1730,10 @@ paths:
         '200':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
             Karakoram-Operation-Id:
@@ -1318,6 +1755,7 @@ paths:
               $ref: '#/components/schemas/ReplaceClusterRequest'
     patch:
       operationId: patchCluster
+      description: Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation.
       tags:
       - Clusters
       summary: Apply an RFC 7396 cluster merge patch
@@ -1326,6 +1764,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1347,6 +1791,10 @@ paths:
         '200':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
             Karakoram-Operation-Id:
@@ -1376,6 +1824,12 @@ paths:
         action: delete
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1384,6 +1838,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -1409,6 +1867,7 @@ paths:
           default: false
   /clusters/{cluster}/resume:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -1421,6 +1880,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1431,6 +1896,10 @@ paths:
           headers:
             Karakoram-Operation-Id:
               schema: {type: string}
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1441,6 +1910,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/restart:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -1453,6 +1923,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1461,6 +1937,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -1473,6 +1953,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/raise-fcv:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -1485,6 +1966,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1493,6 +1980,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -1511,6 +2002,7 @@ paths:
               $ref: '#/components/schemas/RaiseFCVRequest'
   /clusters/{cluster}/members/{member}/replace:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
@@ -1527,6 +2019,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1535,6 +2033,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -1547,6 +2049,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/rotate-tls:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     post:
@@ -1559,6 +2062,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1567,6 +2076,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -1581,6 +2094,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/system-users:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1593,12 +2107,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1608,6 +2133,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/system-users/{user}/rotate:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: user
@@ -1624,6 +2150,12 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1632,6 +2164,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -1644,6 +2180,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/members:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1656,12 +2193,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1671,6 +2219,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/members/{member}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
@@ -1687,12 +2236,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1702,6 +2262,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/status:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1714,12 +2275,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1729,6 +2301,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/connection:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1741,6 +2314,12 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1765,6 +2344,7 @@ paths:
           $ref: '#/components/responses/Unavailable'
   /clusters/{cluster}/placement:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1777,12 +2357,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1792,6 +2383,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/balancer:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1804,12 +2396,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1827,12 +2430,23 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1850,6 +2464,7 @@ paths:
               $ref: '#/components/schemas/Balancer'
   /clusters/{cluster}/database-users:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -1862,12 +2477,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1888,6 +2514,12 @@ paths:
         action: create
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1921,6 +2553,7 @@ paths:
               $ref: '#/components/schemas/CreateDatabaseUserRequest'
   /clusters/{cluster}/database-users/{database}/{username}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: database
@@ -1941,12 +2574,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1964,12 +2608,23 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -1995,12 +2650,23 @@ paths:
         action: delete
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -2008,6 +2674,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/database-roles:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2020,12 +2687,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2047,6 +2725,12 @@ paths:
         action: create
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2055,6 +2739,10 @@ paths:
         '201':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
           content:
@@ -2074,6 +2762,7 @@ paths:
               $ref: '#/components/schemas/DatabaseRole'
   /clusters/{cluster}/database-roles/{database}/{role}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: database
@@ -2094,12 +2783,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2117,12 +2817,23 @@ paths:
         action: update
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2149,12 +2860,23 @@ paths:
         action: delete
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -2162,6 +2884,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /orphaned-volumes:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listOrphanedVolumes
@@ -2174,10 +2897,21 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '401': *id002
         '400': *id001
         '404': *id004
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Orphaned volumes, including an empty items array when none are visible.
           content:
             application/json:
@@ -2187,6 +2921,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/backups:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2200,12 +2935,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2226,6 +2972,12 @@ paths:
         action: create
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2238,6 +2990,10 @@ paths:
               $ref: '#/components/headers/IdempotentReplayed'
             Karakoram-Operation-Id:
               schema: {type: string}
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2255,6 +3011,7 @@ paths:
               $ref: '#/components/schemas/CreateBackupRequest'
   /clusters/{cluster}/backups/{backup}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: backup
@@ -2272,12 +3029,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2296,6 +3064,12 @@ paths:
         action: delete
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2304,6 +3078,10 @@ paths:
         '202':
           description: Accepted; track the returned operation.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Karakoram-Operation-Id:
               schema: {type: string}
           content:
@@ -2311,6 +3089,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Operation'
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Retained snapshot objects and record removed, or already absent.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -2318,6 +3101,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /clusters/{cluster}/pitr:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2335,12 +3119,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2350,6 +3145,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/restores:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2362,12 +3158,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2388,6 +3195,12 @@ paths:
         action: create
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2400,6 +3213,10 @@ paths:
               $ref: '#/components/headers/IdempotentReplayed'
             Karakoram-Operation-Id:
               schema: {type: string}
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2427,6 +3244,7 @@ paths:
               $ref: '#/components/schemas/CreateRestoreRequest'
   /clusters/{cluster}/restores/{restore}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: restore
@@ -2443,12 +3261,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2458,6 +3287,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /backup-storages:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listBackupStorages
@@ -2469,12 +3299,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2495,6 +3336,12 @@ paths:
         action: create
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2505,6 +3352,10 @@ paths:
         '201':
           description: Successful response.
           headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
             Idempotent-Replayed:
               $ref: '#/components/headers/IdempotentReplayed'
           content:
@@ -2524,6 +3375,7 @@ paths:
               $ref: '#/components/schemas/CreateBackupStorageRequest'
   /backup-storages/{storage}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: storage
       in: path
@@ -2539,12 +3391,23 @@ paths:
         action: read
         object: storage
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2562,12 +3425,23 @@ paths:
         action: update
         object: storage
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2593,12 +3467,23 @@ paths:
         action: delete
         object: storage
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '204':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
         '500':
           $ref: '#/components/responses/InternalError'
@@ -2607,6 +3492,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /backup-storages/{storage}/verify:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: storage
       in: path
@@ -2622,12 +3508,23 @@ paths:
         action: update
         object: storage
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2639,6 +3536,7 @@ paths:
       - $ref: '#/components/parameters/CSRF'
   /operations:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listOperations
@@ -2650,12 +3548,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2681,6 +3590,7 @@ paths:
           type: string
   /clusters/{cluster}/operations:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2693,12 +3603,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2715,6 +3636,7 @@ paths:
           type: string
   /operations/{operation}:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - name: operation
       in: path
       schema: *id006
@@ -2729,12 +3651,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2780,6 +3713,7 @@ paths:
           $ref: '#/components/responses/InternalError'
   /events:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: listEvents
@@ -2796,12 +3730,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2849,9 +3794,10 @@ paths:
         description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
         schema:
           type: string
-          enum: [accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
+          enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
   /events/stream:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: streamEvents
@@ -2867,12 +3813,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             text/event-stream:
@@ -2913,6 +3870,7 @@ paths:
         description: SSE reconnection cursor; used when cursor is absent.
   /clusters/{cluster}/metrics:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
@@ -2925,12 +3883,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -2944,17 +3913,18 @@ paths:
         schema:
           type: string
           default: 1h
-          pattern: ^[1-9][0-9]*(s|m|h|d)$
-        description: Lookback from now.
+          pattern: '^[+]?(([0-9]+(\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+$'
+        description: Positive Go duration no greater than 24h, for example 30m, 1h or 24h. Days are not a duration unit.
       - name: step
         in: query
         schema:
           type: string
           default: 30s
-          pattern: ^[1-9][0-9]*(s|m|h)$
-        description: Aggregation interval.
+          pattern: '^[+]?(([0-9]+(\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+$'
+        description: Positive Go duration no greater than range. The omitted default 30s is bounded to a shorter requested range.
   /clusters/{cluster}/members/{member}/logs:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/ClusterPath'
     - $ref: '#/components/parameters/NamespaceQuery'
     - name: member
@@ -2971,12 +3941,23 @@ paths:
         action: read
         object: cluster
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             application/json:
@@ -3012,6 +3993,7 @@ paths:
           format: date-time
   /metrics:
     parameters:
+    - $ref: '#/components/parameters/RequestID'
     - $ref: '#/components/parameters/NamespaceQuery'
     get:
       operationId: getPrometheusMetrics
@@ -3023,12 +4005,23 @@ paths:
         action: read
         object: '*'
       responses:
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '400': *id001
         '401': *id002
         '403': *id003
         '404': *id004
         '409': *id005
         '200':
+          headers:
+            X-Request-ID:
+              description: Request correlation identifier.
+              schema:
+                type: string
           description: Successful response.
           content:
             text/plain:
@@ -3078,6 +4071,12 @@ components:
         minLength: 1
         maxLength: 255
         pattern: '^[!-~]+$'
+    RequestID:
+      name: X-Request-ID
+      in: header
+      description: 'A correlation ID of at most 128 characters from A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Invalid IDs are replaced, not rejected. Echoed on every API response.'
+      schema:
+        type: string
     NamespaceQuery:
       name: namespace
       in: query
@@ -3134,25 +4133,81 @@ components:
         type: boolean
         enum: [true]
   responses:
+    MethodNotAllowed:
+      description: 'method_not_allowed: the route exists but does not support this method.'
+      headers:
+        Allow:
+          schema:
+            type: string
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
+      description: 'payload_too_large: body exceeds the 2 MiB limit.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
+      description: 'unsupported_media_type: use a Content-Type declared for the operation.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     BadRequest:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       description: Invalid request, query, cursor, or resource configuration.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Unauthorized:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       description: Missing, expired or invalid authentication.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       description: Authenticated caller lacks permission or the CSRF check failed.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     NotFound:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       description: The requested resource does not exist or is not visible to the
         caller.
       content:
@@ -3165,11 +4220,21 @@ components:
         or unavailable replay cursor. On operations accepting Idempotency-Key,
         details.field is Idempotency-Key and details.reason is conflict for a
         different request body or invalid_state for an in-flight duplicate.
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     UnprocessableEntity:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       description: Invalid namespace token, project mismatch or duplicate project.
       content:
         application/json:
@@ -3182,6 +4247,11 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     InternalError:
+      headers:
+        X-Request-ID:
+          description: Request correlation identifier.
+          schema:
+            type: string
       description: Unexpected server error; response does not contain secret material.
       content:
         application/json:
@@ -3196,6 +4266,7 @@ components:
       description: Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
     TokenStatus:
       type: object
+      additionalProperties: false
       description: Secret-safe token health; never contains a token or fingerprint.
       properties:
         source:
@@ -3214,6 +4285,7 @@ components:
       required: [source, valid]
     RelayStatus:
       type: object
+      additionalProperties: false
       description: Relay health; the default namespace uses direct networking.
       properties:
         hostname:
@@ -3247,6 +4319,7 @@ components:
       required: [phase, connected, reconnects]
     Namespace:
       type: object
+      additionalProperties: false
       properties:
         name:
           $ref: '#/components/schemas/NamespaceName'
@@ -3323,6 +4396,7 @@ components:
       required: [token]
     NamespaceList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -3334,6 +4408,7 @@ components:
       required: [items]
     Error:
       type: object
+      additionalProperties: false
       description: |
         Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
         `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -3360,6 +4435,7 @@ components:
       - message
     Version:
       type: object
+      additionalProperties: false
       properties:
         version:
           type: string
@@ -3381,6 +4457,7 @@ components:
       - oidcEnabled
     Health:
       type: object
+      additionalProperties: false
       properties:
         status:
           type: string
@@ -3393,6 +4470,7 @@ components:
       - database
     LoginRequest:
       type: object
+      additionalProperties: false
       properties:
         username: *id006
         password: &id012
@@ -3405,6 +4483,7 @@ components:
       - password
     Session:
       type: object
+      additionalProperties: false
       properties:
         account:
           $ref: '#/components/schemas/CurrentUser'
@@ -3420,6 +4499,7 @@ components:
       - expiresAt
     CurrentUser:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         subject:
@@ -3441,6 +4521,7 @@ components:
       - mustChangePassword
     ChangePasswordRequest:
       type: object
+      additionalProperties: false
       properties:
         currentPassword: *id012
         newPassword:
@@ -3450,6 +4531,7 @@ components:
       - newPassword
     ResetPasswordRequest:
       type: object
+      additionalProperties: false
       properties:
         password:
           $ref: '#/components/schemas/AccountPassword'
@@ -3460,6 +4542,7 @@ components:
       - password
     OIDCConfig:
       type: object
+      additionalProperties: false
       properties:
         enabled:
           type: boolean
@@ -3485,6 +4568,7 @@ components:
       - enabled
     Settings:
       type: object
+      additionalProperties: false
       properties:
         oidc:
           $ref: '#/components/schemas/OIDCConfig'
@@ -3492,6 +4576,7 @@ components:
       - oidc
     Permission:
       type: object
+      additionalProperties: false
       properties:
         resource:
           type: string
@@ -3511,6 +4596,7 @@ components:
       - effect
     Permissions:
       type: object
+      additionalProperties: false
       properties:
         subject:
           type: string
@@ -3528,6 +4614,7 @@ components:
       - permissions
     RBACPolicy:
       type: object
+      additionalProperties: false
       properties:
         policy:
           type: string
@@ -3539,6 +4626,7 @@ components:
       - policy
     CanRequest:
       type: object
+      additionalProperties: false
       properties:
         subject:
           type: string
@@ -3563,6 +4651,7 @@ components:
       - object
     CanResponse:
       type: object
+      additionalProperties: false
       properties:
         allowed:
           type: boolean
@@ -3570,6 +4659,7 @@ components:
       - allowed
     Account:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         enabled:
@@ -3608,6 +4698,7 @@ components:
         Duplicate names are allowed; identify tokens by their unique ID.
     CreateAccountRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           $ref: '#/components/schemas/AccountName'
@@ -3624,6 +4715,7 @@ components:
       - password
     UpdateAccountRequest:
       type: object
+      additionalProperties: false
       properties:
         enabled:
           type: boolean
@@ -3634,6 +4726,7 @@ components:
       - mustChangePassword
     APIToken:
       type: object
+      additionalProperties: false
       properties:
         id: *id006
         name: *id006
@@ -3653,6 +4746,7 @@ components:
       - createdAt
     CreateAPITokenRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           $ref: '#/components/schemas/APITokenName'
@@ -3664,6 +4758,7 @@ components:
       - name
     UpdateAPITokenRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           $ref: '#/components/schemas/APITokenName'
@@ -3676,6 +4771,7 @@ components:
       - name
     CreatedAPIToken:
       type: object
+      additionalProperties: false
       properties:
         token:
           $ref: '#/components/schemas/APIToken'
@@ -3689,6 +4785,7 @@ components:
       - secret
     Resources:
       type: object
+      additionalProperties: false
       properties:
         cpuMode:
           type: string
@@ -3697,29 +4794,29 @@ components:
           - DEDICATED
         minCpu:
           type: number
-          minimum: 0
+          minimum: 1
         maxCpu:
           type: number
-          minimum: 0
+          minimum: 1
         minRam:
           type: number
-          minimum: 0
+          minimum: 0.5
           description: GiB
         maxRam:
           type: number
-          minimum: 0
+          minimum: 0.5
           description: GiB
         minDisk:
           type: number
-          minimum: 0
+          minimum: 5
           description: GiB
         maxDisk:
           type: number
-          minimum: 0
+          minimum: 5
           description: GiB
         startCpu:
           type: number
-          minimum: 0
+          minimum: 1
       required:
       - cpuMode
       - minCpu
@@ -3730,6 +4827,7 @@ components:
       - maxDisk
     Component:
       type: object
+      additionalProperties: false
       properties:
         replicas:
           type: integer
@@ -3741,6 +4839,7 @@ components:
       - resources
     Components:
       type: object
+      additionalProperties: false
       properties:
         engine:
           $ref: '#/components/schemas/Component'
@@ -3752,6 +4851,7 @@ components:
       - engine
     Topology:
       type: object
+      additionalProperties: false
       properties:
         type:
           type: string
@@ -3761,10 +4861,12 @@ components:
         shards:
           type: integer
           minimum: 1
+          maximum: 128
       required:
       - type
     ProviderVersion:
       type: object
+      additionalProperties: false
       properties:
         version:
           type: string
@@ -3787,6 +4889,7 @@ components:
       - status
     UpgradePath:
       type: object
+      additionalProperties: false
       properties:
         from:
           type: string
@@ -3809,6 +4912,7 @@ components:
       - to
     ProviderTopology:
       type: object
+      additionalProperties: false
       properties:
         type:
           type: string
@@ -3839,6 +4943,7 @@ components:
       - limits
     Preset:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         displayName:
@@ -3853,6 +4958,7 @@ components:
       - spec
     Provider:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         displayName:
@@ -3890,6 +4996,7 @@ components:
       - backupTypes
     BackupSchedule:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         cron:
@@ -3918,6 +5025,7 @@ components:
       - enabled
     PITRSpec:
       type: object
+      additionalProperties: false
       properties:
         enabled:
           type: boolean
@@ -3929,6 +5037,7 @@ components:
       - enabled
     BackupSpec:
       type: object
+      additionalProperties: false
       properties:
         storage: *id006
         schedules:
@@ -3939,6 +5048,7 @@ components:
           $ref: '#/components/schemas/PITRSpec'
     TLS:
       type: object
+      additionalProperties: false
       properties:
         mode:
           type: string
@@ -3972,6 +5082,7 @@ components:
       - ca
     Exposure:
       type: object
+      additionalProperties: false
       properties:
         public:
           type: boolean
@@ -3987,10 +5098,14 @@ components:
           items:
             type: string
             description: IPv4 or IPv6 CIDR.
+        allowAllAddresses:
+          type: boolean
+          description: Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
       required:
       - public
     MonitoringSpec:
       type: object
+      additionalProperties: false
       properties:
         enabled:
           type: boolean
@@ -3999,6 +5114,7 @@ components:
       - enabled
     DataSource:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4013,10 +5129,12 @@ components:
       - cluster
     ClusterSpec:
       type: object
+      additionalProperties: false
       properties:
         provider:
           type: string
-          default: psmdb
+          minLength: 1
+          description: Required provider identifier; list providers with GET /api/v1/providers.
         version:
           type: string
         topology:
@@ -4043,6 +5161,7 @@ components:
       - components
     Condition:
       type: object
+      additionalProperties: false
       properties:
         type:
           type: string
@@ -4065,6 +5184,7 @@ components:
       - lastTransitionTime
     AgentStatus:
       type: object
+      additionalProperties: false
       properties:
         connected:
           type: boolean
@@ -4078,6 +5198,7 @@ components:
       - connected
     Member:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         set:
@@ -4141,6 +5262,7 @@ components:
       - health
     ObservedResources:
       type: object
+      additionalProperties: false
       readOnly: true
       description: Current infrastructure allocation, distinct from desired autoscaling limits.
       properties:
@@ -4159,6 +5281,7 @@ components:
       - diskGB
     ConnectionSummary:
       type: object
+      additionalProperties: false
       properties:
         hosts:
           type: array
@@ -4178,6 +5301,7 @@ components:
       - uri
     ConnectionCredential:
       type: object
+      additionalProperties: false
       properties:
         username:
           type: string
@@ -4198,6 +5322,7 @@ components:
       - uri
     Connection:
       type: object
+      additionalProperties: false
       properties:
         connection:
           $ref: '#/components/schemas/ConnectionSummary'
@@ -4214,6 +5339,7 @@ components:
       - credentials
     PlacementGroup:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -4226,6 +5352,7 @@ components:
       - members
     Placement:
       type: object
+      additionalProperties: false
       properties:
         warning:
           type: string
@@ -4245,6 +5372,7 @@ components:
       - guaranteedAntiAffinity
     PITRWindow:
       type: object
+      additionalProperties: false
       properties:
         start: *id011
         end: *id011
@@ -4257,12 +5385,14 @@ components:
       - available
     ClusterBackupStatus:
       type: object
+      additionalProperties: false
       properties:
         pitrWindow:
           $ref: '#/components/schemas/PITRWindow'
         lastBackup: *id006
     ClusterStatus:
       type: object
+      additionalProperties: false
       properties:
         phase:
           type: string
@@ -4310,6 +5440,7 @@ components:
       - members
     Cluster:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4339,31 +5470,53 @@ components:
       - updatedAt
     CreateClusterRequest:
       type: object
+      additionalProperties: false
       properties:
         name: *id007
         spec:
-          $ref: '#/components/schemas/ClusterSpec'
+          $ref: '#/components/schemas/ClusterInputSpec'
       required:
       - name
       - spec
     ReplaceClusterRequest:
       type: object
+      additionalProperties: false
       properties:
         spec:
-          $ref: '#/components/schemas/ClusterSpec'
-      description: Replaces the full desired spec; server-owned name, generation,
-        status and timestamps cannot be replaced.
+          $ref: '#/components/schemas/ClusterInputSpec'
+        namespace:
+          $ref: '#/components/schemas/NamespaceName'
+        name:
+          type: string
+          readOnly: true
+        generation:
+          type: integer
+          readOnly: true
+        status:
+          type: object
+          additionalProperties: true
+          readOnly: true
+        createdAt:
+          type: string
+          readOnly: true
+        updatedAt:
+          type: string
+          readOnly: true
+      description: Replaces the full desired spec. Recognized server-owned fields from GET may be round-tripped but are ignored; PATCH rejects them.
       required:
       - spec
     ClusterMergePatch:
+      x-go-type: map[string]interface{}
       type: object
-      additionalProperties: true
-      description: 'RFC 7396 merge patch of the cluster desired spec envelope: {spec:
-        {...}}. null removes optional fields; arrays replace in full. Server-owned
-        name/status/generation/timestamps are rejected. Secret inputs follow TLS write-only
-        fields.'
+      additionalProperties: false
+      properties:
+        spec:
+          $ref: '#/components/schemas/ClusterPatchSpec'
+      required: [spec]
+      description: 'RFC 7396 merge patch of desired {spec: {...}}. null removes optional fields; arrays replace in full. Server-owned fields are rejected.'
     RaiseFCVRequest:
       type: object
+      additionalProperties: false
       properties:
         version:
           type: string
@@ -4373,6 +5526,7 @@ components:
       - version
     Balancer:
       type: object
+      additionalProperties: false
       properties:
         enabled:
           type: boolean
@@ -4387,6 +5541,7 @@ components:
       - enabled
     SystemUser:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -4409,6 +5564,7 @@ components:
       - roles
     RoleReference:
       type: object
+      additionalProperties: false
       properties:
         role:
           type: string
@@ -4419,6 +5575,7 @@ components:
       - db
     DatabaseUser:
       type: object
+      additionalProperties: false
       properties:
         username: *id006
         database: *id006
@@ -4432,6 +5589,7 @@ components:
       - roles
     CreatedDatabaseUser:
       type: object
+      additionalProperties: false
       description: Application user creation result. Generated passwords are returned by creation and matching Idempotency-Key replays within 24 hours, never by subsequent reads.
       properties:
         username: *id006
@@ -4450,6 +5608,7 @@ components:
       - roles
     CreateDatabaseUserRequest:
       type: object
+      additionalProperties: false
       description: Omit password to have the server generate one and return it in generatedPassword. Matching Idempotency-Key retries replay that response for 24 hours.
       properties:
         username: *id006
@@ -4469,6 +5628,7 @@ components:
       - roles
     UpdateDatabaseUserRequest:
       type: object
+      additionalProperties: false
       properties:
         password:
           allOf:
@@ -4482,6 +5642,7 @@ components:
       - roles
     PrivilegeResource:
       type: object
+      additionalProperties: false
       properties:
         db:
           type: string
@@ -4495,6 +5656,7 @@ components:
         exclusive with db/collection.
     Privilege:
       type: object
+      additionalProperties: false
       properties:
         resource:
           $ref: '#/components/schemas/PrivilegeResource'
@@ -4507,6 +5669,7 @@ components:
       - actions
     DatabaseRole:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         database: *id006
@@ -4525,6 +5688,7 @@ components:
       - privileges
     UpdateDatabaseRoleRequest:
       type: object
+      additionalProperties: false
       properties:
         roles:
           type: array
@@ -4539,6 +5703,7 @@ components:
       - privileges
     Backup:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4591,6 +5756,7 @@ components:
       - phase
     CreateBackupRequest:
       type: object
+      additionalProperties: false
       properties:
         name: *id006
         storage: *id006
@@ -4604,6 +5770,7 @@ components:
       - type
     RestoreSource:
       type: object
+      additionalProperties: false
       properties:
         backup: *id006
         pitrTime: *id011
@@ -4618,6 +5785,7 @@ components:
           required: [backup]
     Restore:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4650,6 +5818,7 @@ components:
       - phase
     CreateRestoreRequest:
       type: object
+      additionalProperties: false
       properties:
         sourceNamespace:
           allOf:
@@ -4663,6 +5832,7 @@ components:
       - source
     S3Credentials:
       type: object
+      additionalProperties: false
       properties:
         accessKeyId:
           type: string
@@ -4675,6 +5845,7 @@ components:
       - secretAccessKey
     BackupStorage:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4720,6 +5891,7 @@ components:
       - credentialsConfigured
     CreateBackupStorageRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -4747,6 +5919,7 @@ components:
       - credentials
     UpdateBackupStorageRequest:
       type: object
+      additionalProperties: false
       properties:
         type: *id013
         endpointURL: *id014
@@ -4769,6 +5942,7 @@ components:
       - verifyTLS
     StorageVerification:
       type: object
+      additionalProperties: false
       properties:
         verified:
           type: boolean
@@ -4795,6 +5969,7 @@ components:
       required: [kind, name]
     Operation:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4864,6 +6039,7 @@ components:
       - createdAt
     Event:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -4900,6 +6076,7 @@ components:
       - createdAt
     MetricPoint:
       type: object
+      additionalProperties: false
       properties:
         timestamp: *id011
         value:
@@ -4909,6 +6086,7 @@ components:
       - value
     MetricSeries:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -4934,6 +6112,7 @@ components:
       - points
     ClusterMetrics:
       type: object
+      additionalProperties: false
       properties:
         start: *id011
         end: *id011
@@ -4950,6 +6129,7 @@ components:
       - series
     LogLine:
       type: object
+      additionalProperties: false
       properties:
         timestamp: *id011
         process:
@@ -4962,6 +6142,7 @@ components:
       - message
     MemberLogs:
       type: object
+      additionalProperties: false
       properties:
         member: *id006
         lines:
@@ -4975,6 +6156,7 @@ components:
       - lines
     AccountList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -4987,6 +6169,7 @@ components:
       - items
     APITokenList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -4999,6 +6182,7 @@ components:
       - items
     ProviderList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5011,6 +6195,7 @@ components:
       - items
     ClusterList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5023,6 +6208,7 @@ components:
       - items
     MemberList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5035,6 +6221,7 @@ components:
       - items
     SystemUserList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5047,6 +6234,7 @@ components:
       - items
     DatabaseUserList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5059,6 +6247,7 @@ components:
       - items
     DatabaseRoleList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5071,6 +6260,7 @@ components:
       - items
     OrphanedVolume:
       type: object
+      additionalProperties: false
       properties:
         namespace:
           allOf:
@@ -5120,6 +6310,7 @@ components:
       - lastProcessId
     OrphanedVolumeList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5129,6 +6320,7 @@ components:
       - items
     BackupList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5141,6 +6333,7 @@ components:
       - items
     RestoreList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5153,6 +6346,7 @@ components:
       - items
     BackupStorageList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5165,6 +6359,7 @@ components:
       - items
     OperationList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5177,6 +6372,7 @@ components:
       - items
     EventList:
       type: object
+      additionalProperties: false
       properties:
         items:
           type: array
@@ -5187,3 +6383,473 @@ components:
           description: Opaque continuation cursor; absent at the end.
       required:
       - items
+    ResourcesInput:
+      type: object
+      properties:
+        cpuMode:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+        minCpu:
+          type: number
+          minimum: 1
+        maxCpu:
+          type: number
+          minimum: 1
+        minRam:
+          type: number
+          minimum: 0.5
+          description: GiB
+        maxRam:
+          type: number
+          minimum: 0.5
+          description: GiB
+        minDisk:
+          type: number
+          minimum: 5
+          description: GiB
+        maxDisk:
+          type: number
+          minimum: 5
+          description: GiB
+        startCpu:
+          type: number
+          minimum: 1
+      additionalProperties: false
+    ComponentInput:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 1
+        resources:
+          $ref: '#/components/schemas/ResourcesInput'
+      additionalProperties: false
+    ComponentsInput:
+      type: object
+      properties:
+        engine:
+          $ref: '#/components/schemas/ComponentInput'
+        configServer:
+          $ref: '#/components/schemas/ConfigServerInput'
+        router:
+          $ref: '#/components/schemas/ComponentInput'
+      additionalProperties: false
+    TopologyInput:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - replicaSet
+          - sharded
+        shards:
+          type: integer
+          minimum: 1
+          maximum: 128
+      additionalProperties: false
+    TLSInput:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - preferTLS
+          - requireTLS
+          - disabled
+          default: requireTLS
+        ca:
+          type: string
+          enum:
+          - selfSigned
+          - userProvided
+          default: selfSigned
+        certificate:
+          type: string
+          writeOnly: true
+          description: User-provided PEM certificate chain.
+        privateKey: &inputId001
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+        caCertificate:
+          type: string
+          writeOnly: true
+        caPrivateKey: *inputId001
+      description: PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided
+        CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material
+        cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls
+        operation renews leaf certificates only.
+      additionalProperties: false
+    ExposureInput:
+      type: object
+      properties:
+        public:
+          type: boolean
+          default: false
+        ipType:
+          type: string
+          enum:
+          - IPV6
+          - IPV4
+          default: IPV6
+        allowlist:
+          type: array
+          items:
+            type: string
+            description: IPv4 or IPv6 CIDR.
+        allowAllAddresses:
+          type: boolean
+          description: Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+      additionalProperties: false
+    ClusterInputSpec:
+      type: object
+      properties:
+        provider:
+          type: string
+          minLength: 1
+          description: Required provider identifier; list providers with GET /api/v1/providers.
+        version:
+          type: string
+        topology:
+          $ref: '#/components/schemas/TopologyInput'
+        components:
+          $ref: '#/components/schemas/ComponentsInput'
+        engineConfig:
+          type: string
+          description: Validated YAML mongod/mongos overrides.
+        backup:
+          $ref: '#/components/schemas/BackupSpecInput'
+        tls:
+          $ref: '#/components/schemas/TLSInput'
+        exposure:
+          $ref: '#/components/schemas/ExposureInput'
+        monitoring:
+          $ref: '#/components/schemas/MonitoringSpec'
+        dataSource:
+          $ref: '#/components/schemas/DataSource'
+      additionalProperties: false
+      required:
+      - provider
+      description: Provider is required. Omitted version, topology, components and resource fields use provider catalog
+        defaults. Explicit zero values are invalid.
+    ResourcesPatch:
+      type: object
+      properties:
+        cpuMode:
+          type: string
+          enum:
+          - SHARED
+          - DEDICATED
+          nullable: true
+        minCpu:
+          type: number
+          minimum: 1
+          nullable: true
+        maxCpu:
+          type: number
+          minimum: 1
+          nullable: true
+        minRam:
+          type: number
+          minimum: 0.5
+          description: GiB
+          nullable: true
+        maxRam:
+          type: number
+          minimum: 0.5
+          description: GiB
+          nullable: true
+        minDisk:
+          type: number
+          minimum: 5
+          description: GiB
+          nullable: true
+        maxDisk:
+          type: number
+          minimum: 5
+          description: GiB
+          nullable: true
+        startCpu:
+          type: number
+          minimum: 1
+          nullable: true
+      additionalProperties: false
+      nullable: true
+    ComponentPatch:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 1
+          nullable: true
+        resources:
+          $ref: '#/components/schemas/ResourcesPatch'
+      additionalProperties: false
+      nullable: true
+    ComponentsPatch:
+      type: object
+      properties:
+        engine:
+          $ref: '#/components/schemas/ComponentPatch'
+        configServer:
+          $ref: '#/components/schemas/ConfigServerPatch'
+        router:
+          $ref: '#/components/schemas/ComponentPatch'
+      additionalProperties: false
+      nullable: true
+    TopologyPatch:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - replicaSet
+          - sharded
+          nullable: true
+        shards:
+          type: integer
+          minimum: 1
+          maximum: 128
+          nullable: true
+      additionalProperties: false
+      nullable: true
+    TLSPatch:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - preferTLS
+          - requireTLS
+          - disabled
+          default: requireTLS
+          nullable: true
+        ca:
+          type: string
+          enum:
+          - selfSigned
+          - userProvided
+          default: selfSigned
+          nullable: true
+        certificate:
+          type: string
+          writeOnly: true
+          description: User-provided PEM certificate chain.
+          nullable: true
+        privateKey: &inputId002
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          nullable: true
+        caCertificate:
+          type: string
+          writeOnly: true
+          nullable: true
+        caPrivateKey: *inputId002
+      description: PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided
+        CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material
+        cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls
+        operation renews leaf certificates only.
+      additionalProperties: false
+      nullable: true
+    ExposurePatch:
+      type: object
+      properties:
+        public:
+          type: boolean
+          default: false
+          nullable: true
+        ipType:
+          type: string
+          enum:
+          - IPV6
+          - IPV4
+          default: IPV6
+          nullable: true
+        allowlist:
+          type: array
+          items:
+            type: string
+            description: IPv4 or IPv6 CIDR.
+          nullable: true
+        allowAllAddresses:
+          type: boolean
+          description: Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+          nullable: true
+      additionalProperties: false
+      nullable: true
+    ClusterPatchSpec:
+      type: object
+      properties:
+        provider:
+          type: string
+          minLength: 1
+          description: Required provider identifier; list providers with GET /api/v1/providers.
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        topology:
+          $ref: '#/components/schemas/TopologyPatch'
+        components:
+          $ref: '#/components/schemas/ComponentsPatch'
+        engineConfig:
+          type: string
+          description: Validated YAML mongod/mongos overrides.
+          nullable: true
+        backup:
+          $ref: '#/components/schemas/BackupSpecPatch'
+        tls:
+          $ref: '#/components/schemas/TLSPatch'
+        exposure:
+          $ref: '#/components/schemas/ExposurePatch'
+        monitoring:
+          $ref: '#/components/schemas/MonitoringSpecPatch'
+        dataSource:
+          $ref: '#/components/schemas/DataSourcePatch'
+      additionalProperties: false
+    BackupSpecPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        storage:
+          type: string
+          minLength: 1
+          maxLength: 128
+          nullable: true
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupScheduleInput'
+          nullable: true
+        pitr:
+          $ref: '#/components/schemas/PITRSpecPatch'
+      nullable: true
+    PITRSpecPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          nullable: true
+        oplogSpanMinutes:
+          type: integer
+          minimum: 1
+          default: 10
+          nullable: true
+      nullable: true
+    MonitoringSpecPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          default: true
+          nullable: true
+      nullable: true
+    DataSourcePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        namespace:
+          allOf:
+          - $ref: '#/components/schemas/NamespaceName'
+          description: Source namespace; defaults to the target cluster namespace.
+          nullable: true
+        cluster:
+          type: string
+          pattern: ^[a-z][a-z0-9]{1,11}$
+          minLength: 2
+          maxLength: 12
+          nullable: true
+        backup:
+          type: string
+          minLength: 1
+          maxLength: 128
+          nullable: true
+        pitrTime:
+          type: string
+          format: date-time
+          nullable: true
+      description: Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point
+        in time.
+      nullable: true
+    BackupScheduleInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        cron:
+          type: string
+          description: Five-field cron expression, evaluated in UTC.
+        type:
+          type: string
+          enum:
+          - logical
+          - physical
+        storage:
+          type: string
+          minLength: 1
+          maxLength: 128
+        retainCount:
+          type: integer
+          minimum: 1
+        enabled:
+          type: boolean
+          default: true
+      required:
+      - name
+      - cron
+      - type
+      - retainCount
+      - enabled
+    BackupSpecInput:
+      type: object
+      additionalProperties: false
+      properties:
+        storage:
+          type: string
+          minLength: 1
+          maxLength: 128
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupScheduleInput'
+        pitr:
+          $ref: '#/components/schemas/PITRSpec'
+    ConfigServerInput:
+      x-go-type: ComponentInput
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 1
+          maximum: 7
+          not:
+            enum: [2, 4, 6]
+        resources:
+          $ref: '#/components/schemas/ResourcesInput'
+      additionalProperties: false
+      description: 'PSMDB config-server replica set: 1, 3, 5 or 7 members.'
+    ConfigServerPatch:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 1
+          nullable: true
+          maximum: 7
+          not:
+            enum: [2, 4, 6]
+        resources:
+          $ref: '#/components/schemas/ResourcesPatch'
+      additionalProperties: false
+      nullable: true
+      description: 'PSMDB config-server replica set: 1, 3, 5 or 7 members.'

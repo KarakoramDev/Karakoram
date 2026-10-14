@@ -140,9 +140,10 @@ type TLSConfig struct {
 
 // Exposure defines optional public TCP access and firewall rules.
 type Exposure struct {
-	Public    bool     `json:"public"`
-	IPType    string   `json:"ipType"`
-	Allowlist []string `json:"allowlist"`
+	Public            bool     `json:"public"`
+	IPType            string   `json:"ipType"`
+	Allowlist         []string `json:"allowlist"`
+	AllowAllAddresses bool     `json:"allowAllAddresses,omitempty"`
 }
 
 // MonitoringConfig controls engine monitoring.

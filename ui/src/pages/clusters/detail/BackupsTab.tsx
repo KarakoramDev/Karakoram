@@ -292,7 +292,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     mutationFn: () =>
       unwrap(
         api.PATCH('/clusters/{cluster}', {
-          headers: idempotencyHeaders(submission.key),
+          headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' },
           params: { path: { cluster: name }, query: { namespace } },
           body: { spec: { backup: { storage: storage || null, schedules, pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } } },
         }),

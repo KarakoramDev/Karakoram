@@ -153,7 +153,7 @@ func TestIdempotentConcurrentTokenCreation(t *testing.T) {
 
 func TestIdempotentClusterCreatePutPatchAndPathScope(t *testing.T) {
 	s, _, token := testServer(t)
-	create := `{"name":"retrycluster","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":3,"resources":{"maxCpu":2,"minCpu":1,"ram":2,"disk":10}}}}}`
+	create := `{"name":"retrycluster","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":3,"resources":{"maxCpu":2,"minCpu":1,"minRam":2,"maxRam":2,"minDisk":10,"maxDisk":10}}}}}`
 	first := idempotentCall(s, "POST", "/api/v1/clusters", create, token, "cluster-request")
 	second := idempotentCall(s, "POST", "/api/v1/clusters?namespace=default", create, token, "cluster-request")
 	assertReplay(t, first, second, 201)

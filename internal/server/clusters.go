@@ -38,7 +38,7 @@ func mergePatch(target, patch any) any {
 	}
 	return t
 }
-func tlsValues(t *api.TLS) (map[string][]byte, error) {
+func tlsValues(t *api.TLSInput) (map[string][]byte, error) {
 	if t == nil {
 		return nil, nil
 	}
@@ -130,6 +130,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		c := domain.Cluster{Namespace: namespace, Name: b.Name, Spec: specDomain(b.Spec)}
+		if c.Spec.Provider == "" {
+			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
+		}
 		if d := c.Spec.DataSource; d != nil {
 			d.Namespace = namespaceOrDefaultSource(d.Namespace, namespace)
 			source := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
@@ -147,9 +150,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		p, err := s.Registry.Get(c.Spec.Provider)
 		if err != nil {
-			return invalid()
+			return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
 		}
 		p.ApplyDefaults(&c.Spec)
+		if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
+			return s.failure(err)
+		}
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
 		}
@@ -192,7 +198,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "GetClusterStatus":
 		return ok(s.statusAPI(clusterRef(ctx, c.Name), c.Status))
 	case "ReplaceCluster", "PatchCluster":
-		var spec api.ClusterSpec
+		var spec api.ClusterInputSpec
 		if name == "ReplaceCluster" {
 			spec = in.Body.(*api.ReplaceClusterRequest).Spec
 		} else {
@@ -228,10 +234,16 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		next := *c
 		next.Spec = specDomain(spec)
+		if next.Spec.Provider == "" {
+			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
+		}
 		if next.Spec.DataSource != nil {
 			next.Spec.DataSource.Namespace = namespaceOrDefaultSource(next.Spec.DataSource.Namespace, c.Namespace)
 		}
 		p.ApplyDefaults(&next.Spec)
+		if err = domain.ValidateExposure(next.Spec.Exposure); err != nil {
+			return s.failure(err)
+		}
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
 		}
