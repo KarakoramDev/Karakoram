@@ -292,7 +292,10 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	schedules, _ := cmd.Flags().GetStringArray("schedule")
 	span, _ := cmd.Flags().GetInt("oplog-span-minutes")
 	if storage != "" || pitr || len(schedules) > 0 {
-		b := map[string]any{"storage": storage, "pitr": map[string]any{"enabled": pitr, "oplogSpanMinutes": span}}
+		b := map[string]any{"pitr": map[string]any{"enabled": pitr, "oplogSpanMinutes": span}}
+		if storage != "" {
+			b["storage"] = storage
+		}
 		parsed := []any{}
 		for _, schedule := range schedules {
 			v, err := parseSchedule(schedule, storage)

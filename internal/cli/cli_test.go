@@ -117,6 +117,54 @@ func execute(t *testing.T, server, config, input string, args ...string) (string
 	err := cmd.ExecuteContext(context.Background())
 	return out.String(), stderr.String(), err
 }
+
+func TestClusterCreateBackupStorageOptional(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		flags   []string
+		storage string
+	}{
+		{"schedule override", []string{"--schedule", "daily=0 1 * * *,storage=s3"}, ""},
+		{"pitr only", []string{"--pitr"}, ""},
+		{"default storage", []string{"--backup-storage", "s3", "--schedule", "daily=0 1 * * *", "--pitr"}, "s3"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/api/v1/clusters" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"name":"demo"}`)
+			}))
+			defer server.Close()
+			args := append([]string{"clusters", "create", "demo", "--version", "8.0"}, tt.flags...)
+			code, _, stderr := runCLI(t, server.URL, "", false, args...)
+			if code != 0 {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			backup, ok := nested(body, "spec", "backup").(map[string]any)
+			if !ok {
+				t.Fatalf("backup missing from body: %+v", body)
+			}
+			storage, present := backup["storage"]
+			if tt.storage == "" && present || tt.storage != "" && storage != tt.storage {
+				t.Errorf("backup storage=%v present=%v want=%q", storage, present, tt.storage)
+			}
+			if schedules, _ := backup["schedules"].([]any); len(schedules) > 0 && nested(schedules[0], "storage") != "s3" {
+				t.Errorf("schedule storage lost: %+v", schedules)
+			}
+			for _, key := range []string{"dataSource", "engineConfig"} {
+				if value := nested(body, "spec", key); value != nil {
+					t.Errorf("unexpected optional %s: %v", key, value)
+				}
+			}
+		})
+	}
+}
 func TestCommandsAgainstServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
