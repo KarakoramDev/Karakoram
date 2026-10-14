@@ -1457,7 +1457,15 @@ type UpdateDatabaseUserRequest struct {
 
 // UpgradePath defines model for UpgradePath.
 type UpgradePath struct {
-	From           string  `json:"from"`
+	From string `json:"from"`
+
+	// RequiresBackup Requires a Succeeded backup of this cluster completed within the
+	// last 24 hours, no earlier than cluster creation or the last known
+	// successful convergence to its current version. Enforced on PUT and
+	// PATCH version changes; missing, stale, unfinished or failed backups
+	// return 409 conflict with reason invalid_state. Create a backup via
+	// POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+	// for Succeeded, and retry. There is no bypass flag.
 	RequiresBackup *bool   `json:"requiresBackup,omitempty"`
 	RequiresFCV    *string `json:"requiresFCV,omitempty"`
 	To             string  `json:"to"`
@@ -10252,7 +10260,7 @@ func (response PatchCluster404JSONResponse) VisitPatchClusterResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
-type PatchCluster409JSONResponse struct{ ConflictJSONResponse }
+type PatchCluster409JSONResponse Error
 
 func (response PatchCluster409JSONResponse) VisitPatchClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -10335,7 +10343,7 @@ func (response ReplaceCluster404JSONResponse) VisitReplaceClusterResponse(w http
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ReplaceCluster409JSONResponse struct{ ConflictJSONResponse }
+type ReplaceCluster409JSONResponse Error
 
 func (response ReplaceCluster409JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")

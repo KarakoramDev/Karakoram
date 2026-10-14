@@ -44,6 +44,32 @@ Use the returned exact versions and `upgradePaths`. The current source catalog i
 
 Allowed binary changes move forward within a major or to the next catalog major. Downgrades and skipping a major are rejected. A next-major upgrade requires the current observed FCV to equal the old binary major. Confirm the advertised path on your deployed version; do not use arbitrary apt versions or infer PSMDB support from upstream MongoDB version availability.
 
+### Required pre-upgrade backups
+
+An upgrade path with **`requiresBackup: true`** is a server-enforced prerequisite,
+not advisory UI copy. Both PUT and PATCH changes to `spec.version` require a
+backup of **the same cluster in the same namespace**, in phase **`Succeeded`**
+with `completedAt` within the **last 24 hours**. Pending, Running, Failed and
+Cancelled backups, or records without a completion timestamp, do not qualify.
+The backup must not predate cluster creation. When the observed version matches
+the current desired version and successful create/upgrade operation history is
+available, it must also complete no earlier than that version's latest known
+successful convergence. Unrelated resource updates do not reset this cutoff.
+
+If no qualifying backup exists, the API rejects the version change with **409
+`conflict`**, and `details` identifies `resource: cluster`, its `name`, and
+`reason: invalid_state`. The message names the **from → to** path and the remedy:
+
+1. Create a backup with **`POST /api/v1/clusters/{name}/backups`**, selecting the
+   cluster's namespace, a configured storage and a provider-supported backup type.
+   See [backups and restore](backups-and-restore.md).
+2. Observe the returned backup/operation until the backup is **`Succeeded`** with
+   a completion timestamp. An accepted backup request alone is insufficient.
+3. Retry the version change within 24 hours of backup completion.
+
+There is **no bypass flag**. Paths without `requiresBackup` do not enforce this
+gate, but a tested recovery point is still recommended before every upgrade.
+
 ## Rolling binary upgrade
 
 1. Take a successful backup and check storage access. Test recovery and application/driver compatibility with the target version.

@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func mergePatch(target, patch any) any {
@@ -233,6 +234,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		p.ApplyDefaults(&next.Spec)
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
+		}
+		if next.Spec.Version != c.Spec.Version {
+			if err = s.validateUpgradeBackup(ctx, c, next.Spec.Version, p); err != nil {
+				return s.failure(err)
+			}
 		}
 		if err = s.validateStorages(ctx, &next); err != nil {
 			return s.failure(err)
@@ -562,6 +568,52 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	default:
 		return s.database(ctx, name, in, rc, dp)
 	}
+}
+
+// upgradeBackupMaxAge bounds the recovery point required by a catalog upgrade path.
+const upgradeBackupMaxAge = 24 * time.Hour
+
+func (s *Server) validateUpgradeBackup(ctx context.Context, c *domain.Cluster, version string, p engine.Provider) error {
+	for _, path := range p.Describe().UpgradePaths {
+		if path.From != c.Spec.Version || path.To != version || !path.RequiresBackup {
+			continue
+		}
+		now := time.Now().UTC()
+		cutoff := now.Add(-upgradeBackupMaxAge)
+		if c.CreatedAt.After(cutoff) {
+			cutoff = c.CreatedAt
+		}
+		// When the observed version matches the current spec, successful convergence
+		// records bound when that version was reached. UpdatedAt and Ready condition
+		// transitions also change for unrelated updates, so they are not version clocks.
+		if c.Status.Version == c.Spec.Version {
+			ops, err := s.Store.ListOperations(ctx, c.Ref(), domain.PhaseSucceeded)
+			if err != nil {
+				return err
+			}
+			for _, op := range ops {
+				if (op.Kind == domain.OperationCreate || op.Kind == domain.OperationUpgrade) &&
+					op.TargetGeneration <= c.Status.ObservedGeneration &&
+					op.CompletedAt != nil && op.CompletedAt.After(cutoff) {
+					cutoff = *op.CompletedAt
+				}
+			}
+		}
+		backups, err := s.Store.ListBackups(ctx, c.Ref())
+		if err != nil {
+			return err
+		}
+		for _, b := range backups {
+			if b.Phase == domain.PhaseSucceeded && b.CompletedAt != nil &&
+				!b.CompletedAt.Before(cutoff) && !b.CompletedAt.After(now) {
+				return nil
+			}
+		}
+		return domain.Conflict("cluster", c.Name, domain.ReasonInvalidState, engine.ErrConflict,
+			"Upgrade %s → %s requires a Succeeded backup of cluster %s completed within the last 24 hours and after its current version was reached when known; create a backup via POST /api/v1/clusters/%s/backups in the cluster's namespace, wait for it to succeed, and retry",
+			path.From, path.To, c.Name, c.Name)
+	}
+	return nil
 }
 
 func sameTLS(a, b domain.TLSConfig) bool {

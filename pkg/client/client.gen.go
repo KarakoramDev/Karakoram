@@ -1459,7 +1459,15 @@ type UpdateDatabaseUserRequest struct {
 
 // UpgradePath defines model for UpgradePath.
 type UpgradePath struct {
-	From           string  `json:"from"`
+	From string `json:"from"`
+
+	// RequiresBackup Requires a Succeeded backup of this cluster completed within the
+	// last 24 hours, no earlier than cluster creation or the last known
+	// successful convergence to its current version. Enforced on PUT and
+	// PATCH version changes; missing, stale, unfinished or failed backups
+	// return 409 conflict with reason invalid_state. Create a backup via
+	// POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+	// for Succeeded, and retry. There is no bypass flag.
 	RequiresBackup *bool   `json:"requiresBackup,omitempty"`
 	RequiresFCV    *string `json:"requiresFCV,omitempty"`
 	To             string  `json:"to"`
@@ -11539,7 +11547,7 @@ type PatchClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
-	JSON409      *Conflict
+	JSON409      *Error
 	JSON500      *InternalError
 }
 
@@ -11567,7 +11575,7 @@ type ReplaceClusterResponse struct {
 	JSON401      *Unauthorized
 	JSON403      *Forbidden
 	JSON404      *NotFound
-	JSON409      *Conflict
+	JSON409      *Error
 	JSON500      *InternalError
 }
 
@@ -16217,7 +16225,7 @@ func ParsePatchClusterResponse(rsp *http.Response) (*PatchClusterResponse, error
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -16285,7 +16293,7 @@ func ParseReplaceClusterResponse(rsp *http.Response) (*ReplaceClusterResponse, e
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -282,7 +282,7 @@ type UpgradePath struct {
 	// RequiresFCV is the feature compatibility version the cluster must have
 	// before this upgrade may start (major upgrades only).
 	RequiresFCV string `json:"requiresFCV,omitempty"`
-	// RequiresBackup recommends a fresh backup before the upgrade.
+	// RequiresBackup requires a fresh successful backup before the upgrade.
 	RequiresBackup bool `json:"requiresBackup,omitempty"`
 }
 

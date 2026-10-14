@@ -2319,6 +2319,15 @@ export type components = {
         };
         UpgradePath: {
             from: string;
+            /**
+             * @description Requires a Succeeded backup of this cluster completed within the
+             *     last 24 hours, no earlier than cluster creation or the last known
+             *     successful convergence to its current version. Enforced on PUT and
+             *     PATCH version changes; missing, stale, unfinished or failed backups
+             *     return 409 conflict with reason invalid_state. Create a backup via
+             *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+             *     for Succeeded, and retry. There is no bypass flag.
+             */
             requiresBackup?: boolean;
             requiresFCV?: string;
             to: string;
@@ -3447,7 +3456,24 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /**
+             * @description Conflicting cluster state or idempotency key. A version change on a
+             *     catalog path with requiresBackup needs a Succeeded backup of this
+             *     cluster completed within the last 24 hours, no earlier than cluster
+             *     creation or the last known successful convergence to its current
+             *     version. Otherwise returns conflict with details resource=cluster,
+             *     name={cluster}, reason=invalid_state. Create a backup via
+             *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+             *     for Succeeded, and retry. There is no bypass flag.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };
@@ -3537,7 +3563,24 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /**
+             * @description Conflicting cluster state or idempotency key. A version change on a
+             *     catalog path with requiresBackup needs a Succeeded backup of this
+             *     cluster completed within the last 24 hours, no earlier than cluster
+             *     creation or the last known successful convergence to its current
+             *     version. Otherwise returns conflict with details resource=cluster,
+             *     name={cluster}, reason=invalid_state. Create a backup via
+             *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+             *     for Succeeded, and retry. There is no bypass flag.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

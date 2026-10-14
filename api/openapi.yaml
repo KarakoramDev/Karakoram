@@ -1280,7 +1280,20 @@ paths:
         '401': *id002
         '403': *id003
         '404': *id004
-        '409': *id005
+        '409':
+          description: |
+            Conflicting cluster state or idempotency key. A version change on a
+            catalog path with requiresBackup needs a Succeeded backup of this
+            cluster completed within the last 24 hours, no earlier than cluster
+            creation or the last known successful convergence to its current
+            version. Otherwise returns conflict with details resource=cluster,
+            name={cluster}, reason=invalid_state. Create a backup via
+            POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+            for Succeeded, and retry. There is no bypass flag.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '200':
           description: Successful response.
           headers:
@@ -1317,7 +1330,20 @@ paths:
         '401': *id002
         '403': *id003
         '404': *id004
-        '409': *id005
+        '409':
+          description: |
+            Conflicting cluster state or idempotency key. A version change on a
+            catalog path with requiresBackup needs a Succeeded backup of this
+            cluster completed within the last 24 hours, no earlier than cluster
+            creation or the last known successful convergence to its current
+            version. Otherwise returns conflict with details resource=cluster,
+            name={cluster}, reason=invalid_state. Create a backup via
+            POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+            for Succeeded, and retry. There is no bypass flag.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '200':
           description: Successful response.
           headers:
@@ -3770,6 +3796,14 @@ components:
           type: string
         requiresBackup:
           type: boolean
+          description: |
+            Requires a Succeeded backup of this cluster completed within the
+            last 24 hours, no earlier than cluster creation or the last known
+            successful convergence to its current version. Enforced on PUT and
+            PATCH version changes; missing, stale, unfinished or failed backups
+            return 409 conflict with reason invalid_state. Create a backup via
+            POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
+            for Succeeded, and retry. There is no bypass flag.
       required:
       - from
       - to
