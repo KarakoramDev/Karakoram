@@ -152,6 +152,34 @@ func TestPITRInitializingAndNoCoverageConflicts(t *testing.T) {
 	}
 }
 
+func TestPITRRequiresInitializedReplicaSetAndPBMStorage(t *testing.T) {
+	for _, prerequisite := range []string{"members", "ready-set", "pbm-storage"} {
+		t.Run(prerequisite, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			rc.Cluster.Spec.Backup.Storage = "primary"
+			s, _ := load(rc.Cluster)
+			plan(rc.Cluster, s)
+			s.Phase, s.PBMStorage = "ready", "primary"
+			s.Sets["rs0"].Stage = "ready"
+			switch prerequisite {
+			case "members":
+				s.Members = nil
+			case "ready-set":
+				s.Sets["rs0"].Stage = "users"
+			case "pbm-storage":
+				s.PBMStorage = ""
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			var conflict *domain.ResourceError
+			if _, err := p.PITRWindow(context.Background(), rc); !errors.As(err, &conflict) || conflict.Reason != domain.ReasonInvalidState {
+				t.Fatalf("missing %s did not block initialization: %v", prerequisite, err)
+			}
+		})
+	}
+}
+
 func TestPITRPreflightUsesLiveBackedCoverage(t *testing.T) {
 	p, rc, _, _ := setup(t)
 	rc.Clock = rotationClock{time.Unix(500, 0).UTC()}
@@ -159,6 +187,8 @@ func TestPITRPreflightUsesLiveBackedCoverage(t *testing.T) {
 	s, _ := load(rc.Cluster)
 	plan(rc.Cluster, s)
 	s.Phase, s.PBMPrefix = "ready", "karakoram/demo"
+	s.Sets["rs0"].Stage = "ready"
+	s.PBMStorage = "primary"
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
@@ -186,6 +216,19 @@ func TestPITRPreflightUsesLiveBackedCoverage(t *testing.T) {
 	}
 	if _, err := p.ValidatePITRRestore(context.Background(), rc, time.Unix(150, 0)); err != nil {
 		t.Fatal(err)
+	}
+	for _, phase := range []string{"scaling", "upgrade", "resources", "reload", "join"} {
+		s.Phase = phase
+		if err := save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+		windows, err := p.PITRWindow(context.Background(), rc)
+		if err != nil || len(windows) != 2 {
+			t.Fatalf("%s hid established PITR coverage: windows=%+v error=%v", phase, windows, err)
+		}
+		if _, err := p.ValidatePITRRestore(context.Background(), rc, time.Unix(150, 0)); err != nil {
+			t.Fatalf("%s blocked a covered restore target: %v", phase, err)
+		}
 	}
 	covered = false
 	var conflict *domain.ResourceError

@@ -390,9 +390,19 @@ func (p *Provider) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain
 	if e != nil {
 		return nil, e
 	}
-	if s.Phase != "ready" || len(s.Members) == 0 {
+	readySet := false
+	for _, m := range s.Members {
+		if m.Removing || m.Role == agentapi.RoleRouter {
+			continue
+		}
+		if set := s.Sets[m.Set]; set != nil && set.Stage == "ready" {
+			readySet = true
+			break
+		}
+	}
+	if !readySet || s.PBMStorage == "" {
 		return nil, domain.Conflict("cluster", rc.Cluster.Name, domain.ReasonInvalidState, engine.ErrConflict,
-			"cluster %q is still initializing or unavailable; PITR coverage is not ready until members report and a base snapshot with continuous oplog history is available", rc.Cluster.Name)
+			"cluster %q is still initializing; PITR coverage requires a ready replica set, configured PBM storage and a base snapshot with continuous oplog history", rc.Cluster.Name)
 	}
 	env, e := p.pbmEnv(ctx, rc, s)
 	if e != nil {

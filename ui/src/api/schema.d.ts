@@ -736,7 +736,7 @@ export type paths = {
         };
         /**
          * Read the continuous restorable PITR window
-         * @description Returns the latest continuous backed interval; an initializing cluster returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+         * @description Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured PBM storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
          */
         get: operations["getPITRWindow"];
         put?: never;
