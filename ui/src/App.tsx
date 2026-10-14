@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { Navigate, RouterProvider, createBrowserRouter } from 'react-router-dom';
+import { useState } from 'react';
+import { Navigate, Outlet, RouterProvider, createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { AppErrorFallback } from '@/components/AppErrorBoundary';
+import { ToastViewport } from '@/components/ui/Toast';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import { AppShell } from '@/layout/AppShell';
 import { LoginPage } from '@/pages/auth/Login';
@@ -31,7 +34,7 @@ import { SsoPage } from '@/pages/settings/Sso';
 import { MonitoringSettingsPage } from '@/pages/settings/Monitoring';
 import { OperationDetailPage } from '@/pages/OperationDetail';
 
-const router = createBrowserRouter([
+const pageRoutes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   {
     element: <ProtectedRoute allowPasswordChange />,
@@ -86,8 +89,15 @@ const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
+
+export const appRoutes: RouteObject[] = [{
+  element: <><Outlet /><ToastViewport /></>,
+  errorElement: <AppErrorFallback />,
+  children: pageRoutes,
+}];
 
 export function App() {
+  const [router] = useState(() => createBrowserRouter(appRoutes));
   return <RouterProvider router={router} />;
 }

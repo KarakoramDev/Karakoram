@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/api/client';
 import { AuthProvider } from '@/auth/session';
 import { ToastProvider } from '@/components/ui/Toast';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { App } from './App';
 import './styles/tokens.css';
 import './styles/base.css';
@@ -28,12 +29,14 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </ToastProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </ToastProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 );

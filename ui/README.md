@@ -12,9 +12,13 @@ npm run gen:api     # regenerate src/api/schema.d.ts from ../api/openapi.yaml (n
 npm run dev         # Vite on :5173, proxies /api -> http://localhost:8080 (override KARAKORAM_API_URL)
 npm run typecheck
 npm run lint
-npm test            # unit tests via node --test; needs Node 22.6+ (TypeScript type stripping)
+npm test            # node --test unit/component tests; needs Node 22.6+ (TypeScript type stripping)
 npm run build       # writes ../internal/ui/dist
 ```
+
+Component regressions use React's server renderer with the real route layout.
+Their Node loader uses the installed TypeScript compiler for JSX and Vite
+source aliases; no separate browser-test dependencies are needed.
 
 ## Embedding in the Go binary
 

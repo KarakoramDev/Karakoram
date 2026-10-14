@@ -186,6 +186,8 @@ Accepted asynchronous mutations show **View operation** in their success toast
 when the response identifies the operation. Global and cluster **Operations**
 lists, and **Events** rows carrying an operation ID, link to the same detail
 page at `/operations/:id`.
+The link opens the operation in the current app without reloading the page.
+A notification confirms acceptance, not that the operation has finished.
 
 The detail page shows phase, namespace/cluster, target, step, initiating actor,
 progress when reported, message/error and cancellation-request status. Created,
@@ -222,6 +224,11 @@ Group-based roles, complete CSV policy replacement and token ownership are expla
 ## Errors and live updates
 
 Read error messages, cluster conditions and the failed Operation before resubmitting. A failed request can differ from a failed asynchronous job. Events can replay on SSE reconnect; loss of the live connection does not erase durable operations. If a view looks stale, refresh and inspect [CLI/API](cli.md) status before assuming the mutation was lost. Do not repeatedly initiate backup/restore after a response-loss error; PBM receipts may deliberately report an ambiguous outcome.
+
+If an unexpected display error prevents the app from rendering, it shows
+**The page could not be displayed** with a **Reload page** button instead of
+a blank page. Reloading does not resubmit the action. Inspect existing
+operations and resource state before submitting another mutation.
 
 The sidebar and Events views distinguish **live**, **reconnecting — data may be
 stale** and **connection lost — data may be stale**. Failed background reads can
