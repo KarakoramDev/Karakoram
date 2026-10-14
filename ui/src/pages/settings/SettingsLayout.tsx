@@ -4,9 +4,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/auth/session';
 import { PageHeader } from '@/components/ui/Primitives';
+import { useNamespace } from '@/namespaces/useNamespace';
+import { scopedPath } from '@/components/ui/presentation';
 
 export function SettingsLayout() {
   const auth = useAuth();
+  const { namespace } = useNamespace();
   const items = [
     { to: '/settings/namespaces', label: 'Namespaces', show: auth.can('namespaces', 'read') },
     { to: '/settings/backup-storages', label: 'Backup storages', show: auth.can('backup-storages', 'read') },
@@ -23,7 +26,7 @@ export function SettingsLayout() {
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
           {items.map((i) => (
-            <NavLink key={i.to} to={i.to} className={({ isActive }) => (isActive ? 'active' : '')}>
+            <NavLink key={i.to} to={scopedPath(i.to, namespace)} className={({ isActive }) => (isActive ? 'active' : '')}>
               {i.label}
             </NavLink>
           ))}

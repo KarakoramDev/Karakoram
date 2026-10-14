@@ -109,7 +109,7 @@ export function LineChart({ series, title, unit, height = 160, yMax, categories,
           );
         })}
       </div>
-      {categories ? <p className="xs muted">{Object.entries(categories).map(([value, label]) => `${value} = ${label}`).join(' · ')}. Values are averaged over the step; fractional values represent a mixture of sampled states, not a separate state.</p> : null}
+      <p className="xs muted">{categories ? `${Object.entries(categories).map(([value, label]) => `${value} = ${label}`).join(' · ')}. ` : ''}Values are averaged over the step. For state-code series, fractional values represent a mixture of sampled states, not a separate state.</p>
     </figure>
   );
 }

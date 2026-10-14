@@ -4,13 +4,14 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/session';
-import { useLiveUpdates } from '@/api/events';
+import { useBackgroundConnectionLost, useLiveUpdates } from '@/api/events';
 import { useOrphanedVolumes, useVersion } from '@/api/hooks';
 import { useNamespace } from '@/namespaces/useNamespace';
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/Logo';
 import { Callout } from '@/components/ui/Primitives';
 import { NamespaceSwitcher } from './NamespaceSwitcher';
+import { formatBuildVersion, scopedPath } from '@/components/ui/presentation';
 
 function Icon({ d }: { d: string }) {
   return (
@@ -35,6 +36,8 @@ export function AppShell() {
   const [live, setLive] = useState(false);
   const version = useVersion();
   const { namespace } = useNamespace();
+  const stale = useBackgroundConnectionLost();
+  const scoped = (path: string) => scopedPath(path, namespace);
   const orphanedVolumes = useOrphanedVolumes(auth.status === 'authenticated' && auth.can('clusters', 'read'), namespace);
   const orphanedCount = orphanedVolumes.error ? 0 : (orphanedVolumes.data?.items.length ?? 0);
   useLiveUpdates(auth.status === 'authenticated', undefined, setLive);
@@ -44,33 +47,35 @@ export function AppShell() {
   return (
     <div className={['shell', collapsed ? 'collapsed' : ''].join(' ')}>
       <aside className="sidebar">
-        <NavLink to="/clusters" className="brand" aria-label="Karakoram home">
+        <NavLink to={scoped('/clusters')} className="brand" aria-label="Karakoram home">
           <Logo size={26} />
           <span className="brand-text">Karakoram</span>
         </NavLink>
         <NamespaceSwitcher collapsed={collapsed} />
         <nav className="nav" aria-label="Primary">
-          <NavLink to="/clusters" className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Clusters">
+          <NavLink to={scoped('/clusters')} className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Clusters">
             <Icon d={ICONS.clusters} />
             <span>Clusters</span>
           </NavLink>
           {auth.can('events', 'read') || auth.can('audit', 'read') ? (
-            <NavLink to="/events" className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Events">
+            <NavLink to={scoped('/events')} className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Events">
               <Icon d={ICONS.events} />
               <span>Events</span>
             </NavLink>
           ) : null}
           {auth.can('operations', 'read') ? (
-            <NavLink to="/operations" className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Operations">
+            <NavLink to={scoped('/operations')} className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Operations">
               <Icon d={ICONS.operations} />
               <span>Operations</span>
             </NavLink>
           ) : null}
           <div className="nav-section">Administration</div>
-          <NavLink to="/settings" className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Settings">
+          <NavLink to={scoped('/settings/backup-storages')} className={({ isActive }) => ['nav-link', isActive ? 'active' : ''].join(' ')} title="Settings">
             <Icon d={ICONS.settings} />
             <span>Settings</span>
           </NavLink>
+          <a href="/api/v1/openapi.yaml" className="nav-link" title="API specification"><span>API specification</span></a>
+          <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/api.md" className="nav-link" target="_blank" rel="noreferrer"><span>API guide ↗</span></a>
         </nav>
         <div className="sidebar-foot">
           <div className="user-chip" title={auth.user?.subject}>
@@ -81,12 +86,13 @@ export function AppShell() {
               <div className="truncate" style={{ color: '#fff', fontWeight: 600 }}>
                 {auth.user?.name}
               </div>
-              <div className="xs truncate" style={{ color: live ? '#7fd1a6' : 'var(--ridge-300)' }}>
-                {live ? '● live' : '○ reconnecting'}
-                {version.data ? ` · v${version.data.version}` : ''}
+              <div className="xs" role="status" style={{ color: live && !stale ? '#7fd1a6' : 'var(--ridge-300)' }}>
+                {stale ? 'connection lost — data may be stale' : live ? '● live' : '○ reconnecting — data may be stale'}
+                {version.data ? ` · ${formatBuildVersion(version.data.version)}` : ''}
               </div>
             </div>
           </div>
+          <Link to="/change-password" className="nav-link" title="Change password">{collapsed ? 'Password' : 'Change password'}</Link>
           <div className="row" style={{ justifyContent: collapsed ? 'center' : 'space-between' }}>
             <Button
               variant="ghost"

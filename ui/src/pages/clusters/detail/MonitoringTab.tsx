@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { LineChart, type Series } from '@/components/ui/LineChart';
 import { Callout, Card, ErrorBlock, Loading, Segmented, formatBytes, formatNum } from '@/components/ui/Primitives';
 import { useClusterContext } from './ClusterDetail';
+import { monitoringRange, metricCategories, type MonitoringRange as Range } from '@/components/ui/presentation';
 
-type Range = '15m' | '1h' | '6h' | '24h' | '7d';
-const STEP_FOR: Record<Range, string> = { '15m': '15s', '1h': '30s', '6h': '2m', '24h': '10m', '7d': '1h' };
+const STEP_FOR: Record<Range, string> = { '15m': '15s', '1h': '30s', '6h': '2m', '24h': '10m' };
 
 interface Panel {
   title: string;
@@ -43,7 +43,9 @@ function toSeries(all: Schemas['MetricSeries'][], names: string[], multiName: bo
 
 export function MonitoringTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
-  const [range, setRange] = useState<Range>('1h');
+  const [params, setParams] = useSearchParams();
+  const range = monitoringRange(params.get('range'));
+  const setRange = (next: Range) => setParams((prev) => { const out = new URLSearchParams(prev); out.set('range', next); return out; });
   const metrics = useQuery({
     queryKey: [...keys.clusterSub(namespace, name, 'metrics'), range],
     queryFn: () => unwrap(api.GET('/clusters/{cluster}/metrics', { params: { path: { cluster: name }, query: { namespace, range, step: STEP_FOR[range] } } })),
@@ -83,10 +85,10 @@ export function MonitoringTab() {
             { value: '1h', label: '1h' },
             { value: '6h', label: '6h' },
             { value: '24h', label: '24h' },
-            { value: '7d', label: '7d' },
           ]}
         />
       </div>
+      <p className="xs muted">In-UI queries cover at most 24 hours. Use the Prometheus endpoint for longer retention.</p>
       {metrics.isPending ? (
         <Loading label="Loading metrics…" />
       ) : metrics.error ? (
@@ -101,9 +103,10 @@ export function MonitoringTab() {
             ))}
             {extra.map((n) => {
               const unit = metrics.data.series.find((s) => s.name === n)?.unit;
+              const categories = metricCategories(n);
               return (
                 <Card key={n}>
-                  <LineChart title={n} unit={unit} series={toSeries(metrics.data.series, [n], false)} formatValue={unit === 'bytes' ? (v) => formatBytes(v) : formatNum} />
+                  <LineChart title={n} unit={categories ? 'state code' : unit} categories={categories} series={toSeries(metrics.data.series, [n], false)} formatValue={unit === 'bytes' ? (v) => formatBytes(v) : formatNum} />
                 </Card>
               );
             })}

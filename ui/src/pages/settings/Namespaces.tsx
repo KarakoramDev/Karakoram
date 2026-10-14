@@ -230,7 +230,8 @@ function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Add namespace"
-      onSubmit={() => valid && create.mutate()}
+      busy={create.isPending}
+      onSubmit={() => valid ? create.mutateAsync() : false}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -257,9 +258,9 @@ function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
         mono
         required
         value={form.name}
-        onChange={(e) => set({ name: e.target.value.toLowerCase() })}
-        hint="2–32 lowercase letters, digits or hyphens; used in URLs and policy objects (e.g. prod/**)."
-        error={form.name && (!isNamespaceName(form.name) || form.name === 'default') ? (form.name === 'default' ? 'default is reserved for the control-plane project.' : 'Use 2–32 lowercase letters, digits or hyphens, starting with a letter.') : undefined}
+        onChange={(e) => set({ name: e.target.value })}
+        hint="2–32 lowercase letters, digits or hyphens; start with a letter and end with a letter or digit."
+        error={form.name && (!isNamespaceName(form.name) || form.name === 'default') ? (form.name === 'default' ? 'default is reserved for the control-plane project.' : 'Use 2–32 lowercase letters, digits or hyphens, starting with a letter and ending with a letter or digit.') : undefined}
         autoFocus
       />
       <TextField label="Zerops project ID" mono required value={form.projectId} onChange={(e) => set({ projectId: e.target.value })} hint="Each project can belong to only one namespace." autoComplete="off" />
@@ -455,12 +456,13 @@ function RotateTokenDialog({ namespace, onClose }: { namespace: Namespace; onClo
       open
       onClose={onClose}
       title={`Rotate token for ${namespace.name}`}
+      busy={rotate.isPending}
       onSubmit={() => {
-        if (!token) return;
+        if (!token) return false;
         const value = token;
         // The secret leaves component state before the request is in flight.
         setToken('');
-        rotate.mutate(value);
+        return rotate.mutateAsync(value);
       }}
       footer={
         <>
@@ -512,7 +514,8 @@ function DescriptionDialog({ namespace, onClose }: { namespace: Namespace; onClo
       open
       onClose={onClose}
       title={`Describe ${namespace.name}`}
-      onSubmit={() => save.mutate()}
+      busy={save.isPending}
+      onSubmit={() => save.mutateAsync()}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -542,7 +545,7 @@ function RemoveNamespaceDialog({ namespace, onClose }: { namespace: Namespace; o
     onError: (e) => setError(e instanceof ApiError && e.status === 409 ? `Refused: ${e.message}` : errorMessage(e)),
   });
   return (
-    <ConfirmDialog open onClose={onClose} onConfirm={() => remove.mutate()} title={`Remove namespace ${namespace.name}`} confirmLabel="Remove" danger typeToConfirm={namespace.name} busy={remove.isPending}>
+    <ConfirmDialog open onClose={onClose} onConfirm={() => remove.mutateAsync()} title={`Remove namespace ${namespace.name}`} confirmLabel="Remove" danger typeToConfirm={namespace.name} busy={remove.isPending}>
       {error ? <Callout tone="danger">{error}</Callout> : null}
       <p className="small">
         The relay service is deleted from project <span className="mono">{namespace.projectId}</span>, then the namespace and its sealed token are removed. The project itself is not touched.
