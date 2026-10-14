@@ -6,6 +6,7 @@ package psmdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -168,30 +169,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	}
 	switch op.Kind {
 	case domain.OperationRaiseFCV:
-		version := payload["version"]
-		if e := p.ValidateFCV(ctx, rc, version); e != nil {
-			return engine.OpResult{Done: true, Step: "fcv-rejected", Message: e.Error()}, e
-		}
-		if cp.Stage != "apply-fcv" {
-			cp.Stage = "apply-fcv"
-			return opResult(cp, false, "fcv-ready")
-		}
-		sets := []string{"rs0"}
-		if rc.Cluster.Spec.Topology.Type == "sharded" {
-			sets = []string{"router"}
-		}
-		for _, set := range sets {
-			c, e := p.dial(ctx, rc, s, set, "clusterAdmin")
-			if e != nil {
-				return result, e
-			}
-			e = mongoadmin.SetFCV(ctx, c, version)
-			_ = c.Disconnect(ctx)
-			if e != nil {
-				return result, e
-			}
-		}
-		return opResult(cp, true, "fcv-raised")
+		return p.raiseFCV(ctx, rc, s, cp, payload["version"], p.setFCV)
 	case domain.OperationRestart:
 		return p.rollingOperation(ctx, rc, s, cp, false)
 	case domain.OperationRotateTLS:
@@ -324,6 +302,42 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result, fmt.Errorf("%w: unknown operation %q", engine.ErrNotSupported, op.Kind)
 	}
 }
+
+// raiseFCV separates prerequisite validation from the irreversible database call.
+func (p *Provider) raiseFCV(ctx context.Context, rc *engine.Context, s *internalState, cp operationState, version string,
+	apply func(context.Context, *engine.Context, *internalState, string) error,
+) (engine.OpResult, error) {
+	if err := p.ValidateFCV(ctx, rc, version); err != nil {
+		var field *domain.FieldError
+		var resource *domain.ResourceError
+		if errors.As(err, &field) || errors.As(err, &resource) {
+			return engine.OpResult{Done: true, Step: "fcv-rejected", Message: err.Error()}, err
+		}
+		return engine.OpResult{Step: "fcv-preflight", Message: err.Error()}, err
+	}
+	if cp.Stage != "apply-fcv" {
+		cp.Stage = "apply-fcv"
+		return opResult(cp, false, "fcv-ready")
+	}
+	if err := apply(ctx, rc, s, version); err != nil {
+		return engine.OpResult{}, err
+	}
+	return opResult(cp, true, "fcv-raised")
+}
+
+func (p *Provider) setFCV(ctx context.Context, rc *engine.Context, s *internalState, version string) error {
+	set := "rs0"
+	if rc.Cluster.Spec.Topology.Type == "sharded" {
+		set = "router"
+	}
+	c, err := p.dial(ctx, rc, s, set, "clusterAdmin")
+	if err != nil {
+		return err
+	}
+	defer c.Disconnect(ctx)
+	return mongoadmin.SetFCV(ctx, c, version)
+}
+
 func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *internalState, cp operationState, reload bool) (engine.OpResult, error) {
 	// An operation may start while convergence still owns a platform action.
 	// Preserve its checkpoint until that action (including any retry) completes.

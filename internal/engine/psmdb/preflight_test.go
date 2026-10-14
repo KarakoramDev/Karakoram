@@ -38,7 +38,7 @@ func TestFCVAcceptanceAndTerminalFailure(t *testing.T) {
 	}
 	for _, version := range []string{"8.0.32-14", "7.0", "", "8"} {
 		err := p.ValidateFCV(context.Background(), rc, version)
-		var field *engine.ValidationError
+		var field *domain.FieldError
 		if !errors.As(err, &field) || field.Field != "version" || !strings.Contains(err.Error(), "8.0") {
 			t.Fatal(err)
 		}
@@ -59,6 +59,83 @@ func TestFCVAcceptanceAndTerminalFailure(t *testing.T) {
 	res, err := p.RunOperation(context.Background(), rc, &domain.Operation{Kind: domain.OperationRaiseFCV, Payload: json.RawMessage(`{"version":"8.0"}`)})
 	if err == nil || !res.Done {
 		t.Fatal("rolling FCV failure retried", res, err)
+	}
+}
+
+type transientAgentDialer struct {
+	next engine.AgentDialer
+	err  error
+}
+
+func (d *transientAgentDialer) Dial(ctx context.Context, ref domain.ClusterRef, member string) (*agentapi.Client, error) {
+	if d.err != nil {
+		err := d.err
+		d.err = nil
+		return nil, err
+	}
+	return d.next.Dial(ctx, ref, member)
+}
+
+func TestRaiseFCVRetriesTransientAgentFailureThenSucceeds(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	ctx := context.Background()
+	s, _ := load(rc.Cluster)
+	plan(rc.Cluster, s)
+	s.Phase = "ready"
+	for _, m := range s.Members {
+		m.Stage, m.Version = "active", rc.Cluster.Spec.Version
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	transient := errors.New("agent relay temporarily unavailable")
+	rc.Agents = &transientAgentDialer{next: rc.Agents, err: transient}
+	op := &domain.Operation{Kind: domain.OperationRaiseFCV, Payload: json.RawMessage(`{"version":"8.0"}`)}
+	result, err := p.RunOperation(ctx, rc, op)
+	var conflict *domain.ResourceError
+	if !errors.Is(err, transient) || errors.As(err, &conflict) || result.Done || strings.Contains(result.Message, "binary rollout") {
+		t.Fatalf("transient observation became terminal validation: result=%+v error=%v", result, err)
+	}
+	result, err = p.RunOperation(ctx, rc, op)
+	if err != nil || result.Done || result.Step != "fcv-ready" {
+		t.Fatalf("recovered observation did not advance: result=%+v error=%v", result, err)
+	}
+	var cp operationState
+	if err := decodeJSON(result.Checkpoint, &cp); err != nil {
+		t.Fatal(err)
+	}
+	applied := 0
+	result, err = p.raiseFCV(ctx, rc, s, cp, "8.0",
+		func(_ context.Context, _ *engine.Context, _ *internalState, version string) error {
+			applied++
+			if version != "8.0" {
+				t.Fatalf("wrong FCV target: %q", version)
+			}
+			return nil
+		})
+	if err != nil || !result.Done || result.Step != "fcv-raised" || applied != 1 {
+		t.Fatalf("recovered operation did not finish: result=%+v applied=%d error=%v", result, applied, err)
+	}
+}
+
+func TestRaiseFCVLiveBinaryMismatchIsTerminal(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	s, _ := load(rc.Cluster)
+	plan(rc.Cluster, s)
+	s.Phase = "ready"
+	for _, m := range s.Members {
+		m.Stage, m.Version = "active", rc.Cluster.Spec.Version
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	rc.Agents = responder(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: "7.0.43-23"})
+	})
+	result, err := p.RunOperation(context.Background(), rc, &domain.Operation{Kind: domain.OperationRaiseFCV, Payload: json.RawMessage(`{"version":"8.0"}`)})
+	var conflict *domain.ResourceError
+	if !result.Done || !errors.As(err, &conflict) || conflict.Reason != domain.ReasonInvalidState {
+		t.Fatalf("live mismatch retried: result=%+v error=%v", result, err)
 	}
 }
 
