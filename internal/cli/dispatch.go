@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"net/http"
+	"strings"
 )
 
 // dispatch uses only generated request methods; root endpoints use a separate base client.
@@ -489,6 +490,9 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.VerifyBackupStorage(ctx, args[0], &p)
 	default:
+		if strings.Contains(op, "RabbitMQ") {
+			return dispatchRabbitMQ(ctx, c, op, args, q, body)
+		}
 		return nil, fmt.Errorf("unknown API operation %q", op)
 	}
 }

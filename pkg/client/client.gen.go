@@ -109,6 +109,15 @@ const (
 	CreateBackupStorageRequestTypeS3 CreateBackupStorageRequestType = "s3"
 )
 
+// Defines values for CreatedRabbitMQUserTags.
+const (
+	CreatedRabbitMQUserTagsAdministrator CreatedRabbitMQUserTags = "administrator"
+	CreatedRabbitMQUserTagsImpersonator  CreatedRabbitMQUserTags = "impersonator"
+	CreatedRabbitMQUserTagsManagement    CreatedRabbitMQUserTags = "management"
+	CreatedRabbitMQUserTagsMonitoring    CreatedRabbitMQUserTags = "monitoring"
+	CreatedRabbitMQUserTagsPolicymaker   CreatedRabbitMQUserTags = "policymaker"
+)
+
 // Defines values for ExposureIpType.
 const (
 	ExposureIpTypeIPV4 ExposureIpType = "IPV4"
@@ -135,6 +144,7 @@ const (
 // Defines values for MemberRole.
 const (
 	MemberRoleArbiter         MemberRole = "arbiter"
+	MemberRoleBroker          MemberRole = "broker"
 	MemberRoleConfigPrimary   MemberRole = "config-primary"
 	MemberRoleConfigSecondary MemberRole = "config-secondary"
 	MemberRolePrimary         MemberRole = "primary"
@@ -212,6 +222,41 @@ const (
 	ProviderVersionStatusUnavailable ProviderVersionStatus = "unavailable"
 )
 
+// Defines values for RabbitMQPolicyApplyTo.
+const (
+	All           RabbitMQPolicyApplyTo = "all"
+	ClassicQueues RabbitMQPolicyApplyTo = "classic_queues"
+	Exchanges     RabbitMQPolicyApplyTo = "exchanges"
+	Queues        RabbitMQPolicyApplyTo = "queues"
+	QuorumQueues  RabbitMQPolicyApplyTo = "quorum_queues"
+	Streams       RabbitMQPolicyApplyTo = "streams"
+)
+
+// Defines values for RabbitMQUserTags.
+const (
+	RabbitMQUserTagsAdministrator RabbitMQUserTags = "administrator"
+	RabbitMQUserTagsImpersonator  RabbitMQUserTags = "impersonator"
+	RabbitMQUserTagsManagement    RabbitMQUserTags = "management"
+	RabbitMQUserTagsMonitoring    RabbitMQUserTags = "monitoring"
+	RabbitMQUserTagsPolicymaker   RabbitMQUserTags = "policymaker"
+)
+
+// Defines values for RabbitMQUserWriteTags.
+const (
+	Administrator RabbitMQUserWriteTags = "administrator"
+	Impersonator  RabbitMQUserWriteTags = "impersonator"
+	Management    RabbitMQUserWriteTags = "management"
+	Monitoring    RabbitMQUserWriteTags = "monitoring"
+	Policymaker   RabbitMQUserWriteTags = "policymaker"
+)
+
+// Defines values for RabbitMQVhostDefaultQueueType.
+const (
+	Classic RabbitMQVhostDefaultQueueType = "classic"
+	Quorum  RabbitMQVhostDefaultQueueType = "quorum"
+	Stream  RabbitMQVhostDefaultQueueType = "stream"
+)
+
 // Defines values for RelayStatusPhase.
 const (
 	RelayStatusPhaseDeploying   RelayStatusPhase = "Deploying"
@@ -260,10 +305,12 @@ const (
 
 // Defines values for SystemUserName.
 const (
+	SystemUserNameAdmin          SystemUserName = "admin"
 	SystemUserNameBackup         SystemUserName = "backup"
 	SystemUserNameClusterAdmin   SystemUserName = "clusterAdmin"
 	SystemUserNameClusterMonitor SystemUserName = "clusterMonitor"
 	SystemUserNameDatabaseAdmin  SystemUserName = "databaseAdmin"
+	SystemUserNameKarakoram      SystemUserName = "karakoram"
 	SystemUserNameUserAdmin      SystemUserName = "userAdmin"
 )
 
@@ -941,6 +988,17 @@ type CreatedDatabaseUser struct {
 	Username          string          `json:"username"`
 }
 
+// CreatedRabbitMQUser defines model for CreatedRabbitMQUser.
+type CreatedRabbitMQUser struct {
+	// GeneratedPassword Present only when a password was generated at creation; store it securely once.
+	GeneratedPassword *string                   `json:"generatedPassword,omitempty"`
+	Name              string                    `json:"name"`
+	Tags              []CreatedRabbitMQUserTags `json:"tags"`
+}
+
+// CreatedRabbitMQUserTags defines model for CreatedRabbitMQUser.Tags.
+type CreatedRabbitMQUserTags string
+
 // CurrentUser defines model for CurrentUser.
 type CurrentUser struct {
 	// CsrfToken Present for cookie sessions, including OIDC sessions. Safe authenticated GET discovery allows the UI to authorize subsequent unsafe requests. Absent for bearer API-token authentication.
@@ -1153,14 +1211,16 @@ type Member struct {
 
 	// Resources Infrastructure resources currently allocated to the member container.
 	Resources *ObservedResources `json:"resources,omitempty"`
-	Role      MemberRole         `json:"role"`
-	Set       string             `json:"set"`
-	State     string             `json:"state"`
-	Uptime    *int64             `json:"uptime,omitempty"`
-	Version   *string            `json:"version,omitempty"`
+
+	// Role Member role; broker identifies a RabbitMQ broker.
+	Role    MemberRole `json:"role"`
+	Set     string     `json:"set"`
+	State   string     `json:"state"`
+	Uptime  *int64     `json:"uptime,omitempty"`
+	Version *string    `json:"version,omitempty"`
 }
 
-// MemberRole defines model for Member.Role.
+// MemberRole Member role; broker identifies a RabbitMQ broker.
 type MemberRole string
 
 // MemberList defines model for MemberList.
@@ -1494,6 +1554,100 @@ type ProviderVersionStatus string
 type RBACPolicy struct {
 	// Policy Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. Validation errors name policy and the line. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies.
 	Policy string `json:"policy"`
+}
+
+// RabbitMQPermission defines model for RabbitMQPermission.
+type RabbitMQPermission struct {
+	Configure string `json:"configure"`
+	Read      string `json:"read"`
+	User      string `json:"user"`
+	Vhost     string `json:"vhost"`
+	Write     string `json:"write"`
+}
+
+// RabbitMQPermissionList defines model for RabbitMQPermissionList.
+type RabbitMQPermissionList struct {
+	Items []RabbitMQPermission `json:"items"`
+}
+
+// RabbitMQPolicy defines model for RabbitMQPolicy.
+type RabbitMQPolicy struct {
+	ApplyTo    RabbitMQPolicyApplyTo  `json:"applyTo"`
+	Definition map[string]interface{} `json:"definition"`
+	Name       string                 `json:"name"`
+	Pattern    string                 `json:"pattern"`
+	Priority   int                    `json:"priority"`
+	Vhost      string                 `json:"vhost"`
+}
+
+// RabbitMQPolicyApplyTo defines model for RabbitMQPolicy.ApplyTo.
+type RabbitMQPolicyApplyTo string
+
+// RabbitMQPolicyList defines model for RabbitMQPolicyList.
+type RabbitMQPolicyList struct {
+	Items []RabbitMQPolicy `json:"items"`
+}
+
+// RabbitMQTopicPermission defines model for RabbitMQTopicPermission.
+type RabbitMQTopicPermission struct {
+	Exchange string `json:"exchange"`
+	Read     string `json:"read"`
+	User     string `json:"user"`
+	Vhost    string `json:"vhost"`
+	Write    string `json:"write"`
+}
+
+// RabbitMQTopicPermissionList defines model for RabbitMQTopicPermissionList.
+type RabbitMQTopicPermissionList struct {
+	Items []RabbitMQTopicPermission `json:"items"`
+}
+
+// RabbitMQUser defines model for RabbitMQUser.
+type RabbitMQUser struct {
+	Name string             `json:"name"`
+	Tags []RabbitMQUserTags `json:"tags"`
+}
+
+// RabbitMQUserTags defines model for RabbitMQUser.Tags.
+type RabbitMQUserTags string
+
+// RabbitMQUserList defines model for RabbitMQUserList.
+type RabbitMQUserList struct {
+	Items []RabbitMQUser `json:"items"`
+}
+
+// RabbitMQUserWrite defines model for RabbitMQUserWrite.
+type RabbitMQUserWrite struct {
+	Name         string                  `json:"name"`
+	Password     *string                 `json:"password,omitempty"`
+	PasswordHash *string                 `json:"passwordHash,omitempty"`
+	Tags         []RabbitMQUserWriteTags `json:"tags"`
+}
+
+// RabbitMQUserWriteTags defines model for RabbitMQUserWrite.Tags.
+type RabbitMQUserWriteTags string
+
+// RabbitMQVhost defines model for RabbitMQVhost.
+type RabbitMQVhost struct {
+	DefaultQueueType *RabbitMQVhostDefaultQueueType `json:"defaultQueueType,omitempty"`
+	Description      *string                        `json:"description,omitempty"`
+	Limits           *RabbitMQVhostLimits           `json:"limits,omitempty"`
+	Name             string                         `json:"name"`
+	Tags             []string                       `json:"tags"`
+}
+
+// RabbitMQVhostDefaultQueueType defines model for RabbitMQVhost.DefaultQueueType.
+type RabbitMQVhostDefaultQueueType string
+
+// RabbitMQVhostLimits defines model for RabbitMQVhostLimits.
+type RabbitMQVhostLimits struct {
+	MaxConnections *int `json:"maxConnections,omitempty"`
+	MaxQueues      *int `json:"maxQueues,omitempty"`
+}
+
+// RabbitMQVhostList defines model for RabbitMQVhostList.
+type RabbitMQVhostList struct {
+	Items []RabbitMQVhost `json:"items"`
 }
 
 // RaiseFCVRequest defines model for RaiseFCVRequest.
@@ -2586,6 +2740,240 @@ type GetClusterPlacementParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListRabbitMQOperatorPoliciesParams defines parameters for ListRabbitMQOperatorPolicies.
+type ListRabbitMQOperatorPoliciesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQOperatorPolicyParams defines parameters for CreateRabbitMQOperatorPolicy.
+type CreateRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQOperatorPolicyParams defines parameters for DeleteRabbitMQOperatorPolicy.
+type DeleteRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQOperatorPolicyParams defines parameters for GetRabbitMQOperatorPolicy.
+type GetRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQOperatorPolicyParams defines parameters for ReplaceRabbitMQOperatorPolicy.
+type ReplaceRabbitMQOperatorPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQPermissionsParams defines parameters for ListRabbitMQPermissions.
+type ListRabbitMQPermissionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQPermissionParams defines parameters for CreateRabbitMQPermission.
+type CreateRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQPermissionParams defines parameters for DeleteRabbitMQPermission.
+type DeleteRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQPermissionParams defines parameters for GetRabbitMQPermission.
+type GetRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQPermissionParams defines parameters for ReplaceRabbitMQPermission.
+type ReplaceRabbitMQPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQPoliciesParams defines parameters for ListRabbitMQPolicies.
+type ListRabbitMQPoliciesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQPolicyParams defines parameters for CreateRabbitMQPolicy.
+type CreateRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQPolicyParams defines parameters for DeleteRabbitMQPolicy.
+type DeleteRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQPolicyParams defines parameters for GetRabbitMQPolicy.
+type GetRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQPolicyParams defines parameters for ReplaceRabbitMQPolicy.
+type ReplaceRabbitMQPolicyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQTopicPermissionsParams defines parameters for ListRabbitMQTopicPermissions.
+type ListRabbitMQTopicPermissionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQTopicPermissionParams defines parameters for CreateRabbitMQTopicPermission.
+type CreateRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQTopicPermissionParams defines parameters for DeleteRabbitMQTopicPermission.
+type DeleteRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQTopicPermissionParams defines parameters for GetRabbitMQTopicPermission.
+type GetRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQTopicPermissionParams defines parameters for ReplaceRabbitMQTopicPermission.
+type ReplaceRabbitMQTopicPermissionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQUsersParams defines parameters for ListRabbitMQUsers.
+type ListRabbitMQUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQUserParams defines parameters for CreateRabbitMQUser.
+type CreateRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQUserParams defines parameters for DeleteRabbitMQUser.
+type DeleteRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQUserParams defines parameters for GetRabbitMQUser.
+type GetRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQUserParams defines parameters for ReplaceRabbitMQUser.
+type ReplaceRabbitMQUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListRabbitMQVhostsParams defines parameters for ListRabbitMQVhosts.
+type ListRabbitMQVhostsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateRabbitMQVhostParams defines parameters for CreateRabbitMQVhost.
+type CreateRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteRabbitMQVhostParams defines parameters for DeleteRabbitMQVhost.
+type DeleteRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetRabbitMQVhostParams defines parameters for GetRabbitMQVhost.
+type GetRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ReplaceRabbitMQVhostParams defines parameters for ReplaceRabbitMQVhost.
+type ReplaceRabbitMQVhostParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -2982,6 +3370,42 @@ type CreateDatabaseUserJSONRequestBody = CreateDatabaseUserRequest
 
 // ReplaceDatabaseUserJSONRequestBody defines body for ReplaceDatabaseUser for application/json ContentType.
 type ReplaceDatabaseUserJSONRequestBody = UpdateDatabaseUserRequest
+
+// CreateRabbitMQOperatorPolicyJSONRequestBody defines body for CreateRabbitMQOperatorPolicy for application/json ContentType.
+type CreateRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
+
+// ReplaceRabbitMQOperatorPolicyJSONRequestBody defines body for ReplaceRabbitMQOperatorPolicy for application/json ContentType.
+type ReplaceRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
+
+// CreateRabbitMQPermissionJSONRequestBody defines body for CreateRabbitMQPermission for application/json ContentType.
+type CreateRabbitMQPermissionJSONRequestBody = RabbitMQPermission
+
+// ReplaceRabbitMQPermissionJSONRequestBody defines body for ReplaceRabbitMQPermission for application/json ContentType.
+type ReplaceRabbitMQPermissionJSONRequestBody = RabbitMQPermission
+
+// CreateRabbitMQPolicyJSONRequestBody defines body for CreateRabbitMQPolicy for application/json ContentType.
+type CreateRabbitMQPolicyJSONRequestBody = RabbitMQPolicy
+
+// ReplaceRabbitMQPolicyJSONRequestBody defines body for ReplaceRabbitMQPolicy for application/json ContentType.
+type ReplaceRabbitMQPolicyJSONRequestBody = RabbitMQPolicy
+
+// CreateRabbitMQTopicPermissionJSONRequestBody defines body for CreateRabbitMQTopicPermission for application/json ContentType.
+type CreateRabbitMQTopicPermissionJSONRequestBody = RabbitMQTopicPermission
+
+// ReplaceRabbitMQTopicPermissionJSONRequestBody defines body for ReplaceRabbitMQTopicPermission for application/json ContentType.
+type ReplaceRabbitMQTopicPermissionJSONRequestBody = RabbitMQTopicPermission
+
+// CreateRabbitMQUserJSONRequestBody defines body for CreateRabbitMQUser for application/json ContentType.
+type CreateRabbitMQUserJSONRequestBody = RabbitMQUserWrite
+
+// ReplaceRabbitMQUserJSONRequestBody defines body for ReplaceRabbitMQUser for application/json ContentType.
+type ReplaceRabbitMQUserJSONRequestBody = RabbitMQUserWrite
+
+// CreateRabbitMQVhostJSONRequestBody defines body for CreateRabbitMQVhost for application/json ContentType.
+type CreateRabbitMQVhostJSONRequestBody = RabbitMQVhost
+
+// ReplaceRabbitMQVhostJSONRequestBody defines body for ReplaceRabbitMQVhost for application/json ContentType.
+type ReplaceRabbitMQVhostJSONRequestBody = RabbitMQVhost
 
 // RaiseClusterFCVJSONRequestBody defines body for RaiseClusterFCV for application/json ContentType.
 type RaiseClusterFCVJSONRequestBody = RaiseFCVRequest
@@ -3404,6 +3828,120 @@ type ClientInterface interface {
 
 	// GetClusterPlacement request
 	GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRabbitMQOperatorPolicies request
+	ListRabbitMQOperatorPolicies(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRabbitMQOperatorPolicyWithBody request with any body
+	CreateRabbitMQOperatorPolicyWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, body CreateRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRabbitMQOperatorPolicy request
+	DeleteRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRabbitMQOperatorPolicy request
+	GetRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRabbitMQOperatorPolicyWithBody request with any body
+	ReplaceRabbitMQOperatorPolicyWithBody(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, body ReplaceRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRabbitMQPermissions request
+	ListRabbitMQPermissions(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRabbitMQPermissionWithBody request with any body
+	CreateRabbitMQPermissionWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRabbitMQPermission(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, body CreateRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRabbitMQPermission request
+	DeleteRabbitMQPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRabbitMQPermission request
+	GetRabbitMQPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRabbitMQPermissionWithBody request with any body
+	ReplaceRabbitMQPermissionWithBody(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRabbitMQPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, body ReplaceRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRabbitMQPolicies request
+	ListRabbitMQPolicies(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRabbitMQPolicyWithBody request with any body
+	CreateRabbitMQPolicyWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRabbitMQPolicy(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, body CreateRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRabbitMQPolicy request
+	DeleteRabbitMQPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRabbitMQPolicy request
+	GetRabbitMQPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRabbitMQPolicyWithBody request with any body
+	ReplaceRabbitMQPolicyWithBody(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRabbitMQPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, body ReplaceRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRabbitMQTopicPermissions request
+	ListRabbitMQTopicPermissions(ctx context.Context, cluster ClusterPath, params *ListRabbitMQTopicPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRabbitMQTopicPermissionWithBody request with any body
+	CreateRabbitMQTopicPermissionWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, body CreateRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRabbitMQTopicPermission request
+	DeleteRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRabbitMQTopicPermission request
+	GetRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRabbitMQTopicPermissionWithBody request with any body
+	ReplaceRabbitMQTopicPermissionWithBody(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, body ReplaceRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRabbitMQUsers request
+	ListRabbitMQUsers(ctx context.Context, cluster ClusterPath, params *ListRabbitMQUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRabbitMQUserWithBody request with any body
+	CreateRabbitMQUserWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRabbitMQUser(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, body CreateRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRabbitMQUser request
+	DeleteRabbitMQUser(ctx context.Context, cluster ClusterPath, user string, params *DeleteRabbitMQUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRabbitMQUser request
+	GetRabbitMQUser(ctx context.Context, cluster ClusterPath, user string, params *GetRabbitMQUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRabbitMQUserWithBody request with any body
+	ReplaceRabbitMQUserWithBody(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRabbitMQUser(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, body ReplaceRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRabbitMQVhosts request
+	ListRabbitMQVhosts(ctx context.Context, cluster ClusterPath, params *ListRabbitMQVhostsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRabbitMQVhostWithBody request with any body
+	CreateRabbitMQVhostWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRabbitMQVhost(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, body CreateRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRabbitMQVhost request
+	DeleteRabbitMQVhost(ctx context.Context, cluster ClusterPath, vhost string, params *DeleteRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRabbitMQVhost request
+	GetRabbitMQVhost(ctx context.Context, cluster ClusterPath, vhost string, params *GetRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRabbitMQVhostWithBody request with any body
+	ReplaceRabbitMQVhostWithBody(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRabbitMQVhost(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, body ReplaceRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RaiseClusterFCVWithBody request with any body
 	RaiseClusterFCVWithBody(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4393,6 +4931,510 @@ func (c *Client) GetPITRWindow(ctx context.Context, cluster ClusterPath, params 
 
 func (c *Client) GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterPlacementRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRabbitMQOperatorPolicies(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRabbitMQOperatorPoliciesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQOperatorPolicyWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQOperatorPolicyRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, body CreateRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQOperatorPolicyRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRabbitMQOperatorPolicyRequest(c.Server, cluster, vhost, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRabbitMQOperatorPolicyRequest(c.Server, cluster, vhost, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQOperatorPolicyWithBody(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQOperatorPolicyRequestWithBody(c.Server, cluster, vhost, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQOperatorPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, body ReplaceRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQOperatorPolicyRequest(c.Server, cluster, vhost, name, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRabbitMQPermissions(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRabbitMQPermissionsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQPermissionWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQPermissionRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQPermission(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, body CreateRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQPermissionRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRabbitMQPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRabbitMQPermissionRequest(c.Server, cluster, vhost, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRabbitMQPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRabbitMQPermissionRequest(c.Server, cluster, vhost, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQPermissionWithBody(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQPermissionRequestWithBody(c.Server, cluster, vhost, user, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, body ReplaceRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQPermissionRequest(c.Server, cluster, vhost, user, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRabbitMQPolicies(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRabbitMQPoliciesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQPolicyWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQPolicyRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQPolicy(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, body CreateRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQPolicyRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRabbitMQPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRabbitMQPolicyRequest(c.Server, cluster, vhost, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRabbitMQPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRabbitMQPolicyRequest(c.Server, cluster, vhost, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQPolicyWithBody(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQPolicyRequestWithBody(c.Server, cluster, vhost, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQPolicy(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, body ReplaceRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQPolicyRequest(c.Server, cluster, vhost, name, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRabbitMQTopicPermissions(ctx context.Context, cluster ClusterPath, params *ListRabbitMQTopicPermissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRabbitMQTopicPermissionsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQTopicPermissionWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQTopicPermissionRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, body CreateRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQTopicPermissionRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRabbitMQTopicPermissionRequest(c.Server, cluster, vhost, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRabbitMQTopicPermissionRequest(c.Server, cluster, vhost, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQTopicPermissionWithBody(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQTopicPermissionRequestWithBody(c.Server, cluster, vhost, user, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQTopicPermission(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, body ReplaceRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQTopicPermissionRequest(c.Server, cluster, vhost, user, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRabbitMQUsers(ctx context.Context, cluster ClusterPath, params *ListRabbitMQUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRabbitMQUsersRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQUserWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQUserRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQUser(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, body CreateRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQUserRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRabbitMQUser(ctx context.Context, cluster ClusterPath, user string, params *DeleteRabbitMQUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRabbitMQUserRequest(c.Server, cluster, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRabbitMQUser(ctx context.Context, cluster ClusterPath, user string, params *GetRabbitMQUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRabbitMQUserRequest(c.Server, cluster, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQUserWithBody(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQUserRequestWithBody(c.Server, cluster, user, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQUser(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, body ReplaceRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQUserRequest(c.Server, cluster, user, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRabbitMQVhosts(ctx context.Context, cluster ClusterPath, params *ListRabbitMQVhostsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRabbitMQVhostsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQVhostWithBody(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQVhostRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRabbitMQVhost(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, body CreateRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRabbitMQVhostRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRabbitMQVhost(ctx context.Context, cluster ClusterPath, vhost string, params *DeleteRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRabbitMQVhostRequest(c.Server, cluster, vhost, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRabbitMQVhost(ctx context.Context, cluster ClusterPath, vhost string, params *GetRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRabbitMQVhostRequest(c.Server, cluster, vhost, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQVhostWithBody(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQVhostRequestWithBody(c.Server, cluster, vhost, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRabbitMQVhost(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, body ReplaceRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRabbitMQVhostRequest(c.Server, cluster, vhost, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8893,6 +9935,2322 @@ func NewGetClusterPlacementRequest(server string, cluster ClusterPath, params *G
 	return req, nil
 }
 
+// NewListRabbitMQOperatorPoliciesRequest generates requests for ListRabbitMQOperatorPolicies
+func NewListRabbitMQOperatorPoliciesRequest(server string, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/operator-policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRabbitMQOperatorPolicyRequest calls the generic CreateRabbitMQOperatorPolicy builder with application/json body
+func NewCreateRabbitMQOperatorPolicyRequest(server string, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, body CreateRabbitMQOperatorPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRabbitMQOperatorPolicyRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateRabbitMQOperatorPolicyRequestWithBody generates requests for CreateRabbitMQOperatorPolicy with any type of body
+func NewCreateRabbitMQOperatorPolicyRequestWithBody(server string, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/operator-policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteRabbitMQOperatorPolicyRequest generates requests for DeleteRabbitMQOperatorPolicy
+func NewDeleteRabbitMQOperatorPolicyRequest(server string, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQOperatorPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/operator-policies/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetRabbitMQOperatorPolicyRequest generates requests for GetRabbitMQOperatorPolicy
+func NewGetRabbitMQOperatorPolicyRequest(server string, cluster ClusterPath, vhost string, name string, params *GetRabbitMQOperatorPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/operator-policies/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRabbitMQOperatorPolicyRequest calls the generic ReplaceRabbitMQOperatorPolicy builder with application/json body
+func NewReplaceRabbitMQOperatorPolicyRequest(server string, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, body ReplaceRabbitMQOperatorPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRabbitMQOperatorPolicyRequestWithBody(server, cluster, vhost, name, params, "application/json", bodyReader)
+}
+
+// NewReplaceRabbitMQOperatorPolicyRequestWithBody generates requests for ReplaceRabbitMQOperatorPolicy with any type of body
+func NewReplaceRabbitMQOperatorPolicyRequestWithBody(server string, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/operator-policies/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListRabbitMQPermissionsRequest generates requests for ListRabbitMQPermissions
+func NewListRabbitMQPermissionsRequest(server string, cluster ClusterPath, params *ListRabbitMQPermissionsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/permissions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRabbitMQPermissionRequest calls the generic CreateRabbitMQPermission builder with application/json body
+func NewCreateRabbitMQPermissionRequest(server string, cluster ClusterPath, params *CreateRabbitMQPermissionParams, body CreateRabbitMQPermissionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRabbitMQPermissionRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateRabbitMQPermissionRequestWithBody generates requests for CreateRabbitMQPermission with any type of body
+func NewCreateRabbitMQPermissionRequestWithBody(server string, cluster ClusterPath, params *CreateRabbitMQPermissionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/permissions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteRabbitMQPermissionRequest generates requests for DeleteRabbitMQPermission
+func NewDeleteRabbitMQPermissionRequest(server string, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQPermissionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/permissions/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetRabbitMQPermissionRequest generates requests for GetRabbitMQPermission
+func NewGetRabbitMQPermissionRequest(server string, cluster ClusterPath, vhost string, user string, params *GetRabbitMQPermissionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/permissions/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRabbitMQPermissionRequest calls the generic ReplaceRabbitMQPermission builder with application/json body
+func NewReplaceRabbitMQPermissionRequest(server string, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, body ReplaceRabbitMQPermissionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRabbitMQPermissionRequestWithBody(server, cluster, vhost, user, params, "application/json", bodyReader)
+}
+
+// NewReplaceRabbitMQPermissionRequestWithBody generates requests for ReplaceRabbitMQPermission with any type of body
+func NewReplaceRabbitMQPermissionRequestWithBody(server string, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/permissions/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListRabbitMQPoliciesRequest generates requests for ListRabbitMQPolicies
+func NewListRabbitMQPoliciesRequest(server string, cluster ClusterPath, params *ListRabbitMQPoliciesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRabbitMQPolicyRequest calls the generic CreateRabbitMQPolicy builder with application/json body
+func NewCreateRabbitMQPolicyRequest(server string, cluster ClusterPath, params *CreateRabbitMQPolicyParams, body CreateRabbitMQPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRabbitMQPolicyRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateRabbitMQPolicyRequestWithBody generates requests for CreateRabbitMQPolicy with any type of body
+func NewCreateRabbitMQPolicyRequestWithBody(server string, cluster ClusterPath, params *CreateRabbitMQPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteRabbitMQPolicyRequest generates requests for DeleteRabbitMQPolicy
+func NewDeleteRabbitMQPolicyRequest(server string, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/policies/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetRabbitMQPolicyRequest generates requests for GetRabbitMQPolicy
+func NewGetRabbitMQPolicyRequest(server string, cluster ClusterPath, vhost string, name string, params *GetRabbitMQPolicyParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/policies/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRabbitMQPolicyRequest calls the generic ReplaceRabbitMQPolicy builder with application/json body
+func NewReplaceRabbitMQPolicyRequest(server string, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, body ReplaceRabbitMQPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRabbitMQPolicyRequestWithBody(server, cluster, vhost, name, params, "application/json", bodyReader)
+}
+
+// NewReplaceRabbitMQPolicyRequestWithBody generates requests for ReplaceRabbitMQPolicy with any type of body
+func NewReplaceRabbitMQPolicyRequestWithBody(server string, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/policies/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListRabbitMQTopicPermissionsRequest generates requests for ListRabbitMQTopicPermissions
+func NewListRabbitMQTopicPermissionsRequest(server string, cluster ClusterPath, params *ListRabbitMQTopicPermissionsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/topic-permissions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRabbitMQTopicPermissionRequest calls the generic CreateRabbitMQTopicPermission builder with application/json body
+func NewCreateRabbitMQTopicPermissionRequest(server string, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, body CreateRabbitMQTopicPermissionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRabbitMQTopicPermissionRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateRabbitMQTopicPermissionRequestWithBody generates requests for CreateRabbitMQTopicPermission with any type of body
+func NewCreateRabbitMQTopicPermissionRequestWithBody(server string, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/topic-permissions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteRabbitMQTopicPermissionRequest generates requests for DeleteRabbitMQTopicPermission
+func NewDeleteRabbitMQTopicPermissionRequest(server string, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQTopicPermissionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/topic-permissions/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetRabbitMQTopicPermissionRequest generates requests for GetRabbitMQTopicPermission
+func NewGetRabbitMQTopicPermissionRequest(server string, cluster ClusterPath, vhost string, user string, params *GetRabbitMQTopicPermissionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/topic-permissions/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRabbitMQTopicPermissionRequest calls the generic ReplaceRabbitMQTopicPermission builder with application/json body
+func NewReplaceRabbitMQTopicPermissionRequest(server string, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, body ReplaceRabbitMQTopicPermissionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRabbitMQTopicPermissionRequestWithBody(server, cluster, vhost, user, params, "application/json", bodyReader)
+}
+
+// NewReplaceRabbitMQTopicPermissionRequestWithBody generates requests for ReplaceRabbitMQTopicPermission with any type of body
+func NewReplaceRabbitMQTopicPermissionRequestWithBody(server string, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/topic-permissions/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListRabbitMQUsersRequest generates requests for ListRabbitMQUsers
+func NewListRabbitMQUsersRequest(server string, cluster ClusterPath, params *ListRabbitMQUsersParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/users", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRabbitMQUserRequest calls the generic CreateRabbitMQUser builder with application/json body
+func NewCreateRabbitMQUserRequest(server string, cluster ClusterPath, params *CreateRabbitMQUserParams, body CreateRabbitMQUserJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRabbitMQUserRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateRabbitMQUserRequestWithBody generates requests for CreateRabbitMQUser with any type of body
+func NewCreateRabbitMQUserRequestWithBody(server string, cluster ClusterPath, params *CreateRabbitMQUserParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/users", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteRabbitMQUserRequest generates requests for DeleteRabbitMQUser
+func NewDeleteRabbitMQUserRequest(server string, cluster ClusterPath, user string, params *DeleteRabbitMQUserParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/users/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetRabbitMQUserRequest generates requests for GetRabbitMQUser
+func NewGetRabbitMQUserRequest(server string, cluster ClusterPath, user string, params *GetRabbitMQUserParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/users/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRabbitMQUserRequest calls the generic ReplaceRabbitMQUser builder with application/json body
+func NewReplaceRabbitMQUserRequest(server string, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, body ReplaceRabbitMQUserJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRabbitMQUserRequestWithBody(server, cluster, user, params, "application/json", bodyReader)
+}
+
+// NewReplaceRabbitMQUserRequestWithBody generates requests for ReplaceRabbitMQUser with any type of body
+func NewReplaceRabbitMQUserRequestWithBody(server string, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "user", runtime.ParamLocationPath, user)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/users/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListRabbitMQVhostsRequest generates requests for ListRabbitMQVhosts
+func NewListRabbitMQVhostsRequest(server string, cluster ClusterPath, params *ListRabbitMQVhostsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/vhosts", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRabbitMQVhostRequest calls the generic CreateRabbitMQVhost builder with application/json body
+func NewCreateRabbitMQVhostRequest(server string, cluster ClusterPath, params *CreateRabbitMQVhostParams, body CreateRabbitMQVhostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRabbitMQVhostRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateRabbitMQVhostRequestWithBody generates requests for CreateRabbitMQVhost with any type of body
+func NewCreateRabbitMQVhostRequestWithBody(server string, cluster ClusterPath, params *CreateRabbitMQVhostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/vhosts", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteRabbitMQVhostRequest generates requests for DeleteRabbitMQVhost
+func NewDeleteRabbitMQVhostRequest(server string, cluster ClusterPath, vhost string, params *DeleteRabbitMQVhostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/vhosts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetRabbitMQVhostRequest generates requests for GetRabbitMQVhost
+func NewGetRabbitMQVhostRequest(server string, cluster ClusterPath, vhost string, params *GetRabbitMQVhostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/vhosts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRabbitMQVhostRequest calls the generic ReplaceRabbitMQVhost builder with application/json body
+func NewReplaceRabbitMQVhostRequest(server string, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, body ReplaceRabbitMQVhostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRabbitMQVhostRequestWithBody(server, cluster, vhost, params, "application/json", bodyReader)
+}
+
+// NewReplaceRabbitMQVhostRequestWithBody generates requests for ReplaceRabbitMQVhost with any type of body
+func NewReplaceRabbitMQVhostRequestWithBody(server string, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "vhost", runtime.ParamLocationPath, vhost)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/rabbitmq/vhosts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewRaiseClusterFCVRequest calls the generic RaiseClusterFCV builder with application/json body
 func NewRaiseClusterFCVRequest(server string, cluster ClusterPath, params *RaiseClusterFCVParams, body RaiseClusterFCVJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11331,6 +14689,120 @@ type ClientWithResponsesInterface interface {
 	// GetClusterPlacementWithResponse request
 	GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error)
 
+	// ListRabbitMQOperatorPoliciesWithResponse request
+	ListRabbitMQOperatorPoliciesWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*ListRabbitMQOperatorPoliciesResponse, error)
+
+	// CreateRabbitMQOperatorPolicyWithBodyWithResponse request with any body
+	CreateRabbitMQOperatorPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQOperatorPolicyResponse, error)
+
+	CreateRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, body CreateRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQOperatorPolicyResponse, error)
+
+	// DeleteRabbitMQOperatorPolicyWithResponse request
+	DeleteRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQOperatorPolicyResponse, error)
+
+	// GetRabbitMQOperatorPolicyWithResponse request
+	GetRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*GetRabbitMQOperatorPolicyResponse, error)
+
+	// ReplaceRabbitMQOperatorPolicyWithBodyWithResponse request with any body
+	ReplaceRabbitMQOperatorPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQOperatorPolicyResponse, error)
+
+	ReplaceRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, body ReplaceRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQOperatorPolicyResponse, error)
+
+	// ListRabbitMQPermissionsWithResponse request
+	ListRabbitMQPermissionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPermissionsParams, reqEditors ...RequestEditorFn) (*ListRabbitMQPermissionsResponse, error)
+
+	// CreateRabbitMQPermissionWithBodyWithResponse request with any body
+	CreateRabbitMQPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQPermissionResponse, error)
+
+	CreateRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, body CreateRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQPermissionResponse, error)
+
+	// DeleteRabbitMQPermissionWithResponse request
+	DeleteRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQPermissionResponse, error)
+
+	// GetRabbitMQPermissionWithResponse request
+	GetRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*GetRabbitMQPermissionResponse, error)
+
+	// ReplaceRabbitMQPermissionWithBodyWithResponse request with any body
+	ReplaceRabbitMQPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPermissionResponse, error)
+
+	ReplaceRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, body ReplaceRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPermissionResponse, error)
+
+	// ListRabbitMQPoliciesWithResponse request
+	ListRabbitMQPoliciesWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPoliciesParams, reqEditors ...RequestEditorFn) (*ListRabbitMQPoliciesResponse, error)
+
+	// CreateRabbitMQPolicyWithBodyWithResponse request with any body
+	CreateRabbitMQPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQPolicyResponse, error)
+
+	CreateRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, body CreateRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQPolicyResponse, error)
+
+	// DeleteRabbitMQPolicyWithResponse request
+	DeleteRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQPolicyResponse, error)
+
+	// GetRabbitMQPolicyWithResponse request
+	GetRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*GetRabbitMQPolicyResponse, error)
+
+	// ReplaceRabbitMQPolicyWithBodyWithResponse request with any body
+	ReplaceRabbitMQPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPolicyResponse, error)
+
+	ReplaceRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, body ReplaceRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPolicyResponse, error)
+
+	// ListRabbitMQTopicPermissionsWithResponse request
+	ListRabbitMQTopicPermissionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQTopicPermissionsParams, reqEditors ...RequestEditorFn) (*ListRabbitMQTopicPermissionsResponse, error)
+
+	// CreateRabbitMQTopicPermissionWithBodyWithResponse request with any body
+	CreateRabbitMQTopicPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQTopicPermissionResponse, error)
+
+	CreateRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, body CreateRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQTopicPermissionResponse, error)
+
+	// DeleteRabbitMQTopicPermissionWithResponse request
+	DeleteRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQTopicPermissionResponse, error)
+
+	// GetRabbitMQTopicPermissionWithResponse request
+	GetRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*GetRabbitMQTopicPermissionResponse, error)
+
+	// ReplaceRabbitMQTopicPermissionWithBodyWithResponse request with any body
+	ReplaceRabbitMQTopicPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQTopicPermissionResponse, error)
+
+	ReplaceRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, body ReplaceRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQTopicPermissionResponse, error)
+
+	// ListRabbitMQUsersWithResponse request
+	ListRabbitMQUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQUsersParams, reqEditors ...RequestEditorFn) (*ListRabbitMQUsersResponse, error)
+
+	// CreateRabbitMQUserWithBodyWithResponse request with any body
+	CreateRabbitMQUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQUserResponse, error)
+
+	CreateRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, body CreateRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQUserResponse, error)
+
+	// DeleteRabbitMQUserWithResponse request
+	DeleteRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *DeleteRabbitMQUserParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQUserResponse, error)
+
+	// GetRabbitMQUserWithResponse request
+	GetRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *GetRabbitMQUserParams, reqEditors ...RequestEditorFn) (*GetRabbitMQUserResponse, error)
+
+	// ReplaceRabbitMQUserWithBodyWithResponse request with any body
+	ReplaceRabbitMQUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQUserResponse, error)
+
+	ReplaceRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, body ReplaceRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQUserResponse, error)
+
+	// ListRabbitMQVhostsWithResponse request
+	ListRabbitMQVhostsWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQVhostsParams, reqEditors ...RequestEditorFn) (*ListRabbitMQVhostsResponse, error)
+
+	// CreateRabbitMQVhostWithBodyWithResponse request with any body
+	CreateRabbitMQVhostWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQVhostResponse, error)
+
+	CreateRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, body CreateRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQVhostResponse, error)
+
+	// DeleteRabbitMQVhostWithResponse request
+	DeleteRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *DeleteRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQVhostResponse, error)
+
+	// GetRabbitMQVhostWithResponse request
+	GetRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *GetRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*GetRabbitMQVhostResponse, error)
+
+	// ReplaceRabbitMQVhostWithBodyWithResponse request with any body
+	ReplaceRabbitMQVhostWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQVhostResponse, error)
+
+	ReplaceRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, body ReplaceRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQVhostResponse, error)
+
 	// RaiseClusterFCVWithBodyWithResponse request with any body
 	RaiseClusterFCVWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RaiseClusterFCVParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RaiseClusterFCVResponse, error)
 
@@ -13154,6 +16626,840 @@ func (r GetClusterPlacementResponse) StatusCode() int {
 	return 0
 }
 
+type ListRabbitMQOperatorPoliciesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPolicyList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRabbitMQOperatorPoliciesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRabbitMQOperatorPoliciesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateRabbitMQOperatorPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RabbitMQPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRabbitMQOperatorPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRabbitMQOperatorPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteRabbitMQOperatorPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRabbitMQOperatorPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRabbitMQOperatorPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRabbitMQOperatorPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRabbitMQOperatorPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRabbitMQOperatorPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceRabbitMQOperatorPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRabbitMQOperatorPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRabbitMQOperatorPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListRabbitMQPermissionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPermissionList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRabbitMQPermissionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRabbitMQPermissionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateRabbitMQPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RabbitMQPermission
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRabbitMQPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRabbitMQPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteRabbitMQPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRabbitMQPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRabbitMQPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRabbitMQPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPermission
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRabbitMQPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRabbitMQPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceRabbitMQPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPermission
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRabbitMQPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRabbitMQPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListRabbitMQPoliciesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPolicyList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRabbitMQPoliciesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRabbitMQPoliciesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateRabbitMQPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RabbitMQPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRabbitMQPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRabbitMQPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteRabbitMQPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRabbitMQPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRabbitMQPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRabbitMQPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRabbitMQPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRabbitMQPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceRabbitMQPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRabbitMQPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRabbitMQPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListRabbitMQTopicPermissionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQTopicPermissionList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRabbitMQTopicPermissionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRabbitMQTopicPermissionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateRabbitMQTopicPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RabbitMQTopicPermission
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRabbitMQTopicPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRabbitMQTopicPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteRabbitMQTopicPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRabbitMQTopicPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRabbitMQTopicPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRabbitMQTopicPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQTopicPermissionList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRabbitMQTopicPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRabbitMQTopicPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceRabbitMQTopicPermissionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQTopicPermission
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRabbitMQTopicPermissionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRabbitMQTopicPermissionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListRabbitMQUsersResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQUserList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRabbitMQUsersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRabbitMQUsersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateRabbitMQUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *CreatedRabbitMQUser
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRabbitMQUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRabbitMQUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteRabbitMQUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRabbitMQUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRabbitMQUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRabbitMQUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQUser
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRabbitMQUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRabbitMQUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceRabbitMQUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQUser
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRabbitMQUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRabbitMQUserResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListRabbitMQVhostsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQVhostList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRabbitMQVhostsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRabbitMQVhostsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateRabbitMQVhostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RabbitMQVhost
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRabbitMQVhostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRabbitMQVhostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteRabbitMQVhostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRabbitMQVhostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRabbitMQVhostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRabbitMQVhostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQVhost
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRabbitMQVhostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRabbitMQVhostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceRabbitMQVhostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RabbitMQVhost
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRabbitMQVhostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRabbitMQVhostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type RaiseClusterFCVResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14858,6 +19164,372 @@ func (c *ClientWithResponses) GetClusterPlacementWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseGetClusterPlacementResponse(rsp)
+}
+
+// ListRabbitMQOperatorPoliciesWithResponse request returning *ListRabbitMQOperatorPoliciesResponse
+func (c *ClientWithResponses) ListRabbitMQOperatorPoliciesWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*ListRabbitMQOperatorPoliciesResponse, error) {
+	rsp, err := c.ListRabbitMQOperatorPolicies(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRabbitMQOperatorPoliciesResponse(rsp)
+}
+
+// CreateRabbitMQOperatorPolicyWithBodyWithResponse request with arbitrary body returning *CreateRabbitMQOperatorPolicyResponse
+func (c *ClientWithResponses) CreateRabbitMQOperatorPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQOperatorPolicyResponse, error) {
+	rsp, err := c.CreateRabbitMQOperatorPolicyWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQOperatorPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQOperatorPolicyParams, body CreateRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQOperatorPolicyResponse, error) {
+	rsp, err := c.CreateRabbitMQOperatorPolicy(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQOperatorPolicyResponse(rsp)
+}
+
+// DeleteRabbitMQOperatorPolicyWithResponse request returning *DeleteRabbitMQOperatorPolicyResponse
+func (c *ClientWithResponses) DeleteRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQOperatorPolicyResponse, error) {
+	rsp, err := c.DeleteRabbitMQOperatorPolicy(ctx, cluster, vhost, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRabbitMQOperatorPolicyResponse(rsp)
+}
+
+// GetRabbitMQOperatorPolicyWithResponse request returning *GetRabbitMQOperatorPolicyResponse
+func (c *ClientWithResponses) GetRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQOperatorPolicyParams, reqEditors ...RequestEditorFn) (*GetRabbitMQOperatorPolicyResponse, error) {
+	rsp, err := c.GetRabbitMQOperatorPolicy(ctx, cluster, vhost, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRabbitMQOperatorPolicyResponse(rsp)
+}
+
+// ReplaceRabbitMQOperatorPolicyWithBodyWithResponse request with arbitrary body returning *ReplaceRabbitMQOperatorPolicyResponse
+func (c *ClientWithResponses) ReplaceRabbitMQOperatorPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQOperatorPolicyResponse, error) {
+	rsp, err := c.ReplaceRabbitMQOperatorPolicyWithBody(ctx, cluster, vhost, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQOperatorPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRabbitMQOperatorPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQOperatorPolicyParams, body ReplaceRabbitMQOperatorPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQOperatorPolicyResponse, error) {
+	rsp, err := c.ReplaceRabbitMQOperatorPolicy(ctx, cluster, vhost, name, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQOperatorPolicyResponse(rsp)
+}
+
+// ListRabbitMQPermissionsWithResponse request returning *ListRabbitMQPermissionsResponse
+func (c *ClientWithResponses) ListRabbitMQPermissionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPermissionsParams, reqEditors ...RequestEditorFn) (*ListRabbitMQPermissionsResponse, error) {
+	rsp, err := c.ListRabbitMQPermissions(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRabbitMQPermissionsResponse(rsp)
+}
+
+// CreateRabbitMQPermissionWithBodyWithResponse request with arbitrary body returning *CreateRabbitMQPermissionResponse
+func (c *ClientWithResponses) CreateRabbitMQPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQPermissionResponse, error) {
+	rsp, err := c.CreateRabbitMQPermissionWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQPermissionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPermissionParams, body CreateRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQPermissionResponse, error) {
+	rsp, err := c.CreateRabbitMQPermission(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQPermissionResponse(rsp)
+}
+
+// DeleteRabbitMQPermissionWithResponse request returning *DeleteRabbitMQPermissionResponse
+func (c *ClientWithResponses) DeleteRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQPermissionResponse, error) {
+	rsp, err := c.DeleteRabbitMQPermission(ctx, cluster, vhost, user, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRabbitMQPermissionResponse(rsp)
+}
+
+// GetRabbitMQPermissionWithResponse request returning *GetRabbitMQPermissionResponse
+func (c *ClientWithResponses) GetRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQPermissionParams, reqEditors ...RequestEditorFn) (*GetRabbitMQPermissionResponse, error) {
+	rsp, err := c.GetRabbitMQPermission(ctx, cluster, vhost, user, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRabbitMQPermissionResponse(rsp)
+}
+
+// ReplaceRabbitMQPermissionWithBodyWithResponse request with arbitrary body returning *ReplaceRabbitMQPermissionResponse
+func (c *ClientWithResponses) ReplaceRabbitMQPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPermissionResponse, error) {
+	rsp, err := c.ReplaceRabbitMQPermissionWithBody(ctx, cluster, vhost, user, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQPermissionResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRabbitMQPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQPermissionParams, body ReplaceRabbitMQPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPermissionResponse, error) {
+	rsp, err := c.ReplaceRabbitMQPermission(ctx, cluster, vhost, user, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQPermissionResponse(rsp)
+}
+
+// ListRabbitMQPoliciesWithResponse request returning *ListRabbitMQPoliciesResponse
+func (c *ClientWithResponses) ListRabbitMQPoliciesWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQPoliciesParams, reqEditors ...RequestEditorFn) (*ListRabbitMQPoliciesResponse, error) {
+	rsp, err := c.ListRabbitMQPolicies(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRabbitMQPoliciesResponse(rsp)
+}
+
+// CreateRabbitMQPolicyWithBodyWithResponse request with arbitrary body returning *CreateRabbitMQPolicyResponse
+func (c *ClientWithResponses) CreateRabbitMQPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQPolicyResponse, error) {
+	rsp, err := c.CreateRabbitMQPolicyWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQPolicyParams, body CreateRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQPolicyResponse, error) {
+	rsp, err := c.CreateRabbitMQPolicy(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQPolicyResponse(rsp)
+}
+
+// DeleteRabbitMQPolicyWithResponse request returning *DeleteRabbitMQPolicyResponse
+func (c *ClientWithResponses) DeleteRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *DeleteRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQPolicyResponse, error) {
+	rsp, err := c.DeleteRabbitMQPolicy(ctx, cluster, vhost, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRabbitMQPolicyResponse(rsp)
+}
+
+// GetRabbitMQPolicyWithResponse request returning *GetRabbitMQPolicyResponse
+func (c *ClientWithResponses) GetRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *GetRabbitMQPolicyParams, reqEditors ...RequestEditorFn) (*GetRabbitMQPolicyResponse, error) {
+	rsp, err := c.GetRabbitMQPolicy(ctx, cluster, vhost, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRabbitMQPolicyResponse(rsp)
+}
+
+// ReplaceRabbitMQPolicyWithBodyWithResponse request with arbitrary body returning *ReplaceRabbitMQPolicyResponse
+func (c *ClientWithResponses) ReplaceRabbitMQPolicyWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPolicyResponse, error) {
+	rsp, err := c.ReplaceRabbitMQPolicyWithBody(ctx, cluster, vhost, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRabbitMQPolicyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, name string, params *ReplaceRabbitMQPolicyParams, body ReplaceRabbitMQPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQPolicyResponse, error) {
+	rsp, err := c.ReplaceRabbitMQPolicy(ctx, cluster, vhost, name, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQPolicyResponse(rsp)
+}
+
+// ListRabbitMQTopicPermissionsWithResponse request returning *ListRabbitMQTopicPermissionsResponse
+func (c *ClientWithResponses) ListRabbitMQTopicPermissionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQTopicPermissionsParams, reqEditors ...RequestEditorFn) (*ListRabbitMQTopicPermissionsResponse, error) {
+	rsp, err := c.ListRabbitMQTopicPermissions(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRabbitMQTopicPermissionsResponse(rsp)
+}
+
+// CreateRabbitMQTopicPermissionWithBodyWithResponse request with arbitrary body returning *CreateRabbitMQTopicPermissionResponse
+func (c *ClientWithResponses) CreateRabbitMQTopicPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQTopicPermissionResponse, error) {
+	rsp, err := c.CreateRabbitMQTopicPermissionWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQTopicPermissionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQTopicPermissionParams, body CreateRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQTopicPermissionResponse, error) {
+	rsp, err := c.CreateRabbitMQTopicPermission(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQTopicPermissionResponse(rsp)
+}
+
+// DeleteRabbitMQTopicPermissionWithResponse request returning *DeleteRabbitMQTopicPermissionResponse
+func (c *ClientWithResponses) DeleteRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *DeleteRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQTopicPermissionResponse, error) {
+	rsp, err := c.DeleteRabbitMQTopicPermission(ctx, cluster, vhost, user, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRabbitMQTopicPermissionResponse(rsp)
+}
+
+// GetRabbitMQTopicPermissionWithResponse request returning *GetRabbitMQTopicPermissionResponse
+func (c *ClientWithResponses) GetRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *GetRabbitMQTopicPermissionParams, reqEditors ...RequestEditorFn) (*GetRabbitMQTopicPermissionResponse, error) {
+	rsp, err := c.GetRabbitMQTopicPermission(ctx, cluster, vhost, user, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRabbitMQTopicPermissionResponse(rsp)
+}
+
+// ReplaceRabbitMQTopicPermissionWithBodyWithResponse request with arbitrary body returning *ReplaceRabbitMQTopicPermissionResponse
+func (c *ClientWithResponses) ReplaceRabbitMQTopicPermissionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQTopicPermissionResponse, error) {
+	rsp, err := c.ReplaceRabbitMQTopicPermissionWithBody(ctx, cluster, vhost, user, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQTopicPermissionResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRabbitMQTopicPermissionWithResponse(ctx context.Context, cluster ClusterPath, vhost string, user string, params *ReplaceRabbitMQTopicPermissionParams, body ReplaceRabbitMQTopicPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQTopicPermissionResponse, error) {
+	rsp, err := c.ReplaceRabbitMQTopicPermission(ctx, cluster, vhost, user, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQTopicPermissionResponse(rsp)
+}
+
+// ListRabbitMQUsersWithResponse request returning *ListRabbitMQUsersResponse
+func (c *ClientWithResponses) ListRabbitMQUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQUsersParams, reqEditors ...RequestEditorFn) (*ListRabbitMQUsersResponse, error) {
+	rsp, err := c.ListRabbitMQUsers(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRabbitMQUsersResponse(rsp)
+}
+
+// CreateRabbitMQUserWithBodyWithResponse request with arbitrary body returning *CreateRabbitMQUserResponse
+func (c *ClientWithResponses) CreateRabbitMQUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQUserResponse, error) {
+	rsp, err := c.CreateRabbitMQUserWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQUserResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQUserParams, body CreateRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQUserResponse, error) {
+	rsp, err := c.CreateRabbitMQUser(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQUserResponse(rsp)
+}
+
+// DeleteRabbitMQUserWithResponse request returning *DeleteRabbitMQUserResponse
+func (c *ClientWithResponses) DeleteRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *DeleteRabbitMQUserParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQUserResponse, error) {
+	rsp, err := c.DeleteRabbitMQUser(ctx, cluster, user, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRabbitMQUserResponse(rsp)
+}
+
+// GetRabbitMQUserWithResponse request returning *GetRabbitMQUserResponse
+func (c *ClientWithResponses) GetRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *GetRabbitMQUserParams, reqEditors ...RequestEditorFn) (*GetRabbitMQUserResponse, error) {
+	rsp, err := c.GetRabbitMQUser(ctx, cluster, user, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRabbitMQUserResponse(rsp)
+}
+
+// ReplaceRabbitMQUserWithBodyWithResponse request with arbitrary body returning *ReplaceRabbitMQUserResponse
+func (c *ClientWithResponses) ReplaceRabbitMQUserWithBodyWithResponse(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQUserResponse, error) {
+	rsp, err := c.ReplaceRabbitMQUserWithBody(ctx, cluster, user, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQUserResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRabbitMQUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *ReplaceRabbitMQUserParams, body ReplaceRabbitMQUserJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQUserResponse, error) {
+	rsp, err := c.ReplaceRabbitMQUser(ctx, cluster, user, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQUserResponse(rsp)
+}
+
+// ListRabbitMQVhostsWithResponse request returning *ListRabbitMQVhostsResponse
+func (c *ClientWithResponses) ListRabbitMQVhostsWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQVhostsParams, reqEditors ...RequestEditorFn) (*ListRabbitMQVhostsResponse, error) {
+	rsp, err := c.ListRabbitMQVhosts(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRabbitMQVhostsResponse(rsp)
+}
+
+// CreateRabbitMQVhostWithBodyWithResponse request with arbitrary body returning *CreateRabbitMQVhostResponse
+func (c *ClientWithResponses) CreateRabbitMQVhostWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRabbitMQVhostResponse, error) {
+	rsp, err := c.CreateRabbitMQVhostWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQVhostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, params *CreateRabbitMQVhostParams, body CreateRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRabbitMQVhostResponse, error) {
+	rsp, err := c.CreateRabbitMQVhost(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRabbitMQVhostResponse(rsp)
+}
+
+// DeleteRabbitMQVhostWithResponse request returning *DeleteRabbitMQVhostResponse
+func (c *ClientWithResponses) DeleteRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *DeleteRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*DeleteRabbitMQVhostResponse, error) {
+	rsp, err := c.DeleteRabbitMQVhost(ctx, cluster, vhost, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRabbitMQVhostResponse(rsp)
+}
+
+// GetRabbitMQVhostWithResponse request returning *GetRabbitMQVhostResponse
+func (c *ClientWithResponses) GetRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *GetRabbitMQVhostParams, reqEditors ...RequestEditorFn) (*GetRabbitMQVhostResponse, error) {
+	rsp, err := c.GetRabbitMQVhost(ctx, cluster, vhost, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRabbitMQVhostResponse(rsp)
+}
+
+// ReplaceRabbitMQVhostWithBodyWithResponse request with arbitrary body returning *ReplaceRabbitMQVhostResponse
+func (c *ClientWithResponses) ReplaceRabbitMQVhostWithBodyWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQVhostResponse, error) {
+	rsp, err := c.ReplaceRabbitMQVhostWithBody(ctx, cluster, vhost, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQVhostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRabbitMQVhostWithResponse(ctx context.Context, cluster ClusterPath, vhost string, params *ReplaceRabbitMQVhostParams, body ReplaceRabbitMQVhostJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRabbitMQVhostResponse, error) {
+	rsp, err := c.ReplaceRabbitMQVhost(ctx, cluster, vhost, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRabbitMQVhostResponse(rsp)
 }
 
 // RaiseClusterFCVWithBodyWithResponse request with arbitrary body returning *RaiseClusterFCVResponse
@@ -20093,6 +24765,2004 @@ func ParseGetClusterPlacementResponse(rsp *http.Response) (*GetClusterPlacementR
 			return nil, err
 		}
 		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRabbitMQOperatorPoliciesResponse parses an HTTP response from a ListRabbitMQOperatorPoliciesWithResponse call
+func ParseListRabbitMQOperatorPoliciesResponse(rsp *http.Response) (*ListRabbitMQOperatorPoliciesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRabbitMQOperatorPoliciesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPolicyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRabbitMQOperatorPolicyResponse parses an HTTP response from a CreateRabbitMQOperatorPolicyWithResponse call
+func ParseCreateRabbitMQOperatorPolicyResponse(rsp *http.Response) (*CreateRabbitMQOperatorPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRabbitMQOperatorPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RabbitMQPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRabbitMQOperatorPolicyResponse parses an HTTP response from a DeleteRabbitMQOperatorPolicyWithResponse call
+func ParseDeleteRabbitMQOperatorPolicyResponse(rsp *http.Response) (*DeleteRabbitMQOperatorPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRabbitMQOperatorPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRabbitMQOperatorPolicyResponse parses an HTTP response from a GetRabbitMQOperatorPolicyWithResponse call
+func ParseGetRabbitMQOperatorPolicyResponse(rsp *http.Response) (*GetRabbitMQOperatorPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRabbitMQOperatorPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRabbitMQOperatorPolicyResponse parses an HTTP response from a ReplaceRabbitMQOperatorPolicyWithResponse call
+func ParseReplaceRabbitMQOperatorPolicyResponse(rsp *http.Response) (*ReplaceRabbitMQOperatorPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRabbitMQOperatorPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRabbitMQPermissionsResponse parses an HTTP response from a ListRabbitMQPermissionsWithResponse call
+func ParseListRabbitMQPermissionsResponse(rsp *http.Response) (*ListRabbitMQPermissionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRabbitMQPermissionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPermissionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRabbitMQPermissionResponse parses an HTTP response from a CreateRabbitMQPermissionWithResponse call
+func ParseCreateRabbitMQPermissionResponse(rsp *http.Response) (*CreateRabbitMQPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRabbitMQPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RabbitMQPermission
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRabbitMQPermissionResponse parses an HTTP response from a DeleteRabbitMQPermissionWithResponse call
+func ParseDeleteRabbitMQPermissionResponse(rsp *http.Response) (*DeleteRabbitMQPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRabbitMQPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRabbitMQPermissionResponse parses an HTTP response from a GetRabbitMQPermissionWithResponse call
+func ParseGetRabbitMQPermissionResponse(rsp *http.Response) (*GetRabbitMQPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRabbitMQPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPermission
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRabbitMQPermissionResponse parses an HTTP response from a ReplaceRabbitMQPermissionWithResponse call
+func ParseReplaceRabbitMQPermissionResponse(rsp *http.Response) (*ReplaceRabbitMQPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRabbitMQPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPermission
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRabbitMQPoliciesResponse parses an HTTP response from a ListRabbitMQPoliciesWithResponse call
+func ParseListRabbitMQPoliciesResponse(rsp *http.Response) (*ListRabbitMQPoliciesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRabbitMQPoliciesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPolicyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRabbitMQPolicyResponse parses an HTTP response from a CreateRabbitMQPolicyWithResponse call
+func ParseCreateRabbitMQPolicyResponse(rsp *http.Response) (*CreateRabbitMQPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRabbitMQPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RabbitMQPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRabbitMQPolicyResponse parses an HTTP response from a DeleteRabbitMQPolicyWithResponse call
+func ParseDeleteRabbitMQPolicyResponse(rsp *http.Response) (*DeleteRabbitMQPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRabbitMQPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRabbitMQPolicyResponse parses an HTTP response from a GetRabbitMQPolicyWithResponse call
+func ParseGetRabbitMQPolicyResponse(rsp *http.Response) (*GetRabbitMQPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRabbitMQPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRabbitMQPolicyResponse parses an HTTP response from a ReplaceRabbitMQPolicyWithResponse call
+func ParseReplaceRabbitMQPolicyResponse(rsp *http.Response) (*ReplaceRabbitMQPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRabbitMQPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRabbitMQTopicPermissionsResponse parses an HTTP response from a ListRabbitMQTopicPermissionsWithResponse call
+func ParseListRabbitMQTopicPermissionsResponse(rsp *http.Response) (*ListRabbitMQTopicPermissionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRabbitMQTopicPermissionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQTopicPermissionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRabbitMQTopicPermissionResponse parses an HTTP response from a CreateRabbitMQTopicPermissionWithResponse call
+func ParseCreateRabbitMQTopicPermissionResponse(rsp *http.Response) (*CreateRabbitMQTopicPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRabbitMQTopicPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RabbitMQTopicPermission
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRabbitMQTopicPermissionResponse parses an HTTP response from a DeleteRabbitMQTopicPermissionWithResponse call
+func ParseDeleteRabbitMQTopicPermissionResponse(rsp *http.Response) (*DeleteRabbitMQTopicPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRabbitMQTopicPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRabbitMQTopicPermissionResponse parses an HTTP response from a GetRabbitMQTopicPermissionWithResponse call
+func ParseGetRabbitMQTopicPermissionResponse(rsp *http.Response) (*GetRabbitMQTopicPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRabbitMQTopicPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQTopicPermissionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRabbitMQTopicPermissionResponse parses an HTTP response from a ReplaceRabbitMQTopicPermissionWithResponse call
+func ParseReplaceRabbitMQTopicPermissionResponse(rsp *http.Response) (*ReplaceRabbitMQTopicPermissionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRabbitMQTopicPermissionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQTopicPermission
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRabbitMQUsersResponse parses an HTTP response from a ListRabbitMQUsersWithResponse call
+func ParseListRabbitMQUsersResponse(rsp *http.Response) (*ListRabbitMQUsersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRabbitMQUsersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQUserList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRabbitMQUserResponse parses an HTTP response from a CreateRabbitMQUserWithResponse call
+func ParseCreateRabbitMQUserResponse(rsp *http.Response) (*CreateRabbitMQUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRabbitMQUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreatedRabbitMQUser
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRabbitMQUserResponse parses an HTTP response from a DeleteRabbitMQUserWithResponse call
+func ParseDeleteRabbitMQUserResponse(rsp *http.Response) (*DeleteRabbitMQUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRabbitMQUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRabbitMQUserResponse parses an HTTP response from a GetRabbitMQUserWithResponse call
+func ParseGetRabbitMQUserResponse(rsp *http.Response) (*GetRabbitMQUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRabbitMQUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQUser
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRabbitMQUserResponse parses an HTTP response from a ReplaceRabbitMQUserWithResponse call
+func ParseReplaceRabbitMQUserResponse(rsp *http.Response) (*ReplaceRabbitMQUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRabbitMQUserResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQUser
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRabbitMQVhostsResponse parses an HTTP response from a ListRabbitMQVhostsWithResponse call
+func ParseListRabbitMQVhostsResponse(rsp *http.Response) (*ListRabbitMQVhostsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRabbitMQVhostsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQVhostList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRabbitMQVhostResponse parses an HTTP response from a CreateRabbitMQVhostWithResponse call
+func ParseCreateRabbitMQVhostResponse(rsp *http.Response) (*CreateRabbitMQVhostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRabbitMQVhostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RabbitMQVhost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRabbitMQVhostResponse parses an HTTP response from a DeleteRabbitMQVhostWithResponse call
+func ParseDeleteRabbitMQVhostResponse(rsp *http.Response) (*DeleteRabbitMQVhostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRabbitMQVhostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRabbitMQVhostResponse parses an HTTP response from a GetRabbitMQVhostWithResponse call
+func ParseGetRabbitMQVhostResponse(rsp *http.Response) (*GetRabbitMQVhostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRabbitMQVhostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQVhost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRabbitMQVhostResponse parses an HTTP response from a ReplaceRabbitMQVhostWithResponse call
+func ParseReplaceRabbitMQVhostResponse(rsp *http.Response) (*ReplaceRabbitMQVhostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRabbitMQVhostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RabbitMQVhost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError

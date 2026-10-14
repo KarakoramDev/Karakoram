@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Verification guide and test matrix
 
-Karakoram has local Go tests, Docker-backed integration tests and an environment-gated end-to-end suite for your own Zerops deployment. These layers answer different questions: unit tests check contracts and state transitions, integration tests exercise real MongoDB processes, and end-to-end tests exercise a deployed control plane and its database services. A skipped test does not establish coverage for your deployment.
+Karakoram has local Go tests, Docker-backed integration tests and an environment-gated end-to-end suite for your own Zerops deployment. These layers answer different questions: unit tests check contracts and state transitions, integration tests exercise real MongoDB/RabbitMQ processes, and end-to-end tests exercise a deployed control plane and its services. A skipped test does not establish coverage for your deployment.
 
 ## Running the checks
 
@@ -111,3 +111,47 @@ Follow [installation](install.md) using `deploy/zerops/import-local.yaml` or a p
 Inspect individual assertions and skipped prerequisites, not only the process exit code. Verify recovered data, acknowledged writes, observed generations, member health and terminal operations. Configuration acceptance is not a substitute for database or external-network observation. A test-only allowlist observation option does not establish source-restriction enforcement. Keep logs and optional JSON snapshots private: status and error messages can contain deployment metadata even when secrets are withheld.
 
 See [limitations](limitations.md), [security](security.md) and the [end-to-end suite guide](../test/e2e/README.md) for boundaries, prerequisites and cleanup.
+
+## RabbitMQ checks
+
+These are coverage descriptions and checks to run, not a claim that the current checkout or your deployment passed.
+
+### Automated coverage
+
+- `internal/engine/rabbitmq/...`: catalog/topology/resource/options validation; bootstrap/join and monotonic membership; rolling quorum/drain/stop ordering, configuration acknowledgement and certificate staging; scale-down and stream migration; ownership, platform backoff/CPU cooldown, cleanup and retained volumes; Management API access/TLS/failover, including overview responses containing nested queue-rate details after publishing messages; definitions gzip/S3 checkpoints, recorded locations, restore filtering and cross-namespace clones.
+- `internal/agent/rabbitmq`: rendering for all TLS modes, restart fingerprints, held readiness, authenticated bounded routes, stdin passwords, CLI error/timeout/output bounds and captured Prometheus translation.
+- `internal/server` and `internal/cli`: RabbitMQ access handlers/commands, namespace/RBAC mapping, identity checks, generated-password handling and unsupported-provider responses.
+- `ui/src/engines/rabbitmq`: wizard/spec validation and engine-registry/helper tests. Run the project's UI test/static-check commands; no browser assertions are implied.
+- Docker integration **`TestRabbitMQAgent`** builds pinned RabbitMQ 4.3.6/Erlang 27.3.4.17, starts three real brokers and exercises verified broker/node-control TLS, bootstrap/discovery membership, quorum/stream replica commands, metrics, peer-only reload without restart, held stop/readiness/reload, restart/revive and forgetting a member. It is not a Zerops deployment, apt-cache, placement or message-recovery test.
+
+```sh
+go test ./internal/engine/rabbitmq/... ./internal/agent/rabbitmq \
+  ./internal/server ./internal/cli
+go test -tags integration -count=1 -timeout 30m ./test/integration \
+  -run '^TestRabbitMQAgent$'
+(cd ui && npm ci && npm test && npm run typecheck && npm run lint && npm run build)
+```
+
+UI helper tests use Node's experimental TypeScript stripping; use a Node version that supports `--experimental-strip-types` (Node 22 or newer), not the minimum Node 20 build prerequisite.
+
+The deployed **`TestRabbitMQCluster`** scenarios are `Create`, `Restart`, `ReplaceMember`, `Access`, `Definitions`, `Upgrade`, `Scaling`, `Metrics` and `Delete`. Each provisions its own cluster; select the phase, not only a nested persistence proof that depends on its seed. URL/token are always required. Public CA-verified AMQPS checks additionally need the configured allow CIDR and project IPv6; definitions need a registered S3 storage name or all five storage-creation inputs. Missing capability prerequisites skip those checks; see the [suite guide](../test/e2e/README.md).
+
+```sh
+go test -tags e2e -count=1 -v -timeout 4h ./test/e2e \
+  -run '^TestRabbitMQCluster$/Restart$'
+```
+
+Persistence checks compare confirmed durable quorum messages before/after restart, replacement, upgrade and 3→5→3 scaling; they do not prove continuous availability under load. Definitions checks restore vhost metadata, not messages. Upgrade checks observe mixed versions and a healthy majority. Deletion checks API absence/orphan inventory, not independent enumeration of all platform resources.
+
+### Live and browser checklist
+
+Use only a disposable deployment; these checks create paid runtimes/volumes and can delete messages.
+
+1. Create one/three brokers with defaults, inspect pinned versions, stable node names, persistent mounts, complete running membership, alarms and placement warnings. Independently inspect runtime/volume inventory and cost.
+2. Publish confirmed persistent messages to a durable quorum queue; restart, patch-upgrade, replace a member and scale 3→5→3. Consume/ack the expected messages after each step. Observe quorum gates, drain/stop before platform actions, configuration consumption/revive and post-upgrade flags. During removal verify application stop keeps the Erlang VM voting until survivor-driven forget, then full shutdown. Rehearse lost-node replacement with surviving majorities, stream migration without the optional stream-protocol plugin, and `MemberRemovalBlocked` for durable classic queues; reachable-member replacement alone does not cover those boundaries.
+3. Change RAM/disk/config/plugins, observe serialized rollout and effective metric watermarks after restart. With a member down or quorum-critical, verify another disruptive change is refused rather than forced.
+4. Exercise all TLS modes on separate creation-time-compatible clusters, user-provided PKI/leaf rotation and the rejected requireTLS boundary transition. From external clients verify CA/hostname, allowlisted and denied AMQPS access, returned per-node ports and reconnect behavior.
+5. Through API, CLI and UI create/update/delete each access kind with admin/restricted accounts; verify application login/grants, password-once handling and reserved users. Confirm vhost deletion and vhost/user-wide topic deletion warnings. Native public management must require RabbitMQ authentication and is not protected by the AMQP allowlist.
+6. Export definitions to private S3, inspect sensitivity securely, restore/clone configuration and verify target system credentials survive. Confirm no messages/PITR are claimed, then exercise schedule count retention, recorded-location deletion and each keepVolumes/keepBackups choice.
+7. Verify fresh RabbitMQ/host metrics, counters/rates, alarm/partition conditions, authenticated Prometheus and namespace relay behavior. Scrape availability is not delivery/quorum proof.
+8. Inspect platform runtime/volume/public-route/subdomain cleanup independently, retained secrets/backup usability and orphan-volume retries. Suspend/resume a retained cluster and verify all brokers start before individual readiness/revive waits. Remove disposable resources and revoke temporary credentials.

@@ -11,7 +11,7 @@
 
 <p align="center"><a href="https://karakoram.dev">karakoram.dev</a> · <a href="https://karakoram.dev/docs/">Documentation</a> · <a href="https://github.com/KarakoramDev/Karakoram/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
-**Self-hosted MongoDB orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM) across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
+**Self-hosted database and messaging orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB), Percona Backup for MongoDB (PBM) and RabbitMQ across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
 
 You own the infrastructure, credentials, data and recovery procedures. Zerops is the infrastructure backend, not the operator of your databases. Project site: [karakoram.dev](https://karakoram.dev) · Source: [github.com/KarakoramDev/Karakoram](https://github.com/KarakoramDev/Karakoram).
 
@@ -24,6 +24,7 @@ You own the infrastructure, credentials, data and recovery procedures. Zerops is
 - Database users/roles, independently rotatable system accounts, keyfile authentication, generated or supplied TLS certificates and opt-in public TCP access.
 - Per-member monitoring, authenticated Prometheus output, actor-attributed events/audit activity and operations, logs, local accounts, OIDC, namespace-aware RBAC and owner-scoped API tokens.
 - Multi-project [namespaces](docs/user-guide/namespaces.md), project-scoped tokens, outbound authenticated relays and permission-gated cross-namespace restore/clone.
+- [RabbitMQ 4.3 clusters](docs/user-guide/rabbitmq.md) with persistent per-node storage, quorum-gated rolling changes, vhost/user/permission/policy administration, AMQPS, optional public management and definitions backups (**no messages or PITR**).
 
 **Read the [limitations](docs/limitations.md) before production use.** Zerops does not guarantee physical-host anti-affinity, Local Storage is single-host and the control plane has one replica. Healthy voters do not prove independent failure domains. Public replica-set routing does not automatically solve external member discovery. Configure backups and exercise recovery before loading important data.
 
@@ -71,6 +72,7 @@ are repository paths, not a standalone documentation-bundle layout.
 - [Installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
 - [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)
 - [Replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
+- [RabbitMQ clusters, access, TLS and definitions backups](docs/user-guide/rabbitmq.md)
 - [Backups, PITR, restore and clone](docs/user-guide/backups-and-restore.md)
 - [Scaling and upgrades](docs/user-guide/scaling-and-upgrades.md), [database users, TLS and access](docs/user-guide/users-tls-access.md), [monitoring](docs/user-guide/monitoring.md)
 - [Web UI](docs/user-guide/web-ui.md), [RBAC and authentication](docs/user-guide/rbac-and-auth.md), [REST API](docs/user-guide/api.md), [CLI reference](docs/user-guide/cli.md)

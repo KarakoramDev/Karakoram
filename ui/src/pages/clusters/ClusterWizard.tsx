@@ -31,7 +31,7 @@ import { validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
 import { cleanTLS, wireExposure } from './wizard/access';
 import { WizardNavigation } from './wizard/Navigation';
-import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas } from '@/engines';
+import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable } from '@/engines';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -52,6 +52,7 @@ function specFromTopology(provider: Provider, topology: Topology, version: strin
     backup: d.backup ?? { schedules: [], pitr: { enabled: false, oplogSpanMinutes: 10 } },
   };
 }
+
 
 
 
@@ -327,7 +328,7 @@ export function ClusterWizardPage() {
                   </SelectField>
                   <SelectField label="Version" value={spec.version} onChange={(e) => update((s) => ({ ...s, version: e.target.value }))} error={touched.basics && (!provider.versions.some((v) => v.version === spec.version && v.status !== 'unavailable')) ? 'Choose an available engine version.' : undefined}>
                     {provider.versions.map((v) => (
-                      <option key={v.version} value={v.version} disabled={v.status === 'unavailable'}>
+                      <option key={v.version} value={v.version} disabled={!versionSelectable(provider.name, v)}>
                         {v.version}
                         {v.default ? ' (default)' : ''}
                         {v.status === 'deprecated' ? ' — deprecated' : v.status === 'unavailable' ? ' — unavailable' : ''}

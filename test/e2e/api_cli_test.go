@@ -29,44 +29,7 @@ func testAPIWorkflow(t *testing.T) {
 	}
 	s := newSuite(t, false)
 	storage := s.storage()
-	absolute, err := filepath.Abs(binary)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info, err := os.Stat(absolute); err != nil || info.IsDir() {
-		t.Fatal("KARAKORAM_E2E_KARACTL is not a binary file")
-	}
-	home := t.TempDir()
-	run := func(input any, out any, args ...string) {
-		t.Helper()
-		ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
-		defer cancel()
-		command := exec.CommandContext(ctx, absolute, append([]string{"--output", "json"}, args...)...)
-		for _, v := range os.Environ() {
-			if strings.HasPrefix(v, "HOME=") || strings.HasPrefix(v, "KARAKORAM_") {
-				continue
-			}
-			command.Env = append(command.Env, v)
-		}
-		command.Env = append(command.Env, "HOME="+home, "KARAKORAM_SERVER="+s.base, "KARAKORAM_TOKEN="+s.token)
-		if input != nil {
-			b, err := json.Marshal(input)
-			if err != nil {
-				t.Fatal(err)
-			}
-			command.Stdin = bytes.NewReader(b)
-		}
-		result, err := command.CombinedOutput()
-		if err != nil {
-			t.Fatalf("karactl %s failed: %v (output withheld to prevent credential disclosure)", strings.Join(args, " "), err)
-		}
-		if out != nil {
-			if err := json.Unmarshal(result, out); err != nil {
-				t.Fatalf("karactl %s returned invalid JSON: %v", strings.Join(args, " "), err)
-			}
-		}
-		t.Logf("karactl %s succeeded", strings.Join(args, " "))
-	}
+	run := s.karactlRunner()
 	var identity api.CurrentUser
 	run(nil, &identity, "whoami")
 	if identity.Name == "" {
@@ -255,4 +218,53 @@ func testAPIWorkflow(t *testing.T) {
 			return false
 		})
 	}
+}
+
+// karactlRunner shares the CLI workflow's isolated HOME and credential handling.
+func (s *suite) karactlRunner() func(input any, out any, args ...string) {
+	t := s.t
+	t.Helper()
+	binary := os.Getenv("KARAKORAM_E2E_KARACTL")
+	if binary == "" {
+		t.Skip("set KARAKORAM_E2E_KARACTL to the built karactl binary")
+	}
+	absolute, err := filepath.Abs(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(absolute); err != nil || info.IsDir() {
+		t.Fatal("KARAKORAM_E2E_KARACTL is not a binary file")
+	}
+	home := t.TempDir()
+	run := func(input any, out any, args ...string) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
+		defer cancel()
+		command := exec.CommandContext(ctx, absolute, append([]string{"--output", "json"}, args...)...)
+		for _, v := range os.Environ() {
+			if strings.HasPrefix(v, "HOME=") || strings.HasPrefix(v, "KARAKORAM_") {
+				continue
+			}
+			command.Env = append(command.Env, v)
+		}
+		command.Env = append(command.Env, "HOME="+home, "KARAKORAM_SERVER="+s.base, "KARAKORAM_TOKEN="+s.token)
+		if input != nil {
+			b, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			command.Stdin = bytes.NewReader(b)
+		}
+		result, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("karactl %s failed: %v (output withheld to prevent credential disclosure)", strings.Join(args, " "), err)
+		}
+		if out != nil {
+			if err := json.Unmarshal(result, out); err != nil {
+				t.Fatalf("karactl %s returned invalid JSON: %v", strings.Join(args, " "), err)
+			}
+		}
+		t.Logf("karactl %s succeeded", strings.Join(args, " "))
+	}
+	return run
 }

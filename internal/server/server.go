@@ -75,6 +75,7 @@ type triggerKey struct{}
 type input struct {
 	Body                                                                                                                      any
 	Namespace, Cluster, Account, Token, Storage, Backup, Database, Role, Username, Member, Restore, User, Operation, Provider string
+	Vhost, Name                                                                                                               string
 }
 type response struct {
 	status      int

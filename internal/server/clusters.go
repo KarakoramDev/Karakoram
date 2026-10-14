@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const rabbitMQ435Warning = "RabbitMQ 4.3.5 is deprecated because of stream authorization disclosures GHSA-6jvc-jx8w-m757 and GHSA-342v-cj47-c9g8. Use RabbitMQ 4.3.6, which fixes both disclosures."
+
 func mergePatch(target, patch any) any {
 	p, yes := patch.(map[string]any)
 	if !yes {
@@ -174,8 +176,23 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		op := domain.Operation{Kind: domain.OperationCreate, Actor: principal(ctx).Actor()}
 		ctx = store.WithOperation(ctx, &op)
+		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+			c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
+				Type: "DeprecatedVersion", Status: "True", Reason: "StreamAuthorizationDisclosures",
+				Message: rabbitMQ435Warning, LastTransitionTime: engine.RealClock{}.Now(),
+			})
+		}
 		if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
 			return s.failure(err)
+		}
+		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+			if err = s.recordAudit(ctx, domain.Event{
+				Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
+				Actor: principal(ctx).Actor(), Type: "Warning", Reason: "DeprecatedVersion",
+				Message: rabbitMQ435Warning,
+			}); err != nil {
+				return s.failure(err)
+			}
 		}
 		if d := c.Spec.DataSource; d != nil && d.Namespace != namespace {
 			if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", op.ID); err != nil {
@@ -473,6 +490,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
 			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime")
 		}
+		if p.Name() == "rabbitmq" && b.Source.PitrTime != nil {
+			return s.failure(engine.Invalid("RabbitMQ definitions restore does not support PITR"))
+		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
 				return *failure
@@ -483,6 +503,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 			if !backup.ProviderMatches(c.Spec.Provider) {
 				return s.failure(engine.InvalidField("source.backup", domain.ReasonConflict, "backup provider does not match target provider"))
+			}
+			if p.Name() == "rabbitmq" && (backup.Type != "definitions" || backup.Phase != domain.PhaseSucceeded || backup.Location == "") {
+				return s.failure(engine.Invalid("restore source is not a successful RabbitMQ definitions backup"))
 			}
 		}
 		if b.Source.PitrTime != nil {
@@ -532,6 +555,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	}
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure
+	}
+	if strings.Contains(name, "RabbitMQ") {
+		return s.rabbitmq(ctx, name, in, rc, p)
 	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {

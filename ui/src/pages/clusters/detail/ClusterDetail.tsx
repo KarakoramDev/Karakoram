@@ -20,6 +20,7 @@ import { colocatedGroups, maintenanceCopy, observedVersion } from './detail-stat
 import { clusterPath } from '../cluster-path';
 import { OperationNotice } from '@/components/OperationNotice';
 import { detailProvider, engines, hasCapability, supportsOperation, tabAvailable } from '@/engines';
+import { detailTabState } from './detail-tab-state';
 
 export interface ClusterContext {
   cluster: Cluster;
@@ -111,7 +112,15 @@ export function ClusterDetailLayout() {
   const provider = detailProvider(cluster.spec.provider, providers.error ? undefined : providers.data?.items.find((p) => p.name === cluster.spec.provider));
   const engine = engines[cluster.spec.provider];
   const tab = location.pathname.slice(base.length + 1).split('/')[0] ?? '';
-  if (!tabAvailable(provider, tab)) return <Navigate to={base} replace />;
+  const tabState = detailTabState(provider, tab, providers.isPending);
+  if (tabState === 'loading') {
+    return (
+      <div className="page">
+        <Loading label="Loading provider metadata…" />
+      </div>
+    );
+  }
+  if (tabState === 'unsupported') return <Navigate to={base} replace />;
   const can: ClusterContext['can'] = (act, resource = 'clusters') => auth.can(resource, act, clusterObject(namespace, name));
   const suspended = cluster.status.phase === 'Suspended';
   const colocated = colocatedGroups(cluster.status.placement?.groups).length > 0;

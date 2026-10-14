@@ -13,6 +13,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -293,5 +295,78 @@ func TestRetainedBackupProviderDispatch(t *testing.T) {
 	}
 	if _, err := s.Store.GetBackup(t.Context(), domain.ClusterRef{Name: "deleted"}, "saved"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal(err)
+	}
+}
+
+func TestRestoreSourceAdmissionChecksProviderAndRabbitMQFormat(t *testing.T) {
+	for _, provider := range []string{"rabbitmq", "psmdb"} {
+		for _, source := range []string{"valid", "PITR", "foreign provider", "incompatible type", "pending backup", "missing location"} {
+			t.Run(provider+"/"+source, func(t *testing.T) {
+				s, _, token := testServer(t)
+				rmq := rabbitmq.New(rabbitmq.Options{Store: s.Store})
+				mongo := psmdb.New(psmdb.Options{Store: s.Store})
+				var err error
+				s.Registry, err = engine.NewRegistry(&fakeProvider{}, rmq, mongo)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p := engine.Provider(rmq)
+				if provider == "psmdb" {
+					p = mongo
+				}
+				c := domain.Cluster{Name: "broker"}
+				p.ApplyDefaults(&c.Spec)
+				if err := s.Store.CreateCluster(t.Context(), &c); err != nil {
+					t.Fatal(err)
+				}
+				backup := domain.Backup{Namespace: c.Namespace, Name: "saved", Cluster: c.Name, Provider: provider, Type: "definitions", Phase: domain.PhaseSucceeded, Location: "saved.json.gz"}
+				if provider == "psmdb" {
+					backup.Type = "physical"
+				}
+				switch source {
+				case "foreign provider":
+					backup.Provider = "other"
+				case "incompatible type":
+					backup.Type = "unsupported"
+				case "pending backup":
+					backup.Phase = domain.PhasePending
+				case "missing location":
+					backup.Location = ""
+				}
+				if err := s.Store.CreateBackup(t.Context(), &backup); err != nil {
+					t.Fatal(err)
+				}
+				body := `{"name":"recover","source":{"sourceCluster":"broker","backup":"saved"}}`
+				if source == "PITR" {
+					body = `{"name":"recover","source":{"sourceCluster":"broker","pitrTime":"2026-10-12T12:00:00Z"}}`
+				}
+				want := 202
+				if source == "foreign provider" || provider == "rabbitmq" && source != "valid" {
+					want = 400
+				}
+				if provider == "psmdb" && source == "PITR" {
+					want = 409
+				}
+				w := call(s, "POST", "/api/v1/clusters/broker/restores", body, token)
+				if w.Code != want {
+					t.Fatalf("status=%d want=%d body=%s", w.Code, want, w.Body.String())
+				}
+				restores, err := s.Store.ListRestores(t.Context(), c.Ref())
+				if err != nil {
+					t.Fatal(err)
+				}
+				operations, err := s.Store.ListOperations(t.Context(), c.Ref())
+				if err != nil {
+					t.Fatal(err)
+				}
+				count := 0
+				if want == 202 {
+					count = 1
+				}
+				if len(restores) != count || len(operations) != count {
+					t.Fatalf("restore admission persisted unexpected work: restores=%v operations=%v", restores, operations)
+				}
+			})
+		}
 	}
 }

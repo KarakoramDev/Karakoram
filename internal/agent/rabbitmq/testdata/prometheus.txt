@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+# Aggregated RabbitMQ 4.3.6 / Erlang 27.3.4.17 exposition, selected families.
+# TYPE erlang_vm_dist_node_state gauge
+erlang_vm_dist_node_state{peer="rabbitmqcli-265-rabbit@rmqone"} 3
+# TYPE rabbitmq_process_resident_memory_bytes gauge
+rabbitmq_process_resident_memory_bytes 143691776
+# TYPE rabbitmq_disk_space_available_bytes gauge
+rabbitmq_disk_space_available_bytes 437795672064
+# TYPE rabbitmq_resident_memory_limit_bytes gauge
+rabbitmq_resident_memory_limit_bytes 536870912
+# TYPE rabbitmq_disk_space_available_limit_bytes gauge
+rabbitmq_disk_space_available_limit_bytes 52428800
+# TYPE rabbitmq_erlang_uptime_seconds gauge
+rabbitmq_erlang_uptime_seconds 56.373
+# TYPE rabbitmq_queue_messages_ready gauge
+rabbitmq_queue_messages_ready 0
+# TYPE rabbitmq_queue_messages_unacked gauge
+rabbitmq_queue_messages_unacked 0
+# TYPE rabbitmq_channel_messages_published_total counter
+rabbitmq_channel_messages_published_total 0
+# TYPE rabbitmq_channel_messages_delivered_ack_total counter
+rabbitmq_channel_messages_delivered_ack_total 0
+# TYPE rabbitmq_channel_messages_delivered_total counter
+rabbitmq_channel_messages_delivered_total 0
+# TYPE rabbitmq_connections gauge
+rabbitmq_connections 0
+# TYPE rabbitmq_channels gauge
+rabbitmq_channels 0
+# TYPE rabbitmq_consumers gauge
+rabbitmq_consumers 0
+# TYPE rabbitmq_queues gauge
+rabbitmq_queues 0
+# TYPE rabbitmq_build_info untyped
+rabbitmq_build_info{rabbitmq_version="4.3.6",prometheus_plugin_version="4.3.6",prometheus_client_version="6.1.1",erlang_version="27.3.4.17"} 1
+# TYPE rabbitmq_alarms_free_disk_space_watermark untyped
+rabbitmq_alarms_free_disk_space_watermark 0
+# TYPE rabbitmq_alarms_memory_used_watermark untyped
+rabbitmq_alarms_memory_used_watermark 0
+# TYPE rabbitmq_unreachable_cluster_peers_count gauge
+rabbitmq_unreachable_cluster_peers_count 0

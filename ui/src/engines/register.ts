@@ -6,5 +6,8 @@
 // `node --test`. The app imports this module once before rendering.
 
 import { engines } from './index';
+import { rabbitmqUI } from './rabbitmq/index.ts';
+
+engines.rabbitmq = rabbitmqUI;
 
 export { engines };

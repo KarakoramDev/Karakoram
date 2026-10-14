@@ -87,6 +87,30 @@ karactl orphaned-volumes list -o json
 
 The default output is a table; `-o json` preserves the structured `{items: [...]}` response for automation. The inventory is read-only and includes only records whose original cluster you have permission to read; administrators see all records, even after cluster deletion. The control-plane janitor continues retrying deletion independently of this command. See [operations](../operations.md#orphaned-platform-volumes) for retry timing, events and manual Zerops cleanup.
 
+## RabbitMQ access
+
+The `rabbitmq` group administers RabbitMQ clusters through their Management API. It accepts the same `--namespace/-n` selection and `-o table|json|yaml` output options as other cluster commands. All requests require the corresponding `database-users` read/create/update/delete permission on the cluster; other providers return HTTP 409.
+
+Each of `vhosts`, `users`, `permissions`, `topic-permissions`, `policies`, and `operator-policies` has `list`, `get`, `create`, `update`, and `delete` commands. Creation and update use API-shaped YAML/JSON with `-f FILE` or `-f -`. An update body must match the identities supplied in its arguments.
+
+```sh
+karactl rabbitmq vhosts list brokers -n production -o json
+karactl rabbitmq vhosts get brokers /
+karactl rabbitmq vhosts create brokers -f vhost.yaml
+karactl rabbitmq users create brokers -f user.yaml -o json
+karactl rabbitmq permissions update brokers / application -f permission.yaml
+karactl rabbitmq policies get brokers / retention
+karactl rabbitmq operator-policies delete brokers / safety
+```
+
+A vhost body contains `name`, `tags`, optional `defaultQueueType` (`classic`, `quorum`, or `stream`), `description`, and `limits: {maxConnections: 100, maxQueues: 1000}`. A limit of `-1` means unlimited. A user body contains `name`, `tags`, and optionally `password` or `passwordHash` (mutually exclusive). Valid user tags are `management`, `policymaker`, `monitoring`, `administrator`, and `impersonator`; an empty tags array creates a non-management application user.
+
+When a user creation omits its password, `generatedPassword` is returned **once**. Store it securely; subsequent reads never return passwords or password hashes. Updates that omit both password fields preserve the existing password. The managed `karakoram`, `admin`, and `monitor` users and the reserved `guest` user cannot be modified or deleted through access commands.
+
+Permission bodies contain `vhost`, `user`, and the `configure`, `write`, and `read` regular expressions. Topic permission bodies instead contain `exchange`, `write`, and `read`. Topic `get` and `delete` identify a `vhost`/`user` pair: **delete removes all topic permissions for that pair**, not only one exchange. Policy bodies contain `vhost`, `name`, `pattern`, `applyTo`, a nonnegative `priority`, and a JSON-object `definition`. Both regular and operator policy commands use this shape.
+
+Patterns use RabbitMQ's PCRE syntax, including lookarounds and backreferences. Karakoram permits patterns of at most 4096 bytes and forwards them unchanged; RabbitMQ validates their syntax. Empty vhost/topic permission patterns deny access. Regular and operator policy patterns must remain nonempty.
+
 ## Generated command tree
 
 Use `karactl --help` and each subcommand's `--help` for the current command and flag reference. Make installs the CLI as `bin/karactl`. `[flags]` and inherited global flags are omitted from tree rows for readability.

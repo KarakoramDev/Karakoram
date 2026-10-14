@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Schemas } from '../api/client';
 import type { EngineUI } from './types';
-import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopologySummary, hasCapability, hasReplicaSetDetails, monitoringPanels, providerProcesses, publicExposureMetadata, replicaLimits, supportsOperation, tabAvailable, validateReplicas } from './index.ts';
+import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopologySummary, hasCapability, hasReplicaSetDetails, monitoringPanels, providerProcesses, publicExposureMetadata, replicaLimits, supportsOperation, tabAvailable, validateReplicas, versionSelectable } from './index.ts';
 
 const resources: Schemas['Resources'] = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 2, maxDisk: 20 };
 const spec: Schemas['ClusterSpec'] = { provider: 'unregistered', version: '1.0', topology: { type: 'cluster' }, components: { engine: { replicas: 3, resources }, extra: { worker: { replicas: 2, resources }, disabled: { replicas: 0, resources } } } };
@@ -14,6 +14,15 @@ test('default provider selects psmdb explicitly rather than catalog order', () =
   assert.equal(defaultProvider([{ name: 'elasticsearch' }, { name: 'psmdb' }])?.name, 'psmdb');
   assert.equal(defaultProvider([{ name: 'other' }])?.name, 'other');
   assert.equal(defaultProvider([]), undefined);
+});
+
+test('new-cluster version choices exclude deprecated RabbitMQ upgrade sources', () => {
+  const old: Schemas['Provider']['versions'][number] = { version: '4.3.5', major: '4.3', status: 'deprecated', default: false };
+  const current: Schemas['Provider']['versions'][number] = { version: '4.3.6', major: '4.3', status: 'supported', default: true };
+  assert.equal(versionSelectable('rabbitmq', old), false);
+  assert.equal(versionSelectable('rabbitmq', current), true);
+  assert.equal(versionSelectable('rabbitmq', { ...current, status: 'unavailable' }), false);
+  assert.equal(versionSelectable('psmdb', old), true);
 });
 
 test('replica-set overview details are opt-in through the engine registry', () => {

@@ -67,7 +67,7 @@ export function useMemberRoles(members: Schemas['Member'][], clusterKey: string)
 
 const ROLE_TONE: Record<Schemas['Member']['role'], Tone> = {
   primary: 'accent', secondary: 'neutral', arbiter: 'neutral', 'config-primary': 'accent',
-  'config-secondary': 'neutral', router: 'info', unknown: 'warn',
+  'config-secondary': 'neutral', router: 'info', broker: 'neutral', unknown: 'warn',
 };
 
 export function MemberRole({ member, roles }: { member: Schemas['Member']; roles?: MemberRoles }) {

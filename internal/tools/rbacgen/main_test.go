@@ -108,8 +108,16 @@ func TestRepositorySpecification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := generate(input); err != nil {
+	generated, err := generate(input)
+	if err != nil {
 		t.Fatal(err)
+	}
+	checkedIn, err := os.ReadFile("../../api/rbacmap.gen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(generated, checkedIn) {
+		t.Fatal("RBAC map is stale: run go generate ./api/...")
 	}
 }
 
@@ -161,5 +169,32 @@ func TestAdditionalAuditPermission(t *testing.T) {
 		if _, err := generate([]byte(invalid)); err == nil {
 			t.Fatal("invalid additional permission accepted")
 		}
+	}
+}
+
+func TestAdditionalScopedPermission(t *testing.T) {
+	spec := validSpec + `  /clusters/{cluster}/rabbitmq/users:
+    post:
+      operationId: createRabbitMQUser
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+`
+	generated, err := generate([]byte(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(generated), `OperationAdditionalRBAC = map[string]RBACRule{`) ||
+		!strings.Contains(string(generated), `"createRabbitMQUser": {Resource: "clusters", Action: "update", ObjectParam: "cluster"},`) {
+		t.Fatal("operation-scoped additional permission omitted")
+	}
+	for _, object := range []string{"namespace", "storage", "member", ""} {
+		invalid := strings.Replace(spec, "resource: clusters, action: update, object: cluster", "resource: clusters, action: update, object: "+object, 1)
+		if _, err := generate([]byte(invalid)); err == nil {
+			t.Fatalf("unbound additional object %q accepted", object)
+		}
+	}
+	public := strings.Replace(validSpec, "x-karakoram-rbac: public", "x-karakoram-rbac: public\n      x-karakoram-rbac-extra: {resource: clusters, action: update, object: '*'}", 1)
+	if _, err := generate([]byte(public)); err == nil {
+		t.Fatal("additional permission on public route accepted")
 	}
 }

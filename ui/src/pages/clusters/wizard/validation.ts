@@ -6,7 +6,7 @@ import { resourceMinimums, validateResources } from './resources.ts';
 import { validateExposure, validateTLS } from './access.ts';
 import { validateSchedules } from './schedules.ts';
 import type { Validation } from './state.ts';
-import { engines, hasCapability } from '../../../engines/index.ts';
+import { engines, hasCapability, versionSelectable } from '../../../engines/index.ts';
 
 export function componentEntries(components: Schemas['ClusterSpec']['components']): [string, Schemas['Component']][] {
   return [
@@ -54,7 +54,7 @@ export function validateWizard(name: string, namespace: string, spec: Schemas['C
   if (invalidName) v.basics.push(invalidName);
   const version = provider?.versions.find((item) => item.version === spec.version);
   if (!version) v.basics.push('Choose an available engine version.');
-  else if (version.status === 'unavailable') v.basics.push('This version is not available for new clusters.');
+  else if (!versionSelectable(spec.provider, version)) v.basics.push('This version is not available for new clusters.');
   v.basics.push(...(engines[spec.provider]?.validateSpec?.(spec) ?? []));
   const topology = provider?.topologies.find((item) => item.type === spec.topology.type);
   const custom = engines[spec.provider]?.validateComponents?.(spec, topology);

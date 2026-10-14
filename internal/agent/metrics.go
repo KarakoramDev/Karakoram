@@ -310,7 +310,7 @@ func (a *nodeAgent) collectEngineMetrics(ctx context.Context) []metricValue {
 	states, _ := a.sup.snapshot()
 	var ram float64
 	for name, state := range states {
-		cpu, rss, ok := processUsage(state.PID)
+		cpu, rss, ok := processTreeUsage(state.PID, "/proc")
 		if !ok {
 			cpu, rss = 0, 0
 		}

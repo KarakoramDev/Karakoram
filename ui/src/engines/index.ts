@@ -77,6 +77,11 @@ export function defaultProvider<T extends { name: string }>(providers: T[]): T |
   return providers.find((provider) => provider.name === 'psmdb') ?? providers[0];
 }
 
+/** Deprecated RabbitMQ binaries are API-only upgrade sources, never wizard choices. */
+export function versionSelectable(provider: string, version: Schemas['Provider']['versions'][number]): boolean {
+  return version.status !== 'unavailable' && (provider !== 'rabbitmq' || version.status !== 'deprecated');
+}
+
 export function tabAvailable(provider: Metadata | undefined, tab: string): boolean {
   if (tab === 'users') return hasCapability(provider, 'databaseUsers') || hasCapability(provider, 'systemUsers');
   if (tab === 'backups' || tab === 'restores') return hasCapability(provider, tab);
