@@ -238,9 +238,13 @@ Restore connectivity and re-read durable status before acting on them.
 
 Mutation dialogs keep the server's human error message and field/resource
 context visible without discarding the form. Submit controls become busy
-immediately to prevent duplicate requests; retries for the same submission
-reuse its idempotency key. Read the outcome and existing operation before
-starting another submission.
+immediately to prevent duplicate requests. Cluster create/edit, restart, resume,
+TLS/system-user rotation, FCV raise, member replacement, backup/restore creation,
+database-user/role create/edit, backup-storage create/edit and API-token creation
+reuse their idempotency key when retrying an unchanged submission. The server
+honours these keys for 24 hours after success; other actions are not covered.
+See [safe API retries](api.md#safe-retries-with-idempotency-key). Read the outcome
+and existing operation before starting another submission.
 
 Proxies can **buffer small SSE event frames**. Karakoram sends approximately 16-KiB random-base64 connection comments and similarly padded fifteen-second heartbeats, but view invalidation can still wait until the next heartbeat. Each open stream adds approximately 16 KiB at startup and 16 KiB per heartbeat (~1.1 KiB/s before wire compression). Configure a nonbuffering custom-domain/proxy path where possible. Refresh/read durable status if a view appears stale; do not resubmit a completed mutation. See [API transport details](api.md#pagination-and-events) and [limitations](../limitations.md).
 

@@ -246,12 +246,20 @@ complete; the ordinary retry/deadline budget does not interrupt compensation.
 
 ## Safe retries with Idempotency-Key
 
-Send an optional `Idempotency-Key` header for API-token creation, cluster creation,
-cluster PUT/PATCH, backup and restore creation. Account, namespace, backup-storage,
-database-user and database-role creation also support it. Use a random, unique key
+Send an optional `Idempotency-Key` header on these operations:
+
+* Create API tokens, accounts and namespaces.
+* Create clusters or update them with PUT/PATCH.
+* Restart or resume clusters, rotate cluster TLS, raise FCV, replace a member,
+  or rotate a system-user password.
+* Create backups and restores.
+* Create or replace backup storages, database users and database roles (POST/PUT).
+
+Other operations do not provide keyed retry protection. Use a random, unique key
 for each intended mutation (for example a UUID); reuse that same key and body for
-network retries or double submissions. A key must contain **1–255 visible ASCII
-characters without spaces**. Requests without the header retain their usual behavior.
+network retries or double submissions, including the same empty body for bodyless
+actions. A key must contain **1–255 visible ASCII characters without spaces**.
+Requests without the header retain their usual behavior.
 
 Keys are scoped to the authenticated account (including its OIDC issuer), or the
 specific bearer token identity, plus method, route, namespace and path parameters.
@@ -263,8 +271,9 @@ After a successful **2xx** response, the server retains its exact status and bod
 plus relevant headers such as `Content-Type`, `Cache-Control`, `Location`, `ETag`
 and `Karakoram-Operation-Id` when supplied, for **24 hours**. A matching retry
 returns that response with `Idempotent-Replayed: true`, without creating another
-resource or queuing another operation. JSON whitespace and object-key order do
-not affect matching; array order, values, omitted fields and explicit `null` do.
+resource or queuing another operation. Empty bodies are supported on bodyless
+actions. JSON whitespace and object-key order do not affect matching; array order,
+values, omitted fields and explicit `null` do.
 Numeric spellings are retained, so reuse the same numeric representations.
 The response is the original snapshot, not the resource's latest state; poll the
 resource or its returned operation to observe asynchronous completion.

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -187,6 +188,66 @@ func TestIdempotentClusterCreatePutPatchAndPathScope(t *testing.T) {
 	}
 }
 
+func TestIdempotentClusterActions(t *testing.T) {
+	for _, action := range []struct {
+		path, body, different string
+	}{
+		{"/restart", "", ""},
+		{"/raise-fcv", `{"version":"8.0"}`, `{"version":"7.0"}`},
+	} {
+		t.Run(action.path, func(t *testing.T) {
+			s, _, token := testServer(t)
+			path := "/api/v1/clusters/prod" + action.path
+			first := idempotentCall(s, "POST", path, action.body, token, "action-request")
+			second := idempotentCall(s, "POST", path+"?namespace=default", action.body, token, "action-request")
+			assertReplay(t, first, second, 202)
+			if action.different != "" {
+				assertIdempotencyConflict(t, idempotentCall(s, "POST", path, action.different, token, "action-request"), domain.ReasonConflict)
+			}
+			ops, err := s.Store.ListOperations(t.Context(), domain.ClusterRef{Name: "prod"})
+			if err != nil || len(ops) != 1 {
+				t.Fatal("action retry queued another operation", len(ops), err)
+			}
+		})
+	}
+}
+
+func TestIdempotencyContractCoverage(t *testing.T) {
+	doc, err := apispec.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	covered := map[string]bool{}
+	for _, path := range doc.Paths.Map() {
+		for _, operation := range path.Operations() {
+			declared := false
+			for _, parameter := range operation.Parameters {
+				if parameter.Value.In == "header" && parameter.Value.Name == "Idempotency-Key" {
+					declared = true
+				}
+			}
+			if declared != idempotencyCovered(operation.OperationID) {
+				t.Errorf("%s: contract coverage %t differs from server", operation.OperationID, declared)
+			}
+			if declared {
+				covered[operation.OperationID] = true
+			}
+		}
+	}
+	for _, id := range []string{
+		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV",
+		"replaceClusterMember", "rotateSystemUser", "replaceDatabaseUser",
+		"replaceDatabaseRole", "replaceBackupStorage",
+	} {
+		if !covered[id] {
+			t.Errorf("keyed UI operation %s is not covered", id)
+		}
+	}
+	if len(covered) != 20 {
+		t.Fatalf("covered operations = %d, want 20", len(covered))
+	}
+}
+
 func TestIdempotencyValidationAndUncachedFailures(t *testing.T) {
 	s, _, token := testServer(t)
 	for _, key := range []string{"", "with space", "non-ascii-é", strings.Repeat("x", 256)} {
@@ -318,7 +379,12 @@ func TestIdempotencyCanonicalBody(t *testing.T) {
 			t.Fatal("different values conflated", err)
 		}
 	}
-	for _, body := range []string{`{} {}`, `{} garbage`, ``} {
+	for _, body := range []string{"", " \n\t "} {
+		if canonical, err := canonicalIdempotencyBody([]byte(body)); err != nil || len(canonical) != 0 {
+			t.Fatal("empty action body rejected", err)
+		}
+	}
+	for _, body := range []string{`{} {}`, `{} garbage`} {
 		if _, err := canonicalIdempotencyBody([]byte(body)); err == nil {
 			t.Fatal("malformed body accepted")
 		}

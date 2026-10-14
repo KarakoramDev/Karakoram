@@ -1995,6 +1995,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/restart:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2042,6 +2043,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/raise-fcv:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2089,6 +2091,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2149,6 +2152,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/rotate-tls:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2197,6 +2201,7 @@ paths:
       description: For user-provided TLS, supply replacement PEM inputs in the cluster spec before invoking rotation; no certificate private keys are returned.
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/system-users:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2294,6 +2299,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/members:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2806,6 +2812,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3044,6 +3051,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3709,6 +3717,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
