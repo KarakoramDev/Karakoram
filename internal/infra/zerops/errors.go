@@ -42,8 +42,9 @@ func boundedDiagnostic(s string) string {
 	return s + "..."
 }
 
-// errorSummary deliberately excludes raw payloads and credential-bearing fields.
-// Only diagnostic messages, codes and metadata field/reason pairs are exported.
+// errorSummary exports diagnostic messages/codes and allowlisted metadata:
+// field/reason diagnostics and known validation limits. Unknown metadata keys
+// are omitted; credential-bearing details, URLs and opaque values are redacted.
 func errorSummary(code, message string, meta json.RawMessage, token string) string {
 	clean := func(s string) string {
 		if token != "" {
@@ -104,7 +105,7 @@ func errorSummary(code, message string, meta json.RawMessage, token string) stri
 						walk(v[key], path, true, depth+1)
 					case "code", "error", "message", "reason", "field":
 						walk(v[key], key, metadata, depth+1)
-					default:
+					case "minDisk", "maxDisk", "min", "max", "minFreeResource.memoryGBytes":
 						if metadata {
 							name := key
 							if path != "" {
