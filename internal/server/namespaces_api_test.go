@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -33,7 +32,10 @@ func namespaceTestServer(t *testing.T) (*Server, string) {
 	s, _, token := testServer(t)
 	r, err := namespaces.New(context.Background(), namespaces.Options{Store: s.Store, DefaultBackend: &namespaceTestBackend{project: "proj-default"}, Zerops: zerops.Options{ProjectID: "proj-default", Token: "env-token"}, PublicURL: "https://example.com", AdvertiseURL: "https://control:9443", RelayHostname: "controlrelay", ExecutableHash: "test-hash", Logger: s.Logger, Validate: func(_ context.Context, z zerops.Options) (namespaces.Backend, infra.Project, error) {
 		if z.Token == "bad-token" {
-			return nil, infra.Project{}, errors.New("invalid project token")
+			return nil, infra.Project{}, &zerops.APIError{StatusCode: http.StatusForbidden, Code: "accessDenied"}
+		}
+		if z.Token == "unavailable-token" {
+			return nil, infra.Project{}, &zerops.APIError{StatusCode: http.StatusServiceUnavailable, Code: "platformUnavailable"}
 		}
 		return &namespaceTestBackend{project: z.ProjectID, token: z.Token}, infra.Project{ID: z.ProjectID, Name: "Test project"}, nil
 	}})
@@ -74,6 +76,54 @@ func TestNamespaceAPIStatusAndSecretBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestNamespaceValidationOutageResponses(t *testing.T) {
+	s, token := namespaceTestServer(t)
+	if w := call(s, http.MethodPost, "/api/v1/namespaces", `{"name":"testing","projectId":"proj-test","token":"synthetic-token"}`, token); w.Code != http.StatusCreated {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, tc := range []struct {
+		method, path, body string
+	}{
+		{http.MethodPost, "/api/v1/namespaces", `{"name":"another","projectId":"proj-other","token":"unavailable-token"}`},
+		{http.MethodPut, "/api/v1/namespaces/testing/token", `{"token":"unavailable-token"}`},
+	} {
+		w := call(s, tc.method, tc.path, tc.body, token)
+		var body struct {
+			Code, Message string
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != http.StatusInternalServerError || body.Code != "internal_error" || !strings.HasPrefix(body.Message, "Zerops API temporarily unavailable: ") || !strings.Contains(body.Message, "platformUnavailable") || !strings.HasSuffix(body.Message, "; retrying") {
+			t.Fatalf("outage lost safe diagnostic: %d %s", w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "unavailable-token") {
+			t.Fatal("validation token leaked")
+		}
+	}
+	stored, err := s.Store.GetNamespaceTokenForUpdate(t.Context(), "testing")
+	if err != nil || stored != "synthetic-token" {
+		t.Fatal("failed rotation replaced stored token", err)
+	}
+	before := len(auditEvents(t, s, "NamespaceValidationFailed"))
+	n, err := s.Store.GetNamespaceForUpdate(t.Context(), "testing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Store.UpdateNamespaceCredentials(t.Context(), n, "unavailable-token", nil); err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, http.MethodPost, "/api/v1/namespaces/testing/validate", "", token)
+	var validated api.Namespace
+	if err = json.Unmarshal(w.Body.Bytes(), &validated); err != nil || w.Code != http.StatusOK || !validated.Token.Valid || validated.Token.LastError == nil || !strings.Contains(*validated.Token.LastError, "temporarily unavailable") {
+		t.Fatalf("outage changed known validity: %d %s (%v)", w.Code, w.Body.String(), err)
+	}
+	if len(auditEvents(t, s, "NamespaceValidationFailed")) != before {
+		t.Fatal("platform outage audited as invalid-token rejection")
+	}
+}
+
 func TestNamespaceListPerItemFiltering(t *testing.T) {
 	s, admin := namespaceTestServer(t)
 	ctx := context.Background()

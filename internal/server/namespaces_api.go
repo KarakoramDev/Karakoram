@@ -37,6 +37,10 @@ func (s *Server) namespaceRegistry() (*namespaces.Registry, error) {
 	return r, nil
 }
 func (s *Server) namespaceFailure(err error) response {
+	var unavailable *namespaces.PlatformUnavailableError
+	if errors.As(err, &unavailable) {
+		return fail(http.StatusInternalServerError, "internal_error", unavailable.Error())
+	}
 	switch {
 	case errors.Is(err, namespaces.ErrInvalid):
 		return fail(422, "invalid_namespace", err.Error())

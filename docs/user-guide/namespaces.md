@@ -45,8 +45,10 @@ HTTP **429/5xx**, timeouts and connection failures retain its last known
 retrying` in `token.lastError`. Automatic validation retries on its normal
 five-minute cadence. This applies to startup checks as well as manual and
 automatic re-validation. A new namespace has no previously confirmed validity
-until validation succeeds. Transient registration/rotation failures do not save
-new credentials or label the submitted token invalid; retry when Zerops recovers.
+until validation succeeds. Transient registration/rotation failures return HTTP
+**500** with code `internal_error` and the safe temporary-unavailability message,
+not **422** `invalid_namespace`. They do not save new credentials or label the
+submitted token invalid; retry when Zerops recovers.
 
 Validation confirms project identity and service-list access; it does not probe every import/deploy/secret mutation. A token that can only read the project may pass validation and then fail relay deployment. Supply the required Full access scope and inspect both token and relay health.
 

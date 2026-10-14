@@ -35,6 +35,16 @@ var ErrInvalid = errors.New("invalid namespace")
 var ErrConflict = store.ErrConflict
 var ErrNotFound = store.ErrNotFound
 
+// PlatformUnavailableError exposes a safe validation diagnostic without
+// misclassifying a platform failure as invalid namespace credentials.
+type PlatformUnavailableError struct {
+	cause error
+}
+
+func (e *PlatformUnavailableError) Error() string {
+	return temporaryPlatformError(e.cause)
+}
+
 type Backend interface {
 	infra.Backend
 	SetToken(string)
@@ -358,7 +368,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 		if zerops.IsAuthenticationError(err) {
 			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
 		}
-		return nil, errors.New(temporaryPlatformError(err))
+		return nil, &PlatformUnavailableError{cause: err}
 	}
 	service, err := b.GetService(ctx, r.o.RelayHostname)
 	if err != nil {
@@ -422,7 +432,7 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 		if zerops.IsAuthenticationError(err) {
 			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
 		}
-		return nil, errors.New(temporaryPlatformError(err))
+		return nil, &PlatformUnavailableError{cause: err}
 	}
 	now := time.Now().UTC()
 	n.Token.Valid = true
