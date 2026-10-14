@@ -64,6 +64,8 @@ Both types execute on nodes via PBM; physical snapshots require PSMDB. A create 
 
 If a mutation returns an Operation ID, use `karactl operations wait ID`. For backups/restores, inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
 
+For applications outside this repository, see the [Go client installation and usage walkthrough](api.md#clientssdk), including bearer authentication, structured errors and operation polling. The public client exposes backup, PITR-window, restore and clone request methods from the same OpenAPI contract; after polling, inspect the recovery resource and validate the recovered data as described above.
+
 ## Schedules and count retention
 
 Cluster `spec.backup.storage` is the primary destination. Schedules may select another registered storage. Configure them in the UI or submit a cluster merge patch:

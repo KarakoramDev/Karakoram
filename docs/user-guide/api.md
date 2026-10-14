@@ -4,7 +4,7 @@
 
 The public contract is [api/openapi.yaml](../../api/openapi.yaml), **OpenAPI 3.0.3**. Most routes are rooted at `/api/v1`. `GET /healthz` and authenticated `GET /metrics` are installation-root exceptions. The root WebSocket `/relay/v1/connect` is **not in OpenAPI** and authenticates inside the tunnel with relay mTLS, not API tokens/cookies. The private `/internal/agent/v1` and node `/v1` protocols are not public management APIs.
 
-The UI and `karactl` use this contract. Karakoram does not currently ship an interactive Swagger UI or promise the YAML is served at a guessed HTTP URL; use the checked-in specification and generated client.
+The UI and `karactl` use this contract. Download the running installation's specification from **`GET /api/v1/openapi.yaml`**, or use the checked-in file for a specific release. Karakoram does not currently ship an interactive Swagger UI.
 
 ## Authentication
 
@@ -127,6 +127,155 @@ Structured errors are `{code, message, details?}`; do not rely on English messag
 
 A failed asynchronous Operation is not necessarily a failed HTTP request. Read its persisted error/message and cluster conditions. Never embed secrets in request names or expect diagnostic responses to reveal infrastructure credentials. Public auth errors may be intentionally less specific than administrative observations.
 
+## Clients/SDK
+
+### Install the Go client
+
+The first-party Go package is public and importable from external applications:
+
+```sh
+go get github.com/KarakoramDev/Karakoram/pkg/client@<version>
+```
+
+Replace `<version>` with a release tag or commit matching your server (the angle brackets are placeholders, not shell syntax). Import `github.com/KarakoramDev/Karakoram/pkg/client`; its package name is `client`. The client uses the same generated contract as `karactl` and requires the Go version declared by that release's `go.mod`.
+
+Use **`https://<host>/api/v1`** as the management client base URL, including `/api/v1`; do not pass only the origin or append an individual resource path. `client.WithBearerToken(token)` takes the raw Karakoram token, adds the `Authorization: Bearer …` header and needs no CSRF cookie/header. Keep HTTPS certificate verification enabled.
+
+This example lists the first cluster page, handles the server's structured `Error` (`code`, `message`, optional `details`), then polls an existing operation. Replace the example host and supply `KARAKORAM_TOKEN` securely. Set `KARAKORAM_OPERATION_ID` to the ID returned by an accepted mutation: a resource's `operationId`, the `Karakoram-Operation-Id` response header, or a returned Operation's `id`. Do not use a cluster/backup/restore name as the operation ID.
+
+```go
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "os"
+    "time"
+
+    "github.com/KarakoramDev/Karakoram/pkg/client"
+)
+
+func main() {
+    c, err := client.NewClientWithResponses("https://karakoram.example/api/v1",
+        client.WithBearerToken(os.Getenv("KARAKORAM_TOKEN")),
+        client.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}))
+    if err != nil {
+        log.Fatal(err)
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+    if err := listAndWait(ctx, c, os.Getenv("KARAKORAM_OPERATION_ID")); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func listAndWait(ctx context.Context, c *client.ClientWithResponses, operationID string) error {
+    response, err := c.ListClustersWithResponse(ctx, nil)
+    if err != nil {
+        return err // Transport, context or response-decoding failure.
+    }
+    if err := responseError(response.StatusCode(), response.Body); err != nil {
+        return err // An HTTP error is separate from a transport error.
+    }
+    if response.JSON200 == nil {
+        return fmt.Errorf("unexpected cluster response: %s", response.Status())
+    }
+    for _, cluster := range response.JSON200.Items {
+        fmt.Println(cluster.Name)
+    }
+    // Lists are paginated; follow JSON200.NextCursor to fetch subsequent pages.
+    if operationID == "" {
+        return fmt.Errorf("supply the operation ID returned by an accepted mutation")
+    }
+    ticker := time.NewTicker(time.Second)
+    defer ticker.Stop()
+    for {
+        response, err := c.GetOperationWithResponse(ctx, operationID)
+        if err != nil {
+            return err
+        }
+        if err := responseError(response.StatusCode(), response.Body); err != nil {
+            return err
+        }
+        if response.JSON200 == nil {
+            return fmt.Errorf("unexpected operation response: %s", response.Status())
+        }
+        op := response.JSON200
+        switch string(op.Phase) {
+        case "Succeeded":
+            return nil
+        case "Failed", "Cancelled":
+            message := ""
+            if op.Message != nil {
+                message = *op.Message
+            }
+            if op.Error != nil {
+                return fmt.Errorf("operation %s %s: %s: %s", op.Id, op.Phase, op.Error.Code, op.Error.Message)
+            }
+            return fmt.Errorf("operation %s %s: %s", op.Id, op.Phase, message)
+        }
+        select {
+        case <-ctx.Done():
+            return ctx.Err() // Does not cancel server work; resume polling the same ID.
+        case <-ticker.C:
+        }
+    }
+}
+
+func responseError(status int, body []byte) error {
+    if status >= 200 && status < 300 {
+        return nil
+    }
+    var apiError client.Error
+    if err := json.Unmarshal(body, &apiError); err != nil || apiError.Code == "" {
+        return fmt.Errorf("HTTP %d: %s", status, http.StatusText(status))
+    }
+    var details map[string]interface{}
+    if apiError.Details != nil {
+        details = *apiError.Details
+    }
+    // Branch on code and details["field"]/details["reason"], not message text.
+    return fmt.Errorf("HTTP %d: %s: %s (details: %v)", status, apiError.Code, apiError.Message, details)
+}
+```
+
+The same compiled example lives in [`pkg/client/example_test.go`](../../pkg/client/example_test.go). `WithResponse` methods return a transport/decoding error separately from HTTP status: always check the status and the expected `JSON200`/`JSON201`/`JSON202` field. Operation `Failed`/`Cancelled` is a failure even when polling returns HTTP 200. A local timeout stops waiting, not the operation; retain its ID and resume polling instead of repeating the mutation.
+
+Optional OpenAPI properties use pointers. For example, successful `CreateAPITokenWithResponse` returns `JSON201.Secret` as `*string`: check both `JSON201` and `Secret` for nil before dereferencing, store the one-time secret securely, and never print it in ordinary logs. Later token reads expose metadata, not that secret. For all clusters in a namespace pass `ListClustersParams.Namespace`; continue pagination using `NextCursor` with the same filters.
+
+### Consume SSE
+
+The generated client's `StreamEvents` returns a raw `*http.Response`; it does not decode a sequence of SSE events into JSON objects. Close the body when finished and use a streaming SSE parser (not JSON decoding or `io.ReadAll` of an unending body). For raw frame inspection:
+
+```sh
+curl --no-buffer --fail-with-body \
+  -H "Authorization: Bearer ${KARAKORAM_TOKEN}" \
+  -H 'Accept: text/event-stream' \
+  'https://YOUR-HOST/api/v1/events/stream?namespace=default'
+# On reconnect, also pass: -H 'Last-Event-ID: <last-dispatched-event-id>'
+```
+
+Each blank line ends a frame. An SSE parser ignores `:` comment lines (including padded heartbeats), joins multiple `data:` lines with newlines, and dispatches `event:`/`id:`/`data:` fields only once the frame is complete. Dispatch all event names, including `Normal` and `Warning`, rather than filtering only dot-qualified names. Save the dispatched event's ID; preserve filters and send `Last-Event-ID` when reconnecting. Comments never advance that cursor. SSE is a notification channel, not proof that asynchronous work succeeded; continue querying operation/resource state. See [pagination and events](#pagination-and-events) for replay and buffering behavior.
+
+### Generate clients for other languages
+
+Download the spec matching the running server, or use `api/openapi.yaml` from the matching repository revision:
+
+```sh
+curl --fail-with-body 'https://YOUR-HOST/api/v1/openapi.yaml' -o openapi.yaml
+# Python (with OpenAPI Generator's CLI installed):
+openapi-generator-cli generate -i openapi.yaml -g python -o karakoram-python-client
+python -m pip install ./karakoram-python-client
+# TypeScript types + a typed fetch client:
+npx openapi-typescript openapi.yaml -o karakoram-api.d.ts
+npm install openapi-fetch
+```
+
+`openapi-typescript` generates types, not a runtime SDK. Import its `paths` type into `openapi-fetch` and set `baseUrl` to `https://YOUR-HOST/api/v1` and an `Authorization` bearer header. For a full TypeScript runtime client, OpenAPI Generator also supports `-g typescript-fetch`. Configure the generated Python client's host with the same `/api/v1` suffix and its `bearerAuth` security scheme with the raw token. Follow the generated package's authentication instructions; generator versions can expose different configuration names. Generated clients still need explicit HTTP-error handling, operation polling and raw SSE consumption.
+
 ## Regeneration
 
 From the repository root:
@@ -138,6 +287,6 @@ make openapi-check
 (cd ui && npm ci && npm run gen:api)
 ```
 
-Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `internal/apiclient/client.gen.go`, then the owned RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation uses the lockfile's openapi-typescript and writes `ui/src/api/schema.d.ts`. Do not hand-edit generated artifacts.
+Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, then the owned RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation uses the lockfile's openapi-typescript and writes `ui/src/api/schema.d.ts`. Do not hand-edit generated artifacts.
 
 `make openapi-check` regenerates/diffs the Go API/client/RBAC paths; it is not a TypeScript-drift or live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KarakoramDev/Karakoram/internal/apiclient"
+	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -36,7 +36,7 @@ type app struct {
 	insecure                           bool
 	config                             Config
 	selected                           string
-	client, root                       *apiclient.Client
+	client, root                       *client.Client
 	http                               *http.Client
 	csrf                               string
 	cookies                            []string
@@ -156,11 +156,11 @@ func (a *app) connect(cmd *cobra.Command) error {
 		}
 		return nil
 	}
-	a.client, err = apiclient.NewClient(base+"/api/v1", apiclient.WithHTTPClient(a.http), apiclient.WithRequestEditorFn(editor))
+	a.client, err = client.NewClient(base+"/api/v1", client.WithHTTPClient(a.http), client.WithRequestEditorFn(editor))
 	if err != nil {
 		return err
 	}
-	a.root, err = apiclient.NewClient(base, apiclient.WithHTTPClient(a.http), apiclient.WithRequestEditorFn(editor))
+	a.root, err = client.NewClient(base, client.WithHTTPClient(a.http), client.WithRequestEditorFn(editor))
 	return err
 }
 
@@ -208,7 +208,7 @@ func decodeResponse(resp *http.Response) (any, error) {
 		return map[string]any{"location": resp.Header.Get("Location"), "status": resp.StatusCode}, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var apiErr apiclient.Error
+		var apiErr client.Error
 		if json.Unmarshal(b, &apiErr) == nil && apiErr.Message != "" {
 			return nil, fmt.Errorf("HTTP %d: %s: %s", resp.StatusCode, apiErr.Code, apiErr.Message)
 		}

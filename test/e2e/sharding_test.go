@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 

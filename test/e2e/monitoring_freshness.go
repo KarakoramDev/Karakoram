@@ -6,7 +6,7 @@ package e2e
 import (
 	"time"
 
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 )
 
 // freshMetricNames requires bucket starts beyond the entire baseline query.

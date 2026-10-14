@@ -21,6 +21,31 @@ Member status/roles/lag and agent connectivity remain separate from charts. Moni
 
 Disable collection using an API-shaped merge patch (`spec.monitoring.enabled: false`). Historical samples persist until retention prunes them; do not expect disabling monitoring to delete all history instantly. Control-plane unavailability interrupts scraping/aggregation even while databases continue.
 
+## Query metrics from the Go SDK
+
+Install and authenticate the public Go client using the [Clients/SDK walkthrough](api.md#clientssdk). Reuse its `/api/v1` client, `context.Context` and `responseError` helper. The following function requests **`GET /api/v1/clusters/demo/metrics?namespace=default&range=1h&step=30s`** and returns decoded historical series:
+
+```go
+func clusterMetrics(ctx context.Context, c *client.ClientWithResponses) (*client.ClusterMetrics, error) {
+    namespace, lookback, step := "default", "1h", "30s"
+    response, err := c.GetClusterMetricsWithResponse(ctx, "demo", &client.GetClusterMetricsParams{
+        Namespace: &namespace, Range: &lookback, Step: &step,
+    })
+    if err != nil {
+        return nil, err
+    }
+    if err := responseError(response.StatusCode(), response.Body); err != nil {
+        return nil, err
+    }
+    if response.JSON200 == nil {
+        return nil, fmt.Errorf("unexpected metrics response: %s", response.Status())
+    }
+    return response.JSON200, nil
+}
+```
+
+Replace `demo` and `default` with the cluster and namespace you are authorized to monitor. Iterate the returned `Series` and their `Points`; an empty result is not proof of health. Keep range within the retained 24 hours and step no greater than range. This JSON API differs from root `/metrics`, which returns Prometheus text; the SDK's generated root endpoint method requires a separate client with the origin as its base URL. The metrics example is also compiled in [`pkg/client/example_test.go`](../../pkg/client/example_test.go).
+
 ## Prometheus scraping
 
 The public endpoint is **`GET /metrics` at the installation root**, not `/api/v1/metrics`. It exports Prometheus text with authoritative `namespace`, `cluster` and `member` labels. Obtain a Karakoram API token for an account permitted to `read` `monitoring`; the server filters individual `<namespace>/<cluster>` objects by the same policy. It is not a Zerops integration token.

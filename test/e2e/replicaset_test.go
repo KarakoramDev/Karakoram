@@ -8,7 +8,7 @@ package e2e
 import (
 	"context"
 
-	api "github.com/KarakoramDev/Karakoram/internal/apiclient"
+	api "github.com/KarakoramDev/Karakoram/pkg/client"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"testing"
 )
