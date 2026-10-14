@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
+import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
 import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject } from '@/auth/permissions';
@@ -14,29 +15,24 @@ import { Button } from '@/components/ui/Button';
 import { ChoiceGroup, SelectField, Switch, TextAreaField, TextField } from '@/components/ui/Field';
 import { Callout, Card, ErrorBlock, KV, Loading, PageHeader } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
-import { ResourcesEditor, validateResources } from './editors/ResourcesEditor';
-import { SchedulesEditor, validateSchedules } from './editors/SchedulesEditor';
-import { ExposureEditor, TLSEditor, validateExposure, validateTLS } from './editors/AccessEditor';
+import { ResourcesEditor } from './editors/ResourcesEditor';
+import { SchedulesEditor } from './editors/SchedulesEditor';
+import { ExposureEditor, TLSEditor } from './editors/AccessEditor';
 import { resourcesSummary } from './cluster-utils';
 import { clusterPath } from './detail/ClusterDetail';
 import { dataSourceFor, dataSourceLabel, wireDataSource } from './data-source';
+import { STEPS, claimSubmission, firstInvalidStep, nextStep, normalizeWizardSpec, resetEditedAttempt, type StepId } from './wizard/state';
+import { memberChoices, nameError, topologyErrors, validateWizard } from './wizard/validation';
+import { resourceMinimums } from './wizard/resources';
+import { engineConsequences, engineRules } from './wizard/engine';
+import { exposureSummary, totalFootprint } from './wizard/review';
+import { validatePitrPoint } from './wizard/restore-point';
+import { useSourcePitrWindow } from './wizard/queries';
+import { cleanTLS } from './wizard/access';
 
 type Topology = Schemas['ProviderTopology'];
 
-const NAME_RE = /^[a-z][a-z0-9]{1,11}$/;
-const RS_SIZES = [1, 3, 5, 7];
 
-const STEPS = [
-  { id: 'basics', label: 'Basics' },
-  { id: 'topology', label: 'Topology' },
-  { id: 'resources', label: 'Resources' },
-  { id: 'backups', label: 'Backups' },
-  { id: 'access', label: 'Access & TLS' },
-  { id: 'review', label: 'Review' },
-] as const;
-type StepId = (typeof STEPS)[number]['id'];
-
-const DEFAULT_RESOURCES: Schemas['Resources'] = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 0.5, maxRam: 2, minDisk: 2, maxDisk: 20 };
 
 function specFromTopology(provider: Provider, topology: Topology, version: string): ClusterSpec {
   const d = topology.defaults;
@@ -45,15 +41,7 @@ function specFromTopology(provider: Provider, topology: Topology, version: strin
     provider: provider.name,
     version,
     topology: { ...d.topology, type: topology.type },
-    components: {
-      engine: d.components.engine ?? { replicas: 3, resources: DEFAULT_RESOURCES },
-      ...(topology.type === 'sharded'
-        ? {
-            configServer: d.components.configServer ?? { replicas: 3, resources: DEFAULT_RESOURCES },
-            router: d.components.router ?? { replicas: 2, resources: { ...DEFAULT_RESOURCES, minDisk: 1, maxDisk: 1 } },
-          }
-        : {}),
-    },
+    components: structuredClone(d.components),
     tls: d.tls ?? { mode: 'requireTLS', ca: 'selfSigned' },
     exposure: d.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] },
     monitoring: d.monitoring ?? { enabled: true },
@@ -61,53 +49,6 @@ function specFromTopology(provider: Provider, topology: Topology, version: strin
   };
 }
 
-interface Validation {
-  basics: string[];
-  topology: string[];
-  resources: string[];
-  backups: string[];
-  access: string[];
-}
-
-function validate(name: string, namespace: string, spec: ClusterSpec, existing: string[], provider: Provider | undefined): Validation {
-  const v: Validation = { basics: [], topology: [], resources: [], backups: [], access: [] };
-  if (!namespace) v.basics.push('Choose the namespace (Zerops project) that will host the cluster.');
-  if (!NAME_RE.test(name)) v.basics.push('Name: 2–12 lowercase letters/digits, starting with a letter.');
-  if (existing.includes(name)) v.basics.push('A cluster with this name already exists in this namespace.');
-  if (!spec.version) v.basics.push('Choose an engine version.');
-  const ver = provider?.versions.find((x) => x.version === spec.version);
-  if (ver && ver.status === 'unavailable') v.basics.push('This version is not available for new clusters.');
-
-  const engine = spec.components.engine;
-  if (spec.topology.type === 'replicaSet') {
-    if (!RS_SIZES.includes(engine.replicas)) v.topology.push('Replica sets must have 1, 3, 5 or 7 members.');
-  } else {
-    if (!spec.topology.shards || spec.topology.shards < 1) v.topology.push('Sharded clusters need at least one shard.');
-    if (!RS_SIZES.includes(engine.replicas)) v.topology.push('Each shard must have 1, 3, 5 or 7 members.');
-    const cfg = spec.components.configServer?.replicas ?? 0;
-    if (![1, 3, 5].includes(cfg)) v.topology.push('Config server set must have 1, 3 or 5 members.');
-    if ((spec.components.router?.replicas ?? 0) < 1) v.topology.push('At least one router is required.');
-  }
-
-  v.resources.push(...validateResources(engine.resources).map((e) => `Engine: ${e}`));
-  if (spec.components.configServer) v.resources.push(...validateResources(spec.components.configServer.resources).map((e) => `Config server: ${e}`));
-  if (spec.components.router) v.resources.push(...validateResources(spec.components.router.resources, undefined, true).map((e) => `Router: ${e}`));
-
-  const b = spec.backup;
-  if (b) {
-    const schedules = b.schedules ?? [];
-    if ((schedules.length > 0 || b.pitr?.enabled) && !b.storage) v.backups.push('Choose a primary backup storage for schedules and PITR.');
-    v.backups.push(...validateSchedules(schedules));
-    if (b.pitr?.enabled && !(b.pitr.oplogSpanMinutes >= 1)) v.backups.push('Oplog span must be at least 1 minute.');
-  }
-  if (spec.dataSource) {
-    if (!spec.dataSource.cluster) v.backups.push('Data source: choose a source cluster.');
-    if (!spec.dataSource.backup && !spec.dataSource.pitrTime) v.backups.push('Data source: choose a backup or a point in time.');
-  }
-
-  v.access.push(...validateTLS(spec.tls), ...validateExposure(spec.exposure));
-  return v;
-}
 
 export function ClusterWizardPage() {
   const auth = useAuth();
@@ -126,6 +67,10 @@ export function ClusterWizardPage() {
   const [presetName, setPresetName] = useState('');
   const [touched, setTouched] = useState<Record<StepId, boolean>>({ basics: false, topology: false, resources: false, backups: false, access: false, review: false });
 
+  const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
+  const submissionLocked = useRef(false);
+  const submitted = useRef(false);
+  const idempotency = useIdempotencyKey();
   // Place the cluster in the only namespace available without asking.
   useEffect(() => {
     if (!targetNamespace && namespaceOptions.length === 1) setTargetNamespace(namespaceOptions[0]!);
@@ -161,19 +106,28 @@ export function ClusterWizardPage() {
         seeded.tls = src.spec.tls ? { mode: src.spec.tls.mode, ca: 'selfSigned' } : seeded.tls;
       }
     }
-    setSpec(seeded);
+    setSpec(normalizeWizardSpec(seeded));
   }, [provider, spec, params, from, fromNamespace, source.isPending, source.data]);
 
   const existingNames = useMemo(() => clusters.data?.items.map((c) => c.name) ?? [], [clusters.data]);
-  const validation = useMemo(() => (spec ? validate(name, targetNamespace, spec, existingNames, provider) : null), [name, targetNamespace, spec, existingNames, provider]);
+  const pitrSource = useSourcePitrWindow(spec?.dataSource?.namespace || targetNamespace || DEFAULT_NAMESPACE, spec?.dataSource?.cluster ?? '', Boolean(spec?.dataSource?.pitrTime));
+  const validation = useMemo(() => {
+    if (!spec) return null;
+    const result = validateWizard(name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed);
+    if (spec.dataSource?.pitrTime) result.backups.push(...(pitrSource.error ? [errorMessage(pitrSource.error)] : validatePitrPoint(spec.dataSource.pitrTime, pitrSource.data ?? null)));
+    return result;
+  }, [name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed, pitrSource.data, pitrSource.error]);
 
   const create = useMutation({
-    mutationFn: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, body })),
+    mutationFn: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, headers: idempotencyHeaders(idempotency.key), body })),
     onSuccess: (c) => {
+      idempotency.reset();
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(`Cluster ${c.name} is being created.`);
       navigate(clusterPath(c.namespace || targetNamespace, c.name));
     },
+    onError: () => { setStep('review'); },
+    onSettled: () => { submissionLocked.current = false; },
   });
 
   if (!auth.can('clusters', 'create')) {
@@ -191,20 +145,34 @@ export function ClusterWizardPage() {
     );
   }
 
-  const update = (fn: (s: ClusterSpec) => ClusterSpec) => setSpec((s) => (s ? fn(s) : s));
+  const editAttempt = () => {
+    if (resetEditedAttempt(submitted, submissionLocked.current)) {
+      idempotency.reset();
+      create.reset();
+    }
+  };
+  const update = (fn: (s: ClusterSpec) => ClusterSpec) => {
+    editAttempt();
+    setSpec((s) => (s ? normalizeWizardSpec(fn(s)) : s));
+  };
   const stepIndex = STEPS.findIndex((s) => s.id === step);
   const errorsFor = (id: StepId): string[] => (id === 'review' ? [] : validation[id]);
   const allErrors = [...validation.basics, ...validation.topology, ...validation.resources, ...validation.backups, ...validation.access];
   const storageNames = storages.data?.items.map((s) => s.name) ?? [];
   const sharded = spec.topology.type === 'sharded';
+  const rules = engineRules(spec.provider);
+  const counts = topologyErrors(spec, topology);
+  const footprint = totalFootprint(spec);
 
   const goto = (id: StepId) => {
     setTouched((t) => ({ ...t, [step]: true }));
-    setStep(id);
+    const movingForward = STEPS.findIndex((s) => s.id === id) > stepIndex;
+    if (!movingForward || errorsFor(step).length === 0) setStep(id);
   };
 
   const applyPreset = (pName: string) => {
     setPresetName(pName);
+    setAllAddressesConfirmed(false);
     const preset = provider.presets.find((p) => p.name === pName);
     if (!preset) return;
     update((s) => ({
@@ -222,11 +190,18 @@ export function ClusterWizardPage() {
     setPresetName('');
   };
 
-  const submit = () => {
-    if (allErrors.length) {
+  const submit = (button: HTMLButtonElement) => {
+    if (submissionLocked.current) return;
+    const invalid = firstInvalidStep(validation);
+    if (invalid) {
       setTouched({ basics: true, topology: true, resources: true, backups: true, access: true, review: true });
+      setStep(invalid);
       return;
     }
+    if (!claimSubmission(submissionLocked)) return;
+    submitted.current = true;
+    button.disabled = true;
+    // Send exposure.allowAllAddresses = allAddressesConfirmed after the API schema adds it.
     const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace) };
     create.mutate(body);
   };
@@ -249,7 +224,7 @@ export function ClusterWizardPage() {
               const errs = errorsFor(s.id);
               const cls = ['step', s.id === step ? 'active' : '', touched[s.id] && errs.length ? 'invalid' : touched[s.id] && i < stepIndex ? 'done' : ''].join(' ');
               return (
-                <button key={s.id} type="button" className={cls} onClick={() => goto(s.id)} aria-current={s.id === step ? 'step' : undefined}>
+                <button key={s.id} type="button" className={cls} onClick={() => goto(s.id)} disabled={create.isPending} aria-current={s.id === step ? 'step' : undefined}>
                   <span className="step-index" aria-hidden>
                     {touched[s.id] && errs.length ? '!' : i + 1}
                   </span>
@@ -272,7 +247,7 @@ export function ClusterWizardPage() {
             <dt>Backups</dt>
             <dd>{spec.backup?.storage ? `${spec.backup.storage}${spec.backup.pitr?.enabled ? ' + PITR' : ''}` : 'none'}</dd>
             <dt>Exposure</dt>
-            <dd>{spec.exposure?.public ? 'public' : 'private'}</dd>
+            <dd>{exposureSummary(spec)}</dd>
           </dl>
         </aside>
 
@@ -308,10 +283,10 @@ export function ClusterWizardPage() {
                   required
                   mono
                   value={name}
-                  onChange={(e) => setName(e.target.value.toLowerCase())}
+                  onChange={(e) => { editAttempt(); setName(e.target.value); }}
                   placeholder="orders"
                   hint="2–12 lowercase letters and digits; becomes the Zerops hostname prefix (e.g. ordersm1, ordersm2)."
-                  error={touched.basics && name && !NAME_RE.test(name) ? 'Use 2–12 lowercase letters/digits starting with a letter.' : undefined}
+                  error={touched.basics ? nameError(name, existingNames) : undefined}
                   autoFocus
                 />
                 <div className="grid-2">
@@ -322,7 +297,11 @@ export function ClusterWizardPage() {
                       const p = providers.data?.items.find((x) => x.name === e.target.value);
                       if (!p) return;
                       const t = p.topologies.find((x) => x.type === spec.topology.type) ?? p.topologies[0];
-                      if (t) setSpec(specFromTopology(p, t, p.versions.find((v) => v.default)?.version ?? p.versions[0]?.version ?? ''));
+                      if (t) {
+                        editAttempt();
+                        setAllAddressesConfirmed(false);
+                        setSpec(normalizeWizardSpec(specFromTopology(p, t, p.versions.find((v) => v.default)?.version ?? p.versions[0]?.version ?? '')));
+                      }
                     }}
                   >
                     {providers.data?.items.map((p) => (
@@ -331,7 +310,7 @@ export function ClusterWizardPage() {
                       </option>
                     ))}
                   </SelectField>
-                  <SelectField label="Version" value={spec.version} onChange={(e) => update((s) => ({ ...s, version: e.target.value }))}>
+                  <SelectField label="Version" value={spec.version} onChange={(e) => update((s) => ({ ...s, version: e.target.value }))} error={touched.basics && (!provider.versions.some((v) => v.version === spec.version && v.status !== 'unavailable')) ? 'Choose an available engine version.' : undefined}>
                     {provider.versions.map((v) => (
                       <option key={v.version} value={v.version} disabled={v.status === 'unavailable'}>
                         {v.version}
@@ -349,8 +328,8 @@ export function ClusterWizardPage() {
                   onChange={switchTopology}
                   options={provider.topologies.map((t) => ({
                     value: t.type,
-                    title: t.displayName,
-                    description: t.type === 'replicaSet' ? 'One replica set of 1, 3, 5 or 7 members. Most workloads start here.' : 'Config servers, N shard replica sets and routers. Horizontal scale for large datasets.',
+                    title: rules.topology[t.type]?.title ?? t.displayName,
+                    description: rules.topology[t.type]?.description ?? 'Configure the provider components on the Topology step.',
                   }))}
                 />
                 {provider.presets.length ? (
@@ -396,8 +375,9 @@ export function ClusterWizardPage() {
                         type="number"
                         min={1}
                         value={spec.topology.shards ?? 1}
-                        onChange={(e) => update((s) => ({ ...s, topology: { ...s.topology, shards: Math.max(1, Number(e.target.value) || 1) } }))}
+                        onChange={(e) => update((s) => ({ ...s, topology: { ...s.topology, shards: Number(e.target.value) } }))}
                         hint="Shards can be added later, never removed."
+                        error={touched.topology ? counts.shards : undefined}
                       />
                       <TextField
                         label="Routers (mongos)"
@@ -407,10 +387,11 @@ export function ClusterWizardPage() {
                         onChange={(e) =>
                           update((s) => ({
                             ...s,
-                            components: { ...s.components, router: { replicas: Math.max(1, Number(e.target.value) || 1), resources: s.components.router?.resources ?? DEFAULT_RESOURCES } },
+                            components: { ...s.components, router: { replicas: Number(e.target.value), resources: s.components.router?.resources ?? topology.defaults.components.router?.resources ?? s.components.engine.resources } },
                           }))
                         }
                         hint="Clients connect through routers."
+                        error={touched.topology ? counts.router : undefined}
                       />
                     </div>
                     <ChoiceGroup<string>
@@ -418,7 +399,8 @@ export function ClusterWizardPage() {
                       legend="Members per shard"
                       value={String(spec.components.engine.replicas)}
                       onChange={(v) => update((s) => ({ ...s, components: { ...s.components, engine: { ...s.components.engine, replicas: Number(v) } } }))}
-                      options={RS_SIZES.map((n) => ({ value: String(n), title: `${n}`, description: n === 1 ? 'No redundancy' : `Tolerates ${Math.floor((n - 1) / 2)} failure${n > 3 ? 's' : ''}` }))}
+                      options={memberChoices(topology, 'engine').map((n) => ({ value: String(n), title: `${n}`, description: n === 1 ? 'No redundancy' : `Tolerates ${Math.floor((n - 1) / 2)} failure${n > 3 ? 's' : ''}` }))}
+                      hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                     />
                     <ChoiceGroup<string>
                       name="cfg-members"
@@ -427,10 +409,11 @@ export function ClusterWizardPage() {
                       onChange={(v) =>
                         update((s) => ({
                           ...s,
-                          components: { ...s.components, configServer: { replicas: Number(v), resources: s.components.configServer?.resources ?? DEFAULT_RESOURCES } },
+                          components: { ...s.components, configServer: { replicas: Number(v), resources: s.components.configServer?.resources ?? topology.defaults.components.configServer?.resources ?? s.components.engine.resources } },
                         }))
                       }
-                      options={[1, 3, 5].map((n) => ({ value: String(n), title: `${n}`, description: n === 1 ? 'Dev only' : 'Recommended' }))}
+                      options={memberChoices(topology, 'configServer').map((n) => ({ value: String(n), title: `${n}`, description: n === 1 ? 'Dev only' : 'Replicated config metadata' }))}
+                      hint={touched.topology && counts.configServer ? <span className="field-error" role="alert">{counts.configServer}</span> : undefined}
                     />
                   </>
                 ) : (
@@ -439,7 +422,8 @@ export function ClusterWizardPage() {
                     legend="Members"
                     value={String(spec.components.engine.replicas)}
                     onChange={(v) => update((s) => ({ ...s, components: { ...s.components, engine: { ...s.components.engine, replicas: Number(v) } } }))}
-                    options={RS_SIZES.map((n) => ({ value: String(n), title: `${n} member${n > 1 ? 's' : ''}`, description: n === 1 ? 'Single node, no failover. Dev only.' : `Majority ${Math.ceil(n / 2)}; survives ${Math.floor((n - 1) / 2)} down.` }))}
+                    options={memberChoices(topology, 'engine').map((n) => ({ value: String(n), title: `${n} member${n > 1 ? 's' : ''}`, description: n === 1 ? 'Single node, no failover. Dev only.' : `Majority ${Math.ceil(n / 2)}; survives ${Math.floor((n - 1) / 2)} down.` }))}
+                    hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                   />
                 )}
                 <TextAreaField
@@ -448,7 +432,7 @@ export function ClusterWizardPage() {
                   rows={5}
                   value={spec.engineConfig ?? ''}
                   onChange={(e) => update((s) => ({ ...s, engineConfig: e.target.value || undefined }))}
-                  hint="Merged into mongod/mongos configuration and validated by the server."
+                  hint={rules.configHint}
                 />
               </div>
             </Card>
@@ -457,12 +441,14 @@ export function ClusterWizardPage() {
           {step === 'resources' ? (
             <div className="stack" style={{ gap: 16 }}>
               <Card title={sharded ? 'Shard members' : 'Members'}>
-                <ResourcesEditor idPrefix="engine" value={spec.components.engine.resources} onChange={(r) => update((s) => ({ ...s, components: { ...s.components, engine: { ...s.components.engine, resources: r } } }))} />
+                <ResourcesEditor idPrefix="engine" minimums={resourceMinimums(provider.name, topology, 'engine')} showErrors={touched.resources} value={spec.components.engine.resources} onChange={(r) => update((s) => ({ ...s, components: { ...s.components, engine: { ...s.components.engine, resources: r } } }))} />
               </Card>
               {sharded && spec.components.configServer ? (
                 <Card title="Config servers">
                   <ResourcesEditor
                     idPrefix="cfg"
+                    minimums={resourceMinimums(provider.name, topology, 'configServer')}
+                    showErrors={touched.resources}
                     value={spec.components.configServer.resources}
                     onChange={(r) => update((s) => ({ ...s, components: { ...s.components, configServer: { ...s.components.configServer!, resources: r } } }))}
                   />
@@ -470,7 +456,7 @@ export function ClusterWizardPage() {
               ) : null}
               {sharded && spec.components.router ? (
                 <Card title="Routers">
-                  <ResourcesEditor idPrefix="router" noDisk value={spec.components.router.resources} onChange={(r) => update((s) => ({ ...s, components: { ...s.components, router: { ...s.components.router!, resources: r } } }))} />
+                  <ResourcesEditor idPrefix="router" noDisk minimums={resourceMinimums(provider.name, topology, 'router')} showErrors={touched.resources} value={spec.components.router.resources} onChange={(r) => update((s) => ({ ...s, components: { ...s.components, router: { ...s.components.router!, resources: r } } }))} />
                 </Card>
               ) : null}
             </div>
@@ -490,6 +476,7 @@ export function ClusterWizardPage() {
                     value={spec.backup?.storage ?? ''}
                     onChange={(e) => update((s) => ({ ...s, backup: { ...(s.backup ?? {}), storage: e.target.value || undefined } }))}
                     hint="Default destination for on-demand backups and PITR oplog slices."
+                    error={touched.backups && !spec.backup?.storage && ((spec.backup?.schedules?.length ?? 0) > 0 || spec.backup?.pitr?.enabled) ? 'Choose a primary storage for schedules and PITR.' : undefined}
                   >
                     <option value="">None</option>
                     {storageNames.map((n) => (
@@ -511,8 +498,9 @@ export function ClusterWizardPage() {
                       min={1}
                       style={{ maxWidth: 220 }}
                       value={spec.backup.pitr.oplogSpanMinutes}
-                      onChange={(e) => update((s) => ({ ...s, backup: { ...(s.backup ?? {}), pitr: { enabled: true, oplogSpanMinutes: Math.max(1, Number(e.target.value) || 10) } } }))}
+                      onChange={(e) => update((s) => ({ ...s, backup: { ...(s.backup ?? {}), pitr: { enabled: true, oplogSpanMinutes: Number(e.target.value) } } }))}
                       hint="Smaller intervals tighten the recovery point; PITR requires at least one completed base backup."
+                      error={touched.backups && (!Number.isInteger(spec.backup.pitr.oplogSpanMinutes) || spec.backup.pitr.oplogSpanMinutes < 1) ? 'Use a whole number of at least 1 minute.' : undefined}
                     />
                   ) : null}
                 </div>
@@ -527,7 +515,7 @@ export function ClusterWizardPage() {
                 />
               </Card>
               <Card title="Seed data (optional)">
-                <DataSourceEditor value={spec.dataSource} onChange={(dataSource) => update((s) => ({ ...s, dataSource }))} targetNamespace={targetNamespace || DEFAULT_NAMESPACE} namespaces={namespaceOptions} />
+                <DataSourceEditor value={spec.dataSource} onChange={(dataSource) => update((s) => ({ ...s, dataSource }))} targetNamespace={targetNamespace || DEFAULT_NAMESPACE} namespaces={namespaceOptions} showErrors={touched.backups} />
               </Card>
             </div>
           ) : null}
@@ -538,7 +526,7 @@ export function ClusterWizardPage() {
                 <TLSEditor value={spec.tls ?? { mode: 'requireTLS', ca: 'selfSigned' }} onChange={(tls) => update((s) => ({ ...s, tls }))} />
               </Card>
               <Card title="Network exposure">
-                <ExposureEditor value={spec.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] }} onChange={(exposure) => update((s) => ({ ...s, exposure }))} />
+                <ExposureEditor label={rules.exposureLabel} value={spec.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] }} onChange={(exposure) => update((s) => ({ ...s, exposure }))} allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} />
               </Card>
               <Card title="Monitoring">
                 <Switch label="Collect per-member metrics (dashboard and Prometheus endpoint)" checked={spec.monitoring?.enabled ?? true} onChange={(e) => update((s) => ({ ...s, monitoring: { enabled: e.target.checked } }))} />
@@ -568,40 +556,46 @@ export function ClusterWizardPage() {
                     ['Member resources', resourcesSummary(spec.components.engine.resources)],
                     spec.components.configServer && ['Config server resources', resourcesSummary(spec.components.configServer.resources)],
                     spec.components.router && ['Router resources', resourcesSummary(spec.components.router.resources, true)],
+                    ['Total runtime footprint', `${footprint.members} instances · ${footprint.minCpu}–${footprint.maxCpu} CPU cores · ${footprint.minRam}–${footprint.maxRam} GiB RAM`],
+                    ['Total data volumes', `${footprint.volumes} volumes · ${footprint.minDisk}–${footprint.maxDisk} GiB data disk`],
+                    footprint.runtimeMaxDisk > 0 && ['Runtime disks (additional)', `${footprint.runtimeMinDisk}–${footprint.runtimeMaxDisk} GiB across ${footprint.members} runtime instances`],
+                    ['Placement', 'Selected namespace/project; physical hosts are unknown until allocation. Zerops does not guarantee host anti-affinity.'],
+                    ['Engine configuration', spec.engineConfig?.trim() || 'Provider defaults'],
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],
                     spec.dataSource && ['Seed from', `${dataSourceLabel(spec.dataSource, targetNamespace)} ${spec.dataSource.backup ? `backup ${spec.dataSource.backup}` : `at ${spec.dataSource.pitrTime}`}`],
                     ['TLS', `${spec.tls?.mode ?? 'requireTLS'} · ${spec.tls?.ca === 'userProvided' ? 'user-provided certificates' : 'managed CA'}`],
-                    ['Exposure', spec.exposure?.public ? `public ${spec.exposure.ipType}, allowlist ${(spec.exposure.allowlist ?? []).join(', ') || 'missing (required)'}` : 'private'],
+                    ['Exposure', exposureSummary(spec)],
                     ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
                   ]}
                 />
+                <p className="small muted">These are aggregate autoscaling bounds, not a price estimate or the initial allocation. Billing follows <a href="https://zerops.io/pricing" target="_blank" rel="noreferrer">Zerops pricing</a> for runtime CPU/RAM, runtime disks, data volumes and other enabled resources; backup storage is additional.</p>
+                <Callout tone="info" title="What this configuration means">
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>{engineConsequences(spec).map((consequence) => <li key={consequence}>{consequence}</li>)}</ul>
+                </Callout>
               </div>
             </Card>
           ) : null}
 
           <div className="wizard-foot">
-            <Button onClick={() => (stepIndex === 0 ? navigate('/clusters') : goto(STEPS[stepIndex - 1]!.id))}>{stepIndex === 0 ? 'Cancel' : 'Back'}</Button>
+            <Button disabled={create.isPending} onClick={() => {
+              if (stepIndex === 0) { idempotency.reset(); navigate('/clusters'); }
+              else goto(STEPS[stepIndex - 1]!.id);
+            }}>{stepIndex === 0 ? 'Cancel' : 'Back'}</Button>
             {step === 'review' ? (
-              <Button variant="primary" onClick={submit} loading={create.isPending} disabled={allErrors.length > 0}>
+              <Button variant="primary" onClick={(e) => submit(e.currentTarget)} loading={create.isPending}>
                 Create cluster
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => goto(STEPS[stepIndex + 1]!.id)}>
+              <Button variant="primary" onClick={() => {
+                setTouched((t) => ({ ...t, [step]: true }));
+                setStep(nextStep(step, validation));
+              }}>
                 Continue
               </Button>
             )}
           </div>
-          {touched[step] && errorsFor(step).length ? (
-            <Callout tone="warn">
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {errorsFor(step).map((e) => (
-                  <li key={e}>{e}</li>
-                ))}
-              </ul>
-            </Callout>
-          ) : null}
         </div>
       </div>
     </div>
@@ -617,12 +611,7 @@ function cleanSpec(spec: ClusterSpec, targetNamespace: string): ClusterSpec {
     if (!out.backup.pitr?.enabled && !out.backup.storage) delete out.backup.pitr;
     if (Object.keys(out.backup).length === 0) delete out.backup;
   }
-  if (out.tls?.ca !== 'userProvided' && out.tls) {
-    delete out.tls.caCertificate;
-    delete out.tls.caPrivateKey;
-    delete out.tls.certificate;
-    delete out.tls.privateKey;
-  }
+  if (out.tls) out.tls = cleanTLS(out.tls);
   if (out.exposure && !out.exposure.public) out.exposure = { public: false, ipType: out.exposure.ipType };
   if (!out.engineConfig) delete out.engineConfig;
   if (out.dataSource) out.dataSource = wireDataSource(out.dataSource, targetNamespace);
@@ -642,12 +631,14 @@ export function SourceClusterPicker({
   namespace,
   cluster,
   onChange,
+  showErrors = false,
 }: {
   targetNamespace: string;
   namespaces: string[];
   namespace: string;
   cluster: string;
   onChange: (namespace: string, cluster: string) => void;
+  showErrors?: boolean;
 }) {
   const auth = useAuth();
   const clusters = useClusters(namespace);
@@ -669,7 +660,7 @@ export function SourceClusterPicker({
           label="Source cluster"
           value={cluster}
           onChange={(e) => onChange(namespace, e.target.value)}
-          error={clusters.error ? errorMessage(clusters.error) : undefined}
+          error={clusters.error ? errorMessage(clusters.error) : showErrors && !cluster ? 'Choose a source cluster.' : undefined}
           hint={clusters.data && clusters.data.items.length === 0 ? 'No readable clusters in this namespace.' : undefined}
         >
           <option value="">Choose…</option>
@@ -689,7 +680,7 @@ export function SourceClusterPicker({
   );
 }
 
-export function DataSourceEditor({ value, onChange, targetNamespace, namespaces }: { value: Schemas['DataSource'] | undefined; onChange: (d: Schemas['DataSource'] | undefined) => void; targetNamespace: string; namespaces: string[] }) {
+export function DataSourceEditor({ value, onChange, targetNamespace, namespaces, showErrors = false }: { value: Schemas['DataSource'] | undefined; onChange: (d: Schemas['DataSource'] | undefined) => void; targetNamespace: string; namespaces: string[]; showErrors?: boolean }) {
   const [mode, setMode] = useState<'backup' | 'pitr'>(value?.pitrTime ? 'pitr' : 'backup');
   const cluster = value?.cluster ?? '';
   // Wizard state always carries the source namespace (see data-source.ts); the
@@ -700,7 +691,7 @@ export function DataSourceEditor({ value, onChange, targetNamespace, namespaces 
       <Switch label="Restore data from another cluster into this new cluster" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked ? dataSourceFor(targetNamespace, '') : undefined)} />
       {value ? (
         <>
-          <SourceClusterPicker targetNamespace={targetNamespace} namespaces={namespaces} namespace={namespace} cluster={cluster} onChange={(ns, c) => onChange(dataSourceFor(ns, c))} />
+          <SourceClusterPicker targetNamespace={targetNamespace} namespaces={namespaces} namespace={namespace} cluster={cluster} onChange={(ns, c) => onChange(dataSourceFor(ns, c))} showErrors={showErrors} />
           <ChoiceGroup<'backup' | 'pitr'>
             name="ds-mode"
             legend="Restore point"
@@ -715,9 +706,9 @@ export function DataSourceEditor({ value, onChange, targetNamespace, namespaces 
             ]}
           />
           {mode === 'backup' ? (
-            <BackupPicker namespace={namespace} cluster={cluster} value={value.backup} onChange={(backup) => onChange(dataSourceFor(namespace, cluster, { backup }))} />
+            <BackupPicker namespace={namespace} cluster={cluster} value={value.backup} onChange={(backup) => onChange(dataSourceFor(namespace, cluster, { backup }))} showErrors={showErrors} />
           ) : (
-            <PitrPicker namespace={namespace} cluster={cluster} value={value.pitrTime} onChange={(pitrTime) => onChange(dataSourceFor(namespace, cluster, { pitrTime }))} />
+            <PitrPicker namespace={namespace} cluster={cluster} value={value.pitrTime} onChange={(pitrTime) => onChange(dataSourceFor(namespace, cluster, { pitrTime }))} showErrors={showErrors} />
           )}
         </>
       ) : null}
@@ -725,9 +716,9 @@ export function DataSourceEditor({ value, onChange, targetNamespace, namespaces 
   );
 }
 
-export function BackupPicker({ namespace, cluster, value, onChange }: { namespace: string; cluster: string; value: string | undefined; onChange: (b: string) => void }) {
+export function BackupPicker({ namespace, cluster, value, onChange, showErrors = false }: { namespace: string; cluster: string; value: string | undefined; onChange: (b: string) => void; showErrors?: boolean }) {
   const [items, setItems] = useState<Schemas['Backup'][] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   useEffect(() => {
     if (!cluster) return;
     let cancelled = false;
@@ -738,17 +729,17 @@ export function BackupPicker({ namespace, cluster, value, onChange }: { namespac
         if (!cancelled) setItems(r.items.filter((b) => b.phase === 'Succeeded'));
       })
       .catch((e) => {
-        if (!cancelled) setErr(errorMessage(e));
+        if (!cancelled) setErr(e);
       });
     return () => {
       cancelled = true;
     };
   }, [namespace, cluster]);
   if (!cluster) return <p className="small muted">Choose a source cluster first.</p>;
-  if (err) return <Callout tone="danger">{err}</Callout>;
+  if (err) return <ErrorBlock error={err} />;
   if (!items) return <Loading label="Loading backups…" />;
   return (
-    <SelectField label="Backup" value={value ?? ''} onChange={(e) => onChange(e.target.value)} hint={items.length === 0 ? 'No completed backups on the source cluster.' : undefined}>
+    <SelectField label="Backup" value={value ?? ''} onChange={(e) => onChange(e.target.value)} hint={items.length === 0 ? 'No completed backups on the source cluster.' : undefined} error={showErrors && !value ? 'Choose a completed backup.' : undefined}>
       <option value="">Choose…</option>
       {items.map((b) => (
         <option key={b.name} value={b.name}>
@@ -759,27 +750,11 @@ export function BackupPicker({ namespace, cluster, value, onChange }: { namespac
   );
 }
 
-export function PitrPicker({ namespace, cluster, value, onChange }: { namespace: string; cluster: string; value: string | undefined; onChange: (iso: string) => void }) {
-  const [win, setWin] = useState<Schemas['PITRWindow'] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!cluster) return;
-    let cancelled = false;
-    setWin(null);
-    setErr(null);
-    unwrap(api.GET('/clusters/{cluster}/pitr', { params: { path: { cluster }, query: { namespace } } }))
-      .then((w) => {
-        if (!cancelled) setWin(w);
-      })
-      .catch((e) => {
-        if (!cancelled) setErr(errorMessage(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [namespace, cluster]);
+export function PitrPicker({ namespace, cluster, value, onChange, showErrors = false }: { namespace: string; cluster: string; value: string | undefined; onChange: (iso: string) => void; showErrors?: boolean }) {
+  const query = useSourcePitrWindow(namespace, cluster);
+  const win = query.data;
   if (!cluster) return <p className="small muted">Choose a source cluster first.</p>;
-  if (err) return <Callout tone="danger">{err}</Callout>;
+  if (query.error) return <ErrorBlock error={query.error} />;
   if (!win) return <Loading label="Reading PITR window…" />;
   if (!win.available || !win.start || !win.end) return <Callout tone="warn">{win.message ?? 'No continuous PITR window is available for this cluster.'}</Callout>;
   const toLocal = (iso: string) => {
@@ -787,7 +762,7 @@ export function PitrPicker({ namespace, cluster, value, onChange }: { namespace:
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
-  const inWindow = value ? new Date(value) >= new Date(win.start) && new Date(value) <= new Date(win.end) : true;
+  const pointErrors = validatePitrPoint(value, win);
   return (
     <div className="stack">
       <p className="small muted">
@@ -801,9 +776,9 @@ export function PitrPicker({ namespace, cluster, value, onChange }: { namespace:
         max={toLocal(win.end)}
         value={value ? toLocal(value) : ''}
         onChange={(e) => {
-          if (e.target.value) onChange(new Date(e.target.value).toISOString());
+          onChange(e.target.value ? new Date(e.target.value).toISOString() : '');
         }}
-        error={inWindow ? undefined : 'Outside the restorable window.'}
+        error={value || showErrors ? pointErrors[0] : undefined}
       />
       <div className="row">
         <Button size="sm" onClick={() => onChange(win.end!)}>
