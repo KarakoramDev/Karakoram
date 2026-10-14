@@ -18,6 +18,7 @@ import { EventFilters, useEventFilters } from '@/components/EventFilters';
 
 type KEvent = Schemas['Event'];
 type Process = NonNullable<NonNullable<operations['getMemberLogs']['parameters']['query']>['process']>;
+type EventQuery = NonNullable<operations['listEvents']['parameters']['query']>;
 
 export function EventTable({ items, showCluster, showNamespace, showResource }: { items: KEvent[]; showCluster?: boolean; showNamespace?: boolean; showResource?: boolean }) {
   const extra = (showNamespace ? 1 : 0) + (showCluster ? 1 : 0) + (showResource ? 2 : 0);
@@ -73,7 +74,8 @@ export function EventTable({ items, showCluster, showNamespace, showResource }: 
 /** Merges the durable event list with live frames using the same exact filters. */
 export function useLiveEvents(scope: { namespace?: string; cluster?: string; actor?: string; resource?: string; type?: string }, enabled: boolean) {
   const { namespace, cluster, actor, resource, type } = scope;
-  const query = { ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace), ...(actor ? { actor } : {}), ...(resource ? { resource } : {}), ...(type ? { type } : {}) };
+  // Keep URL filters intact so the API can report unsupported values.
+  const query: EventQuery = { ...(cluster ? { cluster } : {}), ...namespaceQuery(namespace), ...(actor ? { actor } : {}), ...(resource ? { resource: resource as EventQuery['resource'] } : {}), ...(type ? { type: type as EventQuery['type'] } : {}) };
   const list = useQuery({
     queryKey: [...(cluster ? keys.clusterSub(namespace ?? DEFAULT_NAMESPACE, cluster, 'events') : keys.eventList(namespace)), actor ?? '', resource ?? '', type ?? ''],
     queryFn: () => unwrap(api.GET('/events', { params: { query: { ...query, limit: 200, order: 'desc' } } })),

@@ -21,7 +21,7 @@ import { latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
 
-type BackupType = Schemas['CreateBackupRequest']['type'];
+type BackupType = Schemas['Provider']['backupTypes'][number];
 
 export function BackupsTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -45,7 +45,7 @@ export function BackupsTab() {
   const [deleteName, setDeleteName] = useState<string | null>(null);
 
   const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
-  const backupTypes = provider?.backupTypes ?? ['logical', 'physical'];
+  const backupTypes: BackupType[] = provider?.backupTypes ?? ['logical', 'physical'];
   const storageNames = storages.data?.items.map((s) => s.name) ?? [];
   const canCreate = can('create', 'backups');
   const canDelete = can('delete', 'backups');
