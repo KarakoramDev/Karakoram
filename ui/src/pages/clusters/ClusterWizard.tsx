@@ -29,7 +29,7 @@ import { engineConsequences, engineRules } from './wizard/engine';
 import { exposureSummary, totalFootprint } from './wizard/review';
 import { validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
-import { cleanTLS } from './wizard/access';
+import { cleanTLS, wireExposure } from './wizard/access';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -202,8 +202,7 @@ export function ClusterWizardPage() {
     if (!claimSubmission(submissionLocked)) return;
     submitted.current = true;
     button.disabled = true;
-    // Send exposure.allowAllAddresses = allAddressesConfirmed after the API schema adds it.
-    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace) };
+    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed) };
     create.mutate(body);
   };
 
@@ -604,7 +603,7 @@ export function ClusterWizardPage() {
 }
 
 /** Drop empty optional envelopes so the server applies its own defaults. */
-function cleanSpec(spec: ClusterSpec, targetNamespace: string): ClusterSpec {
+function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfirmed: boolean): ClusterSpec {
   const out: ClusterSpec = structuredClone(spec);
   if (out.backup) {
     if (!out.backup.storage) delete out.backup.storage;
@@ -614,6 +613,7 @@ function cleanSpec(spec: ClusterSpec, targetNamespace: string): ClusterSpec {
   }
   if (out.tls) out.tls = cleanTLS(out.tls);
   if (out.exposure && !out.exposure.public) out.exposure = { public: false, ipType: out.exposure.ipType };
+  if (out.exposure) out.exposure = wireExposure(out.exposure, allAddressesConfirmed);
   if (!out.engineConfig) delete out.engineConfig;
   if (out.dataSource) out.dataSource = wireDataSource(out.dataSource, targetNamespace);
   else delete out.dataSource;

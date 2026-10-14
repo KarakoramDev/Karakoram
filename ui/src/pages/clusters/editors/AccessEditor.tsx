@@ -4,7 +4,7 @@
 import type { Schemas } from '@/api/client';
 import { Checkbox, ChoiceGroup, Switch, TextAreaField } from '@/components/ui/Field';
 import { Callout } from '@/components/ui/Primitives';
-import { coversAllAddresses, tlsErrors, validateExposure } from '../wizard/access';
+import { coversAllAddresses, tlsErrors, validateExposure, wireExposure } from '../wizard/access';
 
 type TLS = Schemas['TLS'];
 type Exposure = Schemas['Exposure'];
@@ -64,7 +64,7 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
   const errors = validateExposure(value, allAddressesConfirmed);
   const change = (exposure: Exposure) => {
     onAllAddressesConfirmedChange(false);
-    onChange(exposure);
+    onChange(wireExposure(exposure, false));
   };
   return (
     <div className="stack" style={{ gap: 14 }}>
@@ -105,7 +105,10 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
           {coversAllAddresses(value) ? (
             <Callout tone="danger" title="All internet addresses are allowed">
               A /0 CIDR removes the source-address restriction for its entire IP family. Anyone on the internet can reach the public service.
-              <Checkbox label="I understand and explicitly allow access from all addresses" checked={allAddressesConfirmed} onChange={(e) => onAllAddressesConfirmedChange(e.target.checked)} />
+              <Checkbox label="I understand and explicitly allow access from all addresses" checked={allAddressesConfirmed} onChange={(e) => {
+                onAllAddressesConfirmedChange(e.target.checked);
+                onChange(wireExposure(value, e.target.checked));
+              }} />
             </Callout>
           ) : null}
         </>

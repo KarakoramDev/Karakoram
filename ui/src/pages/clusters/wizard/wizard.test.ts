@@ -7,7 +7,7 @@ import type { Schemas } from '@/api/client';
 import { claimSubmission, clearDisabledFlags, firstInvalidStep, nextStep, normalizeWizardSpec, resetEditedAttempt, type Validation } from './state.ts';
 import { memberChoices, nameError, topologyErrors, validateWizard } from './validation.ts';
 import { resourceErrors, resourceMinimums } from './resources.ts';
-import { cleanTLS, coversAllAddresses, validateExposure, validateTLS } from './access.ts';
+import { cleanTLS, coversAllAddresses, validateExposure, validateTLS, wireExposure } from './access.ts';
 import { scheduleErrors } from './schedules.ts';
 import { exposureSummary, totalFootprint } from './review.ts';
 import { engineConsequences, engineRules } from './engine.ts';
@@ -108,6 +108,19 @@ test('all-address CIDRs require explicit acknowledgement including noncanonical 
     assert.deepEqual(validateExposure(exposure, true), []);
   }
   assert.equal(coversAllAddresses({ public: false, ipType: 'IPV6', allowlist: ['::/0'] }), false);
+});
+
+test('exposure payload acknowledges only confirmed public all-address CIDRs', () => {
+  for (const entry of ['0.0.0.0/0', '1.2.3.4/0', '::/0', '2001:db8::/0']) {
+    const exposure: Schemas['Exposure'] = { public: true, ipType: entry.includes(':') ? 'IPV6' : 'IPV4', allowlist: [entry], allowAllAddresses: true };
+    assert.equal(wireExposure(exposure, true).allowAllAddresses, true);
+    assert.equal(wireExposure(exposure, false).allowAllAddresses, false);
+    assert.equal(wireExposure({ ...exposure, public: false }, true).allowAllAddresses, false);
+    assert.equal(exposure.allowAllAddresses, true);
+  }
+  for (const allowlist of [[], ['2001:db8::/32'], ['::::/0']]) {
+    assert.equal(wireExposure({ public: true, ipType: 'IPV6', allowlist, allowAllAddresses: true }, true).allowAllAddresses, false);
+  }
 });
 
 test('allowlist families must match and malformed CIDRs fail validation', () => {
