@@ -3,6 +3,7 @@
 
 import { useId, useMemo } from 'react';
 import { formatNum } from './Primitives';
+import { chartTicks } from './presentation';
 
 export interface Series {
   name: string;
@@ -19,6 +20,7 @@ export interface LineChartProps {
   /** Fix the y-axis upper bound (e.g. 100 for percentages). */
   yMax?: number;
   formatValue?: (v: number) => string;
+  categories?: Record<number, string>;
 }
 
 /**
@@ -26,10 +28,10 @@ export interface LineChartProps {
  * gridlines with labels and time ticks. Accessible description lists the last
  * value per series.
  */
-export function LineChart({ series, title, unit, height = 160, yMax, formatValue = formatNum }: LineChartProps) {
+export function LineChart({ series, title, unit, height = 160, yMax, categories, formatValue = formatNum }: LineChartProps) {
   const id = useId();
   const width = 640;
-  const pad = { l: 62, r: 10, t: 8, b: 20 };
+  const pad = { l: categories ? 100 : 62, r: 10, t: 8, b: 20 };
   const iw = width - pad.l - pad.r;
   const ih = height - pad.t - pad.b;
 
@@ -45,14 +47,14 @@ export function LineChart({ series, title, unit, height = 160, yMax, formatValue
       if (y > vMax) vMax = y;
     }
     if (xMax === xMin) xMax = xMin + 1;
-    const top = yMax ?? niceCeil(vMax);
+    const top = yMax ?? (categories ? Math.max(...Object.keys(categories).map(Number)) : niceCeil(vMax));
     const sx = (x: number) => pad.l + ((x - xMin) / (xMax - xMin)) * iw;
     const sy = (y: number) => pad.t + ih - (top <= 0 ? 0 : (Math.min(y, top) / top) * ih);
     const paths = series.map((s) => s.points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' '));
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({ y: pad.t + ih - f * ih, v: f * top }));
+    const ticks = chartTicks(top, formatValue, categories).map((v) => ({ y: sy(v), v }));
     const xt = [0, 0.5, 1].map((f) => ({ x: pad.l + f * iw, t: xMin + f * (xMax - xMin) }));
     return { paths, ticks, xt, top };
-  }, [series, yMax, ih, iw, pad.l, pad.t]);
+  }, [series, yMax, categories, formatValue, ih, iw, pad.l, pad.t]);
 
   const describe = series
     .map((s) => {
@@ -78,7 +80,7 @@ export function LineChart({ series, title, unit, height = 160, yMax, formatValue
               <g key={i}>
                 <line x1={pad.l} x2={width - pad.r} y1={t.y} y2={t.y} stroke="var(--border)" strokeWidth="1" />
                 <text x={pad.l - 6} y={t.y + 3} fontSize="10" textAnchor="end" fill="var(--text-3)">
-                  {formatValue(t.v)}
+                  {categories?.[t.v] ?? formatValue(t.v)}
                 </text>
               </g>
             ))}
@@ -107,6 +109,7 @@ export function LineChart({ series, title, unit, height = 160, yMax, formatValue
           );
         })}
       </div>
+      {categories ? <p className="xs muted">{Object.entries(categories).map(([value, label]) => `${value} = ${label}`).join(' · ')}. Values are averaged over the step; fractional values represent a mixture of sampled states, not a separate state.</p> : null}
     </figure>
   );
 }
