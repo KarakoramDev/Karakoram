@@ -32,6 +32,19 @@ Two log paths serve different purposes:
 
 Redact passwords, credential-bearing URIs, environment contents, API tokens and PEM private keys before exporting logs. Capture cluster/member/operation/event identifiers and timestamps instead of full secret responses.
 
+Platform import, deploy and cleanup failures include the Zerops error code and
+a sanitized summary of metadata field/reason values in Events and cluster
+status/conditions. The summary is limited to 1024 bytes; credential-bearing
+fields, environment contents, signed URLs and raw response bodies are not
+included. A message that previously said only “See metadata” now carries the
+available safe diagnostic inline, rather than requiring a separate metadata
+link. Check the named resource bound or missing service before changing the
+specification. For `serviceStackNotFound`, inspect the recorded service/process
+identity and whether the service was removed outside Karakoram; do not recreate
+or delete unrelated services to clear the error. If details are unavailable or
+truncated, inspect that process in the Zerops dashboard and share only redacted
+error codes, service/process IDs and timestamps.
+
 ## Namespace and relay operations
 
 Use [namespace lifecycle](user-guide/namespaces.md) for registration, validation,
@@ -53,6 +66,15 @@ namespace's clusters; other projects continue reconciling. Check namespace
 `phase`/`connected`/`lastSeenAt`/`reconnects` before restarting database members.
 `/healthz` and a relay marked ACTIVE do not establish authenticated tunnel
 health. `karakoram relay readiness` probes the private listener only.
+
+An infrastructure API outage is not an invalid-token diagnosis. Namespace token
+checks retain last known validity on HTTP 429/5xx, timeouts and connection
+failures, with `Zerops API temporarily unavailable: <safe detail>; retrying` in
+`token.lastError`. They retry on the usual five-minute validation cadence.
+Only explicit access rejection (401/403 or authentication error code) marks a
+previously valid token invalid. Check timestamps and the diagnostic before
+rotating credentials or repairing a relay. A fresh installation still needs a
+successful first validation before its token is known valid.
 
 During a remote namespace outage, MongoDB replication and already-running
 member-to-S3 PBM work can continue. Management, new agent configuration pulls,

@@ -9,15 +9,19 @@ import (
 	"time"
 )
 
-// APIError preserves Zerops error details without including sensitive response data in Error.
+// APIError preserves structured details; Error exports only a bounded safe summary.
 type APIError struct {
 	StatusCode int
 	Code       string
 	Message    string
 	Meta       json.RawMessage
+	token      string
 }
 
-func (e *APIError) Error() string { return fmt.Sprintf("zerops HTTP %d (%s)", e.StatusCode, e.Code) }
+func (e *APIError) Error() string {
+	detail := errorSummary(e.Code, e.Message, e.Meta, e.token)
+	return boundedDiagnostic(fmt.Sprintf("zerops HTTP %d: %s", e.StatusCode, detail))
+}
 
 // ErrorCode allows providers to recognize scheduled platform restrictions
 // without depending on the Zerops transport implementation.

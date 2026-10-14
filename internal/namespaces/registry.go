@@ -179,14 +179,7 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 	n.Relay.Phase = "NotRequired"
 	n.UpdatedAt = now
 	project, validation := o.DefaultBackend.ProjectInfo(ctx)
-	n.Token.LastValidatedAt = now
-	n.Token.Valid = validation == nil && project.ID == n.ProjectID
-	n.Token.LastError = ""
-	if !n.Token.Valid {
-		n.Token.LastError = "Environment-managed token cannot access the configured project"
-	} else {
-		n.ProjectName = project.Name
-	}
+	applyTokenValidation(n, project, validation, now)
 	updatePhase(n)
 	if createDefault {
 		err = o.Store.CreateNamespace(ctx, n)
@@ -289,6 +282,30 @@ func (r *Registry) trigger() {
 	default:
 	}
 }
+
+// A failed API request is not evidence that a previously accepted token expired.
+func applyTokenValidation(n *domain.Namespace, project infra.Project, validation error, now time.Time) {
+	n.Token.LastValidatedAt = now
+	if validation == nil && project.ID != n.ProjectID {
+		validation = &zerops.APIError{Code: "accessDenied", Message: "Authenticated project does not match the configured project"}
+	}
+	switch {
+	case validation == nil:
+		n.Token.Valid = true
+		n.Token.LastError = ""
+		n.ProjectName = project.Name
+	case zerops.IsAuthenticationError(validation):
+		n.Token.Valid = false
+		n.Token.LastError = "Project token access rejected: " + zerops.SafeErrorDetail(validation)
+	default:
+		n.Token.LastError = temporaryPlatformError(validation)
+	}
+}
+
+func temporaryPlatformError(err error) string {
+	return "Zerops API temporarily unavailable: " + zerops.SafeErrorDetail(err) + "; retrying"
+}
+
 func updatePhase(n *domain.Namespace) {
 	if n.Phase == "Deleting" {
 		return
@@ -338,7 +355,10 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	z.Token = token
 	b, p, err := r.o.Validate(ctx, z)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalid, err)
+		if zerops.IsAuthenticationError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
+		}
+		return nil, errors.New(temporaryPlatformError(err))
 	}
 	service, err := b.GetService(ctx, r.o.RelayHostname)
 	if err != nil {
@@ -399,7 +419,10 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	z.ProjectID = n.ProjectID
 	replacement, p, err := r.o.Validate(ctx, z)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalid, err)
+		if zerops.IsAuthenticationError(err) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
+		}
+		return nil, errors.New(temporaryPlatformError(err))
 	}
 	now := time.Now().UTC()
 	n.Token.Valid = true
@@ -445,14 +468,7 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 		}
 	}
 	_, p, validation := r.o.Validate(ctx, z)
-	n.Token.Valid = validation == nil
-	n.Token.LastValidatedAt = time.Now().UTC()
-	n.Token.LastError = ""
-	if validation != nil {
-		n.Token.LastError = validation.Error()
-	} else {
-		n.ProjectName = p.Name
-	}
+	applyTokenValidation(n, p, validation, time.Now().UTC())
 	updatePhase(n)
 	if err = r.save(ctx, n); err != nil {
 		return nil, err

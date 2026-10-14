@@ -65,13 +65,19 @@ func ValidateProject(ctx context.Context, o Options) (*Backend, infra.Project, e
 	}
 	p, err := b.ProjectInfo(ctx)
 	if err != nil {
-		return nil, infra.Project{}, errors.New("zerops: token cannot access the project")
+		if IsAuthenticationError(err) {
+			return nil, infra.Project{}, fmt.Errorf("zerops: token cannot access the project: %w", err)
+		}
+		return nil, infra.Project{}, fmt.Errorf("zerops: validate project access: %w", err)
 	}
 	if p.ID != o.ProjectID {
-		return nil, infra.Project{}, errors.New("zerops: token project does not match the requested project")
+		return nil, infra.Project{}, &APIError{Code: "accessDenied", Message: "Authenticated project does not match the requested project"}
 	}
 	if _, err = b.ListServices(ctx, ""); err != nil {
-		return nil, infra.Project{}, errors.New("zerops: token cannot list project services")
+		if IsAuthenticationError(err) {
+			return nil, infra.Project{}, fmt.Errorf("zerops: token cannot list project services: %w", err)
+		}
+		return nil, infra.Project{}, fmt.Errorf("zerops: validate project service access: %w", err)
 	}
 	return b, p, nil
 }
@@ -824,14 +830,11 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		case "FAILED", "CANCELED":
 			msg := p.Status
 			if len(p.Error) > 0 && string(p.Error) != "null" {
-				var detail struct {
-					Message string `json:"message"`
-					Code    string `json:"code"`
-				}
-				if json.Unmarshal(p.Error, &detail) == nil && detail.Message != "" {
-					msg = detail.Message
-				} else {
-					msg = string(p.Error)
+				b.client.tokenMu.RLock()
+				token := b.client.token
+				b.client.tokenMu.RUnlock()
+				if detail := processErrorSummary(p.Error, token); detail != "" {
+					msg = detail
 				}
 			}
 			return infra.OpState{Done: true, Failed: true, Status: p.Status, Message: msg}, nil

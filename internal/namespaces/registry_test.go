@@ -113,10 +113,10 @@ func setupRegistry(t *testing.T) (*Registry, *projectBackend, *eventLog) {
 	o := Options{Store: st, DefaultBackend: defaultBackend, Zerops: zerops.Options{ProjectID: "proj-default", Token: "env-token"}, RelayHostname: "controlrelay", PublicURL: "https://example.com", AdvertiseURL: "https://control:9443", Events: log, Artifact: testArtifact{}, ExecutableHash: "test-hash", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	o.Validate = func(_ context.Context, z zerops.Options) (Backend, infra.Project, error) {
 		if z.Token == "bad-token" {
-			return nil, infra.Project{}, errors.New("token cannot access project")
+			return nil, infra.Project{}, &zerops.APIError{StatusCode: 403, Code: "accessDenied"}
 		}
 		if z.Token == "wrong-project-token" {
-			return nil, infra.Project{}, errors.New("token project does not match requested project")
+			return nil, infra.Project{}, &zerops.APIError{Code: "accessDenied", Message: "Token project does not match requested project"}
 		}
 		b := remote
 		if z.ProjectID == "proj-default" {
