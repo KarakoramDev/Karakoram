@@ -1927,8 +1927,10 @@ type CreateAccountParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -1973,8 +1975,10 @@ type CreateAPITokenParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2055,8 +2059,10 @@ type CreateBackupStorageParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2092,8 +2098,10 @@ type ReplaceBackupStorageParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2135,8 +2143,10 @@ type CreateClusterParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2175,8 +2185,10 @@ type PatchClusterParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2197,8 +2209,10 @@ type ReplaceClusterParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2231,8 +2245,10 @@ type CreateBackupParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2301,8 +2317,10 @@ type CreateDatabaseRoleParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2338,8 +2356,10 @@ type ReplaceDatabaseRoleParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2372,8 +2392,10 @@ type CreateDatabaseUserParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2409,8 +2431,10 @@ type ReplaceDatabaseUserParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2457,8 +2481,10 @@ type ReplaceClusterMemberParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2516,8 +2542,10 @@ type RaiseClusterFCVParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2538,8 +2566,10 @@ type RestartClusterParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2572,8 +2602,10 @@ type CreateRestoreParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2600,8 +2632,10 @@ type ResumeClusterParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2622,8 +2656,10 @@ type RotateClusterTLSParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2656,8 +2692,10 @@ type RotateSystemUserParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2755,8 +2793,10 @@ type CreateNamespaceParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
-	// IdempotencyKey Optional retry key scoped to the authenticated account or token identity,
-	// method, route, namespace and path parameters. Retained for 24 hours after
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
 	// a successful response. The same key and canonical JSON body replay the
 	// original status, body and relevant headers, including one-time secrets
 	// and Karakoram-Operation-Id when present. Different bodies conflict with

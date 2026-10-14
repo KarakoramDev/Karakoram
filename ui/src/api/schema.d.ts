@@ -2681,8 +2681,10 @@ export type components = {
         /** @description Opaque cursor returned by the preceding page. */
         Cursor: string;
         /**
-         * @description Optional retry key scoped to the authenticated account or token identity,
-         *     method, route, namespace and path parameters. Retained for 24 hours after
+         * @description Optional retry key scoped to the authenticated account's name and creation
+         *     identity (including OIDC issuer), or the specific bearer token identity,
+         *     plus method, route, namespace and path parameters. Deleting and recreating
+         *     an account never shares its replays. Retained for 24 hours after
          *     a successful response. The same key and canonical JSON body replay the
          *     original status, body and relevant headers, including one-time secrets
          *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2753,8 +2755,10 @@ export interface operations {
             query?: never;
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -2987,8 +2991,10 @@ export interface operations {
             query?: never;
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -3447,8 +3453,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -3540,8 +3548,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -3711,8 +3721,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -3807,8 +3819,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -3927,8 +3941,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -4045,8 +4061,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -4354,8 +4372,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -4452,8 +4472,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -4593,8 +4615,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -4691,8 +4715,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -4908,8 +4934,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5121,8 +5149,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5180,8 +5210,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5276,8 +5308,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5374,8 +5408,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5429,8 +5465,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5558,8 +5596,10 @@ export interface operations {
             };
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with
@@ -5805,8 +5845,10 @@ export interface operations {
             query?: never;
             header?: {
                 /**
-                 * @description Optional retry key scoped to the authenticated account or token identity,
-                 *     method, route, namespace and path parameters. Retained for 24 hours after
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
                  *     a successful response. The same key and canonical JSON body replay the
                  *     original status, body and relevant headers, including one-time secrets
                  *     and Karakoram-Operation-Id when present. Different bodies conflict with

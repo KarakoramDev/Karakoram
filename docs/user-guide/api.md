@@ -261,11 +261,17 @@ network retries or double submissions, including the same empty body for bodyles
 actions. A key must contain **1–255 visible ASCII characters without spaces**.
 Requests without the header retain their usual behavior.
 
-Keys are scoped to the authenticated account (including its OIDC issuer), or the
-specific bearer token identity, plus method, route, namespace and path parameters.
+Keys are scoped to the authenticated account's name and creation identity
+(including its OIDC issuer), or the specific bearer token identity, plus method,
+route, namespace and path parameters. Deleting and recreating an account with the
+same name cannot replay the deleted account's responses or one-time secrets.
 Omitting `namespace` and sending `namespace=default` have the same scope. Another
 account/token or another route cannot retrieve your stored response. Authentication,
 CSRF and route authorization are checked again before every replay.
+
+When upgrading from an account-name-only replay scope, previously stored keys
+do not match the new creation-scoped identity. Inspect any pre-upgrade ambiguous
+resource or operation before retrying it; its old response will not be replayed.
 
 After a successful **2xx** response, the server retains its exact status and body,
 plus relevant headers such as `Content-Type`, `Cache-Control`, `Location`, `ETag`

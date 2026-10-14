@@ -363,6 +363,70 @@ func TestIdempotencyReplayRechecksAuthentication(t *testing.T) {
 	}
 }
 
+func TestIdempotencyRecreatedAccountCannotReplaySecrets(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx := t.Context()
+	name := "retry-owner"
+	create := func() {
+		t.Helper()
+		if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: name, Roles: []string{"role:admin"}}, "retry-owner-password"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	login := func() *httptest.ResponseRecorder {
+		t.Helper()
+		w := call(s, "POST", "/api/v1/auth/login", `{"username":"retry-owner","password":"retry-owner-password"}`, "")
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		return w
+	}
+	send := func(session *httptest.ResponseRecorder) *httptest.ResponseRecorder {
+		t.Helper()
+		var authenticated api.Session
+		if err := json.Unmarshal(session.Body.Bytes(), &authenticated); err != nil || authenticated.CsrfToken == nil {
+			t.Fatal("login lacks CSRF token", err)
+		}
+		r := httptest.NewRequest("POST", "/api/v1/api-tokens", strings.NewReader(`{"name":"one-time-secret"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Idempotency-Key", "same-account-key")
+		r.Header.Set("X-Karakoram-CSRF", *authenticated.CsrfToken)
+		for _, cookie := range session.Result().Cookies() {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		testHandler(s).ServeHTTP(w, r)
+		return w
+	}
+	create()
+	firstSession := login()
+	first := send(firstSession)
+	assertReplay(t, first, send(firstSession), 201)
+	// Fresh sessions for the same existing account still share its replay scope.
+	assertReplay(t, first, send(login()), 201)
+	if err := s.Auth.DeleteAccount(ctx, name); err != nil {
+		t.Fatal(err)
+	}
+	create()
+	second := send(login())
+	if second.Code != 201 || second.Header().Get("Idempotent-Replayed") != "" || second.Body.String() == first.Body.String() {
+		t.Fatal("recreated account replayed deleted account's secret", second.Code, second.Body.String())
+	}
+	tokens, err := s.Store.ListApiTokens(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned := 0
+	for _, token := range tokens {
+		if token.Owner == name {
+			owned++
+		}
+	}
+	if owned != 1 {
+		t.Fatal("recreated account did not create its own token", owned)
+	}
+}
+
 func TestIdempotentBackupsRestoresAndGeneratedPassword(t *testing.T) {
 	s, _, token := testServer(t)
 	if err := s.Store.CreateBackupStorage(t.Context(), &domain.BackupStorage{Name: "archive", Type: "s3", EndpointURL: "https://storage.example", Region: "region", Bucket: "backups", VerifyTLS: true}); err != nil {

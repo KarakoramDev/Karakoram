@@ -186,7 +186,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 		if err = s.o.Store.TouchApiToken(ctx, t.ID, s.now()); err != nil {
 			return nil, err
 		}
-		return &Principal{Account: a.Name, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, TokenName: t.Name, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword}, nil
+		return &Principal{Account: a.Name, AccountCreatedAt: a.CreatedAt, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, TokenName: t.Name, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword}, nil
 	}
 	c, err := r.Cookie(AccessCookie)
 	if err != nil {
@@ -210,7 +210,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 			return nil, err
 		}
 	}
-	return &Principal{Account: a.Name, Subjects: subjects(a, se.Subjects), Via: se.Via, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword, CSRFToken: se.CSRF}, nil
+	return &Principal{Account: a.Name, AccountCreatedAt: a.CreatedAt, Subjects: subjects(a, se.Subjects), Via: se.Via, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword, CSRFToken: se.CSRF}, nil
 }
 func (s *Service) refreshSession(ctx context.Context, r *http.Request) (*domain.Session, string, error) {
 	c, err := r.Cookie(RefreshCookie)

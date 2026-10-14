@@ -105,7 +105,7 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	}
 	// A JSON tuple avoids delimiter collisions. The actual path adds every path
 	// parameter to the method and route-template scope without storing credentials.
-	scope, err := json.Marshal([]string{p.Account, p.OIDCIssuer, p.TokenID, r.Method, r.Pattern, r.URL.Path, namespace, values[0]})
+	scope, err := json.Marshal([]string{p.Account, p.AccountCreatedAt.UTC().Format(time.RFC3339Nano), p.OIDCIssuer, p.TokenID, r.Method, r.Pattern, r.URL.Path, namespace, values[0]})
 	if err != nil {
 		return s.failure(err), nil
 	}

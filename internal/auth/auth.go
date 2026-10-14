@@ -73,6 +73,7 @@ type Options struct {
 // Principal is the authenticated identity used by policy enforcement.
 type Principal struct {
 	Account            string
+	AccountCreatedAt   time.Time
 	Subjects           []string
 	Via                string
 	MustChangePassword bool
