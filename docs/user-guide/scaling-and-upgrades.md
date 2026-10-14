@@ -205,7 +205,8 @@ Restarts checkpoint per-member progress, check health/quorum and process seconda
 `engineConfig` accepts validated YAML overrides, but provider-owned networking/authentication/TLS/replication/sharding/process/logging/dbpath/cache settings cannot be replaced. Do not use overrides to bypass orchestration safety. Use API-shaped patch files for supported advanced settings and inspect validation errors; see [API](api.md) and [operations](../operations.md).
 
 If a member replacement reaches its operation limit during old-member removal,
-the operation fails but ordinary convergence resumes removal and promotes the
-caught-up replacement. Inspect replica-set membership and voting state before
-raising FCV; a failed replacement operation does not roll back its desired
-member changes.
+the operation fails but ordinary convergence finishes old-member removal before
+promoting the caught-up replacement on a later pass. This preserves the
+seven-voter limit even after failure cleanup. Inspect replica-set membership and
+voting state before raising FCV; a failed replacement operation does not roll
+back its desired member changes.

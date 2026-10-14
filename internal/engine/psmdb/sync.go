@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -469,6 +470,11 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 		if m.Stage == "syncing" {
+			// Retire the old member before promoting its replacement, even
+			// after failure cleanup releases the replacement operation gate.
+			if slices.ContainsFunc(s.Members, func(x *member) bool { return x.Set == m.Set && x.Removing }) {
+				continue
+			}
 			rs, e := p.replication(ctx, rc, s, m)
 			if e != nil || !caught(rs, m.Name) {
 				return result, nil
