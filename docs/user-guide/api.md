@@ -451,13 +451,13 @@ From the repository root:
 ```sh
 make generate
 make openapi-check
-# TypeScript generation is separate:
+# Standalone TypeScript generation (make openapi-check also runs this):
 (cd ui && npm ci && npm run gen:api)
 ```
 
 Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, then the owned RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation uses the lockfile's openapi-typescript and writes `ui/src/api/schema.d.ts`. Do not hand-edit generated artifacts.
 
-`make openapi-check` regenerates/diffs the Go API/client/RBAC paths; it is not a TypeScript-drift or live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.
+`make openapi-check` rejects YAML aliases and regenerates/diffs the Go API/client/RBAC paths and `ui/src/api/schema.d.ts`; UI dependencies must already be installed. This is a drift check, not a live behavior test. Update schema, all callers/tests and docs together. See [CONTRIBUTING](../../CONTRIBUTING.md) for full build/test guidance and [CLI reference](cli.md) for API-shaped file examples.
 
 The checked-in specification has no YAML anchors or aliases, so consumers can
 use parsers with conservative alias-expansion limits. After editing a document
