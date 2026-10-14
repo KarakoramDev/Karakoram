@@ -169,7 +169,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	defer c.Close()
 	switch r.Step {
 	case "prepare":
-		if err := rollingMasterReady(ctx, rc, s, m, c); err != nil {
+		if err := rollingMasterReady(ctx, rc, s, m, c, false); err != nil {
 			return false, "waiting for all master-eligible nodes to join", err
 		}
 		ok, err := p.healthy(ctx, c, rc.Cluster.Spec.Components.Engine.Replicas)
@@ -187,7 +187,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		r.Step = "apply"
 		return false, "flushed indices", nil
 	case "apply":
-		if err := rollingMasterReady(ctx, rc, s, m, c); err != nil {
+		if err := rollingMasterReady(ctx, rc, s, m, c, false); err != nil {
 			return false, "waiting for all master-eligible nodes to join", err
 		}
 		resources := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
@@ -242,7 +242,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	}
 }
 
-func rollingMasterReady(ctx context.Context, rc *engine.Context, s *state, m *member, c *esapi.Client) error {
+func rollingMasterReady(ctx context.Context, rc *engine.Context, s *state, m *member, c *esapi.Client, recovering bool) error {
 	if !masterEligible(rc.Cluster.Spec, m) {
 		return nil
 	}
@@ -256,6 +256,12 @@ func rollingMasterReady(ctx context.Context, rc *engine.Context, s *state, m *me
 			continue
 		}
 		masterCount++
+		// A failed deployment may already have taken its own target offline.
+		// Recovering that same member must not wait for it to recover itself;
+		// all other planned masters and the committed quorum remain required.
+		if recovering && planned.Name == m.Name {
+			continue
+		}
 		if !slices.ContainsFunc(nodes, func(n esapi.Node) bool { return n.Name == planned.Name }) {
 			return fmt.Errorf("%w: master-eligible node %s has not joined", errWaiting, planned.Name)
 		}

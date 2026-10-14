@@ -201,15 +201,15 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *stat
 			return true, delay, &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: "waiting for scheduled platform retry"}
 		}
 	}
-	// A delayed platform retry is another disruption, so it must recheck
-	// membership even when Sync dispatches it before the rolling state machine.
+	// A delayed platform retry rechecks the other masters and committed quorum.
+	// The current failed action may already have taken its own target offline.
 	if m := s.find(v.Member); s.Rolling != nil && m != nil && masterEligible(rc.Cluster.Spec, m) && (v.Action == "resources" || v.Action == "upgrade" || v.Action == "deploy") {
 		c, err := p.es(ctx, rc, s)
 		if err != nil {
 			return true, 5 * time.Second, err
 		}
 		defer c.Close()
-		if err = rollingMasterReady(ctx, rc, s, m, c); err != nil {
+		if err = rollingMasterReady(ctx, rc, s, m, c, s.Rolling.Current == m.Name); err != nil {
 			return true, 5 * time.Second, err
 		}
 	}

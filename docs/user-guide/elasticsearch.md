@@ -421,6 +421,11 @@ karactl operations cluster search
 
 Restart and replace-member operations are rejected until the cluster has formed and is active; they are not bootstrap recovery commands. Select `MEMBER_NAME` from observed members. Rolling disruptions require all planned master-eligible nodes present and green health, except when only unplaceable replicas explain yellow and no shards are initializing/relocating. Red or unexplained yellow blocks progress. Rolling maintenance temporarily restricts allocation to primaries, flushes, changes one node, waits for rejoin, restores allocation and waits for stable health. Data-only nodes precede non-elected masters; the elected master is last.
 
+If a platform deployment fails after taking the current node offline, its retry
+may recover that same absent target. It still requires every other planned
+master and the committed voting quorum; it never advances to a different node
+while the failed target is absent.
+
 Replacement adds/joins a new node before draining/deleting the old one and needs temporary capacity. Single-node replacement is rejected; recover through snapshot restore. One-node restarts/upgrades have downtime, and two combined nodes cannot maintain quorum with one stopped. Persistent volumes are separate from runtime disks; deleting a cluster with `keepVolumes` and/or `keepBackups` is an explicit retention choice, not a backup guarantee.
 
 Deleting with `keepVolumes: true` during a snapshot restore abandons that restore rather than resuming its destructive steps. On resume, Karakoram records a `RestoreAbandoned` warning, clears the restore-owned destructive setting after Elasticsearch rejoins, restores component process intent and skips an interrupted initial-restore checkpoint. **Retained data may be partially restored**; inspect it before allowing workloads and request a fresh explicit snapshot restore if needed. Automatic initial restore is not retried.

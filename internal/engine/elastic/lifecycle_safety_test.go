@@ -42,6 +42,40 @@ func TestRollingRequiresCommittedVotingQuorum(t *testing.T) {
 	}
 }
 
+func TestRollingUpgradeRetryRecoversItsAbsentTarget(t *testing.T) {
+	for _, scenario := range []string{"target-absent", "other-master-absent", "committed-quorum-missing", "different-target"} {
+		t.Run(scenario, func(t *testing.T) {
+			p, rc, f, es := coreSetup(t, 3)
+			s := coreConverge(t, p, rc, f)
+			s.Rolling = &rolling{Reason: "upgrade", Version: "9.5.5", Current: "demon1", Order: []string{"demon1"}, Step: "rejoin"}
+			s.Retry = &pending{Action: "upgrade", Member: "demon1", Version: "9.5.5"}
+			es.voters = []string{"demon0", "demon1", "demon2"}
+			// Publishing the new version succeeded, but installing its product
+			// home failed. The agent cannot rejoin until deployment is retried.
+			delete(f.nodes, "demon1")
+			switch scenario {
+			case "other-master-absent":
+				delete(f.nodes, "demon2")
+			case "committed-quorum-missing":
+				es.voters = append(es.voters, "old-voter-a", "old-voter-b")
+			case "different-target":
+				s.Rolling.Current = "demon2"
+			}
+			before := f.mutations
+			busy, _, err := p.retryPending(context.Background(), rc, s)
+			if scenario != "target-absent" {
+				if !busy || !errors.Is(err, errWaiting) || f.mutations != before {
+					t.Fatal("unsafe retry bypassed membership/quorum gate", busy, err, f.calls)
+				}
+				return
+			}
+			if !busy || err != nil || f.mutations != before+1 || s.Pending == nil || s.Retry != nil || f.nodes["demon1"] == "" {
+				t.Fatal("failed upgrade target could not recover", busy, err, s.Pending, s.Retry, f.calls)
+			}
+		})
+	}
+}
+
 func TestYellowRejectsPlaceableReplicaAmongUnplaceableShards(t *testing.T) {
 	p, rc, f, es := coreSetup(t, 3)
 	s := coreConverge(t, p, rc, f)
