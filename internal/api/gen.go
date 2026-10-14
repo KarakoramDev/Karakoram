@@ -15612,6 +15612,15 @@ func (response RaiseClusterFCV500JSONResponse) VisitRaiseClusterFCVResponse(w ht
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RaiseClusterFCV503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RaiseClusterFCV503JSONResponse) VisitRaiseClusterFCVResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type RestartClusterRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  RestartClusterParams

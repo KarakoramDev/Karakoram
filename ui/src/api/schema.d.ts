@@ -2643,7 +2643,7 @@ export type components = {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Authentication or namespace runtime is temporarily unavailable. */
+        /** @description Authentication, namespace runtime or database agent/relay is temporarily unavailable; retry after connectivity recovers. */
         Unavailable: {
             headers: {
                 [name: string]: unknown;
@@ -5200,6 +5200,7 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     restartCluster: {

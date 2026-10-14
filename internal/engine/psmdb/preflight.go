@@ -56,7 +56,7 @@ func (p *Provider) ValidateFCV(ctx context.Context, rc *engine.Context, version 
 		}
 		st, err := agentStatus(ctx, rc, m.Name)
 		if err != nil {
-			return fmt.Errorf("observe member %s before FCV promotion: %w", m.Name, err)
+			return fmt.Errorf("observe member %s before FCV promotion: %w: %w", m.Name, engine.ErrUnavailable, err)
 		}
 		if st.EngineVersion != rc.Cluster.Spec.Version {
 			return blocked()

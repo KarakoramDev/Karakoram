@@ -23,6 +23,7 @@ type preflightProvider struct {
 	initializing bool
 	rolling      bool
 	rotated      time.Time
+	fcvErr       error
 }
 
 func (p *preflightProvider) ValidatePITRRestore(_ context.Context, rc *engine.Context, target time.Time) ([]domain.TimeWindow, error) {
@@ -38,6 +39,9 @@ func (p *preflightProvider) PITRWindow(_ context.Context, rc *engine.Context) ([
 	return p.windows, nil
 }
 func (p *preflightProvider) ValidateFCV(_ context.Context, rc *engine.Context, version string) error {
+	if p.fcvErr != nil {
+		return p.fcvErr
+	}
 	if version != "8.0" {
 		return engine.InvalidField("version", domain.ReasonInvalid, "version must be deployed major form 8.0, not a package version")
 	}
@@ -120,6 +124,25 @@ func TestFCVPreflightRejectsPackageAndRollingVersions(t *testing.T) {
 	operations, err := s.Store.ListOperations(context.Background(), domain.ClusterRef{Name: "prod"})
 	if err != nil || len(operations) != 0 {
 		t.Fatal("rejected FCV enqueued", operations, err)
+	}
+}
+
+func TestFCVPreflightUnavailableReturnsRetryableResponse(t *testing.T) {
+	s, _, token := testServer(t)
+	p := &preflightProvider{fcvErr: errors.Join(engine.ErrUnavailable, errors.New("private relay transport diagnostic"))}
+	s.Registry, _ = engine.NewRegistry(p)
+	w := call(s, "POST", "/api/v1/clusters/prod/raise-fcv", `{"version":"8.0"}`, token)
+	if w.Code != 503 || !strings.Contains(w.Body.String(), `"code":"unavailable"`) || !strings.Contains(w.Body.String(), "retry") || strings.Contains(w.Body.String(), "private relay") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	operations, err := s.Store.ListOperations(context.Background(), domain.ClusterRef{Name: "prod"})
+	if err != nil || len(operations) != 0 {
+		t.Fatal("unavailable FCV observation enqueued work", operations, err)
+	}
+	p.fcvErr = nil
+	w = call(s, "POST", "/api/v1/clusters/prod/raise-fcv", `{"version":"8.0"}`, token)
+	if w.Code != 202 {
+		t.Fatal("recovered observation was not accepted", w.Code, w.Body.String())
 	}
 }
 

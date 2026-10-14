@@ -149,6 +149,8 @@ func (s *Server) failure(err error) response {
 		return failDetails(409, "conflict", resErr.Message, details)
 	}
 	switch {
+	case errors.Is(err, engine.ErrUnavailable):
+		return fail(503, "unavailable", "Database agent or relay is temporarily unavailable; retry the request after connectivity recovers")
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
 	case errors.Is(err, store.ErrConflict), errors.Is(err, engine.ErrConflict), errors.Is(err, engine.ErrNotSupported):

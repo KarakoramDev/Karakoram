@@ -2089,6 +2089,8 @@ paths:
                 $ref: '#/components/schemas/Operation'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -4559,7 +4561,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Unavailable:
-      description: Authentication or namespace runtime is temporarily unavailable.
+      description: Authentication, namespace runtime or database agent/relay is temporarily unavailable; retry after connectivity recovers.
       content:
         application/json:
           schema:

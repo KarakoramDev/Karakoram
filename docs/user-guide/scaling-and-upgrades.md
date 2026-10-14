@@ -132,6 +132,12 @@ karactl clusters status demo
 
 FCV uses the major form (`8.0`), not the package version (`8.0.32-14`). The API rejects package-form or non-deployed-major `version` values with HTTP **400** and a field-specific message naming the accepted form, before enqueueing an operation. Promotion during an unfinished binary rollout returns **409** with reason `invalid_state`; wait until every member reports the exact desired package version and convergence finishes. The operation rechecks deployment and uses confirmation for 7.0+; a genuine run-time validation failure ends the operation as **Failed** with a reason. Transient agent or relay errors retain their diagnostic cause and retry within the operation's bounded consecutive-failure budget instead of being reported as a binary-rollout mismatch. Retained FCV is for compatibility observation, not a promise of supported binary rollback. Karakoram rejects downgrades regardless of retained FCV; follow the target engine's supported recovery process and use tested backups when necessary.
 
+Before acceptance, a temporary agent/relay observation failure returns HTTP
+**503** with code `unavailable` and a retry hint; no FCV operation is enqueued.
+Restore connectivity and retry the same request. This differs from a **409**
+rollout-state conflict and from transient failures after a **202** acceptance,
+which are retried by the already-created operation.
+
 ### Cancel and recover a stuck FCV request
 
 An FCV request must use major form such as `8.0`, never `8.0.32-14`, and match

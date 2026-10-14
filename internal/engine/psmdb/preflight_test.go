@@ -93,7 +93,7 @@ func TestRaiseFCVRetriesTransientAgentFailureThenSucceeds(t *testing.T) {
 	op := &domain.Operation{Kind: domain.OperationRaiseFCV, Payload: json.RawMessage(`{"version":"8.0"}`)}
 	result, err := p.RunOperation(ctx, rc, op)
 	var conflict *domain.ResourceError
-	if !errors.Is(err, transient) || errors.As(err, &conflict) || result.Done || strings.Contains(result.Message, "binary rollout") {
+	if !errors.Is(err, transient) || !errors.Is(err, engine.ErrUnavailable) || errors.As(err, &conflict) || result.Done || strings.Contains(result.Message, "binary rollout") {
 		t.Fatalf("transient observation became terminal validation: result=%+v error=%v", result, err)
 	}
 	result, err = p.RunOperation(ctx, rc, op)
