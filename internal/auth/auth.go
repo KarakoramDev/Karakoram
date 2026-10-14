@@ -367,6 +367,9 @@ func (s *Service) ChangePassword(ctx context.Context, name, old, password string
 	if a.Disabled || a.OIDC || !VerifyPassword(a.PasswordHash, old) {
 		return domain.InvalidField("currentPassword", domain.ReasonInvalid, "currentPassword is invalid for this local account")
 	}
+	if old == password {
+		return domain.InvalidField("newPassword", domain.ReasonReused, "newPassword must differ from the current password")
+	}
 	return s.setPassword(ctx, a, password, false)
 }
 
@@ -386,9 +389,6 @@ func (s *Service) ResetPassword(ctx context.Context, name, password string) erro
 func (s *Service) setPassword(ctx context.Context, a *domain.Account, password string, must bool) error {
 	if err := validateAccountPassword("newPassword", password); err != nil {
 		return err
-	}
-	if VerifyPassword(a.PasswordHash, password) {
-		return domain.InvalidField("newPassword", domain.ReasonReused, "newPassword must differ from the current password")
 	}
 	hash, err := HashPassword(password)
 	if err != nil {

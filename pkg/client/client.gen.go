@@ -432,7 +432,7 @@ type AccountList struct {
 // AccountName Start with a letter; use only letters, digits, underscore, dot, @ or dash.
 type AccountName = string
 
-// AccountPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+// AccountPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 type AccountPassword = string
 
 // AgentStatus defines model for AgentStatus.
@@ -589,7 +589,7 @@ type CanResponse struct {
 type ChangePasswordRequest struct {
 	CurrentPassword *string `json:"currentPassword,omitempty"`
 
-	// NewPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+	// NewPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 	NewPassword *AccountPassword `json:"newPassword,omitempty"`
 }
 
@@ -831,7 +831,7 @@ type CreateAccountRequest struct {
 	// Name Start with a letter; use only letters, digits, underscore, dot, @ or dash.
 	Name AccountName `json:"name"`
 
-	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 	Password *AccountPassword `json:"password,omitempty"`
 }
 
@@ -1486,7 +1486,7 @@ type ReplaceClusterRequest struct {
 type ResetPasswordRequest struct {
 	MustChangePassword *bool `json:"mustChangePassword,omitempty"`
 
-	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 	Password *AccountPassword `json:"password,omitempty"`
 }
 

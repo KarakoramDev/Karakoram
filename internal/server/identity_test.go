@@ -41,8 +41,30 @@ func TestPasswordChangeHTTPExplainsRejectedField(t *testing.T) {
 			expectIdentityError(t, call(s, "POST", "/api/v1/auth/change-password", string(body), token), 400, tc.field, tc.reason)
 		})
 	}
+}
+
+func TestPasswordResetHTTPAcceptsCurrentPassword(t *testing.T) {
 	s, _, token := testServer(t)
-	expectIdentityError(t, call(s, "POST", "/api/v1/accounts/admin/reset-password", `{"password":"admin-test-password"}`, token), 400, "newPassword", "reused")
+	ctx := t.Context()
+	if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: "reader"}, "reader-test-password"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.Store.GetAccount(ctx, "reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "POST", "/api/v1/accounts/reader/reset-password", `{"password":"reader-test-password"}`, token)
+	if w.Code != 204 || w.Body.Len() != 0 {
+		t.Fatalf("reset returned %d: %s", w.Code, w.Body.String())
+	}
+	after, err := s.Store.GetAccount(ctx, "reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.MustChangePassword || !after.PasswordChangedAt.After(before.PasswordChangedAt) ||
+		!after.UpdatedAt.Equal(after.PasswordChangedAt) || after.PasswordHash == before.PasswordHash {
+		t.Fatalf("reset did not rotate password state: %+v", after)
+	}
 }
 
 func TestAccountHTTPValidationAndUpdatedAt(t *testing.T) {

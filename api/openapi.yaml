@@ -5005,7 +5005,7 @@ components:
       writeOnly: true
       minLength: 12
       maxLength: 1024
-      description: At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+      description: At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
     APITokenName:
       type: string
       minLength: 1

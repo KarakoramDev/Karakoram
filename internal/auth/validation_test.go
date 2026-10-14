@@ -44,7 +44,6 @@ func TestPasswordChangesRejectReuseAndPreserveMandatoryChange(t *testing.T) {
 				t.Fatalf("rejection changed mandatory flag: %v %v", stored, err)
 			}
 		}
-		requireField(t, s.ResetPassword(ctx, "admin", password), "newPassword", domain.ReasonReused)
 	}
 	if err := s.ChangePassword(ctx, "admin", password, "a-different-password"); err != nil {
 		t.Fatal(err)
@@ -52,6 +51,41 @@ func TestPasswordChangesRejectReuseAndPreserveMandatoryChange(t *testing.T) {
 	a, _ := s.GetAccount(ctx, "admin")
 	if a.MustChangePassword {
 		t.Fatal("successful change did not clear flag")
+	}
+}
+
+func TestPasswordResetAcceptsCurrentPasswordAndInvalidatesAuthority(t *testing.T) {
+	s := setup(t)
+	ctx := t.Context()
+	before, err := s.o.Store.GetAccount(ctx, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookies, _ := login(t, s)
+	secret, _, err := s.CreateToken(ctx, "admin", "before-reset", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	later := before.PasswordChangedAt.Add(time.Hour)
+	s.now = func() time.Time { return later }
+	if err := s.ResetPassword(ctx, "admin", password); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.o.Store.GetAccount(ctx, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.MustChangePassword || !after.PasswordChangedAt.Equal(later) || !after.UpdatedAt.Equal(later) ||
+		after.PasswordHash == before.PasswordHash || !VerifyPassword(after.PasswordHash, password) {
+		t.Fatalf("reset did not rotate password state: %+v", after)
+	}
+	if _, err := s.Authenticate(request("GET", cookies, "")); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("old session remains valid: %v", err)
+	}
+	r := request("GET", nil, "")
+	r.Header.Set("Authorization", "Bearer "+secret)
+	if _, err := s.Authenticate(r); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("old API token remains valid: %v", err)
 	}
 }
 
