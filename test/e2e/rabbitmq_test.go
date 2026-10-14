@@ -322,7 +322,10 @@ func (s *suite) exerciseRabbitAccess(name string) {
 	if !reflect.DeepEqual(p, permission) {
 		s.t.Fatal("created permission mismatch")
 	}
-	permission.Configure, permission.Read, permission.Write = "^e2e.*", "^e2e.*", "^e2e.*"
+	permission.Configure, permission.Read = "^e2e.*", "^e2e.*"
+	// RabbitMQ authorizes publishing to the unnamed default exchange as
+	// amq.default, independently of the queue's configure/read permissions.
+	permission.Write = `^(e2e.*|amq\.default)$`
 	s.expect(nil)(s.client.ReplaceRabbitMQPermission(s.ctx, name, vhost, user, nil, permission))
 	s.expect(&p)(s.client.GetRabbitMQPermission(s.ctx, name, vhost, user, nil))
 	if !reflect.DeepEqual(p, permission) {

@@ -118,7 +118,7 @@ These are coverage descriptions and checks to run, not a claim that the current 
 
 ### Automated coverage
 
-- `internal/engine/rabbitmq/...`: catalog/topology/resource/options validation; bootstrap/join and monotonic membership; rolling quorum/drain/stop ordering, configuration acknowledgement and certificate staging; scale-down and stream migration; ownership, platform backoff/CPU cooldown, cleanup and retained volumes; Management API access/TLS/failover; definitions gzip/S3 checkpoints, recorded locations, restore filtering and cross-namespace clones.
+- `internal/engine/rabbitmq/...`: catalog/topology/resource/options validation; bootstrap/join and monotonic membership; rolling quorum/drain/stop ordering, configuration acknowledgement and certificate staging; scale-down and stream migration; ownership, platform backoff/CPU cooldown, cleanup and retained volumes; Management API access/TLS/failover, including overview responses containing nested queue-rate details after publishing messages; definitions gzip/S3 checkpoints, recorded locations, restore filtering and cross-namespace clones.
 - `internal/agent/rabbitmq`: rendering for all TLS modes, restart fingerprints, held readiness, authenticated bounded routes, stdin passwords, CLI error/timeout/output bounds and captured Prometheus translation.
 - `internal/server` and `internal/cli`: RabbitMQ access handlers/commands, namespace/RBAC mapping, identity checks, generated-password handling and unsupported-provider responses.
 - `ui/src/engines/rabbitmq`: wizard/spec validation and engine-registry/helper tests. Run the project's UI test/static-check commands; no browser assertions are implied.

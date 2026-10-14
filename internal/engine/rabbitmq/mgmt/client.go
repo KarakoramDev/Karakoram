@@ -128,7 +128,6 @@ type Overview struct {
 	RabbitMQVersion string           `json:"rabbitmq_version"`
 	ClusterName     string           `json:"cluster_name"`
 	ObjectTotals    map[string]int64 `json:"object_totals"`
-	QueueTotals     map[string]int64 `json:"queue_totals"`
 }
 type Node struct {
 	Name          string   `json:"name"`

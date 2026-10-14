@@ -182,6 +182,27 @@ func TestInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestOverviewWithQueueRateDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/overview" {
+			t.Errorf("unexpected Management API path %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"rabbitmq_version":"4.3.6","cluster_name":"rabbit@broker","object_totals":{"queues":1},"queue_totals":{"messages":1,"messages_ready":1,"messages_unacknowledged":0,"messages_details":{"rate":0.0},"messages_ready_details":{"rate":0.0},"messages_unacknowledged_details":{"rate":0.0}}}`)
+	}))
+	defer srv.Close()
+	c, err := New(srv.URL, "admin", "secret", srv.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	overview, err := c.Overview(t.Context())
+	if err != nil {
+		t.Fatalf("queue rate details must not break Management API health checks: %v", err)
+	}
+	if overview.RabbitMQVersion != "4.3.6" || overview.ClusterName != "rabbit@broker" || overview.ObjectTotals["queues"] != 1 {
+		t.Fatalf("unexpected overview: %+v", overview)
+	}
+}
+
 func TestQueuePlacementMetadata(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/queues" {
