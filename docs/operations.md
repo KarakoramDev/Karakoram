@@ -172,6 +172,8 @@ direct sweep of each cleaned incarnation directory to remove PBM initialization
 markers and any other remaining objects. This sweep is checkpointed per storage
 and retries before credentials are removed. An unreachable agent alone never
 authorizes direct storage deletion: PBM could still be writing data.
+Resuming retained volumes reapplies PBM configuration so a deleted initialization
+marker is recreated even when the desired backup settings are unchanged.
 
 For a suspended cluster, or another cluster whose database runtimes are all
 absent, the control plane deletes objects directly from S3 under the exact

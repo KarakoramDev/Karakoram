@@ -243,6 +243,7 @@ func TestResumeClearsNamespaceFinalizationCheckpoint(t *testing.T) {
 	suspendForBackupCleanup(t, p, rc)
 	s := retryState(t, rc)
 	s.FinalizedStorages = []string{"archive"}
+	s.CleanedStorages = []string{"archive"}
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
@@ -251,5 +252,106 @@ func TestResumeClearsNamespaceFinalizationCheckpoint(t *testing.T) {
 	}
 	if len(retryState(t, rc).FinalizedStorages) != 0 || strings.Contains(string(rc.Cluster.Internal), "finalizedStorages") {
 		t.Fatal("resume retained a namespace checkpoint that PBM can invalidate")
+	}
+	if len(retryState(t, rc).CleanedStorages) != 0 || strings.Contains(string(rc.Cluster.Internal), "cleanedStorages") {
+		t.Fatal("resume retained a completed storage cleanup checkpoint")
+	}
+}
+
+func TestResumeReappliesPBMConfigAfterDeletingBackupNamespace(t *testing.T) {
+	p, rc, _, _ := backupCleanupSetup(t)
+	rc.Cluster.Spec.Backup.Storage = "archive"
+	var mu sync.Mutex
+	configCalls := 0
+	marker := false
+	rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		encoder := json.NewEncoder(w)
+		if r.URL.Path == "/v1/status" {
+			_ = encoder.Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}, "pbm-agent": {State: "running"}}})
+			return
+		}
+		if r.URL.Path != "/v1/pbm" {
+			http.NotFound(w, r)
+			return
+		}
+		var request agentapi.PBMRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		output := json.RawMessage(`{}`)
+		switch request.Command {
+		case "config":
+			if len(request.Config) > 0 {
+				configCalls++
+				marker = true
+			}
+		case "status":
+			output = json.RawMessage(`{"running":{}}`)
+		case "list":
+			output = json.RawMessage(`{"snapshots":[],"pitr":{"ranges":[]}}`)
+		}
+		_ = encoder.Encode(agentapi.PBMResponse{Output: output})
+	})
+	s := retryState(t, rc)
+	env, err := p.pbmEnv(t.Context(), rc, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied, err := ensurePBM(t.Context(), env, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.PBMHash = applied
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error {
+		mu.Lock()
+		marker = false
+		mu.Unlock()
+		return nil
+	}
+	suspended := false
+	for range 40 {
+		done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepVolumes: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done {
+			suspended = true
+			break
+		}
+	}
+	if !suspended || !retryState(t, rc).Suspended {
+		t.Fatal("backup-deleting suspension did not finish")
+	}
+	mu.Lock()
+	if marker {
+		t.Error("suspension retained PBM's initialization marker")
+	}
+	before := configCalls
+	mu.Unlock()
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	resumed := retryState(t, rc)
+	env, err = p.pbmEnv(t.Context(), rc, resumed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the ordinary resumed-member configuration boundary with the
+	// persisted hash, not an independently reset hash supplied by the test.
+	hash, err := ensurePBM(t.Context(), env, resumed.PBMHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if hash != applied || configCalls != before+1 || !marker {
+		t.Fatal("resume skipped reinitializing an unchanged PBM configuration", configCalls, before, marker)
 	}
 }

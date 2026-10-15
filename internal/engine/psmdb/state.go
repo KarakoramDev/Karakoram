@@ -168,7 +168,7 @@ func save(c *domain.Cluster, s *internalState) error {
 	for k, v := range owned {
 		raw[k] = v
 	}
-	for _, k := range []string{"pending", "retry", "platformRetries", "targetTLS", "finalizedStorages"} {
+	for _, k := range []string{"pending", "retry", "platformRetries", "targetTLS", "cleanedStorages", "finalizedStorages"} {
 		if _, ok := owned[k]; !ok {
 			delete(raw, k)
 		}
