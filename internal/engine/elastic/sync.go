@@ -422,6 +422,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	}
 	for _, m := range s.esNodes() {
 		if m.Removing {
+			if cancelled, e := p.cancelRemoval(ctx, rc, s, m); cancelled || e != nil {
+				return result, e
+			}
 			return result, p.removeStep(ctx, rc, s, m)
 		}
 		switch m.Stage {

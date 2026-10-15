@@ -128,7 +128,7 @@ export function elasticMemberSummary(components: { engine: { replicas: number };
 export function elasticHealthNotices(conditions: { type: string; status: string; reason?: string; message?: string }[]) {
   return conditions.flatMap((condition) => {
     if (condition.type === 'ShardDrainBlocked' && condition.status === 'True') {
-      return [{ title: 'Shard drain blocked', message: condition.message || 'Add data-node capacity or lower index replicas to an intentional redundancy policy. Never force removal.' }];
+      return [{ title: 'Shard drain blocked', message: condition.message || 'Restore or raise the desired data-node count to cancel an unfinished drain, then raise it further for capacity; or lower index replicas to an intentional redundancy policy. Restore unavailable primaries. Never force removal.' }];
     }
     if (condition.type === 'ClusterHealth' && ['yellow', 'red'].includes(condition.reason ?? '')) {
       return [{ title: `Elasticsearch health: ${condition.reason}`, message: condition.message || (condition.reason === 'yellow' ? 'Primary shards are allocated, but replica shards are unassigned and data redundancy is reduced.' : 'Primary shards are unavailable; some data cannot be served.') }];

@@ -176,4 +176,6 @@ test('Elasticsearch drain and yellow-health notices are visible independently of
   assert.deepEqual(notices[0], { title: 'Shard drain blocked', message });
   assert.match(notices[1]!.message, /Primary shards are allocated.*replica shards are unassigned.*redundancy is reduced/);
   assert.deepEqual(elasticHealthNotices([{ type: 'ShardDrainBlocked', status: 'False', message }]), []);
+  const fallback = elasticHealthNotices([{ type: 'ShardDrainBlocked', status: 'True' }])[0]!;
+  assert.match(fallback.message, /Restore or raise the desired data-node count to cancel an unfinished drain/);
 });

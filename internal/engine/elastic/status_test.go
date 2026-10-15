@@ -42,7 +42,7 @@ func TestBlockedScaleDownRetainsElectedMasterAndWarnsOnce(t *testing.T) {
 	if master.State != "draining" || master.Health || f.services[master.Name] == nil {
 		t.Fatalf("draining elected master reported healthy or removed: %+v", master)
 	}
-	for _, text := range []string{es.master, "insufficient data nodes", "index replicas", "Add data-node capacity", "Never force removal"} {
+	for _, text := range []string{es.master, "insufficient data nodes", "index replicas", "Restore or raise the desired data-node count", "Never force removal"} {
 		if !strings.Contains(status.Message, text) {
 			t.Fatalf("missing actionable drain message %q: %s", text, status.Message)
 		}

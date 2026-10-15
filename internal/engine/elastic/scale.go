@@ -84,8 +84,56 @@ func (p *Provider) scale(ctx context.Context, rc *engine.Context, s *state) (boo
 	return false, nil
 }
 
+// cancelRemoval restores a scale-down member while it can still serve shards.
+// Replacement removals and nodes already voting-excluded must finish retirement.
+func (p *Provider) cancelRemoval(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
+	if m.Stage != stageJoined && m.Stage != stageDeployed && m.Stage != stageDraining {
+		return false, nil
+	}
+	desired := rc.Cluster.Spec.Components.Engine.Replicas
+	if m.Kind == kindMaster {
+		desired = rc.Cluster.Spec.Components.Extra[kindMaster].Replicas
+	}
+	if desired < len(s.members(m.Kind)) {
+		return false, nil
+	}
+	for _, other := range s.esNodes() {
+		if other.Replaces == m.Name {
+			return false, nil
+		}
+	}
+	if m.AllocationExcluded {
+		c, err := p.es(ctx, rc, s)
+		if err != nil {
+			return true, err
+		}
+		defer c.Close()
+		names, err := c.AllocationExcludeNames(ctx)
+		if err != nil {
+			return true, err
+		}
+		names = slices.DeleteFunc(names, func(name string) bool { return name == m.Name })
+		if err = c.SetAllocationExcludeNames(ctx, names); err != nil {
+			return true, err
+		}
+	}
+	if rc.Events != nil {
+		message := fmt.Sprintf("Removal of %s cancelled because the desired node count includes it again; shard allocation is restored", m.Name)
+		if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Normal", Reason: "ShardDrainCancelled", Message: message, CreatedAt: now(rc)}); err != nil {
+			return true, err
+		}
+	}
+	m.Removing, m.AllocationExcluded = false, false
+	if m.Stage == stageDraining {
+		m.Stage = stageJoined
+	}
+	s.DrainBlocked = ""
+	s.Phase = "scaling"
+	return true, nil
+}
+
 func blockDrain(ctx context.Context, rc *engine.Context, s *state, m *member, reason string) error {
-	message := fmt.Sprintf("Shard drain blocked for %s: %s. Add data-node capacity or lower index replicas to an intentional redundancy policy; restore unavailable primaries before retrying. Never force removal.", m.Name, reason)
+	message := fmt.Sprintf("Shard drain blocked for %s: %s. Restore or raise the desired data-node count to cancel an unfinished drain, then raise it further if more capacity is needed; or lower index replicas to an intentional redundancy policy. Restore unavailable primaries before retrying. Never force removal.", m.Name, reason)
 	if s.DrainBlocked == message {
 		return nil
 	}

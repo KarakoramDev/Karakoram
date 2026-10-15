@@ -13,6 +13,65 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
 
+func TestScaleUpCancelsUnfinishedDrain(t *testing.T) {
+	for _, stage := range []string{stageJoined, stageDraining} {
+		t.Run(stage, func(t *testing.T) {
+			p, rc, f, es := coreSetup(t, 3)
+			s := coreConverge(t, p, rc, f)
+			m := s.find("demon2")
+			m.Removing, m.Stage = true, stage
+			if stage == stageDraining {
+				m.AllocationExcluded = true
+				es.persistent["cluster.routing.allocation.exclude._name"] = "operator,demon2"
+			}
+			if err := blockDrain(t.Context(), rc, s, m, "insufficient data nodes for index replicas"); err != nil {
+				t.Fatal(err)
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			events := rc.Events.(*coreEvents)
+			events.events = nil
+			// Restoring the original count must reach cancellation before removeStep.
+			rc.Cluster.Spec.Components.Engine.Replicas = 3
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = load(rc.Cluster)
+			m = s.find("demon2")
+			if m.Removing || m.AllocationExcluded || m.Stage != stageJoined || s.DrainBlocked != "" || f.services[m.Name] == nil {
+				t.Fatal("unfinished drain was not cancelled", m, s.DrainBlocked)
+			}
+			if stage == stageDraining && es.persistent["cluster.routing.allocation.exclude._name"] != "operator" {
+				t.Fatal("cancellation did not preserve operator exclusions", es.persistent)
+			}
+			if len(events.events) != 1 || events.events[0].Type != "Normal" || events.events[0].Reason != "ShardDrainCancelled" {
+				t.Fatal("cancellation event missing", events.events)
+			}
+			rc.Cluster.Spec.Components.Engine.Replicas = 4
+			s = coreConverge(t, p, rc, f)
+			if len(s.members(kindNode)) != 4 || s.find("demon3") == nil || s.find("demon2").Removing {
+				t.Fatal("additional capacity did not converge", s.Members)
+			}
+		})
+	}
+}
+
+func TestScaleUpDoesNotCancelCompletedDrainOrReplacement(t *testing.T) {
+	p, rc, f, _ := coreSetup(t, 3)
+	s := coreConverge(t, p, rc, f)
+	m := s.find("demon2")
+	m.Removing, m.Stage = true, stageExcluded
+	if cancelled, err := p.cancelRemoval(t.Context(), rc, s, m); cancelled || err != nil {
+		t.Fatal("completed drain was cancelled", cancelled, err)
+	}
+	m.Stage = stageDraining
+	s.find("demon1").Replaces = m.Name
+	if cancelled, err := p.cancelRemoval(t.Context(), rc, s, m); cancelled || err != nil {
+		t.Fatal("replacement removal was cancelled", cancelled, err)
+	}
+}
+
 func TestRollingRequiresCommittedVotingQuorum(t *testing.T) {
 	p, rc, f, es := coreSetup(t, 3)
 	s := coreConverge(t, p, rc, f)
