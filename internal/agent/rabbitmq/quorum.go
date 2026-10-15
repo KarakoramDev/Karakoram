@@ -26,7 +26,7 @@ func parseQuorumCritical(data []byte, commandErr error) (rmqspec.QuorumCriticalR
 		} `json:"queues"`
 	}
 	if json.Unmarshal(data, &native) != nil {
-		return out, errors.New("invalid quorum-critical response")
+		return out, errors.Join(errors.New("quorum-critical check could not run: invalid response"), commandErr)
 	}
 	if native.Result == "ok" && commandErr == nil && len(native.Queues) == 0 {
 		return out, nil

@@ -287,6 +287,8 @@ Blocker identities are validated before storage; the cluster retains at most fif
 blocker details while messages preserve the full remaining count.
 Stream or metadata-component blockers require their own majority recovery, not
 quorum queue additions.
+If the native quorum check cannot run, the error reports that failure and its
+command exit status rather than inventing queue blockers or exposing CLI output.
 
 Open **cluster detail → Queue recovery** from the blocked-queue callout. It shows
 targeted, copyable Management API commands with the actual broker, vhost, queue and
