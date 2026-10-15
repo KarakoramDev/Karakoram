@@ -18,3 +18,21 @@ const FAILURE_LABELS: Record<FailureReason, string> = {
 export function storageFailureLabel(reason: Schemas['StorageVerification']['failureReason']): string | undefined {
   return reason ? FAILURE_LABELS[reason] : undefined;
 }
+
+// Replace, rather than merge, so an omitted verification clears a previous check
+// even when a credential-only edit leaves every public connection field unchanged.
+export function replaceStorageInList(current: Schemas['BackupStorageList'] | undefined, saved: Schemas['BackupStorage']): Schemas['BackupStorageList'] | undefined {
+  if (!current) return current;
+  return {
+    ...current,
+    items: current.items.map((storage) => (storage.namespace || 'default') === (saved.namespace || 'default') && storage.name === saved.name ? saved : storage),
+  };
+}
+
+export async function finishStorageVerification(refresh: () => Promise<unknown>, finish: () => void): Promise<void> {
+  try {
+    await refresh();
+  } finally {
+    finish();
+  }
+}

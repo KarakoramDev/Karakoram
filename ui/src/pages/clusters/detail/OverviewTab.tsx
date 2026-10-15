@@ -7,22 +7,12 @@ import { useQuery } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { Button } from '@/components/ui/Button';
-import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Meter, Time, formatBytes, formatDuration, type Tone } from '@/components/ui/Primitives';
+import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Meter, Time, formatBytes, formatDuration } from '@/components/ui/Primitives';
 import { useClusterContext } from './ClusterDetail';
-import { resourcesSummary } from '../cluster-utils';
+import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from '../cluster-utils';
+import { memberHealthCounts } from '../member-status';
 import { certificateDownload, colocatedGroups, credentialDatabaseLabel, generationState, knownHost, psmdbConnect } from './detail-state';
 
-type Member = Schemas['Member'];
-
-const ROLE_TONE: Record<Member['role'], Tone> = {
-  primary: 'accent',
-  secondary: 'neutral',
-  arbiter: 'neutral',
-  'config-primary': 'accent',
-  'config-secondary': 'neutral',
-  router: 'info',
-  unknown: 'warn',
-};
 
 export function OverviewTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -44,6 +34,8 @@ export function OverviewTab() {
   });
 
   const list = members.data?.items ?? cluster.status.members;
+  const roles = useMemberRoles(list, base);
+  const health = memberHealthCounts(list);
   const spec = cluster.spec;
   const conn = cluster.status.connection;
   const pl = placement.data ?? cluster.status.placement;
@@ -59,12 +51,13 @@ export function OverviewTab() {
           <div className="stat">
             <span className="stat-label">{suspended ? 'Historical members (runtime suspended)' : 'Members healthy'}</span>
             <span className="stat-value">
-              {suspended ? '—' : list.filter((m) => m.health).length}
+              {suspended ? '—' : health.healthy}
               <span className="faint" style={{ fontSize: 'var(--fs-md)' }}>
                 {' '}
-                / {list.length}
+                / {suspended ? list.length : health.total}
               </span>
             </span>
+            {!suspended && health.leaving > 0 ? <span className="stat-sub"><Badge tone="progress">{health.leaving} Leaving</Badge></span> : null}
           </div>
         </Card>
         <Card flush>
@@ -150,14 +143,12 @@ export function OverviewTab() {
                     <td className="mono">{m.set}</td>
                     <td>
                       <span className="row" style={{ gap: 6 }}>
-                        <Badge tone={ROLE_TONE[m.role]} plain>
-                          {m.role}
-                        </Badge>
-                        {m.state && m.state.toLowerCase() !== m.role.replace('config-', '') ? <span className="xs faint">{m.state}</span> : null}
+                        <MemberRole member={m} roles={roles} />
+                        {m.state && m.state !== 'LEAVING' && m.state.toLowerCase() !== m.role.replace('config-', '') ? <span className="xs faint">{m.state}</span> : null}
                       </span>
                     </td>
                     <td>
-                      <Badge tone={suspended ? 'neutral' : m.health ? 'ok' : 'danger'}>{suspended ? 'historical' : m.health ? 'healthy' : 'unhealthy'}</Badge>
+                      <MemberHealthBadge member={m} suspended={suspended} />
                     </td>
                     <td className="num small">{m.lagSeconds === undefined ? '—' : formatDuration(m.lagSeconds)}</td>
                     <td className="mono small">{m.version ?? '—'}</td>

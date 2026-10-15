@@ -20,6 +20,9 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 	if recorded != "" && service.ID == recorded {
 		return nil
 	}
+	if volume && recorded != "" {
+		return fmt.Errorf("%w: service %s no longer matches its recorded volume identity", engine.ErrConflict, service.Hostname)
+	}
 	if volume {
 		retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 		if err != nil {
@@ -35,24 +38,25 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 	if err != nil {
 		return err
 	}
-	ownership := service.Ownership
-	if tok != nil && tok.Token != "" && ownership["KARAKORAM_CLUSTER"] == rc.Cluster.Name && ownership["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(ownership["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1 {
-		return nil
-	}
-	if volume && recorded == "" && m.Stage != "planned" {
-		// Releases before recorded IDs marked the deployed runtime, but not its
-		// volume. Its authenticated environment identifies the persisted mount.
-		// A hostname or lifecycle stage alone is never ownership evidence.
-		runtime, err := rc.Backend.GetService(ctx, m.Name)
-		if err != nil {
-			return err
+	if tok != nil && tok.Token != "" {
+		owned := func(s *infra.Service) bool {
+			o := s.Ownership
+			return o["KARAKORAM_CLUSTER"] == rc.Cluster.Name && o["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(o["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1
 		}
-		if runtime != nil && runtime.Ownership["KARAKORAM_DATA_DIR"] == "/mnt/"+service.Hostname {
-			if err := verifyServiceOwnership(ctx, rc, m, runtime, false); err != nil {
+		if owned(service) {
+			return nil
+		}
+		if volume {
+			runtime, err := rc.Backend.GetService(ctx, m.Name)
+			if err != nil {
 				return err
 			}
-			m.ServiceID = runtime.ID
-			return nil
+			// A partial import may leave Local Storage without environment.
+			// Only a token-verified runtime's exact mount proves ownership;
+			// a recorded runtime ID alone cannot authorize a new volume.
+			if runtime != nil && owned(runtime) && runtime.Ownership["KARAKORAM_DATA_DIR"] == "/mnt/"+service.Hostname {
+				return nil
+			}
 		}
 	}
 	return fmt.Errorf("%w: service %s has no verified cluster ownership", engine.ErrConflict, service.Hostname)

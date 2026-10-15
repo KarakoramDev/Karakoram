@@ -3,7 +3,7 @@
 
 import { useId, useMemo } from 'react';
 import { formatNum } from './Primitives';
-import { chartTicks } from './presentation';
+import { chartTicks, chartTimeTicks } from './presentation';
 
 export interface Series {
   name: string;
@@ -21,6 +21,8 @@ export interface LineChartProps {
   yMax?: number;
   formatValue?: (v: number) => string;
   categories?: Record<number, string>;
+  /** Requested query window; sparse samples must not collapse the time axis. */
+  timeRange?: readonly [number, number];
 }
 
 /**
@@ -28,7 +30,7 @@ export interface LineChartProps {
  * gridlines with labels and time ticks. Accessible description lists the last
  * value per series.
  */
-export function LineChart({ series, title, unit, height = 160, yMax, categories, formatValue = formatNum }: LineChartProps) {
+export function LineChart({ series, title, unit, height = 160, yMax, categories, timeRange, formatValue = formatNum }: LineChartProps) {
   const id = useId();
   const width = 640;
   const pad = { l: categories ? 100 : 62, r: 10, t: 8, b: 20 };
@@ -46,15 +48,17 @@ export function LineChart({ series, title, unit, height = 160, yMax, categories,
       if (x > xMax) xMax = x;
       if (y > vMax) vMax = y;
     }
+    if (timeRange) [xMin, xMax] = timeRange;
+    const timeTicks = chartTimeTicks(xMin, xMax);
     if (xMax === xMin) xMax = xMin + 1;
     const top = yMax ?? (categories ? Math.max(...Object.keys(categories).map(Number)) : niceCeil(vMax));
     const sx = (x: number) => pad.l + ((x - xMin) / (xMax - xMin)) * iw;
     const sy = (y: number) => pad.t + ih - (top <= 0 ? 0 : (Math.min(y, top) / top) * ih);
     const paths = series.map((s) => s.points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' '));
     const ticks = chartTicks(top, formatValue, categories).map((v) => ({ y: sy(v), v }));
-    const xt = [0, 0.5, 1].map((f) => ({ x: pad.l + f * iw, t: xMin + f * (xMax - xMin) }));
+    const xt = timeTicks.map((tick) => ({ x: sx(tick.time), label: tick.label }));
     return { paths, ticks, xt, top };
-  }, [series, yMax, categories, formatValue, ih, iw, pad.l, pad.t]);
+  }, [series, yMax, categories, timeRange, formatValue, ih, iw, pad.l, pad.t]);
 
   const describe = series
     .map((s) => {
@@ -85,8 +89,8 @@ export function LineChart({ series, title, unit, height = 160, yMax, categories,
               </g>
             ))}
             {model.xt.map((t, i) => (
-              <text key={i} x={t.x} y={height - 5} fontSize="10" textAnchor={i === 0 ? 'start' : i === 2 ? 'end' : 'middle'} fill="var(--text-3)">
-                {new Date(t.t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+              <text key={i} x={t.x} y={height - 5} fontSize="10" textAnchor={i === 0 ? 'start' : i === model.xt.length - 1 ? 'end' : 'middle'} fill="var(--text-3)">
+                {t.label}
               </text>
             ))}
             {model.paths.map((d, i) => (

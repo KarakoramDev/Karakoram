@@ -6,11 +6,11 @@ package backupstorage
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/minio/minio-go/v7"
 )
 
 // SnapshotKeys resolves the immutable PBM snapshot namespace. Never derive it
@@ -38,32 +38,27 @@ func SnapshotKeys(s domain.BackupStorage, b domain.Backup) (directory, metadata 
 // the control-plane record until this call succeeds so interruptions are retryable.
 // PITR slices, other snapshots, and PBM namespace markers are not touched.
 func DeleteSnapshot(ctx context.Context, s domain.BackupStorage, b domain.Backup) error {
+	return deleteSnapshot(ctx, s, b, nil)
+}
+
+func deleteSnapshot(ctx context.Context, s domain.BackupStorage, b domain.Backup, transport http.RoundTripper) error {
 	directory, metadata, err := SnapshotKeys(s, b)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	client, closeClient, err := newClient(s, s.Credentials, nil)
+	client, closeClient, err := newClient(s, s.Credentials, transport)
 	if err != nil {
 		return err
 	}
 	defer closeClient()
-	for object := range client.ListObjects(ctx, s.Bucket, minio.ListObjectsOptions{Prefix: directory, Recursive: true}) {
-		if object.Err != nil {
-			return probeError("list snapshot", object.Err)
-		}
-		if !strings.HasPrefix(object.Key, directory) {
-			return errors.New("S3 returned an object outside the snapshot namespace")
-		}
-		if err := client.RemoveObject(ctx, s.Bucket, object.Key, minio.RemoveObjectOptions{}); err != nil {
-			return probeError("delete snapshot object", err)
-		}
+	if _, err := deleteStoredObjects(ctx, client, s.Bucket, directory, false); err != nil {
+		return probeError("delete snapshot objects", err)
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := client.RemoveObject(ctx, s.Bucket, metadata, minio.RemoveObjectOptions{}); err != nil {
+	// Remove all metadata versions only after every data version is gone.
+	// Exact matching leaves similarly named sibling metadata untouched.
+	if _, err := deleteStoredObjects(ctx, client, s.Bucket, metadata, true); err != nil {
 		return probeError("delete snapshot metadata", err)
 	}
 	return nil

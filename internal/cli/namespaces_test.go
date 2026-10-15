@@ -83,7 +83,7 @@ func TestNamespaceTokenInput(t *testing.T) {
 	}{
 		{"create-file", path, "", []string{"namespaces", "create", "--name", "dev", "--project-id", "proj-test", "--description", "Development"}},
 		{"create-stdin", "-", secret + "\n", []string{"namespaces", "create", "--name", "dev", "--project-id", "proj-test"}},
-		{"rotate-stdin", "-", secret + "\n", []string{"namespaces", "rotate-token", "dev"}},
+		{"rotate-stdin", "-", secret + "\n", []string{"namespaces", "rotate-token", "dev", "--yes"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +168,7 @@ func TestInPlaceRestoreSourceNamespace(t *testing.T) {
 		fmt.Fprint(w, `{}`)
 	}))
 	defer server.Close()
-	if _, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "-n", "dev", "restores", "create", "copy", "--backup", "snapshot", "--source-cluster", "orders", "--source-namespace", "prod"); err != nil {
+	if _, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "-n", "dev", "restores", "create", "copy", "--yes", "--backup", "snapshot", "--source-cluster", "orders", "--source-namespace", "prod"); err != nil {
 		t.Fatal(err)
 	}
 }

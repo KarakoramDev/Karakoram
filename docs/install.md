@@ -22,7 +22,8 @@ the Karakoram installation.
 - For a local checkout: [zcli](https://docs.zerops.io/references/cli), already logged
   in with deployment access, and a complete checkout including `ui/package-lock.json`.
   Go and Node are installed by the remote build; local compilation is not required.
-- Free service names `karakoram` and `karakoramdata` in the target project.
+- Free service names `karakoram` and `karakoramdata` in the target project, or
+  [choose different names](#use-different-service-names) before importing.
 
 The installer creates one Ubuntu 24.04 runtime (one container, 0.5–1 GB RAM,
 shared CPU) and a 5 GB Local Storage volume. `zerops.yaml` builds the UI using
@@ -174,6 +175,38 @@ The local template intentionally has neither `buildFromGit` nor an inline
 pipeline. Zerops imports the runtime in `READY_TO_DEPLOY` state; the push uploads
 this checkout and performs the build. This avoids the known failure caused by
 importing an inline pipeline before its executable has arrived.
+
+### Use different service names
+
+If either default name is already taken, use the manual local-checkout procedure
+above with private copies of `deploy/zerops/import-local.yaml` and `zerops.yaml`.
+For example, choose runtime `dbcontrol` and Local Storage `dbcontroldata`:
+
+1. In the import copy, change both service `hostname:` values from `karakoram`
+   and `karakoramdata` to the chosen runtime and storage names. Import this copy
+   instead of the checked-in template, then set the runtime's
+   `KARAKORAM_ZEROPS_TOKEN` in the dashboard as above.
+2. In the pipeline copy, change `zerops[].setup` to `dbcontrol`,
+   `run.volume.hostname` to `dbcontroldata`, and `run.envVariables.KARAKORAM_DATA_DIR`
+   to `/mnt/dbcontroldata`. The volume hostname and data-directory mount path
+   must agree. Add the build provenance values to this copy too.
+3. Update any explicit hostname references in your customized configuration,
+   including `KARAKORAM_ADVERTISE_URL` if set, to the new runtime hostname.
+   By default the internal URL uses the injected runtime hostname and
+   `KARAKORAM_PUBLIC_URL` uses its injected `zeropsSubdomain`; neither needs
+   a hard-coded replacement. Keep the executable/start command `./karakoram server`.
+4. Push to the new runtime using its matching setup name and pipeline file,
+   then enable that runtime's subdomain:
+
+   ```sh
+   zcli service push dbcontrol -P "$PROJECT_ID" --setup dbcontrol \
+     --zerops-yaml-path /private/path/zerops.yaml --no-git --disable-logs
+   zcli service enable-subdomain dbcontrol -P "$PROJECT_ID"
+   ```
+
+Use the resulting runtime origin for browser/CLI access and any configured
+external URL references. Do not use the one-command helper for renamed services:
+it uses the default runtime and setup names.
 
 ### One-command helper
 

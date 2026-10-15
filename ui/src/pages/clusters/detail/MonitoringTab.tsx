@@ -59,6 +59,7 @@ export function MonitoringTab() {
     for (const s of metrics.data?.series ?? []) if (!known.includes(s.name)) names.add(s.name);
     return Array.from(names);
   }, [metrics.data, known]);
+  const timeRange = useMemo(() => metrics.data ? [Date.parse(metrics.data.start), Date.parse(metrics.data.end)] as const : undefined, [metrics.data]);
 
   if (!can('read', 'monitoring')) return <Callout tone="info">You do not have permission to read monitoring data for this cluster.</Callout>;
 
@@ -98,7 +99,7 @@ export function MonitoringTab() {
           <div className="grid-2">
             {PANELS.map((p) => (
               <Card key={p.title}>
-                <LineChart title={p.title} unit={p.unit} yMax={p.yMax} series={toSeries(metrics.data.series, p.names, p.names.length > 1)} formatValue={p.format ?? formatNum} />
+                <LineChart title={p.title} unit={p.unit} yMax={p.yMax} timeRange={timeRange} series={toSeries(metrics.data.series, p.names, p.names.length > 1)} formatValue={p.format ?? formatNum} />
               </Card>
             ))}
             {extra.map((n) => {
@@ -106,7 +107,7 @@ export function MonitoringTab() {
               const categories = metricCategories(n);
               return (
                 <Card key={n}>
-                  <LineChart title={n} unit={categories ? 'state code' : unit} categories={categories} series={toSeries(metrics.data.series, [n], false)} formatValue={unit === 'bytes' ? (v) => formatBytes(v) : formatNum} />
+                  <LineChart title={n} unit={categories ? 'state code' : unit} categories={categories} timeRange={timeRange} series={toSeries(metrics.data.series, [n], false)} formatValue={unit === 'bytes' ? (v) => formatBytes(v) : formatNum} />
                 </Card>
               );
             })}

@@ -6,9 +6,12 @@ package psmdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
+	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
@@ -69,16 +72,22 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			}
 		}
 	}
-	// Capture verified legacy identities while runtimes still exist; deletion
-	// must not destroy the ownership evidence needed for their attached volumes.
+	// Capture verified identities while runtimes still exist; return newly
+	// adopted IDs for persistence before destroying their mount evidence.
+	ownershipChanged := false
 	for _, m := range s.Members {
+		serviceID, volumeID := m.ServiceID, m.VolumeID
 		if e = verifyMemberServices(ctx, rc, m); e != nil {
 			return false, e
 		}
+		ownershipChanged = ownershipChanged || m.ServiceID != serviceID || m.VolumeID != volumeID
 	}
 	// Deletion supersedes provisioning retries, but retains deletion backoff.
 	if s.Retry != nil && s.Retry.Action != "cleanup-runtime" && s.Retry.Action != "cleanup-volume" {
 		s.resetPlatformRetry(s.Retry)
+	}
+	if ownershipChanged {
+		return false, nil
 	}
 	for _, m := range s.Members {
 		oldKey := m.Name + "/delete-volume"
@@ -124,6 +133,15 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		if e != nil {
 			return false, e
 		}
+		// Explicitly retained snapshots belong to their original incarnation,
+		// not to a replacement cluster that happens to reuse its name.
+		current := backups[:0]
+		for _, b := range backups {
+			if b.PBMPrefix == "" || s.PBMPrefix != "" && (b.PBMPrefix == s.PBMPrefix || strings.HasSuffix(b.PBMPrefix, "/"+s.PBMPrefix)) {
+				current = append(current, b)
+			}
+		}
+		backups = current
 		started := s.PBMStorage != "" || s.PBMHash != ""
 		for _, b := range backups {
 			started = started || b.PBMName != "" || b.StartedAt != nil
@@ -155,12 +173,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		}
 		if !started {
 			for _, b := range backups {
-				if b.RecoveryIdentity != "" {
-					if e = rc.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); e != nil && !missing(e) {
-						return false, e
-					}
-				}
-				if e = rc.Store.DeleteBackup(ctx, rc.Cluster.Ref(), b.Name); e != nil && !missing(e) {
+				if e = deleteBackupRecord(ctx, rc, b); e != nil {
 					return false, e
 				}
 			}
@@ -168,27 +181,80 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, nil
 		}
 		for _, b := range backups {
+			if b.Storage == "" && (b.PBMName != "" || b.StartedAt != nil) {
+				return false, fmt.Errorf("cannot delete backup %q: recorded backup storage is missing; repair its storage identity and retry, or delete with --keep-backups", b.Name)
+			}
 			if b.Storage != "" && !slices.Contains(storages, b.Storage) {
 				storages = append(storages, b.Storage)
 			}
 		}
+		withoutRuntimes, e := backupRuntimesAbsent(ctx, rc, s)
+		if e != nil {
+			return false, e
+		}
 		for _, storage := range storages {
-			if slices.Contains(s.CleanedStorages, storage) {
-				continue
+			cleaned := slices.Contains(s.CleanedStorages, storage)
+			if cleaned {
+				remaining := false
+				for _, b := range backups {
+					remaining = remaining || b.Storage == storage
+				}
+				if !remaining {
+					continue
+				}
+				// Older checkpoints may have completed storage cleanup while
+				// failed or interrupted inventory records still remained.
 			}
 			env, e := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, storage)
 			if e != nil {
-				return false, e
+				return false, backupCleanupError(storage, e)
 			}
-			r, e := pbm.DeleteAll(ctx, env)
-			if e != nil {
-				return false, e
+			for _, b := range backups {
+				if b.Storage == storage && b.PBMPrefix != "" && b.PBMPrefix != env.Prefix {
+					return false, fmt.Errorf("cannot delete backup %q: its recorded PBM prefix differs from storage %q's current prefix; restore the original storage prefix and retry, or delete with --keep-backups", b.Name, storage)
+				}
 			}
-			if !r.Done {
-				return false, nil
+			if withoutRuntimes {
+				// A suspended cluster has no command node. Its private storage
+				// namespace is still authoritative, including unlisted snapshots
+				// and PITR chunks left by interrupted operations.
+				if e = p.deleteBackupNamespace(ctx, rc, s, env.Storage); e != nil {
+					if errors.Is(e, backupstorage.ErrDeletionInProgress) {
+						return false, nil
+					}
+					return false, e
+				}
+			} else {
+				r, e := pbm.DeleteAll(ctx, env)
+				if e != nil {
+					return false, fmt.Errorf("cannot delete backup artifacts through PBM: %w; restore member availability and retry, or delete with --keep-backups", e)
+				}
+				if !r.Done {
+					return false, nil
+				}
 			}
-			s.CleanedStorages = append(s.CleanedStorages, storage)
+			for _, b := range backups {
+				if b.Storage != storage {
+					continue
+				}
+				if e = deleteBackupRecord(ctx, rc, b); e != nil {
+					return false, e
+				}
+			}
+			if !cleaned {
+				s.CleanedStorages = append(s.CleanedStorages, storage)
+			}
+			if withoutRuntimes && !slices.Contains(s.FinalizedStorages, storage) {
+				s.FinalizedStorages = append(s.FinalizedStorages, storage)
+			}
 			return false, nil
+		}
+		for _, b := range backups {
+			if b.Storage == "" {
+				if e = deleteBackupRecord(ctx, rc, b); e != nil {
+					return false, e
+				}
+			}
 		}
 		s.CleanupBackups = true
 		return false, nil
@@ -241,6 +307,28 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			if e != nil {
 				return false, s.failPending(rc, e.Error())
 			}
+			return false, nil
+		}
+	}
+	if !opts.KeepBackups {
+		for _, storage := range s.CleanedStorages {
+			if slices.Contains(s.FinalizedStorages, storage) {
+				continue
+			}
+			// PBM removes snapshots and PITR chunks but leaves its namespace
+			// marker. Sweep only after runtime deletion, before credentials
+			// disappear, and checkpoint each destination independently.
+			env, e := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, storage)
+			if e != nil {
+				return false, backupCleanupError(storage, e)
+			}
+			if e = p.deleteBackupNamespace(ctx, rc, s, env.Storage); e != nil {
+				if errors.Is(e, backupstorage.ErrDeletionInProgress) {
+					return false, nil
+				}
+				return false, e
+			}
+			s.FinalizedStorages = append(s.FinalizedStorages, storage)
 			return false, nil
 		}
 	}

@@ -14,11 +14,11 @@ backup settings and schedules resolve storage names in their own namespace.
 Verification runs from the control plane's network, while backup payloads go
 directly between members and S3, not through the relay.
 
-New storage names must contain 1–128 characters, must not be blank, and must not
-contain `:` or `/`; violations return **400** naming `name` and the rule.
-Existing storages in namespace `default` with either character remain readable
-and updatable. Missing configuration or credential fields return **400** with
-the specific field; an existing storage name returns **409** `already_exists`.
+New storage names must contain 2–63 lowercase letters, digits or hyphens and
+start with a letter. A trailing hyphen is allowed. Violations return **400**
+naming `name` and the rule. Existing stored names remain readable, editable and
+deletable. Missing configuration or credential fields return **400** with the
+specific field; an existing storage name returns **409** `already_exists`.
 
 For the CLI, prepare a protected API-shaped YAML/JSON request and pass it with `-f`:
 
@@ -53,12 +53,13 @@ Use **Settings → Backup storages → Edit**, or `karactl storages set archive 
 Registration saves configuration, not proof of S3 access. A verification failure still returns **HTTP 200**, with `verified: false`, `failureReason` and a secret-free message; success omits `failureReason`. The probe checks put/get/delete from the control plane, not connectivity from every database member.
 
 The UI separates **Options** (HTTP without TLS, or HTTPS with certificate
-verification on/off) from **Verification** (not checked in this session,
-checking, successful or failed). A failed result shows its category, message and
-check time; a later configuration change asks you to verify again. Results are
-kept for the current page session, not a durable history. HTTPS/certificate
-verification settings alone do not prove credentials or bucket access, and a
-successful probe does not make plaintext HTTP safe.
+verification on/off) from **Verification** (not checked, checking, successful or
+failed). The API's optional `verification` field stores the latest result and
+check time, not a history. Changing credentials, endpoint, region, bucket,
+prefix, addressing style or TLS settings clears that result immediately;
+description-only edits preserve it. Run Verify again after a connection change.
+HTTPS/certificate verification settings alone do not prove credentials or
+bucket access, and a successful probe does not make plaintext HTTP safe.
 
 | `failureReason` | What to check |
 | --- | --- |
@@ -77,6 +78,9 @@ The verification endpoint must be an HTTP(S) origin without embedded credentials
 Loopback, link-local/metadata-style addresses, unspecified/non-global addresses and shared range 100.64.0.0/10 stay blocked even when allowlisted. The verifier checks all DNS answers on every connection, disables proxies, rejects redirects and has a thirty-second deadline. Use the actual regional S3 origin, not a redirecting website URL; keep HTTPS/TLS verification enabled. This is the verifier's policy, not a guarantee that PBM uses the same outbound sandbox. See [security](../security.md#s3-verifier-outbound-policy) and [installation settings](../install.md#required-secrets-and-generated-settings).
 
 ## On-demand backups and inventory
+
+Inventory `trigger` distinguishes `manual`, `schedule` and `restore` snapshots.
+`restore` identifies the automatic post-restore base backup used to resume PITR.
 
 ```sh
 karactl backups create demo beforechange --type logical --storage archive
@@ -173,9 +177,9 @@ Enabling PITR alone does not create proof of a usable window. Gaps, quota exhaus
 **Stop/quiesce application writers and plan downtime.** A restore overwrites data and may restore application users/roles. Keep a recovery copy of the current state if you may need to return to it.
 
 ```sh
-karactl restores create demo recoverbase --backup beforechange
+karactl restores create demo recoverbase --backup beforechange --yes
 # Or select a timestamp observed in this cluster's PITR window:
-karactl restores create demo recovertime --time 2025-01-15T12:00:00Z
+karactl restores create demo recovertime --time 2025-01-15T12:00:00Z --yes
 karactl restores list demo
 karactl restores get demo recoverbase
 karactl operations cluster demo
@@ -227,6 +231,10 @@ dataSource:
 # Use pitrTime instead of backup for a point-in-time clone.
 ```
 
+After the initial restore completes, the immutable source is provenance only:
+later cluster changes do not require the source cluster or backup to remain.
+Delete or retain those recovery objects according to your recovery policy.
+
 This fragment belongs under `spec` in a normal cluster create request, not a standalone create payload. The destination is initialized, then Karakoram queues a deterministic restore. Inspect destination cluster/restore/operation readiness before connecting.
 
 PBM restores source users except the backup account that performs a logical restore. Karakoram uses that account to reset destination system users to its own generated credentials. Physical snapshots additionally retain a separately encrypted snapshot-time `userAdmin` recovery identity, independent of the source cluster's secrets. Recovery uses the recorded storage/prefix, topology and engine version, then switches back to the destination's isolated prefix. Modern successful logical and physical snapshots can therefore be cloned after their source cluster has been fully deleted. Application users/data restored from the source remain application administration concerns. Never manually take clone backups while PBM still points at the source prefix.
@@ -238,7 +246,7 @@ Select the source namespace in the restore/clone dialog, or pass
 
 ```sh
 karactl -n dev restores create orderscopy recover \
-  --source-namespace prod --source-cluster orders --backup baseline
+  --source-namespace prod --source-cluster orders --backup baseline --yes
 # Live-source convenience clone into a new cluster in dev:
 karactl -n dev restores create orders cloneproof \
   --source-namespace prod --backup baseline --into-new orderscopy
@@ -260,7 +268,7 @@ See [namespaces](namespaces.md#backup-storages-and-cross-namespace-recovery).
 ## Delete and preserve recovery objects
 
 ```sh
-karactl backups delete demo beforechange
+karactl backups delete demo beforechange --yes
 karactl backups list demo
 ```
 
@@ -308,7 +316,7 @@ inventory disappear.
 
    ```sh
    # Destructive retry: removes volumes and owned backups.
-   karactl -n default clusters delete demo --wait
+   karactl -n default clusters delete demo --wait --yes
    ```
 
    Do not repeatedly submit DELETE while a deletion operation is still active.
@@ -320,7 +328,7 @@ inventory disappear.
    objects, use:
 
    ```sh
-   karactl -n default clusters delete demo --keep-volumes --keep-backups --wait
+   karactl -n default clusters delete demo --keep-volumes --keep-backups --wait --yes
    # Only a completed retained-volume suspension can be resumed.
    karactl -n default clusters resume demo --wait
    ```
@@ -355,7 +363,7 @@ the namespace token/relay until owned-resource cleanup is complete.
 Deleting volumes with `--keep-backups` removes the cluster resource, but preserves backup records, immutable snapshot provenance and protected recovery identities. Continue using the original cluster name **and namespace** with the backup API/CLI; permissions remain `backups` read/delete on **`<source namespace>/<source cluster>`**, not the destination or storage:
 
 ```sh
-karactl clusters delete demo --keep-backups --wait
+karactl clusters delete demo --keep-backups --wait --yes
 karactl backups list demo
 karactl backups get demo beforechange
 ```
@@ -370,8 +378,8 @@ karactl restores list democopy
 The `restores create ... --into-new` convenience form copies a live source's spec, so use the explicit create file when the source no longer exists. Alternatively restore into an existing compatible destination with `karactl restores create democopy recoverbase --source-cluster demo --backup beforechange`. Verify recovered application data before deleting the retained snapshot. Logical recovery does not require source-cluster secrets; physical recovery requires its protected snapshot recovery credential. Legacy records without snapshot/topology/version provenance, or physical records without a recoverable identity, are rejected up front with **409** rather than starting destructive work. PITR cloning still requires a live source and its observed continuous window.
 
 ```sh
-karactl backups delete demo beforechange
-karactl storages delete archive
+karactl backups delete demo beforechange --yes
+karactl storages delete archive --yes
 ```
 
 For a deleted source, backup DELETE is synchronous (**204**): the control plane signs requests using the registered storage credentials and removes only `<recorded-pbm-prefix>/<pbm-name>/...` and `<recorded-pbm-prefix>/<pbm-name>.pbm.json`, then the recovery credential and inventory record. No agents are needed. Other snapshots, PITR slices and namespace markers are left untouched; removing a storage resource does not empty its bucket. The same outbound/TLS policy as storage verification applies. A timeout or partial S3 failure leaves the record `Deleting`; repeat DELETE to resume safely, including after a control-plane restart. Already absent records return 204. Keep the registered storage endpoint/bucket/prefix and credentials valid until cleanup finishes; unsafe/missing snapshot provenance is rejected with 409.

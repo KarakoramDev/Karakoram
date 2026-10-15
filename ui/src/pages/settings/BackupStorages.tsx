@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import { storageTransport } from '@/components/ui/presentation';
 import { deleteWithReconciliation } from './storage-outcome';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
-import { storageFailureLabel } from './storage-verification';
+import { finishStorageVerification, replaceStorageInList, storageFailureLabel } from './storage-verification';
 type Storage = Schemas['BackupStorage'];
 
 export function BackupStoragesPage() {
@@ -31,16 +31,19 @@ export function BackupStoragesPage() {
   const showNamespace = !namespace && spansNamespaces(storages.data?.items ?? []);
   const [dialog, setDialog] = useState<null | { mode: 'create' } | { mode: 'edit'; storage: Storage }>(null);
   const [del, setDel] = useState<Storage | null>(null);
-  const [verifications, setVerifications] = useState<Record<string, Schemas['StorageVerification'] | 'pending'>>({});
+  const [checking, setChecking] = useState<Record<string, boolean>>({});
 
   const storageKey = (s: Storage) => clusterObject(s.namespace, s.name);
   const canOn = (s: Storage, action: 'update' | 'delete') => auth.can('backup-storages', action, storageKey(s));
 
   const verify = useMutation({
     mutationFn: (s: Storage) => unwrap(api.POST('/backup-storages/{storage}/verify', { params: { path: { storage: s.name }, query: { namespace: s.namespace || DEFAULT_NAMESPACE } } })),
-    onMutate: (s) => setVerifications((v) => ({ ...v, [storageKey(s)]: 'pending' })),
-    onSuccess: (res, s) => setVerifications((v) => ({ ...v, [storageKey(s)]: res })),
-    onError: (e, s) => setVerifications((v) => ({ ...v, [storageKey(s)]: { verified: false, message: errorMessage(e), checkedAt: new Date().toISOString() } })),
+    onMutate: (s) => setChecking((v) => ({ ...v, [storageKey(s)]: true })),
+    onError: (e) => toast.error(errorMessage(e)),
+    onSettled: (_res, _error, s) => finishStorageVerification(
+      () => queryClient.invalidateQueries({ queryKey: keys.backupStorages }),
+      () => setChecking((v) => ({ ...v, [storageKey(s)]: false })),
+    ),
   });
   const remove = useMutation({
     mutationFn: (s: Storage) => {
@@ -94,7 +97,8 @@ export function BackupStoragesPage() {
               </thead>
               <tbody>
                 {storages.data.items.map((s) => {
-                  const v = verifications[storageKey(s)];
+                  const v = s.verification;
+                  const pending = checking[storageKey(s)];
                   return (
                     <tr key={storageKey(s)}>
                       <td className="mono" title={s.name}>
@@ -116,7 +120,7 @@ export function BackupStoragesPage() {
                         </span>
                       </td>
                       <td className="small">
-                        {v === 'pending' ? (
+                        {pending ? (
                           <span className="row">
                             <span className="spinner" /> checking…
                           </span>
@@ -129,14 +133,14 @@ export function BackupStoragesPage() {
                             Verify
                           </Button>
                         )}
-                        {v && v !== 'pending' ? <div className="xs faint">{v.failureReason ? <strong>{storageFailureLabel(v.failureReason)}: </strong> : null}{v.message}<div>Checked <Time iso={v.checkedAt} /></div>{s.updatedAt && Date.parse(s.updatedAt) > Date.parse(v.checkedAt) ? <div>Configuration changed since this check. Verify again.</div> : null}</div> : !v ? <div className="xs faint">Not checked in this session.</div> : null}
+                        {v && !pending ? <div className="xs faint">{v.failureReason ? <strong>{storageFailureLabel(v.failureReason)}: </strong> : null}{v.message}<div>Checked <Time iso={v.checkedAt} /></div></div> : !pending ? <div className="xs faint">Not checked.</div> : null}
                       </td>
                       <td className="small">
                         <Time iso={s.updatedAt} />
                       </td>
                       <td className="actions">
                         <Menu>
-                          <MenuItem onClick={() => verify.mutate(s)} disabled={!canOn(s, 'update') || v === 'pending'}>
+                          <MenuItem onClick={() => verify.mutate(s)} disabled={!canOn(s, 'update') || pending}>
                             Verify access
                           </MenuItem>
                           <MenuItem onClick={() => setDialog({ mode: 'edit', storage: s })} disabled={!canOn(s, 'update')}>
@@ -186,7 +190,7 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
     setForm((f) => ({ ...f, ...patch }));
   };
   const credsGiven = form.accessKeyId !== '' || form.secretAccessKey !== '';
-  const valid = form.namespace && /^[a-z][a-z0-9-]{1,62}$/.test(form.name) && /^https?:\/\//.test(form.endpointURL) && form.bucket && form.region && (existing ? !credsGiven || (form.accessKeyId && form.secretAccessKey) : form.accessKeyId && form.secretAccessKey);
+  const valid = form.namespace && (existing || /^[a-z][a-z0-9-]{1,62}$/.test(form.name)) && /^https?:\/\//.test(form.endpointURL) && form.bucket && form.region && (existing ? !credsGiven || (form.accessKeyId && form.secretAccessKey) : form.accessKeyId && form.secretAccessKey);
 
   const save = useMutation({
     mutationFn: () => {
@@ -206,7 +210,8 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
         ? unwrap(api.PUT('/backup-storages/{storage}', { headers: idempotencyHeaders(attempt.key), params: { path: { storage: existing.name }, query: { namespace } }, body: { ...common, ...(credsGiven ? { credentials } : {}) } }))
         : unwrap(api.POST('/backup-storages', { headers: idempotencyHeaders(attempt.key), params: { query: { namespace } }, body: { ...common, name: form.name, credentials } }));
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      queryClient.setQueriesData<Schemas['BackupStorageList']>({ queryKey: keys.backupStorages }, (current) => replaceStorageInList(current, saved));
       attempt.reset();
       toast.success(existing ? 'Storage updated.' : 'Storage created. Run Verify to check access.');
       void queryClient.invalidateQueries({ queryKey: keys.backupStorages });
@@ -244,7 +249,7 @@ function StorageDialog({ existing, namespaces, defaultNamespace, onClose }: { ex
         </SelectField>
       )}
       <div className="grid-2">
-        <TextField label="Name" mono required value={form.name} onChange={(e) => set({ name: e.target.value })} disabled={Boolean(existing)} hint={`2–63 lowercase letters, digits or hyphens, starting with a letter. No / or : characters; unique within namespace ${form.namespace || '…'}.`} error={form.name && !/^[a-z][a-z0-9-]{1,62}$/.test(form.name) ? 'Use 2–63 lowercase letters, digits or hyphens, starting with a letter.' : undefined} autoFocus={!existing} />
+        <TextField label="Name" mono required value={form.name} onChange={(e) => set({ name: e.target.value })} disabled={Boolean(existing)} hint={`2–63 lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed; unique within namespace ${form.namespace || '…'}.`} error={!existing && form.name && !/^[a-z][a-z0-9-]{1,62}$/.test(form.name) ? 'Use 2–63 lowercase letters, digits or hyphens, starting with a letter.' : undefined} autoFocus={!existing} />
         <TextField label="Description" value={form.description} onChange={(e) => set({ description: e.target.value })} />
       </div>
       <TextField label="Endpoint URL" mono required value={form.endpointURL} onChange={(e) => set({ endpointURL: e.target.value })} placeholder="https://s3.example.com" hint="S3-compatible endpoint. Zerops Object Storage: https://storage-<region>.zerops.io" />

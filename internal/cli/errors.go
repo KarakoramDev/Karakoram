@@ -10,18 +10,21 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
 
 type commandError struct {
-	code    int
-	message string
+	code       int
+	message    string
+	httpStatus int
+	retryAfter time.Duration
 }
 
 func (e *commandError) Error() string { return e.message }
 func usageError(format string, args ...any) error {
-	return &commandError{2, fmt.Sprintf(format, args...)}
+	return &commandError{code: 2, message: fmt.Sprintf(format, args...)}
 }
 
 // ExitCode maps failures to stable shell exit statuses.
@@ -73,7 +76,7 @@ func groupCommand(use, short string) *cobra.Command {
 	}}
 }
 
-func apiFailure(status int, message string) error {
+func apiFailure(status int, message string) *commandError {
 	code := 1
 	switch status {
 	case 400, 415, 422:
@@ -87,7 +90,7 @@ func apiFailure(status int, message string) error {
 	case 408, 504:
 		code = 7
 	}
-	return &commandError{code, message}
+	return &commandError{code: code, message: message, httpStatus: status}
 }
 
 func printPEM(w io.Writer, pem string) error {

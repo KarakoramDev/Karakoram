@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/robfig/cron/v3"
@@ -31,9 +32,10 @@ type Options struct {
 
 // Provider owns the PSMDB reconciliation and data-plane implementations.
 type Provider struct {
-	options          Options
-	portMu           sync.Mutex
-	portReservations map[string]map[int]string
+	options              Options
+	portMu               sync.Mutex
+	portReservations     map[string]map[int]string
+	deleteClusterObjects func(context.Context, domain.BackupStorage, string, string) error
 }
 
 // New constructs a PSMDB provider.
@@ -44,7 +46,7 @@ func New(o Options) *Provider {
 	if o.ControlPlaneURL == "" {
 		o.ControlPlaneURL = "https://karakoram:9443"
 	}
-	return &Provider{options: o, portReservations: make(map[string]map[int]string)}
+	return &Provider{options: o, portReservations: make(map[string]map[int]string), deleteClusterObjects: backupstorage.DeleteCluster}
 }
 
 // Name returns the stable engine identifier.
@@ -376,7 +378,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			return invalid("dataSource is immutable")
 		}
 	}
-	if d := s.DataSource; d != nil {
+	if d := s.DataSource; old == nil && d != nil {
 		sourceRef := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
 		if sourceRef.Namespace == "" {
 			sourceRef.Namespace = n.Ref().Namespace
@@ -391,13 +393,13 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		if d.Backup != "" {
 			b, e := p.options.Store.GetBackup(ctx, sourceRef, d.Backup)
 			if e != nil || b.Phase != domain.PhaseSucceeded {
-				return invalid("source backup must exist and be succeeded")
+				return invalid("source backup %q on cluster %q in namespace %q must exist and be succeeded", d.Backup, sourceRef.Name, sourceRef.Namespace)
 			}
 			topology, version := b.SourceTopology, b.SourceVersion
 			if topology.Type == "" || version == "" {
 				source, e = p.options.Store.GetCluster(ctx, sourceRef)
 				if e != nil {
-					return invalid("backup lacks retained topology/version provenance: %v", e)
+					return invalid("source backup %q lacks topology/version provenance and source cluster %q in namespace %q is unavailable: %v", d.Backup, sourceRef.Name, sourceRef.Namespace, e)
 				}
 				topology, version = source.Spec.Topology, source.Spec.Version
 			}
@@ -408,7 +410,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			var e error
 			source, e = p.options.Store.GetCluster(ctx, sourceRef)
 			if e != nil {
-				return invalid("source cluster: %v", e)
+				return invalid("source cluster %q in namespace %q: %v", sourceRef.Name, sourceRef.Namespace, e)
 			}
 			if source.Spec.Topology.Type != s.Topology.Type || major(source.Spec.Version) != major(s.Version) {
 				return invalid("restore source must match topology and engine major")

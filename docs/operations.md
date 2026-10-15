@@ -162,6 +162,55 @@ This is intentional safety, not a retry suggestion. Inspect PBM operation metada
 - Preserve control-plane state/master key and monitor expiry of user-supplied TLS/OIDC/API credentials.
 - Drain disruptive work before [Karakoram upgrades](upgrade.md). Existing member agents receive the current binary on a later provider-driven member deployment, not on control-plane restart alone.
 
+## Deleting MongoDB backup data
+
+Deleting a cluster without `--keep-backups` removes snapshots and PITR chunks
+before removing member data, and finalizes storage before removing credentials.
+When member runtimes exist, PBM disables PITR, resynchronizes inventory and removes
+snapshots. After database runtimes are gone, the control plane makes a final
+direct sweep of each cleaned incarnation directory to remove PBM initialization
+markers and any other remaining objects. This sweep is checkpointed per storage
+and retries before credentials are removed. An unreachable agent alone never
+authorizes direct storage deletion: PBM could still be writing data.
+Resuming retained volumes reapplies PBM configuration so a deleted initialization
+marker is recreated even when the desired backup settings are unchanged.
+
+For a suspended cluster, or another cluster whose database runtimes are all
+absent, the control plane deletes objects directly from S3 under the exact
+recorded cluster-incarnation namespace. This includes snapshots not present in
+the backup inventory, their metadata, PITR chunks and namespace markers. It does
+not resume database runtimes or delete adjacent cluster namespaces. Backup
+records and protected recovery credentials are removed only after artifact
+deletion succeeds; interrupted object or inventory deletion can be retried.
+Snapshots explicitly retained from an earlier incarnation are preserved when a
+same-name replacement cluster is deleted. They remain listed and can be deleted
+individually using their recorded snapshot identities.
+
+Keep the backup storage and its credentials available until deletion finishes.
+Storage access failures are reported in the cluster status and delete operation
+with instructions to repair access and retry, or deliberately use
+`--keep-backups`. If a legacy cluster lacks a verified PBM namespace, resume it
+to use PBM cleanup or retain backups; the control plane will not guess an object
+prefix. Deleting an individual retained backup after its cluster is gone uses
+its recorded snapshot directory and metadata file directly; it does not require
+a PBM node and does not remove other snapshots or PITR chunks.
+
+Direct storage deletion batches requests. When object-version listing is
+supported and permitted, it removes every selected object version and delete
+marker; this requires `s3:ListBucketVersions` and `s3:DeleteObjectVersion`.
+If version listing is unavailable or denied, cleanup falls back to ordinary
+listing and key-only deletion using the original list/delete permissions.
+On a versioned bucket this fallback removes only currently visible objects:
+noncurrent versions remain in storage and must be removed separately with
+version-aware credentials or a bucket lifecycle policy. A successful version
+listing followed by denied version deletion remains an access error.
+Cleanup confirms the selected namespace is empty in the listing mode used.
+Large cluster namespaces are cleaned over bounded passes; a pass that makes
+progress before its time limit requeues normally.
+If a storage prefix has changed since a current backup was written, restore
+the original prefix before retrying deletion; changing access permissions does
+not repair a mismatched recorded snapshot location.
+
 ## Orphaned platform volumes
 
 If the platform refuses to delete a Local Storage volume, Karakoram first confirms that its member runtime was deleted and verifies volume ownership. Repeated mount-related deletion refusals are handed off to the orphan inventory after the retry threshold. Karakoram emits the Warning event **`VolumeOrphaned`** for the original cluster, allowing member removal or cluster deletion to finish while background deletion retries continue. This does not mean the volume is gone: it continues consuming disk and may incur charges until deletion succeeds.

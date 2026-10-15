@@ -386,7 +386,7 @@ export type paths = {
          */
         get: operations["listBackups"];
         put?: never;
-        /** Queue an on-demand PBM backup */
+        /** Queue an on-demand backup */
         post: operations["createBackup"];
         delete?: never;
         options?: never;
@@ -416,8 +416,8 @@ export type paths = {
         put?: never;
         post?: never;
         /**
-         * Delete PBM backup data and metadata
-         * @description Live clusters queue PBM deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded S3 directory and sibling .pbm.json metadata, then its protected recovery credential and inventory record (204). Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
+         * Delete backup data and metadata
+         * @description Live clusters queue engine-native deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded objects and metadata, then its protected recovery credential and inventory record (204). For MongoDB, these objects are the snapshot's S3 directory and sibling .pbm.json metadata. Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
          */
         delete: operations["deleteBackup"];
         options?: never;
@@ -736,7 +736,7 @@ export type paths = {
         };
         /**
          * Read the continuous restorable PITR window
-         * @description Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured PBM storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+         * @description Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
          */
         get: operations["getPITRWindow"];
         put?: never;
@@ -834,7 +834,7 @@ export type paths = {
         put?: never;
         /**
          * Queue in-place backup or point-in-time restore
-         * @description Requires a compatible succeeded source backup or an available PITR window. In-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched (on sharded clusters PBM drops every database present in the backup, so only databases absent from it are preserved); it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
+         * @description Requires a compatible succeeded source backup or an available PITR window. Recovery behavior depends on the engine and backup type. For MongoDB, in-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched (on sharded clusters PBM drops every database present in the backup, so only databases absent from it are preserved); it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up MongoDB data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
          */
         post: operations["createRestore"];
         delete?: never;
@@ -1489,8 +1489,11 @@ export type components = {
             /** Format: date-time */
             startedAt?: string;
             storage: string;
-            /** @enum {string} */
-            trigger: "manual" | "schedule";
+            /**
+             * @description What initiated the snapshot; restore identifies an automatic post-restore base backup.
+             * @enum {string}
+             */
+            trigger: "manual" | "schedule" | "restore";
             /** @enum {string} */
             type: "logical" | "physical";
         };
@@ -1555,6 +1558,8 @@ export type components = {
             type: "s3";
             /** Format: date-time */
             updatedAt?: string;
+            /** @description Latest access check for the current connection configuration. Absent until checked, and cleared when connection settings or credentials change. */
+            readonly verification?: components["schemas"]["StorageVerification"];
             /** @default true */
             verifyTLS: boolean;
         };
@@ -1778,7 +1783,7 @@ export type components = {
             endpointURL: string;
             /** @default true */
             forcePathStyle: boolean;
-            /** @description New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable. */
+            /** @description Use lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed. Existing stored names remain usable. */
             name: string;
             prefix?: string;
             region: string;
@@ -2172,7 +2177,7 @@ export type components = {
             /** @default 10 */
             oplogSpanMinutes: number | null;
         } | null;
-        /** @description Only a continuous PBM-verified restorable interval is reported. */
+        /** @description Only a continuous engine-verified restorable interval is reported. */
         PITRWindow: {
             available: boolean;
             /** Format: date-time */
@@ -2290,6 +2295,7 @@ export type components = {
             mustChangePassword: boolean;
             password: components["schemas"]["AccountPassword"];
         };
+        /** @description Resource configuration returned by the control plane. Observed member autoscaling describes runtime root disks, not persistent data volumes; request-only resource bounds do not apply. */
         Resources: {
             /** @enum {string} */
             cpuMode: "SHARED" | "DEDICATED";

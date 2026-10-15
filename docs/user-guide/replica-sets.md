@@ -55,7 +55,7 @@ Default status connection URIs omit passwords. [Explicit connection reveal](user
 ```sh
 karactl clusters scale demo --members 5 --wait
 karactl clusters scale demo --members 3 --wait
-karactl clusters replace-member demo demom1 --wait
+karactl clusters replace-member demo demom1 --wait --yes
 ```
 
 Use an actual member name from the inventory for replacement. Added members join non-voting with priority zero, initial-sync, then become voters after observed healthy replication and lag at most ten seconds. Scale-down removes high-index members safely, stepping down a primary when required and checking voting majorities. Replacement creates a new monotonic member identity rather than reusing the old hostname; names can therefore have gaps. At seven voters it does not create an eighth voter during replacement.
@@ -68,11 +68,11 @@ Deletion options control **two separate assets**: database volumes and PBM backu
 
 ```sh
 # Suspend: remove runtimes, retain database volumes and recovery objects.
-karactl clusters delete demo --keep-volumes --keep-backups --wait
+karactl clusters delete demo --keep-volumes --keep-backups --wait --yes
 karactl clusters resume demo --wait
 
 # Destructive full deletion: volumes and owned backups are removed.
-karactl clusters delete demo --wait
+karactl clusters delete demo --wait --yes
 ```
 
 With `keepVolumes`, the cluster remains `Suspended`, retains secrets/volume identity and can resume by recreating its runtimes. Keeping volumes does not automatically keep backups: specify both flags if you want both. Without retained volumes, deletion is not resumable. With `--keep-backups`, backup records, snapshot provenance and protected physical-recovery credentials survive full deletion: use `karactl backups list/get/delete` with the original cluster name, or create a new compatible cluster with `spec.dataSource` referencing a retained successful snapshot. See [retained-backup management and cloning](backups-and-restore.md#retained-backups-after-full-cluster-deletion). Retained backups do not recreate the deleted resource or volumes; preserve control-plane state and its encryption key for disaster recovery.

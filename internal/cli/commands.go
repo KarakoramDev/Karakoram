@@ -61,7 +61,7 @@ func (a *app) addCommands(root *cobra.Command) {
 			c.Aliases = []string{"revoke"}
 		}
 		if destructive(s.operation) {
-			c.Flags().BoolP("yes", "y", false, "Skip interactive confirmation")
+			c.Flags().BoolP("yes", "y", false, "Confirm without reading stdin (required with stdin payloads; otherwise pipe y/yes)")
 		}
 		annotate(c, s.operation)
 		if c.Name() == "members" {
@@ -153,6 +153,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if s.operation == "listClusterMembers" && len(args) == 2 {
 		op = "getClusterMember"
 	}
+	if err := a.checkConfirmationInput(cmd, s.operation); err != nil {
+		return err
+	}
 	body, err := a.body(cmd, s, args)
 	if err != nil {
 		return err
@@ -210,6 +213,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	}
 	if op == "listNamespaces" && a.format == "table" {
 		return a.namespacesTable(result)
+	}
+	if (op == "getProvider" || op == "listProviders") && a.format == "table" {
+		return a.providersTable(result, op == "listProviders")
 	}
 	return a.print(result)
 }

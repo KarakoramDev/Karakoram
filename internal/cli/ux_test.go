@@ -185,7 +185,19 @@ func TestTokenRevokeAliasAndConfirmation(t *testing.T) {
 		command, input     string
 		tty, yes, accepted bool
 	}{
-		{"delete", "", false, false, true}, {"revoke", "token-one\n", true, false, true}, {"revoke", "wrong\n", true, false, false}, {"revoke", "", true, true, true}, {"delete", "", true, false, false},
+		{"delete", "", false, false, false},
+		{"delete", "\n", false, false, false},
+		{"delete", "n\n", false, false, false},
+		{"delete", "no\n", false, false, false},
+		{"delete", "wrong\n", false, false, false},
+		{"delete", "y\n", false, false, true},
+		{"delete", "YES\n", false, false, true},
+		{"delete", "YeS", false, false, true},
+		{"delete", "", false, true, true},
+		{"revoke", "token-one\n", true, false, true},
+		{"revoke", "wrong\n", true, false, false},
+		{"revoke", "", true, true, true},
+		{"delete", "", true, false, false},
 	} {
 		before := calls
 		args := []string{"tokens", tt.command, "token-one"}
@@ -195,6 +207,13 @@ func TestTokenRevokeAliasAndConfirmation(t *testing.T) {
 		code, _, stderr := runCLI(t, server.URL, tt.input, tt.tty, args...)
 		if (code == 0) != tt.accepted || (calls > before) != tt.accepted {
 			t.Errorf("%+v: code=%d calls=%d stderr=%q", tt, code, calls-before, stderr)
+		}
+		if !tt.tty && !tt.yes && strings.TrimSpace(tt.input) == "" {
+			if code != 2 || !strings.Contains(stderr, "pass --yes for non-interactive use") {
+				t.Errorf("missing confirmation: code=%d stderr=%q", code, stderr)
+			}
+		} else if !tt.accepted && code != 1 {
+			t.Errorf("declined confirmation: code=%d stderr=%q", code, stderr)
 		}
 		prompted := strings.Contains(stderr, "Type the name to confirm")
 		if prompted != (tt.tty && !tt.yes) {
@@ -419,7 +438,7 @@ func TestReplacementFailureMessageAndRepeatedDelete(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	code, _, stderr := runCLI(t, server.URL, "", false, "clusters", "replace-member", "demo", "m0", "--wait", "--timeout", "100ms")
+	code, _, stderr := runCLI(t, server.URL, "", false, "clusters", "replace-member", "demo", "m0", "--yes", "--wait", "--timeout", "100ms")
 	if code != 1 || !strings.Contains(stderr, "Single-member clusters cannot replace members") {
 		t.Fatalf("failure code=%d stderr=%q", code, stderr)
 	}
@@ -536,7 +555,7 @@ func TestOperationProgressChangesAndDeleteHeaderTracking(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	code, out, stderr := runCLI(t, server.URL, "", false, "clusters", "delete", "demo", "--wait", "--timeout", "3s")
+	code, out, stderr := runCLI(t, server.URL, "", false, "clusters", "delete", "demo", "--yes", "--wait", "--timeout", "3s")
 	if code != 0 || !strings.Contains(out, "deleted") {
 		t.Fatalf("code=%d out=%q stderr=%q", code, out, stderr)
 	}

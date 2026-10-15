@@ -37,9 +37,10 @@ Percona member resources require at least **0.5 GiB RAM** and **5 GiB data disk*
 ### Creation wizard walkthrough
 
 The wizard has six screens, in this order. Choose **Continue** after completing
-each screen, or **Back** to revise a previous screen. Invalid input keeps you
-on the affected step with field errors; review errors must be resolved before
-creation.
+each screen, or **Back** to revise a previous screen. A double-click advances
+or returns only one screen; double-clicking Continue cannot also submit Review.
+Invalid input keeps you on the affected step with field errors; review errors
+must be resolved before creation.
 
 Cluster names must be 2–12 lowercase letters/digits beginning with a letter and
 unique in the target namespace; invalid names are rejected rather than silently
@@ -96,6 +97,12 @@ and [sharding](sharding.md).
 
 Use operation and resource status together. Accepted mutations are not completed provisioning/upgrades/restores, and local TCP readiness does not prove replica-set health. Physical restore intentionally stops database processes; do not use UI restart buttons to undo a restore's maintenance holds.
 
+During membership removal, members reported as **Leaving** remain visible with
+in-progress health styling, not as unhealthy members. Overview and cluster-list
+health ratios count active members only and show the leaving count separately.
+Member tables retain a previously observed role while available in the current
+view; without one, the role cell also says **Leaving** rather than **unknown**.
+
 In **Topology → Review & apply**, **What will change** describes only the patch
 being submitted: membership addition/removal, resource changes or CPU-only
 updates, and any other changed settings. Expand **Merge patch to be sent** to
@@ -138,7 +145,7 @@ a successful rotation. See [users and roles](users-tls-access.md).
 
 **Settings** contains:
 
-- **Backup storages:** S3 destination/credential registration and verification. Transport options show HTTP/HTTPS and certificate verification separately from the latest in-session probe result, its failure category/message and check time.
+- **Backup storages:** S3 destination/credential registration and verification. Transport options show HTTP/HTTPS and certificate verification separately from the persisted latest probe result, its failure category/message and check time. Connection or credential changes clear verification immediately; description-only changes retain it.
 - **Namespaces:** project/token/relay health, Validate and add, detail/description, token rotation, re-validation and guarded removal. Tokens are write-only; default-token rotation requires a service-secret update/restart.
 - **Accounts:** local account lifecycle, enable/disable and password reset.
 - **RBAC:** full-policy editing and effective authorization checks.
@@ -209,6 +216,9 @@ terminal result; see [API cancellation semantics](api.md#cancel-an-operation).
 **Monitoring** offers **15m**, **1h**, **6h** and **24h** ranges, kept in the URL
 as `range`; the default is **1h**. There is no seven-day UI query. Their query
 steps are **15s**, **30s**, **2m** and **10m**, respectively.
+Charts keep the complete query window even when only one recent sample exists.
+Time-axis ticks use evenly spaced, rounded times and include the calendar date
+when the window crosses midnight; repeated local hours include their UTC offset.
 
 Charts identify member/series lines and provide state-code labels and legends
 for recognized state series, including MongoDB replica member states and

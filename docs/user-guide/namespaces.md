@@ -32,7 +32,7 @@ karactl namespaces list
 karactl namespaces get dev -o yaml
 karactl namespaces validate dev
 karactl namespaces update dev --description 'Development and test'
-karactl namespaces rotate-token dev --token-file replacement-token.txt
+karactl namespaces rotate-token dev --token-file replacement-token.txt --yes
 karactl -n dev clusters list
 ```
 
@@ -99,13 +99,13 @@ karactl -n dev events watch --resource namespaces
 
 Register storage in the cluster's namespace (`karactl -n dev storages create -f FILE`). Cluster backup settings and schedules refer to names in that same namespace. Identically named storages in different namespaces need not describe the same bucket or credentials. Member access to S3 is direct; control-plane storage verification runs from the control-plane network, not through the relay.
 
-New backup-storage names must not contain `:` or `/`. Existing `default` storages whose names contain these characters remain readable and updatable; the creation restriction does not rename or invalidate them.
+New backup-storage names use 2–63 lowercase letters, digits or hyphens, beginning with a letter; a trailing hyphen is allowed. Existing stored names remain readable, updatable and deletable even if they do not meet the creation rule.
 
 For a snapshot from `prod/orders`, restore into an existing compatible `dev/orderscopy`:
 
 ```sh
 karactl -n dev restores create orderscopy recover \
-  --source-namespace prod --source-cluster orders --backup baseline
+  --source-namespace prod --source-cluster orders --backup baseline --yes
 ```
 
 For a new cluster, submit a complete create file whose `spec.dataSource` contains:
@@ -156,7 +156,7 @@ Without namespace-read grants, the UI shows only `default`; existing cluster per
 ## Remove
 
 ```sh
-karactl namespaces delete dev
+karactl namespaces delete dev --yes
 karactl namespaces list
 ```
 

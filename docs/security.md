@@ -100,6 +100,15 @@ See [ADR 0018](adr/0018-multi-project-namespaces-relay.md) and
 
 Write-only TLS/storage inputs are removed from ordinary cluster/storage response models and retained sealed separately. Agents receive locally needed backup/monitor credentials, not general system-account disclosure. PBM's connection URI is placed in its process environment; local process/root access can expose it. Member config cache is **0600**, keyfile **0400**, controls/receipts **0600**, protected directories normally **0700**. Volume/runtime administrators can read these files: state encryption does not extend to node-cache plaintext.
 
+MongoDB adopts an untagged local-storage service after a partial import only
+when its member runtime's cluster, member and agent-token environment is
+verified and `KARAKORAM_DATA_DIR` names that volume's exact mount. This applies
+even before import completion is recorded. Verified runtime and volume IDs are
+persisted before subsequent cleanup steps, so deletion can finish after the
+runtime is gone. A matching hostname or member stage is not ownership evidence;
+an untagged volume without a verified runtime or previously recorded ownership
+remains a conflict.
+
 Use a strong random master key (installer generates 48 characters); minimum input length is 32. Keep it outside state snapshots in a separate secret manager. Loss means encrypted state is unusable. Replacing the variable is **not** rotation: no master-key re-encryption command exists. Back up the original key and consistent complete state independently, encrypted off-platform. Do not assume a live `.db` copy or Local Storage tarball is transactionally consistent.
 
 ## PKI, database TLS and authentication

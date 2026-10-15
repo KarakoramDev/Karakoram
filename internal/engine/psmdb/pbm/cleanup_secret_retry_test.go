@@ -153,3 +153,31 @@ func TestDeleteAllMissingRecoverySecretErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteAllPreservesPriorIncarnationRecordWithSameSnapshotName(t *testing.T) {
+	env, st, _, _ := setup(t)
+	b := &domain.Backup{Name: "retained", Cluster: "target", Storage: "storage", PBMName: "2024-01-05T11:10:54Z", PBMPrefix: "karakoram/target-prior", RecoveryIdentity: "retained-recovery"}
+	if err := st.CreateBackup(t.Context(), b); err != nil {
+		t.Fatal(err)
+	}
+	identity := domain.ClusterRef{Name: b.RecoveryIdentity}
+	if err := st.SetClusterSecret(t.Context(), identity, "users/userAdmin", []byte("recovery")); err != nil {
+		t.Fatal(err)
+	}
+	for range 30 {
+		res, err := DeleteAll(t.Context(), env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Done {
+			if _, err := st.GetBackup(t.Context(), env.RC.Cluster.Ref(), b.Name); err != nil {
+				t.Fatal("PBM cleanup discarded an earlier incarnation's record", err)
+			}
+			if _, err := st.GetClusterSecret(t.Context(), identity, "users/userAdmin"); err != nil {
+				t.Fatal("PBM cleanup discarded retained recovery credentials", err)
+			}
+			return
+		}
+	}
+	t.Fatal("PBM cleanup did not finish")
+}

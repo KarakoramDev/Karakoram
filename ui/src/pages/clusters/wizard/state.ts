@@ -19,6 +19,11 @@ export function nextStep(current: StepId, validation: Validation): StepId {
   return STEPS[STEPS.findIndex((step) => step.id === current) + 1]!.id;
 }
 
+/** Ignore stale handlers and the repeated clicks in a browser multi-click gesture. */
+export function navigateStep(current: StepId, rendered: StepId, target: StepId, clickCount: number): StepId {
+  return current === rendered && clickCount <= 1 ? target : current;
+}
+
 export function firstInvalidStep(validation: Validation): Exclude<StepId, 'review'> | undefined {
   for (const step of STEPS) if (step.id !== 'review' && validation[step.id].length) return step.id;
 }

@@ -43,6 +43,29 @@ export function chartTicks(top: number, format: (value: number) => string, categ
   return values.filter((v) => { const label = format(v); if (seen.has(label)) return false; seen.add(label); return true; });
 }
 
+/** Rounded time ticks use the query window, including gaps before the first sample. */
+export function chartTimeTicks(start: number, end: number, locale?: string, timeZone?: string): Array<{ time: number; label: string }> {
+  const span = Math.max(0, end - start);
+  const intervals = [1_000, 5_000, 15_000, 30_000, 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000, 60 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000, 12 * 60 * 60_000, 24 * 60 * 60_000];
+  const interval = intervals.find((value) => value >= span / 4) ?? Math.ceil(span / 4);
+  const times: number[] = [];
+  for (let time = Math.ceil(start / interval) * interval; time <= end; time += interval) times.push(time);
+  if (!times.length) times.push(start);
+  const date = new Intl.DateTimeFormat(locale, { timeZone, year: 'numeric', month: 'numeric', day: 'numeric' });
+  const crossesDays = date.format(start) !== date.format(end);
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone, hour: '2-digit', minute: '2-digit',
+    ...(interval < 60_000 ? { second: '2-digit' } : {}),
+    ...(crossesDays ? { month: 'short', day: 'numeric' } : {}),
+  };
+  let formatter = new Intl.DateTimeFormat(locale, options);
+  // A daylight-saving clock change can repeat a local hour on the same day.
+  if (new Set(times.map((time) => formatter.format(time))).size !== times.length) {
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZoneName: 'shortOffset' });
+  }
+  return times.map((time) => ({ time, label: formatter.format(time) }));
+}
+
 export const MONITORING_RANGES = ['15m', '1h', '6h', '24h'] as const;
 export type MonitoringRange = typeof MONITORING_RANGES[number];
 export function monitoringRange(value: string | null): MonitoringRange {

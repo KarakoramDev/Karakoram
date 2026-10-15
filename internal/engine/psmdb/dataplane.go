@@ -330,7 +330,7 @@ func (p *Provider) pbmEnvInNamespace(ctx context.Context, rc *engine.Context, s 
 		}
 	}
 	name := rc.Cluster.Spec.Backup.Storage
-	if name == "" && rc.Cluster.Spec.DataSource != nil {
+	if name == "" && !s.CloneQueued && rc.Cluster.Spec.DataSource != nil {
 		d := rc.Cluster.Spec.DataSource
 		sourceRef := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
 		if sourceRef.Namespace == "" {
@@ -383,7 +383,7 @@ func ensurePBM(ctx context.Context, env pbm.Env, hash string) (string, error) {
 
 // PITRWindow retrieves PBM's continuous recoverable windows.
 func (p *Provider) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.TimeWindow, error) {
-	if rc.Cluster.Spec.Backup.Storage == "" && rc.Cluster.Spec.DataSource == nil {
+	if rc.Cluster.Spec.Backup.Storage == "" {
 		return []domain.TimeWindow{}, nil
 	}
 	s, e := load(rc.Cluster)

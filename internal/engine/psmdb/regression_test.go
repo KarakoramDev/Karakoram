@@ -203,14 +203,14 @@ func TestLegacyThreeMemberPlanAdoptsVerifiedDeployedResources(t *testing.T) {
 			t.Fatalf("legacy IDs not migrated: %+v", m)
 		}
 	}
-	// The first runtime is gone: durable volume IDs permit the next cleanup.
+	// Adopted IDs are durable before the next cleanup removes the runtime.
 	if _, err := p.Cleanup(ctx, rc, domain.DeleteOptions{KeepBackups: true, KeepVolumes: true}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestLegacyVolumeAdoptionRequiresAuthenticatedRuntimeMount(t *testing.T) {
-	for _, variant := range []string{"wrong-token", "wrong-mount", "planned"} {
+	for _, variant := range []string{"wrong-token", "wrong-mount"} {
 		t.Run(variant, func(t *testing.T) {
 			p, rc, f, _ := setup(t)
 			ctx := context.Background()
@@ -230,8 +230,6 @@ func TestLegacyVolumeAdoptionRequiresAuthenticatedRuntimeMount(t *testing.T) {
 				env["KARAKORAM_AGENT_TOKEN"] = "foreign-token"
 			case "wrong-mount":
 				env["KARAKORAM_DATA_DIR"] = "/mnt/foreign"
-			case "planned":
-				m.Stage = "planned"
 			}
 			f.services[m.Name] = &infra.Service{ID: "runtime-id", Hostname: m.Name, Ownership: env}
 			f.services[m.Volume] = &infra.Service{ID: "volume-id", Hostname: m.Volume}

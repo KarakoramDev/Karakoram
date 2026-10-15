@@ -26,7 +26,7 @@ For cookie-authenticated unsafe methods (anything except GET/HEAD/OPTIONS), send
 
 Local account creation/reset and `newPassword` require at least **12 Unicode characters** and at most **1024 UTF-8 bytes**. Self-service changes must differ from the current password. Administrative resets accept the current password without comparing it, invalidate previous authentication and require a password change. A rejected self-service change returns 400 `invalid_request` with `details.field` and `details.reason`: `currentPassword`/`invalid`, `newPassword`/`reused` or `newPassword`/`out_of_range`. Rejection preserves the mandatory-change restriction. Account names start with a letter, contain only letters/digits/`_ . @ -`, and are 1–64 characters; duplicates return 409 `already_exists` naming the account. Account `updatedAt` advances on metadata updates as well as password changes.
 
-API-token names are trimmed, non-blank and 1–128 characters; duplicate names are allowed and IDs distinguish them. Creation and update both require future RFC 3339 `expiresAt`, with 400 field-specific `invalid` or `out_of_range` errors. Null on update removes expiry. The UI prevents concurrent duplicate submissions and reuses an `Idempotency-Key` when retrying an unchanged token-creation request.
+API-token names are trimmed, non-blank and 1–128 characters; duplicate names are allowed and IDs distinguish them. `expiresAt` is optional: omitting it on creation creates a token without an expiry, valid until revoked or its owner's authority is invalidated. When supplied on creation or update, it must be a future RFC 3339 timestamp, with 400 field-specific `invalid` or `out_of_range` errors. Omission on update preserves the existing expiry; null removes it. The UI prevents concurrent duplicate submissions and reuses an `Idempotency-Key` when retrying an unchanged token-creation request.
 
 The UI restores an access-expired session through refresh, preserves identity during 5xx/network failures and offers automatic/manual retry. Ordinary UI API requests are bounded to 30 seconds (SSE is excluded). Persistent 401 after a successful refresh ends the session instead of causing repeated refreshes.
 
@@ -210,6 +210,11 @@ logs when the safe summary is insufficient.
 Request bodies are validated before decoding or accepting work. Unknown fields (including nested spelling mistakes), wrong types, unsupported enum values, invalid bounds and trailing JSON data return **400** `invalid_request` with `details.field` (a dotted JSON path or parameter name) and `details.reason`. Explicit zero counts/resources are errors, not requests for defaults. `spec.provider` is required: list offered engines with `GET /api/v1/providers`. Omitted version, topology, components and resource fields use that provider's catalog defaults. For PSMDB these are the catalog default version, `replicaSet`, three engine/config-server members, one router, one shard, SHARED CPU with min/max 1 core, min/max 1 GiB RAM and min/max 5 GiB disk. PUT may round-trip recognized server-owned fields from GET, which are ignored; PATCH accepts only the spec envelope.
 
 Generated Go create/PUT bodies use `ClusterInputSpec` and pointer-valued optional topology/component/resource fields. Leave pointers unset to request defaults; a pointer to zero is an explicit invalid value. `ClusterSpec` remains the complete read model. An omitted resource maximum follows its effective corresponding minimum, including when that minimum was explicitly supplied.
+
+Response resource configurations do not carry request-only minimums. In particular,
+`status.members[].autoscaling` describes runtime root-disk bounds rather than
+persistent database-volume bounds: a runtime disk below 5 GiB is valid even
+though a requested persistent data volume must be at least 5 GiB.
 
 Supply the operation's declared `Content-Type`: normally `application/json`; cluster PATCH declares `application/merge-patch+json`. The current CLI and UI send that merge-patch media type; for older callers the server also interprets `application/json` on cluster PATCH as the same merge patch. Missing or unsupported media types on requests with bodies return **415** `unsupported_media_type`. Bodies exceeding **2 MiB**, including chunked bodies, return **413** `payload_too_large`. A known route with an unsupported method returns **405** `method_not_allowed` with an `Allow` header; an unknown API route stays **404**.
 
@@ -515,6 +520,9 @@ func responseError(status int, body []byte) error {
 The same compiled example lives in [`pkg/client/example_test.go`](../../pkg/client/example_test.go). `WithResponse` methods return a transport/decoding error separately from HTTP status: always check the status and the expected `JSON200`/`JSON201`/`JSON202` field. Operation `Failed`/`Cancelled` is a failure even when polling returns HTTP 200. A local timeout stops waiting, not the operation; retain its ID and resume polling instead of repeating the mutation.
 
 Optional OpenAPI properties use pointers. For example, successful `CreateAPITokenWithResponse` returns `JSON201.Secret` as `*string`: check both `JSON201` and `Secret` for nil before dereferencing, store the one-time secret securely, and never print it in ordinary logs. Later token reads expose metadata, not that secret. For all clusters in a namespace pass `ListClustersParams.Namespace`; continue pagination using `NextCursor` with the same filters.
+
+The Go backup-trigger constants are `Manual` (`manual`), `Schedule` (`schedule`)
+and `BackupTriggerRestore` (`restore`, the automatic post-restore base backup).
 
 ### Consume SSE
 

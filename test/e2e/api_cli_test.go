@@ -133,7 +133,7 @@ func testAPIWorkflow(t *testing.T) {
 	s.snapshot(name+"-cli-backups", backups)
 	restoreName := s.name()
 	var restore api.Restore
-	run(api.CreateRestoreRequest{Name: restoreName, Source: api.RestoreSource{Backup: ptr(backupName), SourceCluster: ptr(name)}}, &restore, "restores", "create", name, "-f", "-")
+	run(api.CreateRestoreRequest{Name: restoreName, Source: api.RestoreSource{Backup: ptr(backupName), SourceCluster: ptr(name)}}, &restore, "restores", "create", name, "-f", "-", "--yes")
 	s.waitRestore(name, restoreName)
 	run(nil, &restore, "restores", "get", name, restoreName)
 	if restore.Phase != api.RestorePhaseSucceeded {
@@ -167,8 +167,8 @@ func testAPIWorkflow(t *testing.T) {
 	var userList api.DatabaseUserList
 	run(nil, &userList, "db-users", "list", name)
 	run(api.UpdateDatabaseUserRequest{Password: ptr(s.name() + s.name()), Roles: appUser.Roles}, &appUser, "db-users", "set", name, "e2e", "cliapp", "-f", "-")
-	run(nil, nil, "db-users", "delete", name, "e2e", "cliapp")
-	run(nil, nil, "db-roles", "delete", name, "e2e", role.Name)
+	run(nil, nil, "db-users", "delete", name, "e2e", "cliapp", "--yes")
+	run(nil, nil, "db-roles", "delete", name, "e2e", role.Name, "--yes")
 	accountName := s.name()
 	t.Cleanup(func() {
 		if s.keep {
@@ -184,9 +184,9 @@ func testAPIWorkflow(t *testing.T) {
 	var accountList api.AccountList
 	run(nil, &accountList, "accounts", "list")
 	run(api.UpdateAccountRequest{Enabled: true, MustChangePassword: false}, &account, "accounts", "set", accountName, "-f", "-")
-	run(api.ResetPasswordRequest{Password: ptr(s.name() + s.name()), MustChangePassword: ptr(false)}, nil, "accounts", "reset-password", accountName, "-f", "-")
+	run(api.ResetPasswordRequest{Password: ptr(s.name() + s.name()), MustChangePassword: ptr(false)}, nil, "accounts", "reset-password", accountName, "-f", "-", "--yes")
 	if !s.keep {
-		run(nil, nil, "accounts", "delete", accountName)
+		run(nil, nil, "accounts", "delete", accountName, "--yes")
 	}
 	var token api.CreatedAPIToken
 	run(api.CreateAPITokenRequest{Name: s.name()}, &token, "tokens", "create", "-f", "-")
@@ -209,7 +209,7 @@ func testAPIWorkflow(t *testing.T) {
 	bearer := s.newClient(*token.Secret, s.base+"/api/v1", nil)
 	s.expect(&identity)(bearer.GetCurrentUser(s.ctx))
 	if !s.keep {
-		run(nil, nil, "tokens", "delete", token.Token.Id)
+		run(nil, nil, "tokens", "delete", token.Token.Id, "--yes")
 		s.expect(nil, 401)(bearer.GetCurrentUser(s.ctx))
 	}
 	var policy api.RBACPolicy
@@ -239,7 +239,7 @@ func testAPIWorkflow(t *testing.T) {
 	s.snapshot(name+"-cli-operations", operations)
 	s.snapshot(name+"-cli-events", events)
 	if !s.keep {
-		run(nil, nil, "backups", "delete", name, backupName)
+		run(nil, nil, "backups", "delete", name, backupName, "--yes")
 		s.poll("CLI backup deletion", operationTimeout, func() bool {
 			r, err := s.client.GetBackup(s.ctx, name, backupName, nil)
 			if err != nil {

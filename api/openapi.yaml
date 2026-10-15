@@ -4,7 +4,7 @@ openapi: 3.0.3
 info:
   title: Karakoram API
   version: 1.0.0
-  description: Self-hosted Zerops-native PSMDB and PBM orchestration across project namespaces. REST contracts for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie sessions are alternatives. Cookie-authenticated unsafe requests require X-Karakoram-CSRF. Secret inputs are write-only; explicit one-time token creation, generated application passwords returned once on user creation, and cluster-credentials reads are the only secret-bearing JSON responses. RBAC uses resource/action/object with explicit deny overriding allow; database roles share database-users authorization. Self-service auth/permissions endpoints require an authenticated identity but do not require administrative account/RBAC permissions. RBAC object kinds are '*' for global routes, cluster for namespace/cluster from the namespace query and cluster path, namespace for the namespace path, and storage for namespace/storage from the namespace query and storage path. Collection routes filter each item by its persisted object; create routes authorize the submitted namespaced object. Namespace creation requires namespaces/create on '*'; namespace lists filter by namespaces/read on each namespace. Namespace actions are read/create/update/delete. Root /healthz and /metrics use explicit operation-level server overrides. Every API response carries X-Request-ID for correlation. Clients may supply a 1–128-character ID using A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Missing, invalid or repeated values are replaced with a generated identifier. This optional transport header is not an operation parameter; generated clients may set it through their request editor. Do not include secrets in request IDs.
+  description: Self-hosted Zerops-native database orchestration across project namespaces. REST contracts for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie sessions are alternatives. Cookie-authenticated unsafe requests require X-Karakoram-CSRF. Secret inputs are write-only; explicit one-time token creation, generated application passwords returned once on user creation, and cluster-credentials reads are the only secret-bearing JSON responses. RBAC uses resource/action/object with explicit deny overriding allow; database roles share database-users authorization. Self-service auth/permissions endpoints require an authenticated identity but do not require administrative account/RBAC permissions. RBAC object kinds are '*' for global routes, cluster for namespace/cluster from the namespace query and cluster path, namespace for the namespace path, and storage for namespace/storage from the namespace query and storage path. Collection routes filter each item by its persisted object; create routes authorize the submitted namespaced object. Namespace creation requires namespaces/create on '*'; namespace lists filter by namespaces/read on each namespace. Namespace actions are read/create/update/delete. Root /healthz and /metrics use explicit operation-level server overrides. Every API response carries X-Request-ID for correlation. Clients may supply a 1–128-character ID using A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Missing, invalid or repeated values are replaced with a generated identifier. This optional transport header is not an operation parameter; generated clients may set it through their request editor. Do not include secrets in request IDs.
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
@@ -40,7 +40,7 @@ tags:
   - name: DatabaseRoles
     description: Application role privileges and inheritance.
   - name: Backups
-    description: PBM inventory, backups and PITR window.
+    description: Engine-native backup inventory, backups and PITR window.
   - name: Restores
     description: In-place restores; new-cluster restores use cluster dataSource.
   - name: BackupStorages
@@ -3188,7 +3188,7 @@ paths:
       operationId: createBackup
       tags:
         - Backups
-      summary: Queue an on-demand PBM backup
+      summary: Queue an on-demand backup
       x-karakoram-rbac:
         resource: backups
         action: create
@@ -3291,8 +3291,8 @@ paths:
       operationId: deleteBackup
       tags:
         - Backups
-      summary: Delete PBM backup data and metadata
-      description: Live clusters queue PBM deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded S3 directory and sibling .pbm.json metadata, then its protected recovery credential and inventory record (204). Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
+      summary: Delete backup data and metadata
+      description: Live clusters queue engine-native deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded objects and metadata, then its protected recovery credential and inventory record (204). For MongoDB, these objects are the snapshot's S3 directory and sibling .pbm.json metadata. Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
       x-karakoram-rbac:
         resource: backups
         action: delete
@@ -3348,7 +3348,7 @@ paths:
         - Backups
       summary: Read the continuous restorable PITR window
       description: >-
-        Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured PBM storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+        Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
       x-karakoram-rbac:
         resource: backups
         action: read
@@ -3472,7 +3472,7 @@ paths:
                 $ref: '#/components/schemas/Restore'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Requires a compatible succeeded source backup or an available PITR window. In-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched (on sharded clusters PBM drops every database present in the backup, so only databases absent from it are preserved); it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
+      description: Requires a compatible succeeded source backup or an available PITR window. Recovery behavior depends on the engine and backup type. For MongoDB, in-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched (on sharded clusters PBM drops every database present in the backup, so only databases absent from it are preserved); it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up MongoDB data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -5131,6 +5131,7 @@ components:
     Resources:
       type: object
       additionalProperties: false
+      description: Resource configuration returned by the control plane. Observed member autoscaling describes runtime root disks, not persistent data volumes; request-only resource bounds do not apply.
       properties:
         cpuMode:
           type: string
@@ -5139,29 +5140,22 @@ components:
             - DEDICATED
         minCpu:
           type: number
-          minimum: 1
         maxCpu:
           type: number
-          minimum: 1
         minRam:
           type: number
-          minimum: 0.5
           description: GiB
         maxRam:
           type: number
-          minimum: 0.5
           description: GiB
         minDisk:
           type: number
-          minimum: 5
           description: GiB
         maxDisk:
           type: number
-          minimum: 5
           description: GiB
         startCpu:
           type: number
-          minimum: 1
       required:
         - cpuMode
         - minCpu
@@ -5362,10 +5356,9 @@ components:
             - logical
             - physical
         storage:
-          allOf:
-            - type: string
-              minLength: 1
-              maxLength: 128
+          type: string
+          minLength: 1
+          maxLength: 128
           description: Optional override; when omitted, use backup.storage.
         retainCount:
           type: integer
@@ -5762,7 +5755,7 @@ components:
           type: boolean
         message:
           type: string
-      description: Only a continuous PBM-verified restorable interval is reported.
+      description: Only a continuous engine-verified restorable interval is reported.
       required:
         - available
     ClusterBackupStatus:
@@ -6158,9 +6151,16 @@ components:
             - physical
         trigger:
           type: string
+          description: What initiated the snapshot; restore identifies an automatic post-restore base backup.
           enum:
             - manual
             - schedule
+            - restore
+          # Keep existing Go constant names independent of new enum collisions.
+          x-enum-varnames:
+            - Manual
+            - Schedule
+            - BackupTriggerRestore
         schedule:
           type: string
           minLength: 1
@@ -6357,6 +6357,11 @@ components:
         credentialsConfigured:
           type: boolean
           readOnly: true
+        verification:
+          allOf:
+            - $ref: '#/components/schemas/StorageVerification'
+          readOnly: true
+          description: Latest access check for the current connection configuration. Absent until checked, and cleared when connection settings or credentials change.
         createdAt:
           type: string
           format: date-time
@@ -6379,10 +6384,10 @@ components:
       properties:
         name:
           type: string
-          minLength: 1
-          maxLength: 128
-          pattern: '^[^:/]+$'
-          description: New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable.
+          minLength: 2
+          maxLength: 63
+          pattern: '^[a-z][a-z0-9-]{1,62}$'
+          description: Use lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed. Existing stored names remain usable.
         type:
           type: string
           enum:
