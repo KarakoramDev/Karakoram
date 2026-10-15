@@ -36,6 +36,9 @@ func TestRabbitMQCommands(t *testing.T) {
 				if verb == "create" || verb == "update" {
 					args = append(args, "-f", "-")
 				}
+				if verb == "delete" {
+					args = append(args, "--yes")
+				}
 				args = append(args, "-n", "production", "-o", "json")
 				called := false
 				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +120,7 @@ func TestRabbitMQActionableErrors(t *testing.T) {
 			w.WriteHeader(tc.status)
 			fmt.Fprint(w, tc.body)
 		}))
-		_, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "rabbitmq", "permissions", "delete", "brokers", "/", "admin")
+		_, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "rabbitmq", "permissions", "delete", "brokers", "/", "admin", "--yes")
 		server.Close()
 		if err == nil || !strings.Contains(err.Error(), tc.message) || !strings.Contains(err.Error(), tc.detail) {
 			t.Fatal(err)

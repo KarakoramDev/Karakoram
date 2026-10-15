@@ -457,13 +457,13 @@ func (s *suite) exerciseRabbitCLI(name string) {
 	}) {
 		s.t.FailNow()
 	}
-	run(nil, nil, "rabbitmq", "policies", "delete", name, vhost, policy.Name)
+	run(nil, nil, "rabbitmq", "policies", "delete", name, vhost, policy.Name, "--yes")
 	s.expect(nil, 404)(s.client.GetRabbitMQPolicy(s.ctx, name, vhost, policy.Name, nil))
-	run(nil, nil, "rabbitmq", "permissions", "delete", name, vhost, user)
+	run(nil, nil, "rabbitmq", "permissions", "delete", name, vhost, user, "--yes")
 	s.expect(nil, 404)(s.client.GetRabbitMQPermission(s.ctx, name, vhost, user, nil))
-	run(nil, nil, "rabbitmq", "users", "delete", name, user)
+	run(nil, nil, "rabbitmq", "users", "delete", name, user, "--yes")
 	s.expect(nil, 404)(s.client.GetRabbitMQUser(s.ctx, name, user, nil))
-	run(nil, nil, "rabbitmq", "vhosts", "delete", name, vhost)
+	run(nil, nil, "rabbitmq", "vhosts", "delete", name, vhost, "--yes")
 	s.expect(nil, 404)(s.client.GetRabbitMQVhost(s.ctx, name, vhost, nil))
 	s.snapshot(name+"-cli-access", map[string]bool{"vhostCRUD": true, "userCRUD": true, "permissionCRUD": true, "policyCRUD": true})
 }

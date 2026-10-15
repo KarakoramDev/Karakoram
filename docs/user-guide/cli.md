@@ -111,8 +111,11 @@ karactl rabbitmq vhosts create brokers -f vhost.yaml
 karactl rabbitmq users create brokers -f user.yaml -o json
 karactl rabbitmq permissions update brokers / application -f permission.yaml
 karactl rabbitmq policies get brokers / retention
-karactl rabbitmq operator-policies delete brokers / safety
+karactl rabbitmq operator-policies delete brokers / safety --yes
 ```
+
+Deletes require confirmation: interactively type the cluster name; without a TTY,
+pass `--yes` or pipe `y`/`yes`. An empty non-interactive input submits no request.
 
 Pass vhost `/` literally in CLI arguments and UI fields. A raw HTTP API client must encode the name exactly once as `%2F` in a path segment, never `%252F`; generated clients accept the raw name. See the [API path example](rabbitmq.md#access-api-cli-and-ui).
 
