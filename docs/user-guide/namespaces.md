@@ -32,7 +32,7 @@ karactl namespaces list
 karactl namespaces get dev -o yaml
 karactl namespaces validate dev
 karactl namespaces update dev --description 'Development and test'
-karactl namespaces rotate-token dev --token-file replacement-token.txt
+karactl namespaces rotate-token dev --token-file replacement-token.txt --yes
 karactl -n dev clusters list
 ```
 
@@ -105,7 +105,7 @@ For a snapshot from `prod/orders`, restore into an existing compatible `dev/orde
 
 ```sh
 karactl -n dev restores create orderscopy recover \
-  --source-namespace prod --source-cluster orders --backup baseline
+  --source-namespace prod --source-cluster orders --backup baseline --yes
 ```
 
 For a new cluster, submit a complete create file whose `spec.dataSource` contains:
@@ -156,7 +156,7 @@ Without namespace-read grants, the UI shows only `default`; existing cluster per
 ## Remove
 
 ```sh
-karactl namespaces delete dev
+karactl namespaces delete dev --yes
 karactl namespaces list
 ```
 

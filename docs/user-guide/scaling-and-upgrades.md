@@ -126,7 +126,7 @@ warning, including explicit singleton downtime.
 A binary major upgrade **does not automatically raise featureCompatibilityVersion**. Keep the old FCV during application compatibility observation, then deliberately promote:
 
 ```sh
-karactl clusters raise-fcv demo --version 8.0 --wait
+karactl clusters raise-fcv demo --version 8.0 --wait --yes
 karactl clusters status demo
 ```
 
@@ -181,7 +181,7 @@ accepted request that is stuck or was made with the wrong target:
    correct, no promotion is needed. Otherwise submit the **major-form** target:
 
    ```sh
-   karactl -n default clusters raise-fcv demo --version 8.0 --wait
+   karactl -n default clusters raise-fcv demo --version 8.0 --wait --yes
    karactl -n default clusters status demo
    ```
 

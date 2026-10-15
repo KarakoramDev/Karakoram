@@ -69,7 +69,7 @@ PBM's custom `pbmAnyAction` grants `anyAction` on `anyResource`. The backup acco
 
 ```sh
 karactl system-users list demo
-karactl system-users rotate demo backup
+karactl system-users rotate demo backup --yes
 karactl operations cluster demo
 ```
 
@@ -105,7 +105,7 @@ spec:
 
 ```sh
 karactl clusters patch demo -f tls-mode.yaml --wait
-karactl clusters rotate-tls demo --wait
+karactl clusters rotate-tls demo --wait --yes
 ```
 
 Mode changes use cluster-wide rolling passes, waiting for each restarted member to acknowledge its configuration and catch up before disrupting the next member. Enabling TLS follows `disabled → allowTLS → preferTLS → requireTLS` (stopping at the requested mode); disabling it follows the reverse sequence. The internal `allowTLS` bridge accepts TLS and plaintext but sends plaintext to other members, while `preferTLS` sends TLS. Every member must complete a pass before the next begins: directly mixing `disabled` and `preferTLS` can break replication and prevent a safe primary stepdown. `allowTLS` is not a public spec option. See MongoDB's [rolling TLS upgrade procedure](https://www.mongodb.com/docs/v8.0/tutorial/upgrade-cluster-to-ssl/).

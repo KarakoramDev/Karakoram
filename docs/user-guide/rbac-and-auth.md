@@ -155,7 +155,7 @@ expiresAt: "2026-12-31T00:00:00Z"
 ```sh
 karactl tokens create -f token.yaml
 karactl tokens list
-karactl tokens delete TOKEN_ID
+karactl tokens delete TOKEN_ID --yes
 ```
 
 Capture creation's one-time `secret` securely; lists/gets expose metadata only. A bearer token bypasses browser CSRF requirements, not RBAC. Supply it through `KARAKORAM_TOKEN` from a secure runtime environment, avoiding `--token` in shell history. CLI `login` creates/saves its own token and `logout` normally revokes that saved token; `logout --local` removes only local credentials. See [CLI](cli.md), [API](api.md) and [security](../security.md).

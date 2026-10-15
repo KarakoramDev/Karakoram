@@ -177,9 +177,9 @@ Enabling PITR alone does not create proof of a usable window. Gaps, quota exhaus
 **Stop/quiesce application writers and plan downtime.** A restore overwrites data and may restore application users/roles. Keep a recovery copy of the current state if you may need to return to it.
 
 ```sh
-karactl restores create demo recoverbase --backup beforechange
+karactl restores create demo recoverbase --backup beforechange --yes
 # Or select a timestamp observed in this cluster's PITR window:
-karactl restores create demo recovertime --time 2025-01-15T12:00:00Z
+karactl restores create demo recovertime --time 2025-01-15T12:00:00Z --yes
 karactl restores list demo
 karactl restores get demo recoverbase
 karactl operations cluster demo
@@ -246,7 +246,7 @@ Select the source namespace in the restore/clone dialog, or pass
 
 ```sh
 karactl -n dev restores create orderscopy recover \
-  --source-namespace prod --source-cluster orders --backup baseline
+  --source-namespace prod --source-cluster orders --backup baseline --yes
 # Live-source convenience clone into a new cluster in dev:
 karactl -n dev restores create orders cloneproof \
   --source-namespace prod --backup baseline --into-new orderscopy
@@ -268,7 +268,7 @@ See [namespaces](namespaces.md#backup-storages-and-cross-namespace-recovery).
 ## Delete and preserve recovery objects
 
 ```sh
-karactl backups delete demo beforechange
+karactl backups delete demo beforechange --yes
 karactl backups list demo
 ```
 
@@ -316,7 +316,7 @@ inventory disappear.
 
    ```sh
    # Destructive retry: removes volumes and owned backups.
-   karactl -n default clusters delete demo --wait
+   karactl -n default clusters delete demo --wait --yes
    ```
 
    Do not repeatedly submit DELETE while a deletion operation is still active.
@@ -328,7 +328,7 @@ inventory disappear.
    objects, use:
 
    ```sh
-   karactl -n default clusters delete demo --keep-volumes --keep-backups --wait
+   karactl -n default clusters delete demo --keep-volumes --keep-backups --wait --yes
    # Only a completed retained-volume suspension can be resumed.
    karactl -n default clusters resume demo --wait
    ```
@@ -363,7 +363,7 @@ the namespace token/relay until owned-resource cleanup is complete.
 Deleting volumes with `--keep-backups` removes the cluster resource, but preserves backup records, immutable snapshot provenance and protected recovery identities. Continue using the original cluster name **and namespace** with the backup API/CLI; permissions remain `backups` read/delete on **`<source namespace>/<source cluster>`**, not the destination or storage:
 
 ```sh
-karactl clusters delete demo --keep-backups --wait
+karactl clusters delete demo --keep-backups --wait --yes
 karactl backups list demo
 karactl backups get demo beforechange
 ```
@@ -378,8 +378,8 @@ karactl restores list democopy
 The `restores create ... --into-new` convenience form copies a live source's spec, so use the explicit create file when the source no longer exists. Alternatively restore into an existing compatible destination with `karactl restores create democopy recoverbase --source-cluster demo --backup beforechange`. Verify recovered application data before deleting the retained snapshot. Logical recovery does not require source-cluster secrets; physical recovery requires its protected snapshot recovery credential. Legacy records without snapshot/topology/version provenance, or physical records without a recoverable identity, are rejected up front with **409** rather than starting destructive work. PITR cloning still requires a live source and its observed continuous window.
 
 ```sh
-karactl backups delete demo beforechange
-karactl storages delete archive
+karactl backups delete demo beforechange --yes
+karactl storages delete archive --yes
 ```
 
 For a deleted source, backup DELETE is synchronous (**204**): the control plane signs requests using the registered storage credentials and removes only `<recorded-pbm-prefix>/<pbm-name>/...` and `<recorded-pbm-prefix>/<pbm-name>.pbm.json`, then the recovery credential and inventory record. No agents are needed. Other snapshots, PITR slices and namespace markers are left untouched; removing a storage resource does not empty its bucket. The same outbound/TLS policy as storage verification applies. A timeout or partial S3 failure leaves the record `Deleting`; repeat DELETE to resume safely, including after a control-plane restart. Already absent records return 204. Keep the registered storage endpoint/bucket/prefix and credentials valid until cleanup finishes; unsafe/missing snapshot provenance is rejected with 409.
