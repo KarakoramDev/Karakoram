@@ -18,6 +18,7 @@ Extend the existing seams additively instead of introducing a plugin system:
 - Keep engine-specific data-plane APIs (for example RabbitMQ virtual hosts and permissions) in engine-owned interfaces, handlers and OpenAPI paths under `/clusters/{cluster}/<engine>/...`, authorized by the existing `database-users` RBAC resource.
 - Move certificate issuance to `internal/pki`.
 - In the node agent, add `agent.Engine` runners selected by `KARAKORAM_ENGINE` and the configuration's `engine` field. The common loop keeps configuration pull/cache, pinned TLS, bearer authentication, supervision, durable maintenance/stop holds, logs and host metrics; runners render files, start processes, report readiness/version/metrics and register bounded routes under `/v1/<engine>/`. The PSMDB runner stays on its existing code path.
+- Engine change reviews pair their patch builder with consequence copy. The shared Apply dialog first builds the outgoing patch, then reconstructs the reviewed spec with RFC 7386 merge-patch semantics; omitted form defaults cannot become advertised changes. The existing MongoDB review continues to inspect only submitted patch fields.
 
 ## Consequences
 

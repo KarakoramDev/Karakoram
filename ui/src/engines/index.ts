@@ -4,6 +4,7 @@
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
 export type { EngineUI, MonitoringPanel, TopologyEditorProps, WizardSectionProps } from './types';
+export { reviewChanges } from './changes.ts';
 
 /**
  * Provider name → engine UI descriptor. Descriptors with React components are attached by

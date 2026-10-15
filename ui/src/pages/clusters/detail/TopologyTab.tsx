@@ -21,9 +21,9 @@ import { resourceMinimums, validateResources } from '../wizard/resources';
 import { memberChoices } from '../wizard/validation';
 import { validateExposure, validateTLS } from '../wizard/access';
 import { useSubmissionKey } from './use-submission-key';
-import { buildPatch, draftFrom, type Draft } from './topology';
+import { buildPatch, draftFrom, specFromDraft, type Draft } from './topology';
 import { MemberHealthBadge, MemberRole, useMemberRoles } from '../cluster-utils';
-import { engines, publicExposureMetadata, replicaLimits, supportsOperation, validateReplicas } from '@/engines';
+import { engines, publicExposureMetadata, replicaLimits, reviewChanges, supportsOperation, validateReplicas } from '@/engines';
 
 const RS_SIZES = [1, 3, 5, 7];
 
@@ -50,15 +50,6 @@ export function TopologyTab() {
   const submission = useSubmissionKey(JSON.stringify(draft));
   const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
 
-  // Re-seed when the persisted spec changes under us and the user has no edits.
-  const persistedKey = JSON.stringify(cluster.spec);
-  const [seedKey, setSeedKey] = useState(persistedKey);
-  useEffect(() => {
-    if (persistedKey !== seedKey && Object.keys(buildPatch(cluster.spec, draft)).length === 0) {
-      setDraft(draftFrom(cluster.spec));
-      setSeedKey(persistedKey);
-    }
-  }, [persistedKey, seedKey, cluster.spec, draft]);
 
   const sharded = cluster.spec.topology.type === 'sharded';
   const mongo = cluster.spec.provider === 'psmdb';
@@ -66,8 +57,22 @@ export function TopologyTab() {
   const TopologyEditor = engineUI?.topologyEditor;
   const limits = replicaLimits(topology, 'engine');
   const editable = can('update') && cluster.status.phase !== 'Deleting' && cluster.status.phase !== 'Suspended';
-  const patch = useMemo(() => buildPatch(cluster.spec, draft), [cluster.spec, draft]);
+  const { patch, consequences: disruptive } = useMemo(() => {
+    if (engineUI?.changeReview) return reviewChanges(cluster.spec, specFromDraft(cluster.spec, draft), engineUI.changeReview);
+    const patch = buildPatch(cluster.spec, draft);
+    return { patch, consequences: scalingReview(cluster.spec, patch) };
+  }, [cluster.spec, draft, engineUI]);
   const dirty = Object.keys(patch).length > 0;
+
+  // Re-seed when the persisted spec changes under us and the user has no edits.
+  const persistedKey = JSON.stringify(cluster.spec);
+  const [seedKey, setSeedKey] = useState(persistedKey);
+  useEffect(() => {
+    if (persistedKey !== seedKey && !dirty) {
+      setDraft(draftFrom(cluster.spec));
+      setSeedKey(persistedKey);
+    }
+  }, [persistedKey, seedKey, cluster.spec, dirty]);
 
   const errors: string[] = [];
   if (mongo) {
@@ -109,8 +114,6 @@ export function TopologyTab() {
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
-
-  const disruptive = scalingReview(cluster.spec, patch);
 
   const members = cluster.status.members.filter((m) => (roles.get(m.name) ?? m.role) !== 'router');
 
