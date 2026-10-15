@@ -4,10 +4,11 @@
 
 The React SPA is embedded in the Karakoram server when production assets are built. Open the installation's HTTPS origin; no separate frontend deployment or browser Zerops token is needed. The UI calls the same REST API as `karactl` and listens to durable event SSE for live view invalidation.
 
-The UI supports both MongoDB and [Elasticsearch with optional Kibana, Logstash
-and APM Server](elasticsearch.md). Engine-specific topology, component settings,
-native access and backup types come from the selected provider; MongoDB's FCV,
-PBM/PITR and authentication-database procedures do not apply to Elasticsearch.
+The UI supports MongoDB, [RabbitMQ](rabbitmq.md), and [Elasticsearch with optional
+Kibana, Logstash and APM Server](elasticsearch.md). Engine-specific topology,
+component settings, native access and backup types come from the selected
+provider; MongoDB's FCV, PBM/PITR and authentication-database procedures do not
+apply to RabbitMQ or Elasticsearch.
 
 ## Sign in
 

@@ -19,6 +19,37 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
+func TestBuiltInProviderCatalogConforms(t *testing.T) {
+	s, _, token := testServer(t)
+	var err error
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "GET", "/api/v1/providers", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var catalog struct {
+		Items []api.Provider `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	got := make(map[string]bool, len(catalog.Items))
+	for _, provider := range catalog.Items {
+		got[provider.Name] = true
+		w := call(s, "GET", "/api/v1/providers/"+provider.Name, "", token)
+		if w.Code != 200 {
+			t.Fatalf("%s: %d %s", provider.Name, w.Code, w.Body.String())
+		}
+	}
+	want := map[string]bool{"psmdb": true, "rabbitmq": true, "elasticsearch": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("built-in providers = %v, want %v", got, want)
+	}
+}
+
 func TestProviderImmutable(t *testing.T) {
 	for _, method := range []string{"PATCH", "PUT"} {
 		t.Run(method, func(t *testing.T) {

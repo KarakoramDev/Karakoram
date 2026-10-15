@@ -249,6 +249,43 @@ karactl
   providers
     get <provider>
     list
+  rabbitmq
+    operator-policies
+      create <cluster>
+      delete <cluster> <vhost> <name>
+      get <cluster> <vhost> <name>
+      list <cluster>
+      update <cluster> <vhost> <name>
+    permissions
+      create <cluster>
+      delete <cluster> <vhost> <user>
+      get <cluster> <vhost> <user>
+      list <cluster>
+      update <cluster> <vhost> <user>
+    policies
+      create <cluster>
+      delete <cluster> <vhost> <name>
+      get <cluster> <vhost> <name>
+      list <cluster>
+      update <cluster> <vhost> <name>
+    topic-permissions
+      create <cluster>
+      delete <cluster> <vhost> <user>
+      get <cluster> <vhost> <user>
+      list <cluster>
+      update <cluster> <vhost> <user>
+    users
+      create <cluster>
+      delete <cluster> <user>
+      get <cluster> <user>
+      list <cluster>
+      update <cluster> <user>
+    vhosts
+      create <cluster>
+      delete <cluster> <vhost>
+      get <cluster> <vhost>
+      list <cluster>
+      update <cluster> <vhost>
   rbac
     can
     policy
