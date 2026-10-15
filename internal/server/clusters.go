@@ -490,11 +490,8 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
 			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime")
 		}
-		if p.Name() == "rabbitmq" && b.Source.PitrTime != nil {
-			return s.failure(engine.Invalid("RabbitMQ definitions restore does not support PITR"))
-		}
 		if b.Source.PitrTime != nil && !slices.Contains(p.Describe().Capabilities, "pitr") {
-			return s.failure(engine.Invalid("provider does not support point-in-time restore"))
+			return s.failure(engine.Invalid("%s does not support PITR (point-in-time restore)", p.Describe().DisplayName))
 		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
