@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
+import { api, ApiError, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
@@ -14,7 +14,7 @@ import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
 import { hasCapability } from '../index';
 import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, visibleElasticRoles, type MemberKind } from './spec';
 
-import { applicationDrafts, applicationGrants, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation, type ApplicationDraft, type PendingInvalidation } from './access-state';
+import { applicationDrafts, applicationGrants, failedInvalidation, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation, type ApplicationDraft, type PendingInvalidation } from './access-state';
 type ElasticUser = Schemas['ElasticUser'];
 type ElasticRole = Schemas['ElasticRole'];
 type ElasticAPIKey = Schemas['ElasticAPIKey'];
@@ -85,9 +85,7 @@ export function ElasticAccessTab() {
       invalidate('elastic-api-keys');
     },
     onError: (e, key) => {
-      const marker = { id: key.id, startedAt: 0 };
-      rememberInvalidation(sessionStorage, namespace, name, marker);
-      setPendingKeys((items) => items.map((item) => item.id === key.id ? marker : item));
+      setPendingKeys((items) => failedInvalidation(sessionStorage, namespace, name, items, key.id, e instanceof ApiError ? e.status : undefined));
       toast.error(errorMessage(e));
       invalidate('elastic-api-keys');
     },

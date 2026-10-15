@@ -41,6 +41,16 @@ export function forgetInvalidation(storage: MarkerStorage, namespace: string, cl
   storage.removeItem(markerKey(namespace, cluster, id));
 }
 
+export function failedInvalidation(storage: MarkerStorage, namespace: string, cluster: string, pending: PendingInvalidation[], id: string, status: number | undefined): PendingInvalidation[] {
+  if (status === 404) {
+    forgetInvalidation(storage, namespace, cluster, id);
+    return pending.filter((marker) => marker.id !== id);
+  }
+  const marker = { id, startedAt: 0 };
+  rememberInvalidation(storage, namespace, cluster, marker);
+  return pending.map((item) => item.id === id ? marker : item);
+}
+
 export function invalidationState(marker: PendingInvalidation | undefined, key: Pick<Schemas['ElasticAPIKey'], 'invalidated'> | undefined, now: number): 'checking' | 'invalidated' | 'retry' | 'active' {
   if (key?.invalidated || (marker && !key)) return 'invalidated';
   if (!marker) return 'active';

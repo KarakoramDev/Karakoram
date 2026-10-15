@@ -435,7 +435,9 @@ client leaves its outcome uncertain; invalidating an already invalidated key
 succeeds. Refresh the key inventory to confirm the final state. The UI retains
 its pending marker across reload in the same browser tab and offers a retry if
 the key remains active after the request window. This is not a durable
-control-plane operation or a guarantee across server restarts.
+control-plane operation or a guarantee across server restarts. A not-found (404)
+invalidation response clears the pending marker and remains an error; an absent
+key after that rejection is not reported as a successful invalidation.
 
 Managed rotation uses the existing system-user operation with identity `elastic`, `karakoram-monitor`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; these are exactly the identities the system-user list shows. Affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
 

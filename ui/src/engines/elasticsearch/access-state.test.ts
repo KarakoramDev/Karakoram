@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { register } from 'node:module';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { applicationDrafts, applicationGrants, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation } from './access-state.ts';
+import { applicationDrafts, applicationGrants, failedInvalidation, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation } from './access-state.ts';
 
 register('../../../test/tsx-loader.mjs', import.meta.url);
 // Static imports run before the JSX/alias loader is registered.
@@ -69,6 +69,27 @@ test('unconfirmed invalidation offers retry after the bounded wait, and retry re
   assert.equal(retried.length, 1);
   assert.equal(invalidationState(retried[0], { invalidated: false }, 100_001), 'checking');
   assert.equal(invalidationState(undefined, { invalidated: false }, 100_001), 'active');
+});
+
+test('not-found invalidation clears intent instead of reporting an absent key as invalidated', () => {
+  const storage = new MemoryStorage();
+  const marker = { id: 'missing', startedAt: 1000 };
+  rememberInvalidation(storage, 'team', 'search', marker);
+  rememberInvalidation(storage, 'other', 'search', marker);
+  const pending = failedInvalidation(storage, 'team', 'search', [marker], marker.id, 404);
+  assert.deepEqual(pending, []);
+  assert.deepEqual(pendingInvalidations(storage, 'team', 'search'), []);
+  assert.equal(pendingInvalidations(storage, 'other', 'search').length, 1);
+  assert.equal(invalidationState(pending[0], undefined, 2000), 'active');
+  const source = readFileSync(new URL('./ElasticAccessTab.tsx', import.meta.url), 'utf8');
+  assert.match(source, /setPendingKeys\(\(items\) => failedInvalidation\(sessionStorage, namespace, name, items, key.id, e instanceof ApiError \? e.status : undefined\)\)/);
+});
+
+test('ambiguous invalidation failures retain a retry marker', () => {
+  const storage = new MemoryStorage();
+  const pending = failedInvalidation(storage, 'team', 'search', [{ id: 'key', startedAt: 1000 }], 'key', 503);
+  assert.deepEqual(pendingInvalidations(storage, 'team', 'search'), [{ id: 'key', startedAt: 0 }]);
+  assert.equal(invalidationState(pending[0], { invalidated: false }, INVALIDATION_WAIT_MS), 'retry');
 });
 
 test('access panel renders Kibana startup instead of an actionable link until every Kibana member is ready', () => {
