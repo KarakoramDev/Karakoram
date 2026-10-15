@@ -5,13 +5,18 @@ package cli
 
 import (
 	"context"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestAcceptedWaitRetriesTransientObservations(t *testing.T) {
@@ -145,5 +150,96 @@ func TestSuspensionWaitUsesDesiredGeneration(t *testing.T) {
 				t.Fatalf("code=%d stderr=%q", code, stderr)
 			}
 		})
+	}
+}
+
+func TestCompletedOperationDoesNotWrapClusterFailures(t *testing.T) {
+	for _, degraded := range []bool{false, true} {
+		t.Run(fmt.Sprint(degraded), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodPatch:
+					w.Header().Set("Karakoram-Operation-Id", "upgrade-one")
+					fmt.Fprint(w, `{"name":"demo","generation":4}`)
+				case strings.Contains(r.URL.Path, "/operations/"):
+					fmt.Fprint(w, `{"id":"upgrade-one","phase":"Succeeded"}`)
+				case degraded:
+					fmt.Fprint(w, `{"name":"demo","generation":4,"status":{"phase":"Degraded","observedGeneration":4,"message":"A member is unavailable"}}`)
+				default:
+					w.WriteHeader(http.StatusForbidden)
+				}
+			}))
+			defer server.Close()
+			code, _, stderr := runCLI(t, server.URL, "", false, "clusters", "upgrade", "demo", "--version", "8.0", "--wait", "--timeout", "1s")
+			if degraded {
+				if code != 1 || !strings.Contains(stderr, "cluster demo is Degraded: A member is unavailable") || strings.Contains(stderr, "work continues server-side") || strings.Contains(stderr, "Resume waiting") {
+					t.Fatalf("code=%d stderr=%q", code, stderr)
+				}
+			} else if code != 5 || strings.Count(stderr, "Resume waiting") != 1 || !strings.Contains(stderr, `clusters wait "demo"`) {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			if strings.Contains(stderr, `operations wait "upgrade-one"`) {
+				t.Errorf("completed operation offered as resume target: %q", stderr)
+			}
+		})
+	}
+}
+
+func TestObservationRejectsPermanentNetworkErrors(t *testing.T) {
+	for _, cause := range []error{
+		x509.UnknownAuthorityError{},
+		&net.DNSError{Err: "no such host", Name: "missing.example.test", IsNotFound: true},
+		fmt.Errorf("unsupported protocol scheme"),
+	} {
+		err := &url.Error{Op: "Get", URL: "https://example.test", Err: cause}
+		if transientObservationError(err) {
+			t.Errorf("permanent network error retried: %v", err)
+		}
+	}
+	for _, cause := range []error{syscall.ECONNREFUSED, syscall.ECONNRESET, context.DeadlineExceeded} {
+		err := &url.Error{Op: "Get", URL: "https://example.test", Err: &net.OpError{Op: "read", Net: "tcp", Err: cause}}
+		if !transientObservationError(err) {
+			t.Errorf("transient network error not retried: %v", err)
+		}
+	}
+}
+
+func TestRetryAfterParsingAndDeadline(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		value string
+		want  time.Duration
+	}{
+		{"2", 2 * time.Second},
+		{now.Add(5 * time.Second).Format(http.TimeFormat), 5 * time.Second},
+		{now.Add(-time.Second).Format(http.TimeFormat), 0},
+		{"-1", 0}, {"invalid", 0}, {"", 0},
+	} {
+		if got := retryAfterDelay(tc.value, now); got != tc.want {
+			t.Errorf("Retry-After %q = %s, want %s", tc.value, got, tc.want)
+		}
+	}
+	for _, status := range []int{429, 503} {
+		for _, body := range []string{"Service unavailable", `{"code":"busy","message":"Try later"}`} {
+			recorder := httptest.NewRecorder()
+			recorder.Header().Set("Retry-After", "2")
+			recorder.WriteHeader(status)
+			fmt.Fprint(recorder, body)
+			_, err := decodeResponse(recorder.Result())
+			var response *commandError
+			if !errors.As(err, &response) || response.retryAfter != 2*time.Second {
+				t.Fatalf("status=%d error=%v", status, err)
+			}
+			if got := observationRetryDelay(context.Background(), err, 100*time.Millisecond); got != 2*time.Second {
+				t.Errorf("Retry-After ignored: %s", got)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			delay := observationRetryDelay(ctx, err, 100*time.Millisecond)
+			cancel()
+			if delay <= 0 || delay > time.Second {
+				t.Errorf("delay exceeds remaining deadline: %s", delay)
+			}
+		}
 	}
 }

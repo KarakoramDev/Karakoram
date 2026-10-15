@@ -175,6 +175,7 @@ func (a *app) table(rows []any) error {
 		fmt.Fprint(w, strings.ToUpper(k))
 	}
 	fmt.Fprintln(w)
+	summarized := false
 	for _, row := range rows {
 		m, ok := row.(map[string]any)
 		if !ok {
@@ -192,7 +193,13 @@ func (a *app) table(rows []any) error {
 				}
 			}
 			if nestedTableValue(v) {
-				fmt.Fprint(w, "see details")
+				summarized = true
+				switch value := v.(type) {
+				case map[string]any:
+					fmt.Fprintf(w, "%d fields", len(value))
+				case []any:
+					fmt.Fprintf(w, "%d items", len(value))
+				}
 			} else {
 				fmt.Fprint(w, cell(v))
 			}
@@ -202,29 +209,8 @@ func (a *app) table(rows []any) error {
 	if err := w.Flush(); err != nil {
 		return err
 	}
-	for i, row := range rows {
-		m, ok := row.(map[string]any)
-		if !ok {
-			continue
-		}
-		details := map[string]any{}
-		for _, key := range ordered {
-			if key != "status" && nestedTableValue(m[key]) {
-				details[key] = m[key]
-			}
-		}
-		if len(details) == 0 {
-			continue
-		}
-		label := cell(m["name"])
-		if label == "-" {
-			label = cell(m["id"])
-		}
-		if label == "-" {
-			label = strconv.Itoa(i + 1)
-		}
-		fmt.Fprintf(w, "\nDetails for %s:\n", label)
-		detailFields(w, details, "  ")
+	if summarized {
+		fmt.Fprintln(w, "Nested fields summarized. Use -o json or -o yaml for full details.")
 	}
 	return w.Flush()
 }

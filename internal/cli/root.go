@@ -225,14 +225,18 @@ func decodeResponse(resp *http.Response) (any, error) {
 			Message string         `json:"message"`
 			Details map[string]any `json:"details"`
 		}
+		message := fmt.Sprintf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 		if json.Unmarshal(b, &apiErr) == nil && apiErr.Message != "" {
-			message := fmt.Sprintf("HTTP %d: %s: %s", resp.StatusCode, apiErr.Code, apiErr.Message)
+			message = fmt.Sprintf("HTTP %d: %s: %s", resp.StatusCode, apiErr.Code, apiErr.Message)
 			for _, key := range sortedKeys(apiErr.Details) {
 				message += fmt.Sprintf("\n  %s: %s", key, cell(apiErr.Details[key]))
 			}
-			return nil, apiFailure(resp.StatusCode, message)
 		}
-		return nil, apiFailure(resp.StatusCode, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode)))
+		failure := apiFailure(resp.StatusCode, message)
+		if resp.StatusCode == 429 || resp.StatusCode == 503 {
+			failure.retryAfter = retryAfterDelay(resp.Header.Get("Retry-After"), time.Now())
+		}
+		return nil, failure
 	}
 	if len(b) == 0 {
 		result := map[string]any{"status": "ok"}

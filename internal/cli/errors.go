@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -18,6 +19,7 @@ type commandError struct {
 	code       int
 	message    string
 	httpStatus int
+	retryAfter time.Duration
 }
 
 func (e *commandError) Error() string { return e.message }
@@ -74,7 +76,7 @@ func groupCommand(use, short string) *cobra.Command {
 	}}
 }
 
-func apiFailure(status int, message string) error {
+func apiFailure(status int, message string) *commandError {
 	code := 1
 	switch status {
 	case 400, 415, 422:

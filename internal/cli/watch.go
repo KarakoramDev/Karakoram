@@ -11,7 +11,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -31,8 +34,37 @@ func transientObservationError(err error) bool {
 		}
 		return false
 	}
+	var dns *net.DNSError
+	if errors.As(err, &dns) && dns.IsNotFound {
+		return false
+	}
 	var network net.Error
-	return errors.As(err, &network) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+	return errors.As(err, &network) && network.Timeout() ||
+		errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+func retryAfterDelay(value string, now time.Time) time.Duration {
+	if seconds, err := strconv.ParseInt(value, 10, 32); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if date, err := http.ParseTime(value); err == nil && date.After(now) {
+		return date.Sub(now)
+	}
+	return 0
+}
+
+func observationRetryDelay(ctx context.Context, err error, backoff time.Duration) time.Duration {
+	var response *commandError
+	if errors.As(err, &response) && response.retryAfter > backoff {
+		backoff = response.retryAfter
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline); remaining < backoff {
+			return max(remaining, 0)
+		}
+	}
+	return backoff
 }
 
 // Observation retries never resubmit the accepted mutation.
@@ -43,8 +75,9 @@ func (a *app) observe(ctx context.Context, op, id string) (any, error) {
 		if err == nil || !transientObservationError(err) || ctx.Err() != nil {
 			return result, err
 		}
-		fmt.Fprintf(a.opts.Err, "Observation temporarily unavailable; retrying in %s: %s\n", delay, err)
-		timer := time.NewTimer(delay)
+		pause := observationRetryDelay(ctx, err, delay)
+		fmt.Fprintf(a.opts.Err, "Observation temporarily unavailable; retrying in %s: %s\n", pause, err)
+		timer := time.NewTimer(pause)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -142,11 +175,7 @@ func (a *app) waitMutation(ctx context.Context, op string, args []string, result
 	if cluster == "" {
 		return fmt.Errorf("mutation response lacks cluster name or operation ID")
 	}
-	err := a.waitCluster(ctx, op, cluster, generation, q, timeout)
-	if err != nil && id != "" {
-		return a.acceptedOperationFailure(ctx, err, id, timeout)
-	}
-	return err
+	return a.waitCluster(ctx, op, cluster, generation, q, timeout)
 }
 
 func mutationDescription(op string) string {

@@ -116,13 +116,31 @@ func TestNestedResourceTablesUseDetailSections(t *testing.T) {
 		if code != 0 || strings.Contains(out, "components=") || strings.Contains(out, ";") {
 			t.Fatalf("%v: code=%d stdout=%q stderr=%q", args, code, out, stderr)
 		}
-		for _, text := range []string{"spec:", "components:", "engine:", "resources:", "maxCpu", "maxRam", "replicas"} {
-			if !strings.Contains(out, text) {
-				t.Errorf("%v missing %q: %q", args, text, out)
+		if args[1] == "get" {
+			for _, text := range []string{"spec:", "components:", "engine:", "resources:", "maxCpu", "maxRam", "replicas"} {
+				if !strings.Contains(out, text) {
+					t.Errorf("%v missing %q: %q", args, text, out)
+				}
+			}
+		} else {
+			if strings.Contains(out, "Details for") || strings.Contains(out, "maxCpu") || !strings.Contains(out, "-o json") {
+				t.Errorf("list contains nested detail dumps or lacks guidance: %q", out)
+			}
+			if !strings.Contains(stderr, "--cursor next-page") {
+				t.Errorf("missing pagination: stderr=%q", stderr)
 			}
 		}
-		if args[1] == "list" && (!strings.Contains(out, "Details for demo:") || !strings.Contains(stderr, "--cursor next-page")) {
-			t.Errorf("missing list details/pagination: stdout=%q stderr=%q", out, stderr)
-		}
+	}
+}
+
+func TestOperationListSummarizesNestedResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[{"id":"op-one","phase":"Running","result":{"details":{"largeField":"nested-result-only"}}}]}`)
+	}))
+	defer server.Close()
+	code, out, stderr := runCLI(t, server.URL, "", false, "operations", "list")
+	if code != 0 || !strings.Contains(out, "op-one") || !strings.Contains(out, "Running") || !strings.Contains(out, "-o json") || strings.Contains(out, "nested-result-only") || strings.Contains(out, "Details for") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, stderr)
 	}
 }
