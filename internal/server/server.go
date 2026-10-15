@@ -239,6 +239,20 @@ func collection(id string) bool {
 }
 func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictHandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, v any) (any, error) {
+		// Binding has finished: downstream middleware uses decoded PathValues,
+		// unlike the generated binder's encoded-segment input contract.
+		if _, escaped := r.Context().Value(wireURLKey{}).(*url.URL); escaped {
+			for segment := range strings.SplitSeq(r.Pattern, "/") {
+				if len(segment) > 2 && segment[0] == '{' && segment[len(segment)-1] == '}' {
+					key := segment[1 : len(segment)-1]
+					decoded, err := url.PathUnescape(r.PathValue(key))
+					if err != nil {
+						return invalidField(key, domain.ReasonInvalid, key+" must use valid URL path escaping"), nil
+					}
+					r.SetPathValue(key, decoded)
+				}
+			}
+		}
 		id := operationID(name)
 		rule, exists := api.OperationRBAC[id]
 		if !exists {
@@ -347,6 +361,21 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 // stdlib router otherwise applies only at the document's /api/v1 base URL.
 type operationMux struct{ *http.ServeMux }
 
+type wireURLKey struct{}
+
+func (m operationMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// ServeMux decodes wildcard segments, while generated oapi handlers decode
+	// them again. It also treats a decoded %2F as a trailing slash rather than a
+	// wildcard. Route the encoded representation and restore the original URL
+	// before dispatch, leaving encoded PathValues for the generated binder.
+	if escaped := r.URL.EscapedPath(); strings.HasPrefix(r.URL.Path, "/api/v1/") && escaped != r.URL.Path {
+		original := r.URL
+		r = r.Clone(context.WithValue(r.Context(), wireURLKey{}, original))
+		r.URL.Path, r.URL.RawPath = escaped, ""
+	}
+	m.ServeMux.ServeHTTP(w, r)
+}
+
 func (m operationMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	switch pattern {
 	case "GET /api/v1/healthz":
@@ -354,7 +383,12 @@ func (m operationMux) HandleFunc(pattern string, handler func(http.ResponseWrite
 	case "GET /api/v1/metrics":
 		pattern = "GET /metrics"
 	}
-	m.ServeMux.HandleFunc(pattern, handler)
+	m.ServeMux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if original, ok := r.Context().Value(wireURLKey{}).(*url.URL); ok {
+			r.URL = original
+		}
+		handler(w, r)
+	})
 }
 
 // Handler returns the public router, including root health/metrics and SPA history fallback.
@@ -386,14 +420,15 @@ func (s *Server) Handler() http.Handler {
 	if s.RelayHandler != nil {
 		mux.Handle("GET /relay/v1/connect", s.RelayHandler)
 	}
-	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: operationMux{mux}, ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+	routes := operationMux{mux}
+	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: routes, ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 		_ = parameterFailure(err).write(w)
 	}})
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		_ = fail(404, "not_found", "API route not found").write(w)
 	})
 	mux.Handle("/", ui.Handler())
-	validated := s.validationMiddleware(mux)
+	validated := s.validationMiddleware(routes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		id := requestID(r)

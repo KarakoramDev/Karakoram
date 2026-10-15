@@ -21,7 +21,10 @@ func TestRabbitMQCommands(t *testing.T) {
 				args := []string{"rabbitmq", resource, verb, "brokers"}
 				path := "/api/v1/clusters/brokers/rabbitmq/" + resource
 				if verb == "get" || verb == "update" || verb == "delete" {
-					if resource == "vhosts" || resource == "users" {
+					if resource == "vhosts" {
+						args = append(args, "/")
+						path += "/%2F"
+					} else if resource == "users" {
 						args = append(args, "app/a")
 						path += "/app%2Fa"
 					} else {
@@ -76,6 +79,48 @@ func TestRabbitMQCommands(t *testing.T) {
 					t.Fatal(out)
 				}
 			})
+		}
+	}
+}
+
+func TestRabbitMQVhostNameIsNotPreencoded(t *testing.T) {
+	for name, encoded := range map[string]string{"/": "%2F", "%2F": "%252F"} {
+		t.Run(encoded, func(t *testing.T) {
+			called := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				if r.URL.EscapedPath() != "/api/v1/clusters/brokers/rabbitmq/vhosts/"+encoded {
+					t.Error(r.URL.EscapedPath(), r.URL.RawPath)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]any{"name": name, "tags": []string{}})
+			}))
+			defer server.Close()
+			_, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "rabbitmq", "vhosts", "get", "brokers", name, "-o", "json")
+			if err != nil || !called {
+				t.Fatal(err, called)
+			}
+		})
+	}
+}
+
+func TestRabbitMQActionableErrors(t *testing.T) {
+	for _, tc := range []struct {
+		status                int
+		body, message, detail string
+	}{
+		{400, `{"code":"invalid_request","message":"configure, write or read contains a regular expression rejected by RabbitMQ","details":{"field":"configure,write,read","reason":"invalid"}}`, "regular expression rejected by RabbitMQ", "field: configure,write,read"},
+		{409, `{"code":"conflict","message":"RabbitMQ user admin is managed by Karakoram; rotate with system-users rotate","details":{"resource":"rabbitmq-user","name":"admin","reason":"protected"}}`, "rotate with system-users rotate", "reason: protected"},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(tc.status)
+			fmt.Fprint(w, tc.body)
+		}))
+		_, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "rabbitmq", "permissions", "delete", "brokers", "/", "admin")
+		server.Close()
+		if err == nil || !strings.Contains(err.Error(), tc.message) || !strings.Contains(err.Error(), tc.detail) {
+			t.Fatal(err)
 		}
 	}
 }
