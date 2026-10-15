@@ -10,7 +10,7 @@ import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
-import { AccessEditor, type AccessEdit, type AccessKind, SYSTEM_USERS } from './AccessEditor';
+import { AccessEditor, type AccessEdit, type AccessKind, SYSTEM_USERS, SYSTEM_USER_EXPLANATION } from './AccessEditor';
 
 export default function RabbitMQAccessTab() {
   const { namespace, name: cluster, can } = useClusterContext();
@@ -57,7 +57,7 @@ export default function RabbitMQAccessTab() {
   const canCreate = can('create', 'database-users');
   const canUpdate = can('update', 'database-users');
   const canDelete = can('delete', 'database-users');
-  const actions = (edit: AccessEdit, protectedUser = false) => protectedUser ? <Badge plain>System user</Badge> : (
+  const actions = (edit: AccessEdit, protectedUser = false) => protectedUser ? <span className="stack"><Badge plain>System user</Badge><span className="small muted">{SYSTEM_USER_EXPLANATION} <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md" target="_blank" rel="noreferrer">RabbitMQ access guide ↗</a></span></span> : (
     <span className="row">
       {canUpdate ? <Button size="sm" onClick={() => setEditor(edit)}>Edit</Button> : null}
       {canDelete ? <Button size="sm" variant="ghost" onClick={() => setRemove(edit)}>Delete…</Button> : null}

@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast';
 import { parseDefinition, parseOptionalLimit, parsePriority, parseUserTags } from './helpers';
 
 export const SYSTEM_USERS: readonly string[] = ['karakoram', 'admin', 'monitor', 'guest'];
+export const SYSTEM_USER_EXPLANATION = 'Managed by Karakoram; rotate with system-users rotate. Ordinary user and grant changes are protected.';
 type AccessItems = {
   vhost: Schemas['RabbitMQVhost'];
   user: Schemas['RabbitMQUser'];
@@ -63,7 +64,7 @@ export function AccessEditor({ namespace, cluster, edit, vhosts, users, onClose,
         }
         case 'user': {
           if (!name.trim()) throw new Error('A username is required.');
-          if (SYSTEM_USERS.includes(name)) throw new Error('System users are managed separately.');
+          if (SYSTEM_USERS.includes(name)) throw new Error(SYSTEM_USER_EXPLANATION);
           const body = { name, tags: parseUserTags(tags), ...(password ? { password } : {}) };
           if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/users/{user}', { params: { path: { cluster, user: edit.existing.name }, query: { namespace } }, body }));
           else {

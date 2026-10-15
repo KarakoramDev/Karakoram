@@ -11,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/mgmt"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -93,9 +94,14 @@ func accessName(name string) error {
 func protectedUser(name string) bool {
 	return name == "karakoram" || name == "admin" || name == "guest" || name == "monitor"
 }
+
+func protectedUserError(name string) error {
+	return domain.Conflict("rabbitmq-user", name, domain.ReasonProtected, engine.ErrConflict,
+		"RabbitMQ user %q is managed by Karakoram; rotate with system-users rotate", name)
+}
 func userValidation(v UserWrite) error {
 	if protectedUser(v.Name) {
-		return engine.ErrConflict
+		return protectedUserError(v.Name)
 	}
 	if e := accessName(v.Name); e != nil {
 		return e
@@ -108,14 +114,14 @@ func userValidation(v UserWrite) error {
 		}
 	}
 	if v.Password != nil && v.PasswordHash != nil {
-		return engine.Invalid("password and passwordHash are mutually exclusive")
+		return engine.InvalidField("password", domain.ReasonConflict, "password and passwordHash are mutually exclusive")
 	}
 	return nil
 }
-func regexValidation(patterns ...string) error {
+func regexValidation(field string, patterns ...string) error {
 	for _, v := range patterns {
 		if len(v) > 4096 {
-			return engine.Invalid("regular expression must be at most 4096 bytes")
+			return engine.InvalidField(field, domain.ReasonOutOfRange, "%s regular expressions must be at most 4096 bytes", field)
 		}
 	}
 	return nil
@@ -128,15 +134,15 @@ func policyValidation(v Policy) error {
 		return e
 	}
 	if v.Pattern == "" {
-		return engine.Invalid("policy pattern must be non-empty")
+		return engine.InvalidField("pattern", domain.ReasonRequired, "pattern must be non-empty")
 	}
-	if e := regexValidation(v.Pattern); e != nil {
+	if e := regexValidation("pattern", v.Pattern); e != nil {
 		return e
 	}
 	switch v.ApplyTo {
 	case "all", "queues", "exchanges", "classic_queues", "quorum_queues", "streams":
 	default:
-		return engine.Invalid("invalid policy applyTo")
+		return engine.InvalidField("applyTo", domain.ReasonUnsupported, "applyTo is not supported by RabbitMQ")
 	}
 	if v.Priority < 0 {
 		return engine.Invalid("policy priority must be nonnegative")
@@ -196,7 +202,7 @@ func vhostValidation(v Vhost) error {
 }
 func permissionValidation(v Permission) error {
 	if protectedUser(v.User) {
-		return engine.ErrConflict
+		return protectedUserError(v.User)
 	}
 	if e := accessName(v.Vhost); e != nil {
 		return e
@@ -204,11 +210,11 @@ func permissionValidation(v Permission) error {
 	if e := accessName(v.User); e != nil {
 		return e
 	}
-	return regexValidation(v.Configure, v.Write, v.Read)
+	return regexValidation("configure,write,read", v.Configure, v.Write, v.Read)
 }
 func topicValidation(v TopicPermission) error {
 	if protectedUser(v.User) {
-		return engine.ErrConflict
+		return protectedUserError(v.User)
 	}
 	if e := accessName(v.Vhost); e != nil {
 		return e
@@ -219,7 +225,7 @@ func topicValidation(v TopicPermission) error {
 	if e := accessName(v.Exchange); e != nil {
 		return e
 	}
-	return regexValidation(v.Write, v.Read)
+	return regexValidation("write,read", v.Write, v.Read)
 }
 func (p *Provider) ListVhosts(ctx context.Context, rc *engine.Context) ([]Vhost, error) {
 	c, e := p.adminClient(ctx, rc)
@@ -348,7 +354,7 @@ func (p *Provider) GetUser(ctx context.Context, rc *engine.Context, name string)
 }
 func (p *Provider) DeleteUser(ctx context.Context, rc *engine.Context, name string) error {
 	if protectedUser(name) {
-		return engine.ErrConflict
+		return protectedUserError(name)
 	}
 	if e := accessName(name); e != nil {
 		return e
@@ -412,7 +418,7 @@ func (p *Provider) UpdatePermission(ctx context.Context, rc *engine.Context, v P
 }
 func (p *Provider) DeletePermission(ctx context.Context, rc *engine.Context, vhost, user string) error {
 	if protectedUser(user) {
-		return engine.ErrConflict
+		return protectedUserError(user)
 	}
 	if e := accessName(vhost); e != nil {
 		return e
@@ -490,7 +496,7 @@ func (p *Provider) UpdateTopicPermission(ctx context.Context, rc *engine.Context
 }
 func (p *Provider) DeleteTopicPermission(ctx context.Context, rc *engine.Context, vhost, user string) error {
 	if protectedUser(user) {
-		return engine.ErrConflict
+		return protectedUserError(user)
 	}
 	if e := accessName(vhost); e != nil {
 		return e

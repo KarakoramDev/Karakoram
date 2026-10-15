@@ -805,6 +805,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -856,6 +857,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -907,6 +909,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -958,6 +961,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -1064,6 +1068,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5659,6 +5664,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5696,6 +5702,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5737,6 +5744,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5840,6 +5848,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5877,6 +5886,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5918,6 +5928,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6021,6 +6032,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6058,6 +6070,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6099,6 +6112,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6202,6 +6216,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6239,6 +6254,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6280,6 +6296,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6560,6 +6577,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6596,6 +6614,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6636,6 +6655,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -7179,7 +7199,7 @@ export interface operations {
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -7223,7 +7243,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };

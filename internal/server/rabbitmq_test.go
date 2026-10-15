@@ -301,8 +301,27 @@ func TestRabbitMQUnsupportedAndIdentity(t *testing.T) {
 			body = `{"vhost":"wrong","user":"app","configure":".*","read":".*","write":".*"}`
 		}
 		w = call(s, "PUT", "/api/v1/clusters/prod/rabbitmq/"+path, body, token)
-		if w.Code != 400 {
+		field := "vhost"
+		if strings.HasPrefix(path, "vhosts") || strings.HasPrefix(path, "users") {
+			field = "name"
+		}
+		if w.Code != 400 || !strings.Contains(w.Body.String(), `"field":"`+field+`"`) || strings.Contains(w.Body.String(), "wrong") {
 			t.Fatal(path, w.Code, w.Body.String())
+		}
+	}
+	for _, resource := range []string{"permissions", "topic-permissions", "policies", "operator-policies"} {
+		body := `{"vhost":"app","user":"private-identity","configure":"","write":"","read":""}`
+		field := "user"
+		if resource == "topic-permissions" {
+			body = `{"vhost":"app","user":"private-identity","exchange":"events","write":"","read":""}`
+		}
+		if strings.Contains(resource, "policies") {
+			field = "name"
+			body = `{"vhost":"app","name":"private-identity","pattern":".*","applyTo":"queues","priority":0,"definition":{}}`
+		}
+		w = call(s, "PUT", "/api/v1/clusters/prod/rabbitmq/"+resource+"/app/app", body, token)
+		if w.Code != 400 || !strings.Contains(w.Body.String(), `"field":"`+field+`"`) || strings.Contains(w.Body.String(), "private-identity") {
+			t.Fatal(resource, w.Code, w.Body.String())
 		}
 	}
 	for _, path := range []string{"vhosts", "users", "permissions", "topic-permissions", "policies", "operator-policies"} {

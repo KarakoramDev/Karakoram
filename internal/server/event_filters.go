@@ -13,7 +13,11 @@ import (
 )
 
 var eventResources = func() []string {
-	resources := map[string]bool{"auth": true, "orphaned-volumes": true, "operations": true}
+	resources := map[string]bool{
+		"auth": true, "orphaned-volumes": true, "operations": true,
+		"rabbitmq-vhosts": true, "rabbitmq-users": true, "rabbitmq-permissions": true,
+		"rabbitmq-topic-permissions": true, "rabbitmq-policies": true, "rabbitmq-operator-policies": true,
+	}
 	for _, rule := range api.OperationRBAC {
 		if rule.Resource != "" && (rule.Action != "read" || rule.Resource == "cluster-credentials") {
 			resources[rule.Resource] = true

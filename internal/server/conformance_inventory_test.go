@@ -133,6 +133,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if w := call(s, "GET", "/api/v1/providers/psmdb", "", token); w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	t.Run("rabbitmq-native", testRabbitMQNativeGETResponses)
 }
 
 func TestOpenAPISpecIsPublicAndCacheable(t *testing.T) {
