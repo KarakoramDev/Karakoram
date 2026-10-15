@@ -97,7 +97,7 @@ func TestFailedImportCleanupAdoptsAndDeletesUntaggedVolume(t *testing.T) {
 	}
 	s := state(t, rc)
 	m = s.Members[0]
-	if m.ServiceID != runtimeID || m.VolumeID != volumeID || s.Retry != nil || f.services[m.Name] != nil || f.services[m.Volume] == nil {
+	if m.ServiceID != runtimeID || m.VolumeID != volumeID || s.Retry != nil || f.services[m.Name] == nil || f.services[m.Volume] == nil {
 		t.Fatalf("cleanup lost volume evidence before runtime deletion: %+v", s)
 	}
 	rc.Cluster = cloneCluster(t, rc.Cluster)
@@ -161,5 +161,25 @@ func TestUntaggedVolumeRequiresVerifiedRuntimeMount(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestFailedImportCleanupCheckpointsOwnershipBeforeDeletingRuntime(t *testing.T) {
+	p, rc, f := failedMemberImport(t)
+	m := state(t, rc).Members[0]
+	runtimeID, volumeID := f.services[m.Name].ID, f.services[m.Volume].ID
+	f.log.clear()
+	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepBackups: true})
+	if err != nil || done {
+		t.Fatal(done, err)
+	}
+	m = state(t, rc).Members[0]
+	if m.ServiceID != runtimeID || m.VolumeID != volumeID || f.services[m.Name] == nil || f.services[m.Volume] == nil {
+		t.Fatal("runtime deleted before returning its adopted ownership checkpoint", m, f.log.snapshot())
+	}
+	rc.Cluster = cloneCluster(t, rc.Cluster)
+	done, err = p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepBackups: true})
+	if err != nil || done || f.services[m.Name] != nil || f.services[m.Volume] == nil {
+		t.Fatal("checkpointed cleanup did not delete only the runtime", done, err, f.log.snapshot())
 	}
 }
