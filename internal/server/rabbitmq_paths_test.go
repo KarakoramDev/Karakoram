@@ -4,9 +4,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -110,5 +112,26 @@ func TestRabbitMQGeneratedClientVhostPaths(t *testing.T) {
 		if wire := <-seen; resp.StatusCode != 200 || err != nil || vhost.Name != name || wire != expected {
 			t.Fatal(resp.StatusCode, err, vhost.Name, wire)
 		}
+	}
+}
+
+func TestRabbitMQEscapedPathAccessLogRoute(t *testing.T) {
+	s, _, token := testServer(t)
+	s.Registry, _ = engine.NewRegistry(&pathRabbitMQAccess{})
+	var logs bytes.Buffer
+	s.Logger = slog.New(slog.NewJSONHandler(&logs, nil))
+	req := httptest.NewRequest("GET", "/api/v1/clusters/prod/rabbitmq/vhosts/%2F", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	testHandler(s).ServeHTTP(w, req)
+	var entry struct {
+		Route string `json:"route"`
+	}
+	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
+		t.Fatal(err, logs.String())
+	}
+	const pattern = "GET /api/v1/clusters/{cluster}/rabbitmq/vhosts/{vhost}"
+	if w.Code != http.StatusOK || entry.Route != pattern || req.Pattern != pattern {
+		t.Fatal(w.Code, entry.Route, req.Pattern)
 	}
 }

@@ -364,6 +364,7 @@ type operationMux struct{ *http.ServeMux }
 type wireURLKey struct{}
 
 func (m operationMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	originalRequest := r
 	// ServeMux decodes wildcard segments, while generated oapi handlers decode
 	// them again. It also treats a decoded %2F as a trailing slash rather than a
 	// wildcard. Route the encoded representation and restore the original URL
@@ -374,6 +375,7 @@ func (m operationMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path, r.URL.RawPath = escaped, ""
 	}
 	m.ServeMux.ServeHTTP(w, r)
+	originalRequest.Pattern = r.Pattern
 }
 
 func (m operationMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
