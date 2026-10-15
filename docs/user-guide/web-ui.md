@@ -145,7 +145,7 @@ a successful rotation. See [users and roles](users-tls-access.md).
 
 **Settings** contains:
 
-- **Backup storages:** S3 destination/credential registration and verification. Transport options show HTTP/HTTPS and certificate verification separately from the latest in-session probe result, its failure category/message and check time.
+- **Backup storages:** S3 destination/credential registration and verification. Transport options show HTTP/HTTPS and certificate verification separately from the persisted latest probe result, its failure category/message and check time. Connection or credential changes clear verification immediately; description-only changes retain it.
 - **Namespaces:** project/token/relay health, Validate and add, detail/description, token rotation, re-validation and guarded removal. Tokens are write-only; default-token rotation requires a service-secret update/restart.
 - **Accounts:** local account lifecycle, enable/disable and password reset.
 - **RBAC:** full-policy editing and effective authorization checks.
