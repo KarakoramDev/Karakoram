@@ -17,7 +17,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/elastic"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
@@ -41,12 +40,13 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	s, token := namespaceTestServer(t)
 	ctx := t.Context()
 	var err error
-	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), elastic.New(elastic.ProviderOptions{}), rabbitmq.New(rabbitmq.Options{}))
+	inventoryElastic := newInventoryElasticProvider(t, s)
+	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	elasticRegistry := s.Registry
-	rabbitRegistry, err := engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}), elastic.New(elastic.ProviderOptions{}), rabbitmq.New(rabbitmq.Options{}))
+	rabbitRegistry, err := engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +112,9 @@ func TestEveryGETResponseConforms(t *testing.T) {
 				s.Registry = rabbitRegistry
 			}
 			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
+			if strings.Contains(path, "/elasticsearch/") {
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/search/", 1)
+			}
 			if path == "/healthz" || path == "/metrics" {
 				url = path
 			}
@@ -138,6 +141,13 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if w.Code != want {
 				t.Fatalf("%s: %d, want %d: %s", url, w.Code, want, w.Body.String())
 			}
+			if strings.Contains(path, "/elasticsearch/roles") {
+				for _, field := range []string{`"applications"`, `"kibana-.kibana"`, `"query"`, `"fieldSecurity"`, `"grant"`, `"except"`} {
+					if !strings.Contains(w.Body.String(), field) {
+						t.Fatalf("native role response omits %s: %s", field, w.Body.String())
+					}
+				}
+			}
 			if strings.HasPrefix(operationID, "list") {
 				var envelope struct {
 					Items []json.RawMessage `json:"items"`
@@ -158,6 +168,19 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	t.Run("rabbitmq-native", testRabbitMQNativeGETResponses)
 	if w := call(s, "GET", "/api/v1/providers/elasticsearch", "", token); w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, path := range []string{"/api/v1/clusters/search", "/api/v1/clusters/search/backups", "/api/v1/clusters/search/backups/snapshot"} {
+		w := call(s, "GET", path, "", token)
+		if w.Code != 200 {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+		if strings.Contains(path, "/backups") {
+			for _, field := range []string{`"provider":"elasticsearch"`, `"type":"snapshot"`, `"location":"s3://backups/search?repository=archive#snapshot"`, `"completedAt"`} {
+				if !strings.Contains(w.Body.String(), field) {
+					t.Fatalf("native snapshot response omits %s: %s", field, w.Body.String())
+				}
+			}
+		}
 	}
 }
 

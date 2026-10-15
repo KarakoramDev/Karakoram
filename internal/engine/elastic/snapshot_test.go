@@ -54,7 +54,7 @@ func TestBackupCheckpointReentryAfterCreate(t *testing.T) {
 		t.Fatalf("re-entry creates=%d err=%v", creates, err)
 	}
 	result, err = p.runBackup(context.Background(), rc, s, op, opsCheckpoint(t, result), st.backup.Name)
-	if err != nil || !result.Done || st.backup.Phase != domain.PhaseSucceeded || st.backup.Provider != "elasticsearch" || st.backup.Location == "" || st.backup.CompletedAt == nil {
+	if err != nil || !result.Done || st.backup.Phase != domain.PhaseSucceeded || st.backup.Provider != "elasticsearch" || st.backup.Type != "snapshot" || st.backup.Location == "" || st.backup.CompletedAt == nil {
 		t.Fatalf("backup result %+v backup %+v err %v", result, st.backup, err)
 	}
 }

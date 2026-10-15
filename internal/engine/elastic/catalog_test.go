@@ -58,6 +58,11 @@ func TestCatalog(t *testing.T) {
 		if !ok || backup != p.RequiresBackup {
 			t.Fatalf("invalid path: %+v", p)
 		}
+		from, fromOK := parseVersion(p.From)
+		to, toOK := parseVersion(p.To)
+		if !fromOK || !toOK || from[0] != to[0] && !p.RequiresBackup {
+			t.Fatalf("every major upgrade must require a backup: %+v", p)
+		}
 		key := p.From + ">" + p.To
 		if seen[key] {
 			t.Fatal("duplicate path")

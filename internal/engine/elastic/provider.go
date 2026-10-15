@@ -191,7 +191,10 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	for name, c := range s.Components.Extra {
 		switch name {
 		case "master":
-			if s.Topology.Type != "dedicatedMasters" || c.Replicas != 3 && c.Replicas != 5 {
+			if s.Topology.Type != "dedicatedMasters" {
+				return engine.InvalidField("spec.components.extra.master", domain.ReasonUnsupported, "dedicated masters require the dedicatedMasters topology; cluster topology uses combined master/data nodes")
+			}
+			if c.Replicas != 3 && c.Replicas != 5 {
 				return invalid("dedicated masters require 3 or 5 replicas")
 			}
 		case "kibana", "apm":
