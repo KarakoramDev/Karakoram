@@ -355,3 +355,25 @@ func TestReadinessRouteDoesNotTreatStoppedProcessAsReady(t *testing.T) {
 		t.Fatalf("unexpected readiness: %d %+v", w.Code, observation)
 	}
 }
+
+func TestConfigurationLogCutoffFollowsRunnerApply(t *testing.T) {
+	r, _ := fixture(t)
+	keystore := r.KeystoreCommand
+	var runnerReachedAt time.Time
+	r.KeystoreCommand = func(ctx context.Context, binary string, args, env []string, stdin io.Reader) error {
+		runnerReachedAt = time.Now()
+		return keystore(ctx, binary, args, env, stdin)
+	}
+	e := NewEngine()
+	e.runner = r
+	result := runAdapter(t, e, t.TempDir(), esSpec(), []string{})
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	e.mu.RLock()
+	cutoff := e.configAppliedAt
+	e.mu.RUnlock()
+	if runnerReachedAt.IsZero() || cutoff.Before(runnerReachedAt) {
+		t.Fatalf("log cutoff %s preceded runner apply %s", cutoff, runnerReachedAt)
+	}
+}

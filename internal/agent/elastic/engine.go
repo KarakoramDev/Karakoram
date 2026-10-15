@@ -80,12 +80,12 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		return nil, errors.New("unknown Elastic component")
 	}
 	fileLimitOnce.Do(RaiseFileLimit)
-	appliedAt := time.Now()
 	h := nodeHost{Node: n}
 	changes, err := e.runner.Apply(ctx, h, spec, c.Cluster, c.Member)
 	if err != nil {
 		return changes, err
 	}
+	appliedAt := time.Now()
 	// Explicit empty intent stops children without releasing operator holds.
 	states, _ := n.Snapshot()
 	for name := range states {
