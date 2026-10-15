@@ -52,6 +52,9 @@ func New(o Options) *Provider {
 // Name returns the stable engine identifier.
 func (*Provider) Name() string { return "psmdb" }
 
+// RelayTargets exposes the provider's observed and planned relay destinations.
+func (*Provider) RelayTargets(c *domain.Cluster) []string { return RelayTargets(c) }
+
 var clusterName = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}$`)
 
 // Catalog pins noble packages published by repo.percona.com.
@@ -104,6 +107,9 @@ func (*Provider) Describe() domain.ProviderInfo {
 	ci := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 3, Resources: r}, MinReplicas: 1, MaxReplicas: 7, AllowedReplicas: []int{1, 3, 5, 7}}
 	router := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 1, Resources: r}, MinReplicas: 1, MaxReplicas: 32}
 	v := domain.ProviderInfo{Name: "psmdb", DisplayName: "Percona Server for MongoDB", Versions: append([]domain.VersionInfo(nil), catalog...), BackupTypes: []string{"logical", "physical"}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": ci}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": ci, "configServer": ci, "router": router}, Schema: json.RawMessage(`{"type":"object","properties":{"shards":{"type":"integer","minimum":1,"maximum":128,"default":1}}}`)}}}
+	v.Capabilities = []string{"databaseUsers", "databaseRoles", "systemUsers", "balancer", "pitr", "backups", "restores", "fcv", "publicExposure", "tls", "monitoring", "engineConfig"}
+	v.Operations = []string{domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, domain.OperationRaiseFCV, domain.OperationRestart, domain.OperationReplaceMember, domain.OperationRotateSystemUser, domain.OperationRotateTLS}
+	v.Processes = []string{"mongod", "mongos", "pbm-agent"}
 	for i := range v.Versions {
 		v.Versions[i].PBMVersion = "2.16.0-1"
 	}

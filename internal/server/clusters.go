@@ -13,8 +13,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/store"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -143,8 +144,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				if failure := s.retainedRestoreSource(ctx, source, d.Backup); failure != nil {
 					return *failure
 				}
-				if _, err := s.Store.GetBackup(ctx, source, d.Backup); err != nil {
+				backup, err := s.Store.GetBackup(ctx, source, d.Backup)
+				if err != nil {
 					return s.backupDependencyFailure(err, source, d.Backup)
+				}
+				if !backup.ProviderMatches(c.Spec.Provider) {
+					return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 				}
 			}
 		}
@@ -193,6 +198,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.failure(err)
 	}
 	c := rc.Cluster
+	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
+		return s.failure(engine.ErrNotSupported)
+	}
 	switch name {
 	case "GetCluster":
 		return ok(s.clusterAPI(*c))
@@ -241,6 +249,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		next.Spec = specDomain(spec)
 		if next.Spec.Provider == "" {
 			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
+		}
+		if next.Spec.Provider != c.Spec.Provider {
+			return invalidField("spec.provider", domain.ReasonInvalid, "spec.provider is immutable")
 		}
 		if next.Spec.DataSource != nil {
 			next.Spec.DataSource.Namespace = namespaceOrDefaultSource(next.Spec.DataSource.Namespace, c.Namespace)
@@ -413,6 +424,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		v := domain.Backup{Namespace: c.Namespace, Name: b.Name, Cluster: c.Name, Storage: b.Storage, Type: string(b.Type), Trigger: "manual", Phase: domain.PhasePending}
+		if c.Spec.Provider != "psmdb" {
+			v.Provider = c.Spec.Provider
+		}
 		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
 		if err = s.Store.EnqueueBackup(ctx, &v, &op); err != nil {
 			return s.failure(err)
@@ -463,8 +477,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
 				return *failure
 			}
-			if _, err = s.Store.GetBackup(ctx, sourceRef, *b.Source.Backup); err != nil {
+			backup, err := s.Store.GetBackup(ctx, sourceRef, *b.Source.Backup)
+			if err != nil {
 				return s.backupDependencyFailure(err, sourceRef, *b.Source.Backup)
+			}
+			if !backup.ProviderMatches(c.Spec.Provider) {
+				return s.failure(engine.InvalidField("source.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 			}
 		}
 		if b.Source.PitrTime != nil {
@@ -580,8 +598,15 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 		}
 		proc := q.Get("process")
+		processes := p.Describe().Processes
 		if proc == "" {
-			proc = "mongod"
+			proc = "agent"
+			if len(processes) > 0 {
+				proc = processes[0]
+			}
+		}
+		if proc != "agent" && !slices.Contains(processes, proc) {
+			return invalid()
 		}
 		logs, err := dp.MemberLogs(ctx, rc, in.Member, proc, lines)
 		if err != nil {
@@ -649,6 +674,28 @@ func sameTLS(a, b domain.TLSConfig) bool {
 	return bytes.Equal(left, right)
 }
 
+func operationKind(name string) string {
+	switch name {
+	case "RestartCluster":
+		return domain.OperationRestart
+	case "RotateClusterTLS":
+		return domain.OperationRotateTLS
+	case "RaiseClusterFCV":
+		return domain.OperationRaiseFCV
+	case "ReplaceClusterMember":
+		return domain.OperationReplaceMember
+	case "RotateSystemUser":
+		return domain.OperationRotateSystemUser
+	case "CreateBackup":
+		return domain.OperationBackup
+	case "DeleteBackup":
+		return domain.OperationDeleteBackup
+	case "CreateRestore":
+		return domain.OperationRestore
+	}
+	return ""
+}
+
 func namespaceOrDefaultSource(source, target string) string {
 	if source == "" {
 		return domain.NormalizedNamespace(target)
@@ -677,6 +724,15 @@ func (s *Server) restorePermission(ctx context.Context, targetNamespace string, 
 }
 
 func (s *Server) validateStorages(ctx context.Context, c *domain.Cluster) error {
+	p, err := s.Registry.Get(c.Spec.Provider)
+	if err != nil {
+		return err
+	}
+	for i, schedule := range c.Spec.Backup.Schedules {
+		if !slices.Contains(p.Describe().BackupTypes, schedule.Type) {
+			return engine.InvalidField(fmt.Sprintf("spec.backup.schedules[%d].type", i), domain.ReasonUnsupported, "backup schedule %q has unsupported type %q", schedule.Name, schedule.Type)
+		}
+	}
 	if c.Spec.Backup.Storage != "" {
 		if _, err := s.Store.GetBackupStorage(ctx, c.Namespace, c.Spec.Backup.Storage); err != nil {
 			return err

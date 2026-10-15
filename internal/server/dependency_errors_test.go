@@ -179,8 +179,11 @@ func TestBackupRestoreAndCloneDependencyDiagnostics(t *testing.T) {
 
 type noPITRProvider struct{ *fakeProvider }
 
-func (*noPITRProvider) Describe() domain.ProviderInfo {
-	return domain.ProviderInfo{Name: "fake", DisplayName: "Example engine", BackupTypes: []string{"physical"}}
+func (p *noPITRProvider) Describe() domain.ProviderInfo {
+	info := p.fakeProvider.Describe()
+	info.DisplayName = "Example engine"
+	info.BackupTypes = []string{"physical"}
+	return info
 }
 func (*noPITRProvider) PITRWindow(context.Context, *engine.Context) ([]domain.TimeWindow, error) {
 	return nil, engine.ErrNotSupported

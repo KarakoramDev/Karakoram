@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { Schemas } from '@/api/client';
 import { Badge, type Tone } from '@/components/ui/Primitives';
 import { memberHealthCounts, rememberMemberRoles, type MemberRoles } from './member-status';
+import { engineTopologySummary } from '@/engines';
 
 type Phase = Schemas['ClusterStatus']['phase'];
 type Cluster = Schemas['Cluster'];
@@ -44,6 +45,8 @@ export function BackupPhaseBadge({ phase }: { phase: Schemas['Backup']['phase'] 
 }
 
 export function topologySummary(c: Cluster): string {
+  const summary = engineTopologySummary(c);
+  if (summary !== undefined) return summary;
   const { topology, components } = c.spec;
   if (topology.type === 'sharded') {
     return `Sharded · ${topology.shards ?? 0} shards × ${components.engine.replicas} · ${components.configServer?.replicas ?? 0} cfg · ${components.router?.replicas ?? 0} routers`;

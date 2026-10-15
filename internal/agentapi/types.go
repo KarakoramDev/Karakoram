@@ -20,6 +20,8 @@ const (
 type MemberConfig struct {
 	Cluster               string                 `json:"cluster"`
 	Member                string                 `json:"member"`
+	Engine                string                 `json:"engine,omitempty"`
+	EngineSpec            json.RawMessage        `json:"engineSpec,omitempty"`
 	Role                  string                 `json:"role"`
 	ReplSetName           string                 `json:"replSetName"`
 	Port                  int                    `json:"port"`

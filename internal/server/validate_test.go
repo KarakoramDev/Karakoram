@@ -379,7 +379,7 @@ func TestClosedSchemasAndCompositions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"CreateClusterRequest", "ReplaceClusterRequest", "ClusterMergePatch", "ClusterInputSpec", "ClusterPatchSpec", "ResourcesInput", "ResourcesPatch", "ComponentsInput", "ComponentsPatch"} {
+	for _, name := range []string{"CreateClusterRequest", "ReplaceClusterRequest", "ClusterMergePatch", "ClusterInputSpec", "ClusterPatchSpec", "ResourcesInput", "ResourcesPatch", "ComponentsInput", "ComponentsPatch", "ExtraComponentInput", "ExtraComponentPatch"} {
 		s := doc.Components.Schemas[name].Value
 		if s.AdditionalProperties.Has == nil || *s.AdditionalProperties.Has {
 			t.Fatalf("%s is not closed", name)

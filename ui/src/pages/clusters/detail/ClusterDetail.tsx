@@ -2,11 +2,11 @@
 // Copyright 2026 The Karakoram Authors
 
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Link, Navigate, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
-import { useCluster, type Cluster } from '@/api/hooks';
+import { useCluster, useProviders, type Cluster, type Provider } from '@/api/hooks';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject, type Action, type Resource } from '@/auth/permissions';
@@ -19,9 +19,11 @@ import { PhaseBadge, topologySummary } from '../cluster-utils';
 import { colocatedGroups, maintenanceCopy, observedVersion } from './detail-state';
 import { clusterPath } from '../cluster-path';
 import { OperationNotice } from '@/components/OperationNotice';
+import { detailProvider, engines, hasCapability, supportsOperation, tabAvailable } from '@/engines';
 
 export interface ClusterContext {
   cluster: Cluster;
+  provider: Provider | undefined;
   namespace: string;
   name: string;
   /** Namespace-aware route prefix of this cluster (`/clusters/<ns>/<name>`). */
@@ -48,6 +50,8 @@ export function ClusterDetailLayout() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const q = useCluster(namespace, name);
+  const providers = useProviders();
+  const location = useLocation();
   const [confirm, setConfirm] = useState<null | 'restart' | 'rotate-tls' | 'resume'>(null);
   const base = clusterPath(namespace, name);
   const submission = useIdempotencyKey();
@@ -104,6 +108,10 @@ export function ClusterDetailLayout() {
     );
   }
   const cluster = q.data;
+  const provider = detailProvider(cluster.spec.provider, providers.error ? undefined : providers.data?.items.find((p) => p.name === cluster.spec.provider));
+  const engine = engines[cluster.spec.provider];
+  const tab = location.pathname.slice(base.length + 1).split('/')[0] ?? '';
+  if (!tabAvailable(provider, tab)) return <Navigate to={base} replace />;
   const can: ClusterContext['can'] = (act, resource = 'clusters') => auth.can(resource, act, clusterObject(namespace, name));
   const suspended = cluster.status.phase === 'Suspended';
   const colocated = colocatedGroups(cluster.status.placement?.groups).length > 0;
@@ -134,7 +142,7 @@ export function ClusterDetailLayout() {
         description={
           <>
             {topologySummary(cluster)} · running {observedVersion(cluster.status) || 'not yet observed'} · desired {cluster.spec.version}
-            {cluster.status.fcv ? ` · FCV ${cluster.status.fcv}` : ''}
+            {hasCapability(provider, 'fcv') && cluster.status.fcv ? ` · FCV ${cluster.status.fcv}` : ''}
             {cluster.status.message ? ` · ${cluster.status.message}` : ''}
           </>
         }
@@ -147,11 +155,11 @@ export function ClusterDetailLayout() {
             ) : null}
             {can('update') && !suspended ? (
               <Menu label="Actions" size="md">
-                <MenuItem onClick={() => setConfirm('restart')}>Rolling restart…</MenuItem>
-                <MenuItem onClick={() => setConfirm('rotate-tls')} disabled={cluster.spec.tls?.mode === 'disabled'} title={cluster.spec.tls?.mode === 'disabled' ? 'TLS is disabled' : undefined}>
+                {supportsOperation(provider, 'restart') ? <MenuItem onClick={() => setConfirm('restart')}>Rolling restart…</MenuItem> : null}
+                {supportsOperation(provider, 'rotate-tls') ? <MenuItem onClick={() => setConfirm('rotate-tls')} disabled={cluster.spec.tls?.mode === 'disabled'} title={cluster.spec.tls?.mode === 'disabled' ? 'TLS is disabled' : undefined}>
                   Rotate TLS certificates…
-                </MenuItem>
-                <MenuItem onClick={() => navigate(`/clusters/new?namespace=${encodeURIComponent(namespace)}&from=${encodeURIComponent(name)}`)}>Clone into new cluster…</MenuItem>
+                </MenuItem> : null}
+                {hasCapability(provider, 'restores') ? <MenuItem onClick={() => navigate(`/clusters/new?namespace=${encodeURIComponent(namespace)}&from=${encodeURIComponent(name)}`)}>Clone into new cluster…</MenuItem> : null}
               </Menu>
             ) : null}
           </>
@@ -175,9 +183,10 @@ export function ClusterDetailLayout() {
           { to: `${base}/events`, label: 'Events & logs' },
           { to: `${base}/operations`, label: 'Operations' },
           ...(can('delete') ? [{ to: `${base}/delete`, label: 'Delete' }] : []),
-        ]}
+          ...(engine?.detailTabs ?? []).filter((t) => !t.capability || hasCapability(provider, t.capability)).map((t) => ({ to: `${base}/${t.id}`, label: t.label })),
+        ].filter((t) => tabAvailable(provider, t.to.slice(base.length + 1)))}
       />
-      <Outlet context={{ cluster, namespace, name, base, can } satisfies ClusterContext} />
+      <Outlet context={{ cluster, provider, namespace, name, base, can } satisfies ClusterContext} />
 
       <ConfirmDialog
         open={confirm === 'restart'}
@@ -217,4 +226,11 @@ export function ClusterDetailLayout() {
       </ConfirmDialog>
     </div>
   );
+}
+
+export function EngineDetailTab() {
+  const { cluster, base } = useClusterContext();
+  const location = useLocation();
+  const id = location.pathname.slice(base.length + 1);
+  return engines[cluster.spec.provider]?.detailTabs?.find((tab) => tab.id === id)?.element ?? <Navigate to={base} replace />;
 }

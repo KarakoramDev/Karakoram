@@ -50,12 +50,15 @@ type ImportResult struct {
 // ServiceStack contains service identity and the effective autoscaling configuration.
 // Raw configuration fields preserve platform attributes unknown to Karakoram.
 type ServiceStack struct {
-	ID                   string `json:"id"`
-	ProjectID            string `json:"projectId"`
-	Name                 string `json:"name"`
-	Status               string `json:"status"`
-	Base                 string `json:"base"`
-	IsSystem             bool   `json:"isSystem"`
+	ID                   string        `json:"id"`
+	ProjectID            string        `json:"projectId"`
+	Name                 string        `json:"name"`
+	Status               string        `json:"status"`
+	Base                 string        `json:"base"`
+	IsSystem             bool          `json:"isSystem"`
+	SubdomainAccess      bool          `json:"subdomainAccess"`
+	NestID               string        `json:"nestId"`
+	Ports                []ServicePort `json:"ports"`
 	ServiceStackTypeInfo struct {
 		Category string `json:"serviceStackTypeCategory"`
 		Version  string `json:"serviceStackTypeVersionName"`
@@ -68,12 +71,20 @@ func (s ServiceStack) protected() bool {
 	return s.IsSystem || s.Name == "core" || s.ServiceStackTypeInfo.Category == "CORE" || s.ServiceStackTypeInfo.Category == "SYSTEM"
 }
 
+// ServicePort describes an internal port; run.ports.httpSupport is observed as scheme "http".
+type ServicePort struct {
+	Port        int    `json:"port"`
+	Scheme      string `json:"scheme"`
+	HTTPSupport bool   `json:"httpSupport"`
+}
+
 // Project is the REST project response, including optional public addresses.
 type Project struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	PublicIPv4 string `json:"publicIpV4"`
-	PublicIPv6 string `json:"publicIpV6"`
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	PublicIPv4          string `json:"publicIpV4"`
+	PublicIPv6          string `json:"publicIpV6"`
+	ZeropsSubdomainHost string `json:"zeropsSubdomainHost"`
 }
 
 // AppVersion intentionally excludes credential-bearing upload URLs.

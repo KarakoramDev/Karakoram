@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { existsSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -15,9 +15,9 @@ export async function resolve(specifier, context, nextResolve) {
       ? new URL(specifier.slice(2), sourceRoot)
       : new URL(specifier, context.parentURL);
     if (url.href.startsWith(sourceRoot.href)) {
-      for (const suffix of ['', '.ts', '.tsx']) {
+      for (const suffix of ['', '.ts', '.tsx', '/index.ts', '/index.tsx']) {
         const candidate = new URL(url.href + suffix);
-        if (existsSync(fileURLToPath(candidate))) {
+        if (statSync(fileURLToPath(candidate), { throwIfNoEntry: false })?.isFile()) {
           return nextResolve(candidate.href, context);
         }
       }

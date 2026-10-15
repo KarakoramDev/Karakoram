@@ -61,6 +61,7 @@ func hostFingerprint() string {
 
 type metricValue struct {
 	name    string
+	help    string
 	value   float64
 	counter bool
 	labels  map[string]string
@@ -104,6 +105,9 @@ func field(m any, path ...string) any {
 	return v
 }
 func (a *nodeAgent) collectMetrics(ctx context.Context) []metricValue {
+	if a.engine != nil {
+		return a.collectEngineMetrics(ctx)
+	}
 	values := []metricValue{{name: "karakoram_mongodb_up"}}
 	gauge := func(name string, value float64) { values = append(values, metricValue{name: name, value: value}) }
 	counter := func(name string, value float64) {
@@ -269,7 +273,7 @@ func (c scrapeCollector) Describe(ch chan<- *prometheus.Desc) {
 		for name := range v.labels {
 			labels = append(labels, name)
 		}
-		ch <- prometheus.NewDesc(v.name, "Karakoram member metric.", labels, nil)
+		ch <- prometheus.NewDesc(v.name, metricHelp(v), labels, nil)
 	}
 }
 func (c scrapeCollector) Collect(ch chan<- prometheus.Metric) {
@@ -283,7 +287,7 @@ func (c scrapeCollector) Collect(ch chan<- prometheus.Metric) {
 		if v.counter {
 			kind = prometheus.CounterValue
 		}
-		ch <- prometheus.MustNewConstMetric(prometheus.NewDesc(v.name, "Karakoram member metric.", names, nil), kind, v.value, values...)
+		ch <- prometheus.MustNewConstMetric(prometheus.NewDesc(v.name, metricHelp(v), names, nil), kind, v.value, values...)
 	}
 }
 func (a *nodeAgent) writeMetrics(w http.ResponseWriter, r *http.Request) {
@@ -292,4 +296,46 @@ func (a *nodeAgent) writeMetrics(w http.ResponseWriter, r *http.Request) {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(scrapeCollector{values: a.collectMetrics(ctx)})
 	promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(w, r)
+}
+
+func metricHelp(v metricValue) string {
+	if v.help != "" {
+		return v.help
+	}
+	return "Karakoram member metric."
+}
+
+func (a *nodeAgent) collectEngineMetrics(ctx context.Context) []metricValue {
+	var values []metricValue
+	states, _ := a.sup.snapshot()
+	var ram float64
+	for name, state := range states {
+		cpu, rss, ok := processUsage(state.PID)
+		if !ok {
+			cpu, rss = 0, 0
+		}
+		labels := map[string]string{"process": name}
+		values = append(values,
+			metricValue{name: "karakoram_process_cpu_seconds_total", value: cpu, counter: true, labels: labels},
+			metricValue{name: "karakoram_process_resident_memory_bytes", value: rss, labels: labels})
+		ram += rss
+	}
+	values = append(values,
+		metricValue{name: "karakoram_ram_used_bytes", value: ram},
+		metricValue{name: "karakoram_ram_total_bytes", value: memoryTotal()})
+	if disk, err := diskUsage(a.o.DataDir); err == nil {
+		values = append(values,
+			metricValue{name: "karakoram_disk_used_bytes", value: float64(disk.UsedBytes)},
+			metricValue{name: "karakoram_disk_total_bytes", value: float64(disk.TotalBytes)})
+	}
+	result := make(chan []Metric, 1)
+	go func() { result <- a.engine.Metrics(ctx, &Node{a: a}) }()
+	select {
+	case metrics := <-result:
+		for _, metric := range metrics {
+			values = append(values, metricValue{name: metric.Name, help: metric.Help, value: metric.Value, counter: metric.Counter, labels: metric.Labels})
+		}
+	case <-ctx.Done():
+	}
+	return values
 }

@@ -398,6 +398,14 @@ func RefusalReason(reason string) string {
 	return "target refused"
 }
 
+// relayPorts bounds every engine's namespace policy as defense in depth: the
+// node agent (9443), MongoDB (27017), RabbitMQ AMQP/AMQPS and management
+// (5672, 5671, 15672, 15671) and Elasticsearch, Kibana, Logstash, APM and
+// Beats (9200, 5601, 9600, 8200, 5044, 8080). Exact host:port policy
+// membership is still required. Cluster-internal ports such as Erlang
+// distribution are never relayed.
+var relayPorts = map[string]bool{"9443": true, "27017": true, "5672": true, "5671": true, "15672": true, "15671": true, "9200": true, "5601": true, "9600": true, "8200": true, "5044": true, "8080": true}
+
 func (r *runtime) target(ctx context.Context, s *relaySession, addr string) (net.Conn, error) {
 	s.mu.RLock()
 	_, allowed := s.targets[addr]
@@ -409,7 +417,7 @@ func (r *runtime) target(ctx context.Context, s *relaySession, addr string) (net
 	if err != nil {
 		return nil, errors.New(refusedAddress)
 	}
-	if port != "27017" && port != "9443" {
+	if !relayPorts[port] {
 		return nil, errors.New(refusedPort)
 	}
 	if _, err = netip.ParseAddr(host); err == nil || strings.Contains(host, ".") || !hostnamePattern.MatchString(host) {

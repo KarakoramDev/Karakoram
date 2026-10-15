@@ -6,6 +6,16 @@ import { resourceMinimums, validateResources } from './resources.ts';
 import { validateExposure, validateTLS } from './access.ts';
 import { validateSchedules } from './schedules.ts';
 import type { Validation } from './state.ts';
+import { engines, hasCapability } from '../../../engines/index.ts';
+
+export function componentEntries(components: Schemas['ClusterSpec']['components']): [string, Schemas['Component']][] {
+  return [
+    ['engine', components.engine],
+    ...(components.configServer ? [['configServer', components.configServer] as [string, Schemas['Component']]] : []),
+    ...(components.router ? [['router', components.router] as [string, Schemas['Component']]] : []),
+    ...Object.entries(components.extra ?? {}),
+  ];
+}
 
 export function nameError(name: string, existing: string[]): string | undefined {
   if (!/^[a-z][a-z0-9]{1,11}$/.test(name)) return 'Use 2–12 lowercase letters/digits starting with a letter.';
@@ -19,7 +29,7 @@ export function memberChoices(topology: Schemas['ProviderTopology'] | undefined,
 
 export function topologyErrors(spec: Schemas['ClusterSpec'], topology: Schemas['ProviderTopology'] | undefined): Record<string, string> {
   const errors: Record<string, string> = {};
-  for (const [name, component] of Object.entries(spec.components)) {
+  for (const [name, component] of componentEntries(spec.components)) {
     if (!component) continue;
     const limits = topology?.limits[name] as { minReplicas?: number; maxReplicas?: number } | undefined;
     const allowed = memberChoices(topology, name);
@@ -45,15 +55,22 @@ export function validateWizard(name: string, namespace: string, spec: Schemas['C
   const version = provider?.versions.find((item) => item.version === spec.version);
   if (!version) v.basics.push('Choose an available engine version.');
   else if (version.status === 'unavailable') v.basics.push('This version is not available for new clusters.');
+  v.basics.push(...(engines[spec.provider]?.validateSpec?.(spec) ?? []));
   const topology = provider?.topologies.find((item) => item.type === spec.topology.type);
-  v.topology.push(...Object.values(topologyErrors(spec, topology)));
-  for (const [name, component] of Object.entries(spec.components)) {
-    if (component) v.resources.push(...validateResources(component.resources, undefined, name === 'router', resourceMinimums(spec.provider, topology, name)).map((error) => `${name}: ${error}`));
+  const custom = engines[spec.provider]?.validateComponents?.(spec, topology);
+  if (custom) {
+    v.topology.push(...custom.topology);
+    v.resources.push(...custom.resources);
+  } else {
+    v.topology.push(...Object.values(topologyErrors(spec, topology)));
+    for (const [name, component] of componentEntries(spec.components)) {
+      if (component) v.resources.push(...validateResources(component.resources, undefined, name === 'router', resourceMinimums(spec.provider, topology, name)).map((error) => `${name}: ${error}`));
+    }
   }
   const backup = spec.backup;
   if (backup) {
     const schedules = backup.schedules ?? [];
-    if ((schedules.length || backup.pitr?.enabled) && !backup.storage) v.backups.push('Choose a primary backup storage for schedules and PITR.');
+    if ((schedules.length || backup.pitr?.enabled) && !backup.storage) v.backups.push(hasCapability(provider, 'pitr') ? 'Choose a primary backup storage for schedules and PITR.' : 'Choose a primary backup storage for schedules.');
     v.backups.push(...validateSchedules(schedules));
     if (backup.pitr?.enabled && (!Number.isInteger(backup.pitr.oplogSpanMinutes) || backup.pitr.oplogSpanMinutes < 1)) v.backups.push('Oplog span must be a whole number of at least 1 minute.');
   }

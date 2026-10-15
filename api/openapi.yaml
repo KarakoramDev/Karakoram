@@ -4310,11 +4310,7 @@ paths:
           in: query
           schema:
             type: string
-            enum:
-              - mongod
-              - mongos
-              - pbm-agent
-              - agent
+            description: Must be one of the cluster provider catalog's processes, or agent.
         - name: lines
           in: query
           schema:
@@ -5170,7 +5166,8 @@ components:
       properties:
         replicas:
           type: integer
-          minimum: 1
+          minimum: 0
+          description: Replica count; zero disables an optional component when supported by the provider.
         resources:
           $ref: '#/components/schemas/Resources'
       required:
@@ -5186,6 +5183,10 @@ components:
           $ref: '#/components/schemas/Component'
         router:
           $ref: '#/components/schemas/Component'
+        extra:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Component'
       required:
         - engine
     Topology:
@@ -5197,6 +5198,8 @@ components:
           enum:
             - replicaSet
             - sharded
+            - cluster
+            - dedicatedMasters
         shards:
           type: integer
           minimum: 1
@@ -5258,6 +5261,8 @@ components:
           enum:
             - replicaSet
             - sharded
+            - cluster
+            - dedicatedMasters
         displayName:
           type: string
         defaults:
@@ -5331,6 +5336,20 @@ components:
             enum:
               - logical
               - physical
+              - definitions
+              - snapshot
+        capabilities:
+          type: array
+          items:
+            type: string
+        operations:
+          type: array
+          items:
+            type: string
+        processes:
+          type: array
+          items:
+            type: string
       required:
         - name
         - displayName
@@ -5355,6 +5374,8 @@ components:
           enum:
             - logical
             - physical
+            - definitions
+            - snapshot
         storage:
           type: string
           minLength: 1
@@ -5507,7 +5528,10 @@ components:
           $ref: '#/components/schemas/Components'
         engineConfig:
           type: string
-          description: Validated YAML mongod/mongos overrides.
+          description: Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...).
+        engineOptions:
+          type: object
+          additionalProperties: true
         backup:
           $ref: '#/components/schemas/BackupSpec'
         tls:
@@ -5669,9 +5693,28 @@ components:
           type: array
           items:
             type: string
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Endpoint'
       required:
         - hosts
         - uri
+    Endpoint:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+          description: Connection URL without a password.
+        public:
+          type: boolean
+      required:
+        - name
+        - url
+        - public
     ConnectionCredential:
       type: object
       additionalProperties: false
@@ -6144,11 +6187,18 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        provider:
+          type: string
+        location:
+          type: string
+          description: Complete snapshot-time object key, prefix, or snapshot reference.
         type:
           type: string
           enum:
             - logical
             - physical
+            - definitions
+            - snapshot
         trigger:
           type: string
           description: What initiated the snapshot; restore identifies an automatic post-restore base backup.
@@ -6973,6 +7023,16 @@ components:
         resources:
           $ref: '#/components/schemas/ResourcesInput'
       additionalProperties: false
+    ExtraComponentInput:
+      type: object
+      additionalProperties: false
+      properties:
+        replicas:
+          type: integer
+          minimum: 0
+          description: Zero disables an optional component when supported by the provider.
+        resources:
+          $ref: '#/components/schemas/ResourcesInput'
     ComponentsInput:
       type: object
       properties:
@@ -6982,6 +7042,10 @@ components:
           $ref: '#/components/schemas/ConfigServerInput'
         router:
           $ref: '#/components/schemas/ComponentInput'
+        extra:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ExtraComponentInput'
       additionalProperties: false
     TopologyInput:
       type: object
@@ -6991,6 +7055,8 @@ components:
           enum:
             - replicaSet
             - sharded
+            - cluster
+            - dedicatedMasters
         shards:
           type: integer
           minimum: 1
@@ -7067,7 +7133,10 @@ components:
           $ref: '#/components/schemas/ComponentsInput'
         engineConfig:
           type: string
-          description: Validated YAML mongod/mongos overrides.
+          description: Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...).
+        engineOptions:
+          type: object
+          additionalProperties: true
         backup:
           $ref: '#/components/schemas/BackupSpecInput'
         tls:
@@ -7081,7 +7150,7 @@ components:
       additionalProperties: false
       required:
         - provider
-      description: Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid.
+      description: Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
     ResourcesPatch:
       type: object
       properties:
@@ -7136,6 +7205,17 @@ components:
           $ref: '#/components/schemas/ResourcesPatch'
       additionalProperties: false
       nullable: true
+    ExtraComponentPatch:
+      type: object
+      additionalProperties: false
+      nullable: true
+      properties:
+        replicas:
+          type: integer
+          minimum: 0
+          nullable: true
+        resources:
+          $ref: '#/components/schemas/ResourcesPatch'
     ComponentsPatch:
       type: object
       properties:
@@ -7145,6 +7225,11 @@ components:
           $ref: '#/components/schemas/ConfigServerPatch'
         router:
           $ref: '#/components/schemas/ComponentPatch'
+        extra:
+          type: object
+          nullable: true
+          additionalProperties:
+            $ref: '#/components/schemas/ExtraComponentPatch'
       additionalProperties: false
       nullable: true
     TopologyPatch:
@@ -7155,6 +7240,8 @@ components:
           enum:
             - replicaSet
             - sharded
+            - cluster
+            - dedicatedMasters
           nullable: true
         shards:
           type: integer
@@ -7248,7 +7335,11 @@ components:
           $ref: '#/components/schemas/ComponentsPatch'
         engineConfig:
           type: string
-          description: Validated YAML mongod/mongos overrides.
+          description: Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...).
+          nullable: true
+        engineOptions:
+          type: object
+          additionalProperties: true
           nullable: true
         backup:
           $ref: '#/components/schemas/BackupSpecPatch'
@@ -7342,6 +7433,8 @@ components:
           enum:
             - logical
             - physical
+            - definitions
+            - snapshot
         storage:
           type: string
           minLength: 1

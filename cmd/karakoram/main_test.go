@@ -46,6 +46,39 @@ func TestAgentReadinessWithoutMemberEnvironment(t *testing.T) {
 		t.Fatalf("readiness must reach the local TCP probe without member env: %v", err)
 	}
 }
+
+func TestAgentReadinessArgumentPassthrough(t *testing.T) {
+	t.Setenv("KARAKORAM_ENGINE", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var out bytes.Buffer
+	err := run(ctx, []string{"agent", "readiness", "component", "1234"}, &out, &out)
+	var networkError *net.OpError
+	if !errors.As(err, &networkError) {
+		t.Fatalf("extra readiness arguments must reach the default probe: %v", err)
+	}
+	t.Setenv("KARAKORAM_ENGINE", "unknown")
+	if err := run(ctx, []string{"agent", "readiness", "component"}, &out, &out); err == nil || !strings.Contains(err.Error(), "unknown KARAKORAM_ENGINE") {
+		t.Fatal(err)
+	}
+}
+
+func TestAgentReadinessExplicitEngineOverridesEnvironment(t *testing.T) {
+	t.Setenv("KARAKORAM_ENGINE", "unknown")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var out bytes.Buffer
+	err := run(ctx, []string{"agent", "readiness", "--engine=psmdb", "component", "1234"}, &out, &out)
+	var networkError *net.OpError
+	if !errors.As(err, &networkError) {
+		t.Fatalf("explicit engine must override environment and reach the local TCP probe: %v", err)
+	}
+	t.Setenv("KARAKORAM_ENGINE", "psmdb")
+	if err := run(ctx, []string{"agent", "readiness", "--engine=unknown"}, &out, &out); err == nil || !strings.Contains(err.Error(), "unknown KARAKORAM_ENGINE") {
+		t.Fatal(err)
+	}
+}
+
 func TestOfflinePasswordReset(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

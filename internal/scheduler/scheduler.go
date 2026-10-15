@@ -200,6 +200,9 @@ func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedul
 	}
 	name := "scheduled-" + now.Format("20060102t150405") + "-" + strings.ToLower(suffix)
 	backup := domain.Backup{Namespace: c.Namespace, Name: name, Cluster: c.Name, Storage: storage, Type: spec.Type, Trigger: "schedule", Schedule: schedule, Phase: domain.PhasePending, CreatedAt: now}
+	if c.Spec.Provider != "" && c.Spec.Provider != "psmdb" {
+		backup.Provider = c.Spec.Provider
+	}
 	payload, _ := json.Marshal(map[string]string{"backup": name})
 	op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationBackup, Payload: payload, Actor: "scheduler", CreatedAt: now}
 	if err = s.opts.Store.EnqueueBackup(ctx, &backup, &op); err != nil {

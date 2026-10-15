@@ -52,6 +52,32 @@ func TestParseMetrics(t *testing.T) {
 		t.Fatal("accepted invalid exposition")
 	}
 }
+
+func TestProviderVocabulary(t *testing.T) {
+	ctx := t.Context()
+	st := monitoringStore(t)
+	descriptor := domain.MetricDescriptor{Exposition: "provider_work_total", Name: "work.rate", Unit: "items/second", Scale: 2}
+	c := New(Options{Store: st, Interval: 10 * time.Second, Vocabulary: []domain.MetricDescriptor{descriptor}})
+	start := time.Now().UTC().Truncate(time.Second)
+	for i, value := range []int{10, 20} {
+		at := start.Add(time.Duration(i-1) * 10 * time.Second)
+		text := fmt.Sprintf("# TYPE provider_work_total counter\nprovider_work_total %d\n# TYPE karakoram_ram_used_bytes gauge\nkarakoram_ram_used_bytes 42\n", value)
+		_, samples, err := parseMetricsWithVocabulary([]byte(text), Target{Cluster: "demo", Member: "m0"}, at, c.vocabulary)
+		if err != nil || len(samples) != 2 {
+			t.Fatal(samples, err)
+		}
+		if err := st.InsertMetricSamples(ctx, samples); err != nil {
+			t.Fatal(err)
+		}
+	}
+	series, err := c.Series(ctx, domain.ClusterRef{Name: "demo"}, []string{"work.rate"}, start, start.Add(10*time.Second), 10*time.Second)
+	if err != nil || len(series) != 1 || series[0].Unit != "items/second" || len(series[0].Points) != 1 || series[0].Points[0].Value != 2 {
+		t.Fatal(series, err)
+	}
+	if _, exists := New(Options{}).vocabulary[descriptor.Exposition]; exists {
+		t.Fatal("provider vocabulary leaked between collectors")
+	}
+}
 func monitoringStore(t *testing.T) *store.Store {
 	t.Helper()
 	sealer, err := secrets.New(strings.Repeat("x", 32))
@@ -402,5 +428,57 @@ func TestScrapeDialsNamespacedReferences(t *testing.T) {
 	}
 	if len(c.latest) != 2 {
 		t.Fatal("namespace scrape caches collided", c.latest)
+	}
+}
+
+func TestMemberUsageAggregatesProcessCPU(t *testing.T) {
+	const previous = `# TYPE karakoram_process_cpu_seconds_total counter
+karakoram_process_cpu_seconds_total{process="worker",component="data"} 10
+karakoram_process_cpu_seconds_total{process="helper",component="data"} 20
+`
+	for _, tc := range []struct {
+		name, current string
+		want          float64
+	}{
+		{"rates", `karakoram_process_cpu_seconds_total{process="helper",component="data"} 20.9
+karakoram_process_cpu_seconds_total{process="worker",component="data"} 10.6
+`, 5},
+		{"independent-reset", `karakoram_process_cpu_seconds_total{process="worker",component="data"} 0.3
+karakoram_process_cpu_seconds_total{process="helper",component="data"} 20.9
+`, 4},
+		{"clamp-aggregate", `karakoram_process_cpu_seconds_total{process="worker",component="data"} 28
+karakoram_process_cpu_seconds_total{process="helper",component="data"} 38
+`, 100},
+		{"new-process", `karakoram_process_cpu_seconds_total{process="worker",component="data"} 10.6
+karakoram_process_cpu_seconds_total{process="new",component="data"} 300
+`, 2},
+		{"changed-label", `karakoram_process_cpu_seconds_total{process="worker",component="other"} 300
+karakoram_process_cpu_seconds_total{process="helper",component="data"} 20.9
+`, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := New(Options{Interval: 30 * time.Second})
+			target := Target{Namespace: "default", Cluster: "demo", Member: "m0"}
+			now := time.Now().UTC()
+			cacheUsage(t, c, target, now.Add(-30*time.Second), previous)
+			if usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"); usage.CPUPercent != nil {
+				t.Fatal("first scrape has CPU rate", usage)
+			}
+			cacheUsage(t, c, target, now, "# TYPE karakoram_process_cpu_seconds_total counter\n"+tc.current)
+			usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0")
+			if usage.CPUPercent == nil || *usage.CPUPercent < tc.want-0.001 || *usage.CPUPercent > tc.want+0.001 {
+				t.Fatal(usage.CPUPercent, tc.want)
+			}
+			other := Target{Namespace: "other", Cluster: "demo", Member: "m0"}
+			cacheUsage(t, c, other, now, "# TYPE karakoram_process_cpu_seconds_total counter\n"+tc.current)
+			if usage := c.MemberUsage(domain.ClusterRef{Namespace: "other", Name: "demo"}, "m0"); usage.CPUPercent != nil {
+				t.Fatal("another target borrowed CPU baseline")
+			}
+			c.cacheScrape(target, nil, nil, now)
+			cacheUsage(t, c, target, now.Add(time.Second), "# TYPE karakoram_process_cpu_seconds_total counter\n"+tc.current)
+			if usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"); usage.CPUPercent != nil {
+				t.Fatal("failed scrape retained process baselines")
+			}
+		})
 	}
 }

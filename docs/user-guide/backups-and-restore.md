@@ -4,6 +4,12 @@
 
 Backup types and recovery capabilities come from the cluster's provider catalog (`backupTypes`). The MongoDB provider uses PBM for consistent replica-set and sharded recovery; the MongoDB/PBM workflows below apply to that provider. Zerops Local Storage live archives are **not** consistent database backups. Engine backup objects are independent of [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
 
+Restore and clone require the backup's provider to match the target cluster's
+provider. A backup without provider metadata is a legacy PSMDB backup, not a
+provider-neutral artifact. Incompatible requests are rejected before enqueueing;
+incompatible restores already in the queue fail terminally without invoking the
+target engine.
+
 ## Register S3 storage
 
 Create the bucket separately: Karakoram's BackupStorage resource describes an existing S3-compatible destination. Zerops Object Storage and other S3-compatible services are supported. In **Settings → Backup storages**, supply name, endpoint URL, signing region, bucket, optional prefix and access credentials. Path-style addressing and TLS verification default to true. Do not disable TLS verification to hide an incorrect endpoint or certificate chain.

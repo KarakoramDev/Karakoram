@@ -323,7 +323,8 @@ Commands absent below have no additional flags except confirmation: destructive 
       --component string         Scale resources of engine, configServer or router (default "engine")
       --config-servers int       Config-server replicas (default 3)
       --cpu-mode string          SHARED or DEDICATED (default "SHARED")
-      --engine-config string     YAML engine overrides file
+      --engine-config string     Provider configuration overrides file
+      --engine-options string    Provider options as a JSON object or @file.json
   -f, --file string              API request YAML/JSON file ('-' for stdin)
       --from-backup string       Seed from a backup
       --from-pitr string         Seed from RFC3339 point in time
@@ -340,17 +341,25 @@ Commands absent below have no additional flags except confirmation: destructive 
       --pitr                     Enable continuous point-in-time recovery
       --provider string          Engine provider (default "psmdb")
       --public                   Expose public TCP endpoints
+      --replicas int             Engine replicas (default 3)
       --routers int              Router replicas (default 2)
-      --schedule stringArray     Schedule: NAME=CRON,type=logical|physical,retain=COUNT[,storage=NAME]
+      --schedule stringArray     Schedule: NAME=CRON,type=TYPE,retain=COUNT[,storage=NAME]
       --shards int               Shard count (default 1)
       --source-cluster string    Source cluster for initial data
       --start-cpu float          CPU cores (default 1)
       --timeout duration         Maximum wait duration (default 30m0s)
       --tls-mode string          disabled, preferTLS or requireTLS (default "requireTLS")
-      --topology string          replicaSet or sharded (default "replicaSet")
+      --topology string          Provider topology (replicaSet, sharded, cluster or dedicatedMasters) (default "replicaSet")
       --version string           Exact engine version (defaults to provider catalog default; see providers get <provider>)
       --wait                     Wait for operation completion and observed cluster generation
 ```
+
+The default provider is explicitly `psmdb`. When `--provider` selects another
+engine, create sends no implicit MongoDB topology, replica-count, or resource
+defaults; the provider fills omitted settings. Use `--topology` and `--replicas`
+to supply generic overrides, and `--engine-options '{"option":true}'` or
+`--engine-options @options.json` for a provider-validated JSON object. Supported
+backup types and operations are advertised by `karactl providers get PROVIDER`.
 
 ### `karactl clusters delete`
 
@@ -450,6 +459,7 @@ Commands absent below have no additional flags except confirmation: destructive 
       --min-cpu float        CPU cores (default 1)
       --min-disk float       Resource size in GiB (default 5)
       --min-ram float        Resource size in GiB (default 1)
+      --replicas int         Engine replicas (default 3)
       --routers int          Router replicas (default 2)
       --shards int           Shard count (default 1)
       --start-cpu float      CPU cores (default 1)

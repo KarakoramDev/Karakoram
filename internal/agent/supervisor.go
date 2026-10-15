@@ -21,7 +21,26 @@ import (
 type processSpec struct {
 	binary    string
 	args, env []string
+	dir       string
+	// cleanEnv starts the child from a minimal environment instead of the
+	// agent's, so member credentials such as the agent token are not inherited.
+	cleanEnv bool
 }
+
+// minimalEnv carries only non-secret process basics into engine children.
+func minimalEnv() []string {
+	env := []string{}
+	for _, key := range []string{"PATH", "LANG", "LC_ALL", "TZ"} {
+		if v, ok := os.LookupEnv(key); ok {
+			env = append(env, key+"="+v)
+		}
+	}
+	if _, ok := os.LookupEnv("PATH"); !ok {
+		env = append(env, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+	}
+	return env
+}
+
 type child struct {
 	spec       processSpec
 	cmd        *exec.Cmd
@@ -61,7 +80,12 @@ func (s *supervisor) startLocked(name string, p *child) error {
 		return nil
 	}
 	cmd := exec.Command(p.spec.binary, p.spec.args...)
-	cmd.Env = append(os.Environ(), p.spec.env...)
+	if p.spec.cleanEnv {
+		cmd.Env = append(minimalEnv(), p.spec.env...)
+	} else {
+		cmd.Env = append(os.Environ(), p.spec.env...)
+	}
+	cmd.Dir = p.spec.dir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

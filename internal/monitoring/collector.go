@@ -35,6 +35,7 @@ type Options struct {
 	Targets             func(context.Context) ([]Target, error)
 	Interval, Retention time.Duration
 	Logger              *slog.Logger
+	Vocabulary          []domain.MetricDescriptor
 }
 
 // Point is a timestamped JSON metric value.
@@ -62,10 +63,9 @@ type MemberUsage struct {
 }
 
 type memberSample struct {
-	at     time.Time
-	usage  MemberUsage
-	cpu    domain.MetricSample
-	hasCPU bool
+	at    time.Time
+	usage MemberUsage
+	cpu   map[string]domain.MetricSample
 }
 
 // Collector owns scrape scheduling and the latest federation samples.
@@ -74,6 +74,7 @@ type Collector struct {
 	mu          sync.RWMutex
 	latest      map[Target]map[string]*dto.MetricFamily
 	latestUsage map[Target]memberSample
+	vocabulary  map[string]vocabulary
 }
 
 // New creates a collector with a 30-second interval and 24-hour retention by default.
@@ -87,7 +88,14 @@ func New(o Options) *Collector {
 	if o.Logger == nil {
 		o.Logger = slog.Default()
 	}
-	return &Collector{o: o, latest: map[Target]map[string]*dto.MetricFamily{}, latestUsage: map[Target]memberSample{}}
+	vocab := make(map[string]vocabulary, len(vocabularyByName)+len(o.Vocabulary))
+	for name, v := range vocabularyByName {
+		vocab[name] = v
+	}
+	for _, v := range o.Vocabulary {
+		vocab[v.Exposition] = vocabulary{name: v.Name, unit: v.Unit, scale: v.Scale}
+	}
+	return &Collector{o: o, vocabulary: vocab, latest: map[Target]map[string]*dto.MetricFamily{}, latestUsage: map[Target]memberSample{}}
 }
 
 type vocabulary struct {
@@ -106,6 +114,10 @@ var vocabularyByName = map[string]vocabulary{
 }
 
 func parseMetrics(data []byte, target Target, now time.Time) (map[string]*dto.MetricFamily, []domain.MetricSample, error) {
+	return parseMetricsWithVocabulary(data, target, now, vocabularyByName)
+}
+
+func parseMetricsWithVocabulary(data []byte, target Target, now time.Time, vocab map[string]vocabulary) (map[string]*dto.MetricFamily, []domain.MetricSample, error) {
 	parser := expfmt.NewTextParser(model.LegacyValidation)
 	families, err := parser.TextToMetricFamilies(bytes.NewReader(data))
 	if err != nil {
@@ -113,7 +125,7 @@ func parseMetrics(data []byte, target Target, now time.Time) (map[string]*dto.Me
 	}
 	var samples []domain.MetricSample
 	for name, family := range families {
-		v, ok := vocabularyByName[name]
+		v, ok := vocab[name]
 		if !ok {
 			continue
 		}
@@ -167,15 +179,21 @@ func (c *Collector) cacheScrape(target Target, families map[string]*dto.MetricFa
 	for _, sample := range samples {
 		switch sample.Metric {
 		case "cpu.percent":
+			key := seriesKey(sample)
 			var baseline *domain.MetricSample
-			if previous.hasCPU && now.Sub(previous.at) <= 2*c.o.Interval {
-				baseline = &previous.cpu
+			if preceding, ok := previous.cpu[key]; ok && now.Sub(previous.at) <= 2*c.o.Interval {
+				baseline = &preceding
 			}
 			if value, ok := sampleValue(sample, baseline); ok {
-				latest.usage.CPUPercent = &value
+				if latest.usage.CPUPercent == nil {
+					latest.usage.CPUPercent = new(float64)
+				}
+				*latest.usage.CPUPercent += value
 			}
-			latest.cpu = sample
-			latest.hasCPU = true
+			if latest.cpu == nil {
+				latest.cpu = make(map[string]domain.MetricSample)
+			}
+			latest.cpu[key] = sample
 		case "ram.usedBytes":
 			value := int64(sample.Value)
 			latest.usage.RAMBytes = &value
@@ -186,6 +204,9 @@ func (c *Collector) cacheScrape(target Target, families map[string]*dto.MetricFa
 			value := int64(sample.Value)
 			latest.usage.DiskTotalBytes = &value
 		}
+	}
+	if latest.usage.CPUPercent != nil {
+		*latest.usage.CPUPercent = min(100, max(0, *latest.usage.CPUPercent))
 	}
 	c.latestUsage[target] = latest
 	c.latest[target] = families
@@ -231,7 +252,7 @@ func (c *Collector) scrape(ctx context.Context) error {
 			continue
 		}
 		now := time.Now().UTC()
-		families, samples, err := parseMetrics(data, target, now)
+		families, samples, err := parseMetricsWithVocabulary(data, target, now, c.vocabulary)
 		if err != nil {
 			c.o.Logger.Warn("invalid member metrics", "member", target.Member, "error", err)
 			c.cacheScrape(target, nil, nil, now)
@@ -280,8 +301,8 @@ func seriesKey(s domain.MetricSample) string {
 	data, _ := json.Marshal(s.Labels)
 	return s.Member + "\x00" + s.Metric + "\x00" + string(data)
 }
-func metricInfo(name string) vocabulary {
-	for _, v := range vocabularyByName {
+func metricInfoWithVocabulary(name string, vocab map[string]vocabulary) vocabulary {
+	for _, v := range vocab {
 		if v.name == name {
 			return v
 		}
@@ -291,6 +312,10 @@ func metricInfo(name string) vocabulary {
 
 // sampleValue is shared by live member usage and historical UI series.
 func sampleValue(sample domain.MetricSample, previous *domain.MetricSample) (float64, bool) {
+	return sampleValueWithVocabulary(sample, previous, vocabularyByName)
+}
+
+func sampleValueWithVocabulary(sample domain.MetricSample, previous *domain.MetricSample, vocab map[string]vocabulary) (float64, bool) {
 	if sample.Labels["__type"] != "counter" {
 		return sample.Value, true
 	}
@@ -305,7 +330,7 @@ func sampleValue(sample domain.MetricSample, previous *domain.MetricSample) (flo
 	if delta < 0 {
 		delta = sample.Value
 	}
-	value := delta / seconds * metricInfo(sample.Metric).scale
+	value := delta / seconds * metricInfoWithVocabulary(sample.Metric, vocab).scale
 	if sample.Metric == "cpu.percent" {
 		value = min(100, max(0, value))
 	}
@@ -356,7 +381,7 @@ func (c *Collector) Series(ctx context.Context, cluster domain.ClusterRef, metri
 					labels[k] = v
 				}
 			}
-			v := metricInfo(sample.Metric)
+			v := metricInfoWithVocabulary(sample.Metric, c.vocabulary)
 			a = &accumulation{series: Series{Name: sample.Metric, Member: sample.Member, Unit: v.unit, Labels: labels, Points: []Point{}}}
 			all[key] = a
 		}
@@ -366,7 +391,7 @@ func (c *Collector) Series(ctx context.Context, cluster domain.ClusterRef, metri
 		if sample.Timestamp.Before(start) {
 			continue
 		}
-		value, ok := sampleValue(sample, previous)
+		value, ok := sampleValueWithVocabulary(sample, previous, c.vocabulary)
 		if !ok {
 			continue
 		}

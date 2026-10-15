@@ -447,3 +447,31 @@ func TestResolvedAddressRestrictions(t *testing.T) {
 		})
 	}
 }
+func TestEnginePortAllowlist(t *testing.T) {
+	o := defaults(Options{Hostname: "relayhost"})
+	o.Resolver = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("192.0.2.10")}, nil
+	}
+	var dialed []string
+	o.DialContext = func(_ context.Context, _ string, addr string) (net.Conn, error) {
+		dialed = append(dialed, addr)
+		return nil, errors.New("test dial")
+	}
+	r := runtime{o: o}
+	for _, port := range []string{"9443", "27017", "5671", "5672", "15671", "15672", "9200", "5601"} {
+		s := &relaySession{targets: map[string]struct{}{"member:" + port: {}}}
+		_, _ = r.target(context.Background(), s, "member:"+port)
+	}
+	if len(dialed) != 8 {
+		t.Fatalf("allowed engine ports not dialed: %v", dialed)
+	}
+	for _, port := range []string{"4369", "25672", "15692", "22"} {
+		s := &relaySession{targets: map[string]struct{}{"member:" + port: {}}}
+		if _, err := r.target(context.Background(), s, "member:"+port); err == nil || !strings.Contains(err.Error(), "port is not allowed") {
+			t.Fatalf("port %s accepted: %v", port, err)
+		}
+	}
+	if len(dialed) != 8 {
+		t.Fatalf("prohibited port dialed: %v", dialed)
+	}
+}

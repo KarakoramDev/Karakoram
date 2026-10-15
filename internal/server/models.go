@@ -58,6 +58,15 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 		s.Components.ConfigServer = componentDomain(a.Components.ConfigServer)
 		s.Components.Router = componentDomain(a.Components.Router)
 	}
+	if a.Components != nil && a.Components.Extra != nil {
+		s.Components.Extra = make(map[string]domain.ComponentSpec, len(*a.Components.Extra))
+		for name, c := range *a.Components.Extra {
+			s.Components.Extra[name] = domain.ComponentSpec{Replicas: value(c.Replicas), Resources: resourcesDomain(c.Resources)}
+		}
+	}
+	if a.EngineOptions != nil {
+		s.EngineOptions, _ = json.Marshal(*a.EngineOptions)
+	}
 	if a.Backup != nil {
 		s.Backup.Storage = value(a.Backup.Storage)
 		if a.Backup.Schedules != nil {
@@ -112,6 +121,19 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 		a.Components.ConfigServer = ptr(componentAPI(s.Components.ConfigServer))
 		a.Components.Router = ptr(componentAPI(s.Components.Router))
 	}
+	if len(s.Components.Extra) > 0 {
+		extra := make(map[string]api.Component, len(s.Components.Extra))
+		for name, c := range s.Components.Extra {
+			extra[name] = componentAPI(c)
+		}
+		a.Components.Extra = &extra
+	}
+	if len(s.EngineOptions) > 0 {
+		var options map[string]any
+		if json.Unmarshal(s.EngineOptions, &options) == nil {
+			a.EngineOptions = &options
+		}
+	}
 	schedules := make([]api.BackupSchedule, 0, len(s.Backup.Schedules))
 	for _, b := range s.Backup.Schedules {
 		schedules = append(schedules, api.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: api.BackupScheduleType(b.Type), Storage: optionalString(b.Storage), RetainCount: b.RetainCount, Enabled: b.Enabled})
@@ -129,7 +151,15 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	return a
 }
 func connectionAPI(c domain.Connection) api.ConnectionSummary {
-	return api.ConnectionSummary{Hosts: nonNil(c.Hosts), ReplicaSet: optionalString(c.ReplicaSet), Uri: c.URI, PublicHosts: ptr(nonNil(c.PublicHosts))}
+	a := api.ConnectionSummary{Hosts: nonNil(c.Hosts), ReplicaSet: optionalString(c.ReplicaSet), Uri: c.URI, PublicHosts: ptr(nonNil(c.PublicHosts))}
+	if len(c.Endpoints) > 0 {
+		endpoints := make([]api.Endpoint, 0, len(c.Endpoints))
+		for _, e := range c.Endpoints {
+			endpoints = append(endpoints, api.Endpoint{Name: e.Name, Url: e.URL, Public: e.Public})
+		}
+		a.Endpoints = &endpoints
+	}
+	return a
 }
 func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api.Member {
 	usage := s.Monitoring.MemberUsage(cluster, m.Name)
@@ -231,7 +261,14 @@ func operationAPI(o domain.Operation) api.Operation {
 	return a
 }
 func backupAPI(b domain.Backup) api.Backup {
-	return api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: optionalString(b.Schedule), Phase: api.BackupPhase(b.Phase), PbmName: optionalString(b.PBMName), StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: optionalString(b.Error), OperationId: optionalString(b.OperationID)}
+	a := api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: optionalString(b.Schedule), Phase: api.BackupPhase(b.Phase), PbmName: optionalString(b.PBMName), StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: optionalString(b.Error), OperationId: optionalString(b.OperationID)}
+	if b.Provider != "" {
+		a.Provider = &b.Provider
+	}
+	if b.Location != "" {
+		a.Location = &b.Location
+	}
+	return a
 }
 func restoreAPI(r domain.Restore) api.Restore {
 	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
@@ -280,6 +317,15 @@ func roleAPI(r domain.DatabaseRole) api.DatabaseRole {
 func providerAPI(p engine.Provider) api.Provider {
 	d := p.Describe()
 	a := api.Provider{Name: d.Name, DisplayName: d.DisplayName, Versions: []api.ProviderVersion{}, UpgradePaths: []api.UpgradePath{}, Topologies: []api.ProviderTopology{}, Presets: []api.Preset{}, BackupTypes: []api.ProviderBackupTypes{}}
+	if d.Capabilities != nil {
+		a.Capabilities = &d.Capabilities
+	}
+	if d.Operations != nil {
+		a.Operations = &d.Operations
+	}
+	if d.Processes != nil {
+		a.Processes = &d.Processes
+	}
 	for _, v := range d.Versions {
 		a.Versions = append(a.Versions, api.ProviderVersion{Version: v.Version, Major: v.Major, Default: v.Default, Status: api.ProviderVersionStatus(v.Status), PbmVersion: ptr(v.PBMVersion)})
 	}
@@ -299,6 +345,11 @@ func providerAPI(p engine.Provider) api.Provider {
 				spec.Components.ConfigServer = c.Defaults
 			case "router":
 				spec.Components.Router = c.Defaults
+			default:
+				if spec.Components.Extra == nil {
+					spec.Components.Extra = make(map[string]domain.ComponentSpec)
+				}
+				spec.Components.Extra[n] = c.Defaults
 			}
 		}
 		p.ApplyDefaults(&spec)

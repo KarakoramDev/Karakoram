@@ -23,3 +23,11 @@ The core can evolve toward other engines without disguising Zerops as Kubernetes
 - **Reuse OpenEverest's ProviderInterface:** preserves existing code only by retaining its Kubernetes runtime and object model.
 - **Put all behavior in a Zerops adapter:** conflates database semantics with infrastructure and makes either replacement expensive.
 - **Separate provider services/plugins:** independent releases, but additional networking, authentication and deployment complexity without a current requirement.
+
+## Multi-engine extension
+
+The in-process registry is assembled centrally, with `psmdb` as the explicit CLI/UI default and required, immutable cluster provider selection in API requests. `Describe` now includes capabilities, supported durable operations and process names so API preflight and clients can avoid presenting MongoDB-only behavior to other engines. Shared models carry extra components, engine-owned JSON options, connection endpoints and provider/location backup provenance; providers still own defaults and validation. Generic CLI creation omits MongoDB defaults for other providers.
+
+The UI's `EngineUI` registry extends wizard sections, detail tabs, monitoring panels and topology summaries without putting engine-specific components into generic pages. Generic UI actions use provider capability/operation metadata, and provider-declared process names drive logs.
+
+Optional `RelayTargeter`, `MetricsCatalog` and `RetainedBackupDeleter` interfaces keep namespace target policy, monitoring vocabulary and retained-backup deletion engine-neutral. Certificate issuance is shared in `internal/pki`, and the infrastructure Backend exposes Zerops public HTTPS subdomain control. Engine-specific access interfaces and HTTP routes remain engine-owned. At the node boundary, `agent.Engine` and its protected `Node` toolkit share cached configuration, authenticated transport, supervision, metrics and durable safety holds while preserving the built-in PSMDB runner. Engines are selected explicitly and compiled into the executable; no plugin service or remote-exec contract is introduced.

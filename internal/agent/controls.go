@@ -9,7 +9,41 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 )
+
+// controlMutex preserves zero-value mutex use while supporting bounded route waits.
+type controlMutex struct {
+	once sync.Once
+	held chan struct{}
+}
+
+func (m *controlMutex) init() {
+	m.once.Do(func() { m.held = make(chan struct{}, 1) })
+}
+func (m *controlMutex) Lock() {
+	m.init()
+	m.held <- struct{}{}
+}
+func (m *controlMutex) LockContext(ctx context.Context) error {
+	m.init()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.held <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (m *controlMutex) Unlock() {
+	select {
+	case <-m.held:
+	default:
+		panic("unlock of unlocked control mutex")
+	}
+}
 
 // localControls preserves explicit restore safety holds independently of pulled configuration.
 // Only an explicit maintenance-off or process start/restart releases its respective hold.
@@ -38,13 +72,15 @@ func (a *nodeAgent) saveControls(controls localControls) error {
 	if err = atomicWrite(filepath.Join(a.o.DataDir, "karakoram", "controls.json"), data, 0600); err != nil {
 		return err
 	}
+	a.controlsMu.Lock()
 	a.controls = controls
+	a.controlsMu.Unlock()
 	return nil
 }
 func (a *nodeAgent) processAction(ctx context.Context, name, action string) error {
 	a.applyMu.Lock()
 	defer a.applyMu.Unlock()
-	if name != "mongod" && name != "mongos" && name != "pbm-agent" {
+	if !a.allowedProcess(name) {
 		return errors.New("unknown process")
 	}
 	if action != "start" && action != "stop" && action != "restart" {

@@ -29,6 +29,13 @@
 // A deleted service may return HTTP 400 with serviceStackNotFound, not HTTP 404;
 // both invalidate cached service IDs and resolve the absent hostname as nil.
 //
+// SubdomainAccess is an optional infra capability, separate from public TCP routes.
+// Enable/disable PUTs return durable process IDs and are never replayed; matching
+// state returns a completed no-op. SubdomainURLs includes only enabled HTTP ports
+// (run.ports.httpSupport is returned as ports[].scheme="http") and derives
+// https://<service>-<zeropsSubdomainHost>-<port>.<nestId>.zerops.app from service and
+// project GETs. Zerops's shared L7 balancer terminates TLS and forwards HTTP.
+//
 // The client retries only explicitly idempotent GET/PUT requests on network errors,
 // HTTP 429 and HTTP 5xx. Deploy, upload, lifecycle and routing synchronization are
 // not replayed because they create processes or stream non-repeatable data. No

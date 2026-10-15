@@ -12,7 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 

@@ -232,6 +232,17 @@ func TestRetainedRestorePreflight(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			s, _, admin := testServer(t)
 			ctx := context.Background()
+			if err := s.Registry.Register(&restoreTestProvider{fakeProvider: &fakeProvider{}, name: "psmdb"}); err != nil {
+				t.Fatal(err)
+			}
+			c, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Spec.Provider = "psmdb"
+			if err = s.Store.UpdateClusterSpec(ctx, c.Ref(), c.Spec); err != nil {
+				t.Fatal(err)
+			}
 			b := domain.Backup{Name: "saved", Cluster: "deleted", Storage: "storage", Type: kind, PBMName: "snapshot", PBMPrefix: "archive/old", SourceTopology: domain.Topology{Type: "replicaSet"}, SourceVersion: "8.0", Phase: domain.PhaseSucceeded}
 			if kind == "physical" {
 				b.RecoveryIdentity = "backup-recovery"
@@ -246,7 +257,7 @@ func TestRetainedRestorePreflight(t *testing.T) {
 			if w := call(s, "POST", "/api/v1/clusters/prod/restores", body, admin); w.Code != 202 {
 				t.Fatal(w.Code, w.Body.String())
 			}
-			cloneBody := `{"name":"copy","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":1}},"dataSource":{"cluster":"deleted","backup":"saved"}}}`
+			cloneBody := `{"name":"copy","spec":{"provider":"psmdb","version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":1}},"dataSource":{"cluster":"deleted","backup":"saved"}}}`
 			if w := call(s, "POST", "/api/v1/clusters", cloneBody, admin); w.Code != 201 {
 				t.Fatal("retained clone rejected", w.Code, w.Body.String())
 			}

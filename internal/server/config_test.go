@@ -11,7 +11,7 @@ import (
 	"encoding/pem"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pki"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"strings"
 	"testing"
 	"time"

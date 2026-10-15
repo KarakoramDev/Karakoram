@@ -15,6 +15,7 @@ import { OperationNotice } from '@/components/OperationNotice';
 import { useClusterContext } from './ClusterDetail';
 import { assignedRoles, assignedUsers, passwordValid } from './detail-state';
 import { useSubmissionKey } from './use-submission-key';
+import { hasCapability, supportsOperation } from '@/engines';
 
 type DBUser = Schemas['DatabaseUser'];
 type DBRole = Schemas['DatabaseRole'];
@@ -38,12 +39,12 @@ function rolesText(roles: RoleRef[]): string {
 }
 
 export function UsersTab() {
-  const { namespace, name, can } = useClusterContext();
+  const { provider, namespace, name, can } = useClusterContext();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const users = useQuery({ queryKey: keys.clusterSub(namespace, name, 'database-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-users', { params: { path: { cluster: name }, query: { namespace, limit: 500 } } })) });
-  const roles = useQuery({ queryKey: keys.clusterSub(namespace, name, 'database-roles'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-roles', { params: { path: { cluster: name }, query: { namespace, limit: 500 } } })) });
-  const system = useQuery({ queryKey: keys.clusterSub(namespace, name, 'system-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/system-users', { params: { path: { cluster: name }, query: { namespace } } })) });
+  const users = useQuery({ queryKey: keys.clusterSub(namespace, name, 'database-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-users', { params: { path: { cluster: name }, query: { namespace, limit: 500 } } })), enabled: hasCapability(provider, 'databaseUsers') });
+  const roles = useQuery({ queryKey: keys.clusterSub(namespace, name, 'database-roles'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/database-roles', { params: { path: { cluster: name }, query: { namespace, limit: 500 } } })), enabled: hasCapability(provider, 'databaseRoles') });
+  const system = useQuery({ queryKey: keys.clusterSub(namespace, name, 'system-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/system-users', { params: { path: { cluster: name }, query: { namespace } } })), enabled: hasCapability(provider, 'systemUsers') });
 
   const [userDialog, setUserDialog] = useState<null | { mode: 'create' } | { mode: 'edit'; user: DBUser }>(null);
   const [roleDialog, setRoleDialog] = useState<null | { mode: 'create' } | { mode: 'edit'; role: DBRole }>(null);
@@ -92,7 +93,7 @@ export function UsersTab() {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
-      <Card
+      {hasCapability(provider, 'databaseUsers') ? <Card
         title="Application users"
         flush
         actions={
@@ -154,9 +155,9 @@ export function UsersTab() {
             </table>
           </div>
         )}
-      </Card>
+      </Card> : null}
 
-      <Card
+      {hasCapability(provider, 'databaseRoles') ? <Card
         title="Custom roles"
         flush
         actions={
@@ -218,9 +219,9 @@ export function UsersTab() {
             </table>
           </div>
         )}
-      </Card>
+      </Card> : null}
 
-      <Card title="System users" flush>
+      {hasCapability(provider, 'systemUsers') ? <Card title="System users" flush>
         {system.isPending ? (
           <Loading />
         ) : system.error ? (
@@ -249,7 +250,7 @@ export function UsersTab() {
                       <Time iso={u.lastRotatedAt} />
                     </td>
                     <td className="actions">
-                      {can('update') ? (
+                      {can('update') && supportsOperation(provider, 'rotate-system-user') ? (
                         <Button size="sm" onClick={() => setRotate(u)}>
                           Rotate password…
                         </Button>
@@ -261,7 +262,7 @@ export function UsersTab() {
             </table>
           </div>
         )}
-      </Card>
+      </Card> : null}
 
       {userDialog ? <UserDialog namespace={namespace} cluster={name} existing={userDialog.mode === 'edit' ? userDialog.user : undefined} onClose={() => setUserDialog(null)} onSaved={invalidate} /> : null}
       {roleDialog ? <RoleDialog namespace={namespace} cluster={name} existing={roleDialog.mode === 'edit' ? roleDialog.role : undefined} onClose={() => setRoleDialog(null)} onSaved={invalidate} /> : null}

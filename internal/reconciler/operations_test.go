@@ -5,6 +5,7 @@ package reconciler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -115,7 +116,11 @@ func TestRunningCancellationAndRestorePhase(t *testing.T) {
 	if err := s.CreateCluster(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore}
+	pitrTime := time.Now()
+	if err := s.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: c.Name, Source: domain.RestoreSource{PITRTime: &pitrTime}}); err != nil {
+		t.Fatal(err)
+	}
+	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"restore"}`)}
 	if err := s.EnqueueOperation(ctx, op); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +237,11 @@ func TestRestorePhaseIsPersistedBeforeProviderCall(t *testing.T) {
 	if err := s.CreateCluster(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EnqueueOperation(ctx, &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore}); err != nil {
+	pitrTime := time.Now()
+	if err := s.CreateRestore(ctx, &domain.Restore{Name: "restore", Cluster: c.Name, Source: domain.RestoreSource{PITRTime: &pitrTime}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnqueueOperation(ctx, &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"restore"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.reconcile(ctx, c.Ref()); err != nil {

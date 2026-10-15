@@ -26,6 +26,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0016](0016-placement-anti-affinity.md) | No anti-affinity guarantee; heuristic detection and honest warnings |
 | [0017](0017-public-tcp-exposure.md) | Optional public TCP, IP/allowlist policy and discovery-safe endpoints |
 | [0018](0018-multi-project-namespaces-relay.md) | Multi-project namespaces; outbound WebSocket/inner mTLS/smux relays |
+| [0019](0019-multi-engine-seams.md) | Additive multi-engine seams: provider metadata, optional interfaces, agent runners |
 
 ## References and verification
 

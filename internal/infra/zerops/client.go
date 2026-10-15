@@ -269,6 +269,17 @@ func (c *Client) Lifecycle(ctx context.Context, id, action string) (Process, err
 	return v, err
 }
 
+// SetSubdomainAccess schedules HTTPS routing changes without replaying process creation.
+func (c *Client) SetSubdomainAccess(ctx context.Context, id string, enabled bool) (Process, error) {
+	action := "disable-subdomain-access"
+	if enabled {
+		action = "enable-subdomain-access"
+	}
+	var v Process
+	err := c.json(ctx, "PUT", "/service-stack/"+escape(id)+"/"+action, struct{}{}, &v, false)
+	return v, err
+}
+
 // CreateAppVersion allocates an artifact version without exposing its upload URL.
 func (c *Client) CreateAppVersion(ctx context.Context, id, name string) (AppVersion, error) {
 	var v AppVersion

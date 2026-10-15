@@ -55,12 +55,14 @@ export function TLSEditor({ value, onChange, storedCA }: { value: TLS; onChange:
   );
 }
 
-export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAddressesConfirmedChange, label = 'Expose database publicly' }: {
+export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAddressesConfirmedChange, label, publicPort, publicPortLabel }: {
   value: Exposure;
   onChange: (e: Exposure) => void;
   allAddressesConfirmed: boolean;
   onAllAddressesConfirmedChange: (confirmed: boolean) => void;
   label?: string;
+  publicPort?: number;
+  publicPortLabel?: string;
 }) {
   const errors = validateExposure(value, allAddressesConfirmed);
   const change = (exposure: Exposure) => {
@@ -69,7 +71,7 @@ export function ExposureEditor({ value, onChange, allAddressesConfirmed, onAllAd
   };
   return (
     <div className="stack" style={{ gap: 14 }}>
-      <Switch label={label} checked={value.public} onChange={(e) => change({ ...value, public: e.target.checked })} />
+      <Switch label={label ?? `${publicPort === undefined ? 'Expose publicly' : `Expose publicly on port ${publicPort}`}${publicPortLabel ? ` (${publicPortLabel})` : ''}`} checked={value.public} onChange={(e) => change({ ...value, public: e.target.checked })} />
       {value.public ? (
         <>
           <Callout tone="warn" title="Public exposure opens the database to the internet">

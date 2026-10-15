@@ -55,12 +55,14 @@ export function clusterEmptyCopy(canCreate: boolean): { title: string; message: 
   return canCreate ? { title: 'No clusters yet', message: 'Create a database cluster to get started.' } : { title: 'No accessible clusters', message: 'No clusters are accessible to your account in this scope. Ask an administrator for access; you do not have permission to create clusters.' };
 }
 
+type ReviewComponent = { replicas: number; resources: object };
+
 /** Describe only the fields included in an RFC 7396 spec patch. */
-export function scalingReview(spec: { components: Record<string, { replicas: number; resources: object } | undefined> }, patch: Record<string, unknown>): string[] {
+export function scalingReview(spec: { components: { engine: ReviewComponent; configServer?: ReviewComponent; router?: ReviewComponent } }, patch: Record<string, unknown>): string[] {
   const changes: string[] = [];
   const components = patch.components as Record<string, { replicas?: number; resources?: Record<string, unknown> }> | undefined;
   for (const [name, component] of Object.entries(components ?? {})) {
-    const current = spec.components[name];
+    const current = name === 'engine' || name === 'configServer' || name === 'router' ? spec.components[name] : undefined;
     if (component.replicas !== undefined) {
       const action = component.replicas > (current?.replicas ?? 0) ? 'add members with initial sync and voting promotion' : 'remove members while preserving a voting majority';
       changes.push(name === 'router' ? `Routers: ${current?.replicas ?? 0} → ${component.replicas}; update router capacity.` : `${name} members: ${current?.replicas ?? 0} → ${component.replicas}; ${action}.`);

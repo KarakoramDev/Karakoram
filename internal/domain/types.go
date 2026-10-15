@@ -66,19 +66,20 @@ type Cluster struct {
 
 // ClusterSpec declares the desired engine, topology, and operational configuration.
 type ClusterSpec struct {
-	Provider     string           `json:"provider"`
-	Version      string           `json:"version"`
-	Topology     Topology         `json:"topology"`
-	Components   Components       `json:"components"`
-	EngineConfig string           `json:"engineConfig,omitempty"`
-	Backup       BackupConfig     `json:"backup"`
-	TLS          TLSConfig        `json:"tls"`
-	Exposure     Exposure         `json:"exposure"`
-	Monitoring   MonitoringConfig `json:"monitoring"`
-	DataSource   *DataSource      `json:"dataSource,omitempty"`
+	Provider      string           `json:"provider"`
+	Version       string           `json:"version"`
+	Topology      Topology         `json:"topology"`
+	Components    Components       `json:"components"`
+	EngineConfig  string           `json:"engineConfig,omitempty"`
+	EngineOptions json.RawMessage  `json:"engineOptions,omitempty"`
+	Backup        BackupConfig     `json:"backup"`
+	TLS           TLSConfig        `json:"tls"`
+	Exposure      Exposure         `json:"exposure"`
+	Monitoring    MonitoringConfig `json:"monitoring"`
+	DataSource    *DataSource      `json:"dataSource,omitempty"`
 }
 
-// Topology selects replica-set or sharded deployment and shard count.
+// Topology selects a provider's deployment layout and optional shard count.
 type Topology struct {
 	Type   string `json:"type"`
 	Shards int    `json:"shards,omitempty"`
@@ -86,9 +87,10 @@ type Topology struct {
 
 // Components groups replica and resource settings for each component.
 type Components struct {
-	Engine       ComponentSpec `json:"engine"`
-	ConfigServer ComponentSpec `json:"configServer"`
-	Router       ComponentSpec `json:"router"`
+	Engine       ComponentSpec            `json:"engine"`
+	ConfigServer ComponentSpec            `json:"configServer"`
+	Router       ComponentSpec            `json:"router"`
+	Extra        map[string]ComponentSpec `json:"extra,omitempty"`
 }
 
 // ComponentSpec defines replica count and infrastructure sizing.
@@ -231,10 +233,18 @@ type AgentStatus struct {
 
 // Connection contains password-free connection discovery information.
 type Connection struct {
-	Hosts       []string `json:"hosts"`
-	ReplicaSet  string   `json:"replicaSet,omitempty"`
-	URI         string   `json:"uri"`
-	PublicHosts []string `json:"publicHosts"`
+	Hosts       []string   `json:"hosts"`
+	ReplicaSet  string     `json:"replicaSet,omitempty"`
+	URI         string     `json:"uri"`
+	PublicHosts []string   `json:"publicHosts"`
+	Endpoints   []Endpoint `json:"endpoints,omitempty"`
+}
+
+// Endpoint advertises a password-free provider-specific connection URL.
+type Endpoint struct {
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Public bool   `json:"public"`
 }
 
 // TimeWindow bounds a restorable point-in-time interval.
@@ -264,6 +274,15 @@ type ProviderInfo struct {
 	Topologies   []TopologyInfo `json:"topologies"`
 	Presets      []Preset       `json:"presets"`
 	BackupTypes  []string       `json:"backupTypes"`
+	Capabilities []string       `json:"capabilities"`
+	Operations   []string       `json:"operations"`
+	Processes    []string       `json:"processes"`
+}
+
+// MetricDescriptor maps an agent exposition metric to a monitoring series.
+type MetricDescriptor struct {
+	Exposition, Name, Unit string
+	Scale                  float64
 }
 
 // VersionInfo describes a supported engine version.
@@ -362,6 +381,8 @@ type Backup struct {
 	Schedule    string `json:"schedule,omitempty"`
 	Phase       Phase  `json:"phase"`
 	PBMName     string `json:"pbmName,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	Location    string `json:"location,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -375,6 +396,19 @@ type Backup struct {
 	Size             int64      `json:"size"`
 	Error            string     `json:"error,omitempty"`
 	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+// ProviderMatches reports whether a backup can be consumed by the target engine.
+// Backups written before provider metadata existed belong to PSMDB.
+func (b Backup) ProviderMatches(target string) bool {
+	source := b.Provider
+	if source == "" {
+		source = "psmdb"
+	}
+	if target == "" {
+		target = "psmdb"
+	}
+	return source == target
 }
 
 // Restore tracks a restore into its target cluster.

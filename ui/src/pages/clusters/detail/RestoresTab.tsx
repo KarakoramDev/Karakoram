@@ -18,9 +18,10 @@ import { BackupPicker, PitrPicker, SourceClusterPicker } from '../ClusterWizard'
 import { OpPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
 import { useSubmissionKey } from './use-submission-key';
+import { hasCapability, supportsOperation } from '@/engines';
 
 export function RestoresTab() {
-  const { cluster, namespace, name, base, can } = useClusterContext();
+  const { cluster, provider, namespace, name, base, can } = useClusterContext();
   const [params, setParams] = useSearchParams();
   const restores = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'restores'),
@@ -28,7 +29,7 @@ export function RestoresTab() {
     refetchInterval: 15_000,
   });
   const [open, setOpen] = useState(params.has('backup') || params.has('pitr'));
-  const canCreate = can('create', 'restores');
+  const canCreate = can('create', 'restores') && supportsOperation(provider, 'restore');
   const inFlight = restores.data?.items.some((r) => r.phase === 'Pending' || r.phase === 'Running');
 
   return (
@@ -101,12 +102,14 @@ export function RestoresTab() {
         )}
       </Card>
 
-      {open ? (
+      {open && supportsOperation(provider, 'restore') ? (
         <RestoreDialog
           namespace={namespace}
           cluster={name}
           base={base}
           initialBackup={params.get('backup') ?? undefined}
+          pitr={hasCapability(provider, 'pitr')}
+          mongo={cluster.spec.provider === 'psmdb'}
           onClose={() => {
             setOpen(false);
             if (params.has('backup') || params.has('pitr')) setParams({}, { replace: true });
@@ -117,7 +120,7 @@ export function RestoresTab() {
   );
 }
 
-function RestoreDialog({ namespace, cluster, base, initialBackup, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; onClose: () => void }) {
+function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; onClose: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -177,7 +180,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, onClose }: { n
       }
     >
       <Callout tone="danger" title="Current data will be replaced">
-        The cluster becomes unavailable while the restore runs. Members are stopped (physical) or data is dropped and reloaded (logical). Take a fresh backup first if you may need the current state.
+        {mongo ? 'The cluster becomes unavailable while the restore runs. Members are stopped (physical) or data is dropped and reloaded (logical). Take a fresh backup first if you may need the current state.' : 'The cluster becomes unavailable while the engine restores the backup. Take a fresh backup first if you may need the current state.'}
       </Callout>
       <TextField label="Restore name" mono value={name} onChange={(e) => setName(e.target.value)} required />
       <SourceClusterPicker
@@ -200,7 +203,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, onClose }: { n
         onChange={setMode}
         options={[
           { value: 'backup', title: 'From backup', description: 'Exact state of a completed backup.' },
-          { value: 'pitr', title: 'Point in time', description: 'Any instant within the PITR window.' },
+          ...(pitr ? [{ value: 'pitr' as const, title: 'Point in time', description: 'Any instant within the PITR window.' }] : []),
         ]}
       />
       {mode === 'backup' ? <BackupPicker namespace={sourceNamespace} cluster={sourceCluster} value={backup} onChange={setBackup} /> : <PitrPicker namespace={sourceNamespace} cluster={sourceCluster} value={pitrTime} onChange={setPitrTime} />}

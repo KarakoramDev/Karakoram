@@ -42,6 +42,12 @@ serves a "UI not built" page, so Go builds and tests never need Node:
   page before exposing the collection; choices are not capped at the API page size.
 - `src/components/ui` – dependency-free component kit (buttons, fields, native `<dialog>`, toasts,
   SVG line chart).
+- `src/engines` – per-provider UI descriptors (`index.ts` registry, helpers and the Mongo entry;
+  `<provider>/index.tsx` for engines with their own wizard sections, detail tabs and monitoring
+  panels, attached by `register.ts`). Pure spec helpers live in `<provider>/spec.ts` so they run
+  under `node --test`.
+  Overview replica-set names and replication-lag details require `replicaSetDetails: true`;
+  other engine descriptors omit it to use the generic member and connection presentation.
 - `src/layout` – app shell with the sidebar namespace switcher.
 - `src/pages` – clusters list, creation wizard, cluster detail tabs (`/clusters/<namespace>/<name>`;
   pre-namespace `/clusters/<name>` links redirect to `default`), global events/operations, settings

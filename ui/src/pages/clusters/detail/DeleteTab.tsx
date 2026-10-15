@@ -14,9 +14,10 @@ import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from './ClusterDetail';
 import { OperationNotice } from '@/components/OperationNotice';
 import { operationPath } from '@/components/operations';
+import { hasCapability } from '@/engines';
 
 export function DeleteTab() {
-  const { cluster, namespace, name, can } = useClusterContext();
+  const { cluster, provider, namespace, name, can } = useClusterContext();
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -57,12 +58,12 @@ export function DeleteTab() {
             disabled={suspended}
             onChange={(e) => setKeepVolumes(e.target.checked)}
           />
-          <Checkbox
+          {hasCapability(provider, 'backups') ? <Checkbox
             label="Keep backups in object storage"
-            description={`Backup data and PITR oplog slices remain (${backupCount}). Unchecking queues deletion of all backups for this cluster.`}
+            description={`Backup data${hasCapability(provider, 'pitr') ? ' and PITR oplog slices' : ''} remain (${backupCount}). Unchecking queues deletion of all backups for this cluster.`}
             checked={keepBackups}
             onChange={(e) => setKeepBackups(e.target.checked)}
-          />
+          /> : null}
           <div>
             <Button variant="danger" disabled={deleting} onClick={() => setOpen(true)}>
               {keepVolumes && !suspended ? 'Suspend cluster…' : 'Delete cluster…'}

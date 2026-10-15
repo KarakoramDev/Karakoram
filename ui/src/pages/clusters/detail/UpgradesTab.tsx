@@ -16,6 +16,7 @@ import { OperationNotice } from '@/components/OperationNotice';
 import { useClusterContext } from './ClusterDetail';
 import { FCV_GUIDANCE, fcvObservation, latestSuccessfulBackup, maintenanceCopy, observedVersion, requireUpgradeBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
+import { hasCapability, supportsOperation } from '@/engines';
 
 export function UpgradesTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -38,6 +39,7 @@ export function UpgradesTab() {
   const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
   const running = observedVersion(cluster.status);
   const current = running && !running.includes(',') ? running : cluster.spec.version;
+  const fcv = hasCapability(provider, 'fcv');
   const currentMajor = provider?.versions.find((v) => v.version === current)?.major ?? current.split('.').slice(0, 2).join('.');
   const maintenance = maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas);
 
@@ -111,13 +113,13 @@ export function UpgradesTab() {
             <span className="stat-sub">Desired version: <span className="mono">{cluster.spec.version}</span></span>
           </div>
         </Card>
-        <Card flush>
+        {fcv ? <Card flush>
           <div className="stat">
             <span className="stat-label">Feature compatibility (FCV)</span>
             <span className="stat-value mono">{cluster.status.fcv || '—'}</span>
             <span className="stat-sub">{fcvObservation(cluster.status.fcv, running, currentMajor)}</span>
           </div>
-        </Card>
+        </Card> : null}
         <Card flush>
           <div className="stat">
             <span className="stat-label">Per-member versions</span>
@@ -159,9 +161,9 @@ export function UpgradesTab() {
                         {v.version}
                         {v.default ? <Badge plain tone="accent">default</Badge> : null}
                       </td>
-                      <td>{v.major === currentMajor ? 'Minor (rolling)' : 'Major (rolling, FCV stays until raised)'}</td>
+                      <td>{v.major === currentMajor ? 'Minor (rolling)' : fcv ? 'Major (rolling, FCV stays until raised)' : 'Major (rolling)'}</td>
                       <td className="small">
-                        {[path.requiresBackup ? lastSuccessful ? 'recent backup required' : can('read', 'backups') ? 'successful backup required — create one first' : 'backup verification required — ask an administrator' : null, path.requiresFCV ? `FCV ≥ ${path.requiresFCV}` : null].filter(Boolean).join(' · ') || '—'}
+                        {[path.requiresBackup ? lastSuccessful ? 'recent backup required' : can('read', 'backups') ? 'successful backup required — create one first' : 'backup verification required — ask an administrator' : null, fcv && path.requiresFCV ? `FCV ≥ ${path.requiresFCV}` : null].filter(Boolean).join(' · ') || '—'}
                       </td>
                       <td>
                         <Badge plain tone={v.status === 'supported' ? 'ok' : 'warn'}>
@@ -183,20 +185,20 @@ export function UpgradesTab() {
       </Card>
 
       <div className="grid-2">
-        <Card title="Feature compatibility version">
+        {fcv ? <Card title="Feature compatibility version">
           <div className="stack">
             <p className="small muted">
               {FCV_GUIDANCE}
             </p>
             <KV items={[['Current FCV', cluster.status.fcv ?? '—'], ['Binary major', currentMajor]]} />
             <div>
-              <Button disabled={!editable || !fcvBehind || upgrading} onClick={() => setFcvTarget(currentMajor)}>
+              {supportsOperation(provider, 'raise-fcv') ? <Button disabled={!editable || !fcvBehind || upgrading} onClick={() => setFcvTarget(currentMajor)}>
                 Raise FCV to {currentMajor}…
-              </Button>
+              </Button> : null}
             </div>
           </div>
-        </Card>
-        <Card title="Rolling restart">
+        </Card> : null}
+        {supportsOperation(provider, 'restart') ? <Card title="Rolling restart">
           <div className="stack">
             <p className="small muted">{maintenance} Useful after configuration changes applied outside Karakoram or to recycle memory.</p>
             <div>
@@ -205,7 +207,7 @@ export function UpgradesTab() {
               </Button>
             </div>
           </div>
-        </Card>
+        </Card> : null}
       </div>
 
       <ConfirmDialog open={target !== null} onClose={() => { setTarget(null); upgrade.reset(); submission.reset(); }} onConfirm={() => target && upgrade.mutateAsync(target)} title={`Upgrade to ${target ?? ''}`} confirmLabel="Start upgrade" busy={upgrade.isPending} error={upgrade.error}>
@@ -216,7 +218,7 @@ export function UpgradesTab() {
           {targetPath?.path.requiresBackup ? (
             <Callout tone="warn">This path requires a recent backup. Last successful backup: {lastSuccessful?.name ?? 'none recorded'}. Confirm it is current enough for recovery before proceeding.</Callout>
           ) : null}
-          {targetPath?.path.requiresFCV && cluster.status.fcv && cluster.status.fcv < targetPath.path.requiresFCV ? (
+          {fcv && targetPath?.path.requiresFCV && cluster.status.fcv && cluster.status.fcv < targetPath.path.requiresFCV ? (
             <Callout tone="danger">FCV {cluster.status.fcv} is below the required {targetPath.path.requiresFCV}. Raise FCV first.</Callout>
           ) : null}
         </div>

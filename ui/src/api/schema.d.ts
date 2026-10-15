@@ -1476,6 +1476,8 @@ export type components = {
             error?: string;
             /** Format: date-time */
             lastWriteTime?: string;
+            /** @description Complete snapshot-time object key, prefix, or snapshot reference. */
+            location?: string;
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
             /** @description Durable operation that created this backup. */
@@ -1483,6 +1485,7 @@ export type components = {
             pbmName?: string;
             /** @enum {string} */
             phase: "Pending" | "Running" | "Succeeded" | "Failed" | "Deleting";
+            provider?: string;
             schedule?: string;
             /** Format: int64 */
             size?: number;
@@ -1495,7 +1498,7 @@ export type components = {
              */
             trigger: "manual" | "schedule" | "restore";
             /** @enum {string} */
-            type: "logical" | "physical";
+            type: "logical" | "physical" | "definitions" | "snapshot";
         };
         BackupList: {
             items: components["schemas"]["Backup"][];
@@ -1512,7 +1515,7 @@ export type components = {
             /** @description Optional override; when omitted, use backup.storage. */
             storage?: string;
             /** @enum {string} */
-            type: "logical" | "physical";
+            type: "logical" | "physical" | "definitions" | "snapshot";
         };
         BackupScheduleInput: {
             /** @description Five-field cron expression, evaluated in UTC. */
@@ -1523,7 +1526,7 @@ export type components = {
             retainCount: number;
             storage?: string;
             /** @enum {string} */
-            type: "logical" | "physical";
+            type: "logical" | "physical" | "definitions" | "snapshot";
         };
         BackupSpec: {
             pitr?: components["schemas"]["PITRSpec"];
@@ -1608,13 +1611,16 @@ export type components = {
             lastBackup?: string;
             pitrWindow?: components["schemas"]["PITRWindow"];
         };
-        /** @description Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid. */
+        /** @description Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components. */
         ClusterInputSpec: {
             backup?: components["schemas"]["BackupSpecInput"];
             components?: components["schemas"]["ComponentsInput"];
             dataSource?: components["schemas"]["DataSource"];
-            /** @description Validated YAML mongod/mongos overrides. */
+            /** @description Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...). */
             engineConfig?: string;
+            engineOptions?: {
+                [key: string]: unknown;
+            };
             exposure?: components["schemas"]["ExposureInput"];
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
@@ -1644,8 +1650,11 @@ export type components = {
             backup?: components["schemas"]["BackupSpecPatch"];
             components?: components["schemas"]["ComponentsPatch"];
             dataSource?: components["schemas"]["DataSourcePatch"];
-            /** @description Validated YAML mongod/mongos overrides. */
+            /** @description Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...). */
             engineConfig?: string | null;
+            engineOptions?: {
+                [key: string]: unknown;
+            } | null;
             exposure?: components["schemas"]["ExposurePatch"];
             monitoring?: components["schemas"]["MonitoringSpecPatch"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
@@ -1658,8 +1667,11 @@ export type components = {
             backup?: components["schemas"]["BackupSpec"];
             components: components["schemas"]["Components"];
             dataSource?: components["schemas"]["DataSource"];
-            /** @description Validated YAML mongod/mongos overrides. */
+            /** @description Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...). */
             engineConfig?: string;
+            engineOptions?: {
+                [key: string]: unknown;
+            };
             exposure?: components["schemas"]["Exposure"];
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
@@ -1687,6 +1699,7 @@ export type components = {
             version?: string;
         };
         Component: {
+            /** @description Replica count; zero disables an optional component when supported by the provider. */
             replicas: number;
             resources: components["schemas"]["Resources"];
         };
@@ -1701,16 +1714,25 @@ export type components = {
         Components: {
             configServer?: components["schemas"]["Component"];
             engine: components["schemas"]["Component"];
+            extra?: {
+                [key: string]: components["schemas"]["Component"];
+            };
             router?: components["schemas"]["Component"];
         };
         ComponentsInput: {
             configServer?: components["schemas"]["ConfigServerInput"];
             engine?: components["schemas"]["ComponentInput"];
+            extra?: {
+                [key: string]: components["schemas"]["ExtraComponentInput"];
+            };
             router?: components["schemas"]["ComponentInput"];
         };
         ComponentsPatch: {
             configServer?: components["schemas"]["ConfigServerPatch"];
             engine?: components["schemas"]["ComponentPatch"];
+            extra?: {
+                [key: string]: components["schemas"]["ExtraComponentPatch"];
+            } | null;
             router?: components["schemas"]["ComponentPatch"];
         } | null;
         Condition: {
@@ -1747,6 +1769,7 @@ export type components = {
             username: string;
         };
         ConnectionSummary: {
+            endpoints?: components["schemas"]["Endpoint"][];
             hosts: string[];
             publicHosts?: string[];
             replicaSet?: string;
@@ -1870,6 +1893,12 @@ export type components = {
             /** Format: date-time */
             pitrTime?: string | null;
         } | null;
+        Endpoint: {
+            name: string;
+            public: boolean;
+            /** @description Connection URL without a password. */
+            url: string;
+        };
         /**
          * @description Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
          *     `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -1952,6 +1981,15 @@ export type components = {
             ipType: "IPV6" | "IPV4" | null;
             /** @default false */
             public: boolean | null;
+        } | null;
+        ExtraComponentInput: {
+            /** @description Zero disables an optional component when supported by the provider. */
+            replicas?: number;
+            resources?: components["schemas"]["ResourcesInput"];
+        };
+        ExtraComponentPatch: {
+            replicas?: number | null;
+            resources?: components["schemas"]["ResourcesPatch"];
         } | null;
         Health: {
             database: boolean;
@@ -2215,10 +2253,13 @@ export type components = {
             db?: string;
         };
         Provider: {
-            backupTypes: ("logical" | "physical")[];
+            backupTypes: ("logical" | "physical" | "definitions" | "snapshot")[];
+            capabilities?: string[];
             displayName: string;
             name: string;
+            operations?: string[];
             presets: components["schemas"]["Preset"][];
+            processes?: string[];
             topologies: components["schemas"]["ProviderTopology"][];
             upgradePaths: components["schemas"]["UpgradePath"][];
             versions: components["schemas"]["ProviderVersion"][];
@@ -2238,7 +2279,7 @@ export type components = {
                 [key: string]: unknown;
             };
             /** @enum {string} */
-            type: "replicaSet" | "sharded";
+            type: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters";
             uiSchema?: {
                 [key: string]: unknown;
             };
@@ -2487,17 +2528,17 @@ export type components = {
         Topology: {
             shards?: number;
             /** @enum {string} */
-            type: "replicaSet" | "sharded";
+            type: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters";
         };
         TopologyInput: {
             shards?: number;
             /** @enum {string} */
-            type?: "replicaSet" | "sharded";
+            type?: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters";
         };
         TopologyPatch: {
             shards?: number | null;
             /** @enum {string|null} */
-            type?: "replicaSet" | "sharded" | null;
+            type?: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | null;
         } | null;
         UpdateAccountRequest: {
             enabled: boolean;
@@ -4897,7 +4938,7 @@ export interface operations {
                 lines?: number;
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
-                process?: "mongod" | "mongos" | "pbm-agent" | "agent";
+                process?: string;
                 since?: string;
             };
             header?: never;

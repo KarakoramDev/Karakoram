@@ -10,27 +10,10 @@ import { LineChart, type Series } from '@/components/ui/LineChart';
 import { Callout, Card, ErrorBlock, Loading, Segmented, formatBytes, formatNum } from '@/components/ui/Primitives';
 import { useClusterContext } from './ClusterDetail';
 import { monitoringRange, metricCategories, type MonitoringRange as Range } from '@/components/ui/presentation';
+import { monitoringPanels } from '@/engines';
 
 const STEP_FOR: Record<Range, string> = { '15m': '15s', '1h': '30s', '6h': '2m', '24h': '10m' };
 
-interface Panel {
-  title: string;
-  /** Series names to overlay; each member becomes a line per name. */
-  names: string[];
-  unit?: string;
-  yMax?: number;
-  format?: (v: number) => string;
-}
-
-const PANELS: Panel[] = [
-  { title: 'Operations', names: ['opcounters.total'], unit: 'ops/s' },
-  { title: 'Connections', names: ['connections.current'], unit: 'count' },
-  { title: 'Replication lag', names: ['repl.lagSeconds'], unit: 's' },
-  { title: 'Cache used', names: ['cache.usedBytes', 'cache.maxBytes'], unit: 'bytes', format: (v) => formatBytes(v) },
-  { title: 'CPU', names: ['cpu.percent'], unit: '%', yMax: 100 },
-  { title: 'Memory used', names: ['ram.usedBytes', 'ram.totalBytes'], unit: 'bytes', format: (v) => formatBytes(v) },
-  { title: 'Disk used', names: ['disk.usedBytes', 'disk.totalBytes'], unit: 'bytes', format: (v) => formatBytes(v) },
-];
 
 function toSeries(all: Schemas['MetricSeries'][], names: string[], multiName: boolean): Series[] {
   return all
@@ -53,7 +36,8 @@ export function MonitoringTab() {
     enabled: can('read', 'monitoring'),
   });
 
-  const known = useMemo(() => PANELS.flatMap((p) => p.names), []);
+  const panels = useMemo(() => monitoringPanels(cluster.spec.provider), [cluster.spec.provider]);
+  const known = useMemo(() => panels.flatMap((p) => p.names), [panels]);
   const extra = useMemo(() => {
     const names = new Set<string>();
     for (const s of metrics.data?.series ?? []) if (!known.includes(s.name)) names.add(s.name);
@@ -97,9 +81,9 @@ export function MonitoringTab() {
       ) : (
         <>
           <div className="grid-2">
-            {PANELS.map((p) => (
+            {panels.map((p) => (
               <Card key={p.title}>
-                <LineChart title={p.title} unit={p.unit} yMax={p.yMax} timeRange={timeRange} series={toSeries(metrics.data.series, p.names, p.names.length > 1)} formatValue={p.format ?? formatNum} />
+                <LineChart title={p.title} unit={p.unit} yMax={p.yMax} timeRange={timeRange} series={toSeries(metrics.data.series, p.names, p.names.length > 1)} formatValue={p.format ?? (p.unit === 'bytes' ? formatBytes : formatNum)} />
               </Card>
             ))}
             {extra.map((n) => {

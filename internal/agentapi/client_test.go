@@ -64,7 +64,7 @@ func TestPinnedClient(t *testing.T) {
 	if err = client.Process(ctx, ProcessAction{Process: "mongod", Action: "restart"}); err != nil {
 		t.Fatal(err)
 	}
-	if err = client.Process(ctx, ProcessAction{Process: "shell", Action: "start"}); err == nil {
+	if err = client.Process(ctx, ProcessAction{Process: "../shell", Action: "start"}); err == nil {
 		t.Fatal("invalid process")
 	}
 	if err = client.Maintenance(ctx, Maintenance{Enabled: true}); err != nil {

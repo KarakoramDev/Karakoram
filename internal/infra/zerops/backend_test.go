@@ -473,3 +473,193 @@ func TestAutoscalingPreservesNullableAndExplicitFreeThresholds(t *testing.T) {
 		})
 	}
 }
+
+func TestSubdomainAccessSchedulesAndPollsDurableOperations(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		action := "disable-subdomain-access"
+		if enabled {
+			action = "enable-subdomain-access"
+		}
+		t.Run(action, func(t *testing.T) {
+			var writes, polls int
+			status := "PENDING"
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/project/ExampleID0000000000077/service-stack":
+					_, _ = w.Write([]byte(`{"total":1,"list":[{"id":"service-id","name":"dashboard"}]}`))
+				case "/service-stack/service-id":
+					_ = json.NewEncoder(w).Encode(map[string]any{"id": "service-id", "name": "dashboard", "projectId": "ExampleID0000000000077", "subdomainAccess": !enabled})
+				case "/service-stack/service-id/" + action:
+					writes++
+					if r.Method != "PUT" {
+						t.Errorf("method %s", r.Method)
+					}
+					body, err := io.ReadAll(r.Body)
+					if err != nil || string(body) != "{}" {
+						t.Errorf("body %q: %v", body, err)
+					}
+					_, _ = w.Write([]byte(`{"id":"subdomain-process","status":"PENDING"}`))
+				case "/process/subdomain-process":
+					polls++
+					if r.Method != "GET" {
+						t.Errorf("poll method %s", r.Method)
+					}
+					_ = json.NewEncoder(w).Encode(Process{ID: "subdomain-process", Status: status})
+				default:
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			})
+			ctx := context.Background()
+			op, err := b.SetSubdomainAccess(ctx, "dashboard", enabled)
+			want := infra.Op{ID: "subdomain-process", Kind: action, ServiceID: "service-id"}
+			if err != nil || op != want || writes != 1 || polls != 0 {
+				t.Fatalf("schedule %+v: %v, writes %d polls %d", op, err, writes, polls)
+			}
+			// Reconstruct both backend and operation: polling needs no in-memory state.
+			restored, err := New(Options{BaseURL: b.client.base, Token: "test-token", ProjectID: b.client.project, MaxRetries: -1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(op)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var durable infra.Op
+			if err := json.Unmarshal(data, &durable); err != nil {
+				t.Fatal(err)
+			}
+			for _, terminal := range []string{"PENDING", "RUNNING", "FINISHED", "FAILED", "CANCELED"} {
+				status = terminal
+				state, err := restored.OpStatus(ctx, durable)
+				done := terminal == "FINISHED" || terminal == "FAILED" || terminal == "CANCELED"
+				failed := terminal == "FAILED" || terminal == "CANCELED"
+				if err != nil || state.Done != done || state.Failed != failed || state.Status != terminal {
+					t.Fatalf("%s: %+v %v", terminal, state, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSubdomainAccessMatchingStateIsDone(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		t.Run(map[bool]string{true: "enabled", false: "disabled"}[enabled], func(t *testing.T) {
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/project/ExampleID0000000000077/service-stack":
+					_, _ = w.Write([]byte(`{"total":1,"list":[{"id":"service-id","name":"dashboard"}]}`))
+				case "/service-stack/service-id":
+					_ = json.NewEncoder(w).Encode(map[string]any{"id": "service-id", "name": "dashboard", "subdomainAccess": enabled})
+				default:
+					t.Errorf("no-op made request %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			})
+			ctx := context.Background()
+			op, err := b.SetSubdomainAccess(ctx, "dashboard", enabled)
+			if err != nil || op.ID != "" || op.ServiceID != "service-id" {
+				t.Fatalf("matching state %+v %v", op, err)
+			}
+			state, err := b.OpStatus(ctx, op)
+			if err != nil || !state.Done || state.Failed {
+				t.Fatalf("no-op status %+v %v", state, err)
+			}
+		})
+	}
+}
+
+func TestSubdomainAccessRefusesProtectedAndForeignServices(t *testing.T) {
+	for _, tc := range []struct {
+		name, category, project string
+		system                  bool
+	}{
+		{name: "core"},
+		{name: "controlplane", system: true},
+		{name: "controlplane", category: "CORE"},
+		{name: "controlplane", category: "SYSTEM"},
+		{name: "dashboard", project: "other-project"},
+	} {
+		t.Run(tc.name+tc.category+tc.project, func(t *testing.T) {
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/project/ExampleID0000000000077/service-stack":
+					_ = json.NewEncoder(w).Encode(map[string]any{"total": 1, "list": []map[string]string{{"id": "service-id", "name": tc.name}}})
+				case "/service-stack/service-id":
+					_ = json.NewEncoder(w).Encode(map[string]any{"id": "service-id", "name": tc.name, "isSystem": tc.system, "projectId": tc.project, "serviceStackTypeInfo": map[string]string{"serviceStackTypeCategory": tc.category}})
+				default:
+					t.Errorf("protected service made request %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			})
+			for _, enabled := range []bool{true, false} {
+				if _, err := b.SetSubdomainAccess(context.Background(), tc.name, enabled); err == nil {
+					t.Fatal("accepted protected or foreign service")
+				}
+			}
+			if _, err := b.SubdomainURLs(context.Background(), tc.name); err == nil {
+				t.Fatal("exposed protected or foreign service")
+			}
+		})
+	}
+}
+
+func TestSubdomainURLsEffectiveHTTPPorts(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		service   string
+		project   string
+		want      []string
+		wantError bool
+		wantGETs  int
+	}{
+		{
+			name:     "enabled",
+			service:  `{"subdomainAccess":true,"nestId":"test1","ports":[{"port":5672,"scheme":"tcp"},{"port":15672,"scheme":"http"},{"port":8080,"httpSupport":true},{"port":9443,"scheme":"https"},{"port":9000,"httpSupport":false}]}`,
+			project:  `{"zeropsSubdomainHost":"example"}`,
+			want:     []string{"https://dashboard-example-15672.test1.zerops.app", "https://dashboard-example-8080.test1.zerops.app", "https://dashboard-example-9443.test1.zerops.app"},
+			wantGETs: 1,
+		},
+		{name: "disabled", service: `{"subdomainAccess":false,"nestId":"test1","ports":[{"port":15672,"scheme":"http"}]}`},
+		{name: "no-http", service: `{"subdomainAccess":true,"nestId":"test1","ports":[{"port":5672,"scheme":"tcp"}]}`},
+		{name: "no-ports", service: `{"subdomainAccess":true,"nestId":"test1","ports":[]}`},
+		{name: "missing-host", service: `{"subdomainAccess":true,"nestId":"test1","ports":[{"port":15672,"scheme":"http"}]}`, project: `{}`, wantError: true, wantGETs: 1},
+		{name: "missing-region", service: `{"subdomainAccess":true,"ports":[{"port":15672,"scheme":"http"}]}`, project: `{"zeropsSubdomainHost":"example"}`, wantError: true, wantGETs: 1},
+		{name: "project-error", service: `{"subdomainAccess":true,"nestId":"test1","ports":[{"port":15672,"scheme":"http"}]}`, wantError: true, wantGETs: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var projectGETs int
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" {
+					t.Errorf("URL observation made %s request", r.Method)
+				}
+				switch r.URL.Path {
+				case "/project/ExampleID0000000000077/service-stack":
+					_, _ = w.Write([]byte(`{"total":1,"list":[{"id":"service-id","name":"dashboard"}]}`))
+				case "/service-stack/service-id":
+					var service map[string]any
+					if err := json.Unmarshal([]byte(tc.service), &service); err != nil {
+						t.Fatal(err)
+					}
+					service["id"], service["name"] = "service-id", "dashboard"
+					_ = json.NewEncoder(w).Encode(service)
+				case "/project/ExampleID0000000000077":
+					projectGETs++
+					if tc.project == "" {
+						w.WriteHeader(http.StatusForbidden)
+						_, _ = w.Write([]byte(`{"error":{"code":"accessDenied"}}`))
+					} else {
+						_, _ = w.Write([]byte(tc.project))
+					}
+				default:
+					t.Errorf("unexpected %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			})
+			urls, err := b.SubdomainURLs(context.Background(), "dashboard")
+			if (err != nil) != tc.wantError || !reflect.DeepEqual(urls, tc.want) || projectGETs != tc.wantGETs {
+				t.Fatalf("URLs %v err %v project GETs %d", urls, err, projectGETs)
+			}
+		})
+	}
+}

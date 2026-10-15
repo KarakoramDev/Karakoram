@@ -87,6 +87,18 @@ SQLite migration 004 follows actor/audit migration 003 and assigns existing clus
 
 Only the `psmdb` provider and `zerops` backend are implemented. The seams isolate present responsibilities; they are not dynamically installable plugins or promises of compatibility with another project's providers.
 
+## Multi-engine extension
+
+Providers are registered centrally in `internal/server/providers.go`; PSMDB remains the explicit default. Provider metadata publishes capabilities, durable operations, process names, component limits and backup types. Generic API preflight rejects unsupported operations/backup types and validates log process names; a cluster's provider is immutable. Optional extra components, engine-owned JSON options, password-free connection endpoints, and provider/location backup provenance extend the shared domain and OpenAPI models without applying MongoDB defaults to other engines. Non-PSMDB CLI creation delegates defaults to the provider and accepts generic topology, replica count and JSON engine options.
+
+The UI's `EngineUI` registry provides optional wizard sections, detail tabs, monitoring panels and topology summaries. Generic actions/tabs are gated by provider capabilities and operations; forms use provider topology/component/backup metadata, logs use declared process names, and connection endpoints are shown without credentials. Host CPU/RAM/disk panels remain available to every engine. Missing capability metadata retains the PSMDB-compatible presentation.
+
+Optional provider interfaces supply namespace relay targets, monitoring metric vocabulary and retained-backup deletion. Namespace routing and monitoring no longer need engine-specific imports; shared certificate issuance lives in `internal/pki`. Zerops subdomain access supplies public HTTPS endpoints where an engine needs them. Engine-specific data-plane APIs remain in engine-owned packages/routes, rather than becoming generic MongoDB endpoints.
+
+Node runners implement `agent.Engine` and receive the protected `Node` toolkit; the common agent loop owns configuration pulls/cache, TLS/token authentication, generic routes, metrics, process supervision and durable maintenance/stop holds. `KARAKORAM_ENGINE`, configuration `engine` and engine-owned `engineSpec` select and configure a compiled-in runner. Empty engine names retain PSMDB behavior; unknown engines and mismatched configurations are rejected. Readiness forwards engine-specific arguments. See [ADR 0005](adr/0005-engine-provider-seam.md) and [ADR 0008](adr/0008-node-agent-protocol.md).
+
+Readiness accepts a leading `--engine=<name>` argument before engine-specific arguments. It overrides `KARAKORAM_ENGINE`, so platform exec checks can select the compiled-in engine without the service environment; for example, `karakoram agent readiness --engine=psmdb`. Without either selection, readiness retains the PSMDB default.
+
 ## Desired state and durable operations
 
 Clusters have desired `spec`, observed `status`, generation/observedGeneration and provider-owned internal state. Spec-driven work includes creation, membership/resource/disk/version changes, shard addition, TLS mode, exposure, backup configuration and PITR. Imperative work is a persisted Operation: backup, delete-backup, restore, raise-fcv, restart, replace-member, rotate-system-user or rotate-tls.

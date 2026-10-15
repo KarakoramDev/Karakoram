@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
-import { useClusters, useProviders } from '@/api/hooks';
+import { useClusters } from '@/api/hooks';
 import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
@@ -21,20 +21,19 @@ import { resourceMinimums, validateResources } from '../wizard/resources';
 import { memberChoices } from '../wizard/validation';
 import { validateExposure, validateTLS } from '../wizard/access';
 import { useSubmissionKey } from './use-submission-key';
-import { buildPatch, draftFrom, type Draft } from './topology';
+import { buildPatch, draftFrom, specFromDraft, type Draft } from './topology';
 import { MemberHealthBadge, MemberRole, useMemberRoles } from '../cluster-utils';
+import { engines, publicExposureMetadata, replicaLimits, reviewChanges, supportsOperation, validateReplicas } from '@/engines';
 
 const RS_SIZES = [1, 3, 5, 7];
 
 
 export function TopologyTab() {
-  const { cluster, namespace, name, base, can } = useClusterContext();
+  const { cluster, provider, namespace, name, base, can } = useClusterContext();
   const roles = useMemberRoles(cluster.status.members, base);
   const toast = useToast();
   const queryClient = useQueryClient();
   const clusters = useClusters(namespace);
-  const providers = useProviders();
-  const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
   const topology = provider?.topologies.find((t) => t.type === cluster.spec.topology.type);
   const minimums = {
     engine: resourceMinimums(cluster.spec.provider, topology, 'engine'),
@@ -51,23 +50,34 @@ export function TopologyTab() {
   const submission = useSubmissionKey(JSON.stringify(draft));
   const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
 
+
+  const sharded = cluster.spec.topology.type === 'sharded';
+  const mongo = cluster.spec.provider === 'psmdb';
+  const engineUI = engines[cluster.spec.provider];
+  const TopologyEditor = engineUI?.topologyEditor;
+  const limits = replicaLimits(topology, 'engine');
+  const editable = can('update') && cluster.status.phase !== 'Deleting' && cluster.status.phase !== 'Suspended';
+  const { patch, consequences: disruptive } = useMemo(() => {
+    if (engineUI?.changeReview) return reviewChanges(cluster.spec, specFromDraft(cluster.spec, draft), engineUI.changeReview);
+    const patch = buildPatch(cluster.spec, draft);
+    return { patch, consequences: scalingReview(cluster.spec, patch) };
+  }, [cluster.spec, draft, engineUI]);
+  const dirty = Object.keys(patch).length > 0;
+
   // Re-seed when the persisted spec changes under us and the user has no edits.
   const persistedKey = JSON.stringify(cluster.spec);
   const [seedKey, setSeedKey] = useState(persistedKey);
   useEffect(() => {
-    if (persistedKey !== seedKey && Object.keys(buildPatch(cluster.spec, draft)).length === 0) {
+    if (persistedKey !== seedKey && !dirty) {
       setDraft(draftFrom(cluster.spec));
       setSeedKey(persistedKey);
     }
-  }, [persistedKey, seedKey, cluster.spec, draft]);
-
-  const sharded = cluster.spec.topology.type === 'sharded';
-  const editable = can('update') && cluster.status.phase !== 'Deleting' && cluster.status.phase !== 'Suspended';
-  const patch = useMemo(() => buildPatch(cluster.spec, draft), [cluster.spec, draft]);
-  const dirty = Object.keys(patch).length > 0;
+  }, [persistedKey, seedKey, cluster.spec, dirty]);
 
   const errors: string[] = [];
-  if (!engineSizes.includes(draft.engineReplicas)) errors.push(`Member count must be one of: ${engineSizes.join(', ')}.`);
+  if (mongo) {
+    if (!engineSizes.includes(draft.engineReplicas)) errors.push(`Member count must be one of: ${engineSizes.join(', ')}.`);
+  } else errors.push(...validateReplicas(draft.engineReplicas, limits));
   errors.push(...validateResources(draft.engineResources, cluster.spec.components.engine.resources, false, minimums.engine).map((e) => `Members: ${e}`));
   if (sharded) {
     if (draft.shards < (cluster.spec.topology.shards ?? 0)) errors.push('Shards cannot be removed.');
@@ -80,9 +90,10 @@ export function TopologyTab() {
   if (patch.exposure) errors.push(...validateExposure(draft.exposure, allAddressesConfirmed));
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: patch } })),
+    mutationFn: ({ spec, key }: { spec: Record<string, unknown>; key: string }) => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec } })),
     onSuccess: (c) => {
       submission.reset();
+      setAllAddressesConfirmed(false);
       queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(<OperationNotice operationId={c.operationId}>Changes submitted; the cluster is reconciling.</OperationNotice>);
@@ -104,8 +115,6 @@ export function TopologyTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  const disruptive = scalingReview(cluster.spec, patch);
-
   const members = cluster.status.members.filter((m) => (roles.get(m.name) ?? m.role) !== 'router');
 
   return (
@@ -113,6 +122,7 @@ export function TopologyTab() {
       {!editable ? <Callout tone="info">{can('update') ? `Editing is unavailable while the cluster is ${cluster.status.phase}.` : 'You have read-only access to this cluster.'}</Callout> : null}
       {cluster.status.observedGeneration < cluster.generation ? <Callout tone="info">A previous change is still being reconciled (generation {cluster.status.observedGeneration} of {cluster.generation}).</Callout> : null}
 
+      {TopologyEditor ? <TopologyEditor cluster={cluster} provider={provider} editable={editable} can={can} busy={save.isPending} submit={(spec, key) => save.mutateAsync({ spec, key })} /> : <>
       <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
         <Card title={sharded ? 'Shards and members' : 'Members'}>
           <div className="stack" style={{ gap: 16 }}>
@@ -139,18 +149,18 @@ export function TopologyTab() {
                 </div>
               </div>
             ) : null}
-            <ChoiceGroup<string>
+            {!mongo && !limits.allowedReplicas?.length ? <TextField label="Nodes" type="number" min={limits.minReplicas} max={limits.maxReplicas} value={draft.engineReplicas} onChange={(e) => setDraft((d) => ({ ...d, engineReplicas: Number(e.target.value) }))} /> : <ChoiceGroup<string>
               name="replicas"
               legend={sharded ? 'Members per shard' : 'Members'}
               value={String(draft.engineReplicas)}
               onChange={(v) => setDraft((d) => ({ ...d, engineReplicas: Number(v) }))}
-              options={engineSizes.map((n) => ({
+              options={(mongo ? engineSizes : limits.allowedReplicas ?? []).map((n) => ({
                 value: String(n),
                 title: `${n}`,
-                description: n > cluster.spec.components.engine.replicas ? 'adds members (initial sync)' : n < cluster.spec.components.engine.replicas ? 'removes members (quorum-safe)' : 'current',
+                description: mongo ? (n > cluster.spec.components.engine.replicas ? 'adds members (initial sync)' : n < cluster.spec.components.engine.replicas ? 'removes members (quorum-safe)' : 'current') : undefined,
               }))}
-              hint="Members are added one at a time and must complete initial sync before the next. Removal always keeps a voting majority."
-            />
+              hint={mongo ? 'Members are added one at a time and must complete initial sync before the next. Removal always keeps a voting majority.' : undefined}
+            />}
           </div>
         </Card>
 
@@ -172,12 +182,12 @@ export function TopologyTab() {
           <TLSEditor storedCA={cluster.spec.tls?.ca ?? 'selfSigned'} value={draft.tls} onChange={(tls) => setDraft((d) => ({ ...d, tls }))} />
         </Card>
         <Card title="Network exposure">
-          <ExposureEditor allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} />
+          <ExposureEditor allAddressesConfirmed={allAddressesConfirmed} onAllAddressesConfirmedChange={setAllAddressesConfirmed} value={draft.exposure} onChange={(exposure) => setDraft((d) => ({ ...d, exposure }))} {...publicExposureMetadata(engineUI, { ...cluster.spec, tls: draft.tls, exposure: draft.exposure })} />
         </Card>
         <Card title="Monitoring & engine configuration">
           <div className="stack" style={{ gap: 14 }}>
             <Switch label="Collect per-member metrics" checked={draft.monitoring} onChange={(e) => setDraft((d) => ({ ...d, monitoring: e.target.checked }))} />
-            <TextAreaField label="Engine configuration overrides (YAML)" mono rows={6} value={draft.engineConfig} onChange={(e) => setDraft((d) => ({ ...d, engineConfig: e.target.value }))} hint="Validated server-side; applied with a rolling restart." />
+            <TextAreaField label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML)' : 'Engine configuration overrides')} placeholder={engineUI?.engineConfigPlaceholder} mono rows={6} value={draft.engineConfig} onChange={(e) => setDraft((d) => ({ ...d, engineConfig: e.target.value }))} hint="Validated server-side; applied with a rolling restart." />
           </div>
         </Card>
       </fieldset>
@@ -199,8 +209,9 @@ export function TopologyTab() {
           </Button>
         </div>
       ) : null}
+      </>}
 
-      <Card title="Replace a member" flush>
+      {supportsOperation(provider, 'replace-member') ? <Card title="Replace a member" flush>
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -240,9 +251,9 @@ export function TopologyTab() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Card> : null}
 
-      <ConfirmDialog open={confirmOpen} onClose={() => { setConfirmOpen(false); save.reset(); submission.reset(); }} onConfirm={() => save.mutateAsync()} title="Apply topology changes" confirmLabel="Apply" busy={save.isPending} error={save.error}>
+      {TopologyEditor ? null : <ConfirmDialog open={confirmOpen} onClose={() => { setConfirmOpen(false); save.reset(); submission.reset(); }} onConfirm={() => save.mutateAsync({ spec: patch, key: submission.key })} title="Apply topology changes" confirmLabel="Apply" busy={save.isPending} error={save.error}>
         <div className="stack">
           {disruptive.length ? (
             <Callout tone="warn" title="What will change">
@@ -259,7 +270,7 @@ export function TopologyTab() {
           </details>
           {clusters.data && clusters.data.items.length > 1 && patch.exposure ? <p className="xs faint">Other clusters are unaffected.</p> : null}
         </div>
-      </ConfirmDialog>
+      </ConfirmDialog>}
 
       <ConfirmDialog
         open={replaceMember !== null}

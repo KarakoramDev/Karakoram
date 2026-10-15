@@ -35,6 +35,24 @@ export function draftFrom(spec: Spec): Draft {
   };
 }
 
+/** Form values may include defaults that an engine's patch builder deliberately omits. */
+export function specFromDraft(spec: Spec, d: Draft): Spec {
+  return {
+    ...spec,
+    topology: { ...spec.topology, ...(spec.topology.type === 'sharded' ? { shards: d.shards } : {}) },
+    components: {
+      ...spec.components,
+      engine: { replicas: d.engineReplicas, resources: d.engineResources },
+      ...(d.configResources ? { configServer: { replicas: d.configReplicas, resources: d.configResources } } : {}),
+      ...(d.routerResources ? { router: { replicas: d.routerReplicas, resources: d.routerResources } } : {}),
+    },
+    tls: d.tls,
+    exposure: d.exposure,
+    monitoring: { enabled: d.monitoring },
+    engineConfig: d.engineConfig,
+  };
+}
+
 /** Build an RFC 7396 merge patch containing only what changed. */
 export function buildPatch(spec: Spec, d: Draft): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
