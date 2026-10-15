@@ -69,16 +69,22 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			}
 		}
 	}
-	// Capture verified legacy identities while runtimes still exist; deletion
-	// must not destroy the ownership evidence needed for their attached volumes.
+	// Capture verified identities while runtimes still exist; return newly
+	// adopted IDs for persistence before destroying their mount evidence.
+	ownershipChanged := false
 	for _, m := range s.Members {
+		serviceID, volumeID := m.ServiceID, m.VolumeID
 		if e = verifyMemberServices(ctx, rc, m); e != nil {
 			return false, e
 		}
+		ownershipChanged = ownershipChanged || m.ServiceID != serviceID || m.VolumeID != volumeID
 	}
 	// Deletion supersedes provisioning retries, but retains deletion backoff.
 	if s.Retry != nil && s.Retry.Action != "cleanup-runtime" && s.Retry.Action != "cleanup-volume" {
 		s.resetPlatformRetry(s.Retry)
+	}
+	if ownershipChanged {
+		return false, nil
 	}
 	for _, m := range s.Members {
 		oldKey := m.Name + "/delete-volume"

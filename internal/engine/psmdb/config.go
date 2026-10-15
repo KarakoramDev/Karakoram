@@ -58,7 +58,11 @@ func serviceSpec(c *domain.Cluster, m *member, token string) infra.ServiceSpec {
 	if m.Role == agentapi.RoleRouter {
 		containers = comp.Replicas
 	}
-	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(comp.Resources), MinContainers: containers, MaxContainers: containers, Env: ownershipEnv(c.Name, m.Name, token), Volume: m.Volume}
+	env := ownershipEnv(c.Name, m.Name, token)
+	if m.Volume != "" {
+		env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+	}
+	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(comp.Resources), MinContainers: containers, MaxContainers: containers, Env: env, Volume: m.Volume}
 }
 
 func ownershipEnv(cluster, member, token string) map[string]string {
