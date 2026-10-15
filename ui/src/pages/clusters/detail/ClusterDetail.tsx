@@ -112,7 +112,7 @@ export function ClusterDetailLayout() {
   const provider = detailProvider(cluster.spec.provider, providers.error ? undefined : providers.data?.items.find((p) => p.name === cluster.spec.provider));
   const engine = engines[cluster.spec.provider];
   const tab = location.pathname.slice(base.length + 1).split('/')[0] ?? '';
-  const tabState = detailTabState(provider, tab, providers.isPending);
+  const tabState = detailTabState(provider, tab, providers.isSuccess);
   if (tabState === 'loading') {
     return (
       <div className="page">

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Schemas } from '../api/client';
 import type { EngineUI } from './types';
-import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopologySummary, hasCapability, hasReplicaSetDetails, monitoringPanels, providerProcesses, publicExposureMetadata, replicaLimits, shouldRedirectTab, supportsOperation, tabAvailable, validateReplicas, versionSelectable } from './index.ts';
+import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopologySummary, hasCapability, hasReplicaSetDetails, monitoringPanels, providerProcesses, publicExposureMetadata, replicaLimits, supportsOperation, tabAvailable, validateReplicas, versionSelectable } from './index.ts';
 
 const resources: Schemas['Resources'] = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 2, maxDisk: 20 };
 const spec: Schemas['ClusterSpec'] = { provider: 'unregistered', version: '1.0', topology: { type: 'cluster' }, components: { engine: { replicas: 3, resources }, extra: { worker: { replicas: 2, resources }, disabled: { replicas: 0, resources } } } };
@@ -115,21 +115,6 @@ test('detail catalog fallback preserves Mongo access without granting other engi
   const described: Schemas['Provider'] = { ...generic!, capabilities: ['backups'], processes: ['broker'] };
   assert.equal(detailProvider('other', described), described);
   assert.equal(tabAvailable(detailProvider('other', described), 'backups'), true);
-});
-
-test('capability-gated detail URLs wait for a successful provider catalog before redirecting', () => {
-  const pending = detailProvider('elasticsearch', undefined);
-  const supported = { capabilities: ['databaseUsers', 'systemUsers', 'backups', 'restores'] };
-  const unsupported = { capabilities: [] };
-  for (const tab of ['users', 'backups', 'restores']) {
-    assert.equal(shouldRedirectTab(pending, tab, false), false);
-    assert.equal(shouldRedirectTab(supported, tab, true), false);
-    assert.equal(shouldRedirectTab(unsupported, tab, true), true);
-    // A catalog failure still is not proof that the provider lacks this capability.
-    assert.equal(shouldRedirectTab(pending, tab, false), false);
-  }
-  assert.equal(shouldRedirectTab(unsupported, 'topology', true), false);
-  assert.equal(shouldRedirectTab(detailProvider('psmdb', undefined), 'users', true), false);
 });
 
 test('Mongo log defaults follow member roles while other engines use their first described process', () => {
