@@ -103,25 +103,24 @@ func (c *Client) request(ctx context.Context, method string, parts []string, bod
 			if method == http.MethodPut && len(parts) > 0 {
 				// Recognize fixed native diagnostics without exposing submitted data.
 				var rejection struct {
-					Reason string `json:"reason"`
+					Reason json.RawMessage `json:"reason"`
 				}
 				_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&rejection)
+				reason := string(rejection.Reason)
 				switch parts[0] {
 				case "permissions", "topic-permissions":
-					if rejection.Reason == "vhost_or_user_not_found" {
+					if reason == `"vhost_or_user_not_found"` {
 						sentinel = engine.InvalidField("user,vhost", domain.ReasonNotFound, "user or vhost does not exist in RabbitMQ")
-					} else if strings.Contains(rejection.Reason, "invalid regexp") || strings.Contains(rejection.Reason, "invalid regular expression") {
-						if parts[0] == "permissions" {
-							sentinel = engine.InvalidField("configure,write,read", domain.ReasonInvalid, "configure, write or read contains a regular expression rejected by RabbitMQ")
-						} else {
-							sentinel = engine.InvalidField("write,read", domain.ReasonInvalid, "write or read contains a regular expression rejected by RabbitMQ")
-						}
+					} else if parts[0] == "permissions" {
+						sentinel = engine.InvalidField("configure,write,read", domain.ReasonInvalid, "configure, write or read contains a regular expression rejected by RabbitMQ")
+					} else {
+						sentinel = engine.InvalidField("write,read", domain.ReasonInvalid, "write or read contains a regular expression rejected by RabbitMQ")
 					}
 				case "policies", "operator-policies":
 					sentinel = engine.InvalidField("pattern,definition", domain.ReasonInvalid, "pattern or definition was rejected by RabbitMQ; check regular expression syntax and supported policy definition keys and values")
-					if strings.Contains(rejection.Reason, "not a recognised policy setting") || strings.Contains(rejection.Reason, "not a recognized policy setting") {
+					if strings.Contains(reason, "not a recognised policy setting") || strings.Contains(reason, "not a recognized policy setting") || strings.Contains(reason, "are not recognised policy settings") || strings.Contains(reason, "are not recognized policy settings") {
 						sentinel = engine.InvalidField("definition", domain.ReasonInvalid, "definition contains a policy setting not supported by RabbitMQ")
-					} else if strings.Contains(rejection.Reason, "invalid regular expression") {
+					} else if strings.Contains(reason, "invalid regular expression") {
 						sentinel = engine.InvalidField("pattern", domain.ReasonInvalid, "pattern contains a regular expression rejected by RabbitMQ")
 					}
 				}

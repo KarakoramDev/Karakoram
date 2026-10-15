@@ -269,8 +269,8 @@ func TestPermissionNativeRejectionReasons(t *testing.T) {
 			name, body, field, reason string
 		}{
 			{"missing identity", `{"error":"bad_request","reason":"vhost_or_user_not_found"}`, "user,vhost", domain.ReasonNotFound},
-			{"regex", `{"error":"bad_request","reason":"invalid regexp: submitted-secret"}`, "write,read", domain.ReasonInvalid},
-			{"unknown", `{"error":"bad_request","reason":"submitted-secret"}`, "", ""},
+			{"regex", `{"error":"bad_request","reason":["invalid_regexp","[submitted-secret",["missing terminating ] for character class",17]]}`, "write,read", domain.ReasonInvalid},
+			{"unknown", `{"error":"bad_request","reason":"submitted-secret"}`, "write,read", domain.ReasonInvalid},
 		} {
 			t.Run(resource+"/"+tc.name, func(t *testing.T) {
 				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -291,14 +291,8 @@ func TestPermissionNativeRejectionReasons(t *testing.T) {
 					t.Fatal(err)
 				}
 				var field *engine.ValidationError
-				if tc.field == "" {
-					if errors.As(err, &field) {
-						t.Fatal("unknown rejection misreported as a field error", field)
-					}
-					return
-				}
 				wantField := tc.field
-				if tc.name == "regex" && resource == "permissions" {
+				if tc.name != "missing identity" && resource == "permissions" {
 					wantField = "configure,write,read"
 				}
 				if !errors.As(err, &field) || field.Field != wantField || field.Reason != tc.reason {

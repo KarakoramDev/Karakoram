@@ -66,10 +66,10 @@ func TestRabbitMQNativeValidationErrors(t *testing.T) {
 		writes++
 		w.WriteHeader(400)
 		if strings.Contains(r.URL.Path, "policies/") {
-			fmt.Fprint(w, `{"error":"bad_request","reason":"unknown-definition is not a recognised policy setting; submitted-secret"}`)
+			fmt.Fprint(w, `{"error":"bad_request","reason":"[unknown-definition] are not recognised policy settings; submitted-secret"}`)
 			return
 		}
-		fmt.Fprint(w, `{"error":"bad_request","reason":"invalid regexp: submitted-secret"}`)
+		fmt.Fprint(w, `{"error":"bad_request","reason":["invalid_regexp","[submitted-secret",["missing terminating ] for character class",17]]}`)
 	}))
 	for _, tc := range []struct{ resource, body, field string }{
 		{"permissions", `{"vhost":"/","user":"app","configure":"[submitted-secret","write":"","read":""}`, "configure,write,read"},
