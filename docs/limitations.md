@@ -2,15 +2,15 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Known limitations
 
-These constraints are part of the product's operating model, not errors to suppress. Healthy database processes, successful platform requests and replicated data do not alone establish host-level HA or recovery guarantees.
+These constraints are part of the product's operating model, not errors to suppress. Healthy engine processes, successful platform requests and replicated data do not alone establish host-level HA or recovery guarantees. Shared limits apply to MongoDB, RabbitMQ and Elasticsearch; MongoDB-specific topology/recovery rules and the separate RabbitMQ and Elasticsearch sections are scoped to those engines.
 
 ## Zerops failure domains and storage
 
 - **No anti-affinity or placement guarantee.** Independent services/volumes and dedicated CPU are not proof of independent physical machines, racks or zones. One host loss can remove multiple voters.
 - **Best-effort detection only.** The agent groups hashed host-level signals (visible ZFS ARC header/optional hostid plus CPU model). Missing/changing signals, collisions and platform virtualization can cause unknown/false/stale groups. Container `boot_id` and `/proc/uptime` are not reliable physical host IDs. Even distinct fingerprints do not certify future placement or zone separation.
-- **Local Storage is single-machine.** Each member's runtime is co-located with its volume; the volume is not replicated HA storage. Database replication and PBM backups are separate protection. Runtime root disks are wiped on deployment; data must remain on the assigned volume.
+- **Local Storage is single-machine.** Each member's runtime is co-located with its volume; the volume is not replicated HA storage. Engine replication and engine-supported backups are separate protection. Runtime root disks are wiped on deployment; data must remain on the assigned volume.
 - **Local Storage minimum is 5 GB**, and mounted capacity follows the volume service **maxDisk**, not runtime disk or volume minDisk. Growth is supported; shrinking is rejected. Shared SeaweedFS dbpaths are not supported/safe database storage.
-- **Platform volume backups are live archives**, not consistent MongoDB or automatically consistent SQLite backups. Use PBM and a consistent stopped-writer/native SQLite state snapshot respectively.
+- **Platform volume backups are live archives**, not consistent engine or automatically consistent SQLite backups. Use engine-native recovery (MongoDB PBM, Elasticsearch snapshots; RabbitMQ definitions exclude messages) and a consistent stopped-writer/native SQLite state snapshot respectively.
 
 ## Control-plane and platform operations
 
@@ -28,13 +28,13 @@ These constraints are part of the product's operating model, not errors to suppr
 
 - **Default token is environment-managed.** API token rotation returns 409 for `default`; update `KARAKORAM_ZEROPS_TOKEN` on the control-plane service and restart.
 - **One namespace per project.** Cluster and backup-storage names are unique per namespace, not installation-wide. Namespace rename/project reassignment is not supported; only descriptions can change.
-- **No relay HA.** Each additional project has one relay container. Losing it interrupts MongoDB administration, agent commands/config pulls and monitoring for that namespace, not database replication. It is not a workload connectivity gateway.
+- **No relay HA.** Each additional project has one relay container. Losing it interrupts engine administration, agent commands/config pulls and monitoring for that namespace, not engine replication. It is not a workload connectivity gateway.
 - **Public HTTPS origin is required.** Remote namespaces depend on outbound access to the control-plane origin and WebSocket forwarding through L7. Default namespace networking remains direct.
 - **Half-close is not propagated.** EOF closes both sides of a tunneled stream; the relay is not a general TCP/VPN transport.
-- **One ordered tunnel per namespace.** Streams share congestion/failure fate. Backup data goes directly member-to-S3; measured transport throughput is evidence for admin/PBM control, not a bulk-backup SLA.
+- **One ordered tunnel per namespace.** Streams share congestion/failure fate. MongoDB/PBM and Elasticsearch snapshot data go directly member-to-S3; RabbitMQ definitions are exported through the Management API and uploaded by the control plane. Measured admin/PBM transport throughput is not a bulk-backup SLA.
 - **L7 longevity is bounded evidence.** A session measured in a test deployment survived at least 31 minutes 23.882 seconds with keepalives and three approximately ten-minute application-idle intervals. Multi-hour/day behavior, actual idle timeout and message-size limits were not characterized; see [ADR 0018](adr/0018-multi-project-namespaces-relay.md#evidence).
 - **Removal guards retained resources.** Clusters (including deleting), storages, retained backup records and orphaned-volume records must be gone first. Deletion removes the owned relay, not the project, and does not remove RBAC policy rules. Review obsolete policies before reusing names.
-- **Relay bounds are not a DoS guarantee.** Handshakes, control frames, WebSocket messages and active streams are bounded, but shared public listener/network resources remain exposed to denial of service. Project DNS/network are trusted; inner relay TLS is not a substitute for MongoDB TLS.
+- **Relay bounds are not a DoS guarantee.** Handshakes, control frames, WebSocket messages and active streams are bounded, but shared public listener/network resources remain exposed to denial of service. Project DNS/network are trusted; inner relay TLS is not a substitute for engine TLS.
 
 See [namespace lifecycle](user-guide/namespaces.md) and [relay threat model](security.md#relay-threat-model).
 
@@ -46,9 +46,9 @@ See [namespace lifecycle](user-guide/namespaces.md) and [relay threat model](sec
 - **External replica-set discovery is unresolved automatically.** Public routes use distinct ports on one project IP, while normal `hello` discovery advertises private member hosts. Karakoram does not configure external DNS/SNI split horizons. A public seed/CA/SAN or DNS-only mapping is insufficient if the discovered ports remain private defaults. DirectConnection to a public member is diagnostic and sacrifices normal discovery/failover; do not label it external RS HA.
 - **Sharded exposure publishes mongos only.** Config servers/shards stay private. Multiple router containers share a service name rather than independent per-container public discovery.
 - **Project users/platform are trusted.** The Full access project token can read other services' sensitive env. The public API's HTTP hop after Zerops L7 termination uses private infrastructure; agent traffic has separate end-to-end TLS. Karakoram is not an isolation sandbox against project administrators.
-- **TLS CA source is immutable.** User-provided PKI needs a signing CA key; optional leaf SANs must cover every relevant member and localhost/public IP. Leaf rotation does not implement general CA or master-key rotation. PreferTLS/disabled permit plaintext database traffic; current default is requireTLS with password clients allowed without client certificates.
+- **TLS CA source is immutable.** User-provided PKI needs a signing CA key; optional leaf SANs must cover every relevant member and localhost/public IP. Leaf rotation does not implement general CA or master-key rotation. MongoDB and RabbitMQ `preferTLS`/`disabled` permit plaintext engine traffic; their default is `requireTLS` with password clients allowed without client certificates. Elasticsearch requires TLS; see its engine guide.
 
-## Database topology and lifecycle
+## MongoDB topology and lifecycle
 
 - **No shard removal.** Shards can be added; decreasing shard count is rejected. Topology type and cluster name are immutable. A replica set is not transformed into sharding by changing a flag.
 - **Uniform shard component specs.** Engine replicas/resources apply to every shard; no per-shard independent specification is exposed.
@@ -59,7 +59,7 @@ See [namespace lifecycle](user-guide/namespaces.md) and [relay threat model](sec
 - **Agent binary rollout is not automatic on CP restart.** Existing agents receive the current executable on their next provider-driven member deployment. Maintain protocol compatibility through mixed versions.
 - **No automatic adoption from lost state.** A blank control plane cannot discover missing secret ownership/checkpoints and safely adopt existing members. Keep consistent state+original key backups. No `admin backup-db` or master-key re-encryption command exists; replacing the master-key env breaks decryption.
 
-## Recovery and scheduling
+## MongoDB recovery and scheduling
 
 - **Restore is disruptive and serialized.** Stop writers; physical restore intentionally takes mongod offline and suppresses restarts. Sharded restore coordinates routers/balancer. Failed terminal work still requires cleanup; ambiguous PBM initiation deliberately fails rather than automatically launching a duplicate.
 - **Source/target compatibility matters.** Clone requires matching topology/engine major and a successful snapshot, or a live source's continuous PITR window. Modern retained snapshots preserve provenance; physical recovery additionally requires the protected snapshot identity. Legacy retained records lacking either are rejected before work starts. DataSource is creation-time and immutable; it is not a continuous replication link or topology migration.

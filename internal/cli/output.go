@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"unicode/utf8"
 )
 
 func (a *app) print(v any) error {
@@ -117,6 +118,44 @@ func nestedTableValue(v any) bool {
 	return false
 }
 
+func compactObjectCell(m map[string]any) (string, bool) {
+	if len(m) > 3 {
+		return "", false
+	}
+	for _, value := range m {
+		switch value.(type) {
+		case nil, string, bool, float32, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, json.Number:
+		default:
+			return "", false
+		}
+	}
+	if len(m) == 0 {
+		return "-", true
+	}
+	var text strings.Builder
+	kind, hasKind := m["kind"].(string)
+	name, hasName := m["name"].(string)
+	target := hasKind && hasName
+	if target {
+		text.WriteString(cell(kind))
+		text.WriteByte('/')
+		text.WriteString(cell(name))
+	}
+	for _, key := range sortedKeys(m) {
+		if target && (key == "kind" || key == "name") {
+			continue
+		}
+		if text.Len() > 0 {
+			text.WriteByte(',')
+		}
+		text.WriteString(cell(key))
+		text.WriteByte('=')
+		text.WriteString(cell(m[key]))
+	}
+	summary := text.String()
+	return summary, utf8.RuneCountInString(summary) <= 40
+}
+
 // Detail fields retain hierarchy without squeezing whole documents into a cell.
 func detailFields(w *tabwriter.Writer, m map[string]any, prefix string) {
 	for _, key := range sortedKeys(m) {
@@ -193,11 +232,16 @@ func (a *app) table(rows []any) error {
 				}
 			}
 			if nestedTableValue(v) {
-				summarized = true
 				switch value := v.(type) {
 				case map[string]any:
-					fmt.Fprintf(w, "%d fields", len(value))
+					if summary, compact := compactObjectCell(value); compact {
+						fmt.Fprint(w, summary)
+					} else {
+						summarized = true
+						fmt.Fprintf(w, "%d fields", len(value))
+					}
 				case []any:
+					summarized = true
 					fmt.Fprintf(w, "%d items", len(value))
 				}
 			} else {

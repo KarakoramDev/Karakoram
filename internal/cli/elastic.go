@@ -38,14 +38,14 @@ var elasticCommands = []elasticCommand{
 }
 
 func (a *app) addElastic(root *cobra.Command) {
-	group := &cobra.Command{Use: "elasticsearch", Short: "Manage Elasticsearch native users, roles and API keys"}
+	group := &cobra.Command{Use: "elasticsearch", Short: commandGroupDescriptions["elasticsearch"]}
 	root.AddCommand(group)
 	groups := map[string]*cobra.Command{}
 	for _, spec := range elasticCommands {
 		s := spec
 		parent := groups[s.group]
 		if parent == nil {
-			parent = &cobra.Command{Use: s.group, Short: "Manage Elasticsearch " + s.group}
+			parent = &cobra.Command{Use: s.group, Short: commandGroupDescriptions["elasticsearch "+s.group]}
 			group.AddCommand(parent)
 			groups[s.group] = parent
 		}
@@ -58,7 +58,7 @@ func (a *app) addElastic(root *cobra.Command) {
 				use = s.verb + " <cluster> <id>"
 			}
 		}
-		c := &cobra.Command{Use: use, Short: s.operation, Args: cobra.ExactArgs(argc)}
+		c := &cobra.Command{Use: use, Short: commandDescription("elasticsearch " + s.group + " " + s.verb), Args: cobra.ExactArgs(argc)}
 		annotate(c, s.operation)
 		if destructive(s.operation) {
 			c.Flags().BoolP("yes", "y", false, "Confirm without reading stdin (otherwise pipe y/yes)")

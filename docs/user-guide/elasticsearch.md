@@ -21,6 +21,8 @@ Live Zerops checks have exercised a three-node Elasticsearch 9.5.4 Stack with Ki
 
 Topology type is immutable. These layouts do not enable the `ml` role or separate hot/warm/cold pools. Applications connect to data/combined nodes, not dedicated masters.
 
+The wizard and **Topology & scaling** page label `cluster` as **Combined master and data nodes** and `dedicatedMasters` as **Dedicated masters + data nodes**. API requests continue to use the topology identifiers above.
+
 Choose one combined node for development or usually 3/5 for production voting. Even counts are allowed with warnings, not recommended as an availability improvement. Two combined nodes require both voters; loss of either stops writes. One data node has no redundant shard copy, even with three dedicated masters. Replicas, disk headroom and actual failure domains determine resilience, not the preset name.
 
 | Preset | Topology | Initial components |

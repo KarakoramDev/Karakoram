@@ -34,9 +34,9 @@ that it was deleted; authorization still applies. See [namespaces](namespaces.md
 
 ## Clusters and creation
 
-**Clusters** lists authorized clusters and their current phases. **Create cluster** opens the catalog-driven wizard at `/clusters/new`. Select a name, exact catalog version, topology, component replicas/resources and the relevant backup, recovery, TLS, exposure and monitoring settings. Review the resource footprint and placement limitations before submitting; resource choices are not a binding price quote.
+**Clusters** lists authorized clusters and their current phases. **Create cluster** opens the catalog-driven wizard at `/clusters/new`. Select the engine (**MongoDB**, **RabbitMQ** or **Elasticsearch**), name, exact catalog version, topology, component replicas/resources and the relevant backup, recovery, TLS, exposure and monitoring settings. Review the resource footprint and placement limitations before submitting; resource choices are not a binding price quote.
 
-The wizard uses provider metadata/presets; it does not promise a “production” preset supplies physical anti-affinity. Name, topology, backup dependencies and unsafe transitions are validated by the server. Creation acceptance starts reconciliation; keep observing until member health and desired-generation convergence are reported. [Replica sets](replica-sets.md), [sharding](sharding.md) and [limitations](../limitations.md) describe the constraints.
+The wizard uses provider metadata/presets; it does not promise a “production” preset supplies physical anti-affinity. Name, topology, backup dependencies and unsafe transitions are validated by the server. Creation acceptance starts reconciliation; keep observing until member health and desired-generation convergence are reported. Follow the [MongoDB replica-set](replica-sets.md), [sharding](sharding.md), [RabbitMQ](rabbitmq.md) or [Elasticsearch](elasticsearch.md) guide and read the [limitations](../limitations.md).
 
 Percona member resources require at least **0.5 GiB RAM** and **5 GiB data disk**. The resource editor applies these limits before submission; an initial cluster may not yet have connection hosts, in which case Overview shows the initializing message rather than a connection URI.
 
@@ -57,7 +57,7 @@ it to one.
 | Screen | Fields and choices |
 | --- | --- |
 | **Basics** | Target namespace (selected automatically when only one is available), cluster name, engine, exact version, topology and optional preset. Unavailable catalog versions cannot be selected. |
-| **Topology** | Replica-set member count; for sharding, shard count, members per shard, config-server members and routers. MongoDB replica-set/config-server choices are 1/3/5/7. MongoDB configuration overrides are YAML and remain subject to provider-owned-setting restrictions. Elasticsearch uses its native component/settings controls, not the generic `engineConfig` editor. |
+| **Topology** | Engine-specific topology and component settings. MongoDB selects replica-set count or shard/config-server/router counts; replica-set/config-server choices are 1/3/5/7, with YAML configuration overrides subject to provider restrictions. RabbitMQ selects 1/3/5/7 brokers and its plugin/management/configuration options. Elasticsearch selects combined nodes or dedicated masters/data nodes and optional Stack components/settings, not the generic `engineConfig` editor. |
 | **Resources** | CPU mode, minimum/maximum CPU cores, optional start CPU and minimum/maximum RAM in GiB for each component. Data-bearing components also have minimum/maximum disk in GiB. Sharded clusters have separate shard-member, config-server and router resource editors; routers have no durable data-disk editor. |
 | **Backups** | Primary namespace-local storage or None; provider-supported backup schedules (name, five-field UTC cron, type, storage, positive retain count, enabled); PITR and oplog slice interval where supported; optional seed data from a backup or recovery time, including source namespace/cluster. |
 | **Access & TLS** | TLS mode, managed or supplied CA, certificate inputs, private/public exposure, IP family and client CIDR allowlist, plus per-member monitoring. A supplied CA needs its certificate and signing private key; supplied server certificate/key are an optional matching pair. |
@@ -76,6 +76,11 @@ servers and one router). A preset replaces topology/resource/backup defaults,
 but you can edit them afterward; it is not a capacity or production-readiness
 certification. The catalog served by your installation is authoritative.
 
+RabbitMQ offers **dev** (one broker) and **prod** (three brokers), with 1/3/5/7
+nodes supported. Its Backups step offers **definitions** only, without messages
+or PITR. Keep public management disabled unless its separate exposure and TLS
+constraints are acceptable; see the [RabbitMQ guide](rabbitmq.md).
+
 Elasticsearch offers combined master/data nodes or dedicated masters plus data
 nodes, explained on Basics, with **dev**, **prod**, **observability** and **large**
 presets. Its Resources step covers enabled Kibana/Logstash/APM components and
@@ -86,7 +91,7 @@ clears dependent public flags (and disabled Logstash pipelines) when preparing
 the request, including for clones. See [topologies and presets](elasticsearch.md#topologies-and-presets)
 and [component sizing](elasticsearch.md#sizing-and-heap) before selecting counts.
 
-For a first replica set, choose **dev** for disposable development or **prod**
+For a first MongoDB replica set, choose **dev** for disposable development or **prod**
 for three voting members, keep private access and `requireTLS`, choose an existing
 S3 storage if you need backups, then inspect Review before **Create cluster**.
 For a sharded deployment, also check the resource totals across *all* shards and
@@ -103,15 +108,15 @@ and [sharding](sharding.md).
 | Overview | Phase/conditions, password-free connection summary and explicit credential reveal |
 | Topology | Member roles/health/lag/agent status, resource/membership controls, replacement/placement, member logs |
 | Upgrades | Catalog-based binary changes and rolling restart; MongoDB-only FCV promotion |
-| Backups | Backup inventory, on-demand backup, storage/schedule/PITR configuration and observed window |
+| Backups | Provider-supported backup inventory and on-demand backup; storage/schedules, MongoDB-only PITR/window |
 | Restores | In-place recovery and restore into a new cluster, restore status/errors |
-| Users / Elastic Access | Engine-native application users/roles, managed system-user rotation; Elasticsearch API keys and application privileges |
+| Users / Access / Elastic Access | MongoDB users/roles; RabbitMQ vhosts/users/grants/policies; Elasticsearch users/roles/API keys/application privileges; engine-supported system-user rotation |
 | Monitoring | Per-member time series and status context |
 | Events | Cluster activity and diagnostic messages, including the actor |
 | Operations | Durable asynchronous operation progress/failure and initiating actor |
 | Delete | Destructive deletion or retained-volume/backups choices |
 
-Use operation and resource status together. Accepted mutations are not completed provisioning/upgrades/restores, and local TCP readiness does not prove replica-set health. Physical restore intentionally stops database processes; do not use UI restart buttons to undo a restore's maintenance holds.
+Tabs and actions are capability-gated by engine. Use operation and resource status together: accepted mutations are not completed provisioning/upgrades/restores, and local TCP readiness does not prove cluster health. MongoDB physical restore intentionally stops database processes; do not use UI restart buttons to undo a restore's maintenance holds.
 
 During membership removal, members reported as **Leaving** remain visible with
 in-progress health styling, not as unhealthy members. Overview and cluster-list
@@ -148,6 +153,14 @@ copyable `mongosh` command with `--tlsCAFile ca.pem` and a driver URI with
 the database project network, and replace the administrative credentials with
 your application's scoped identity. URI-encode its credentials; the CA path is
 relative to the client process. Do not disable certificate verification.
+
+RabbitMQ's **Access** tab administers vhosts, users, vhost permissions, topic
+permissions, policies and operator policies directly through its Management API.
+Generated application passwords are displayed once. Deleting a vhost deletes
+its queues and messages; deleting a topic grant removes every exchange's grant
+for the selected vhost/user pair. **Backups** contains definitions only, never
+messages. See [RabbitMQ access](rabbitmq.md#access-api-cli-and-ui) and
+[definitions backups](rabbitmq.md#definitions-backups-and-cleanup).
 
 For Elasticsearch, expand **How to connect** for the returned `elasticsearch`
 endpoint, revealed `elastic` password and CA-verified curl guidance; the

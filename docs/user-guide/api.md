@@ -117,6 +117,7 @@ Every authenticated operation is classified by `x-karakoram-rbac` in OpenAPI. Re
 | Cluster desired/observed state | `/clusters`, `/clusters/{cluster}`, `/status`, `/members`, `/placement`, `/balancer`, `/connection` (suffixes on a cluster) |
 | Cluster operations | `/restart`, `/resume`, `/raise-fcv`, `/rotate-tls`, `/members/{member}/replace`, `/system-users/{user}/rotate` (cluster suffixes) |
 | Database identities | Cluster `/database-users` and `/database-roles` |
+| Engine-native identities | Cluster `/rabbitmq/vhosts`, `/rabbitmq/users`, `/rabbitmq/permissions`, `/rabbitmq/topic-permissions`, `/rabbitmq/policies`, `/rabbitmq/operator-policies`; cluster `/elasticsearch/users`, `/elasticsearch/roles`, `/elasticsearch/api-keys` (RBAC resource: `database-users`) |
 | Recovery | `/backup-storages`; cluster `/backups`, `/restores`, `/pitr` |
 | Activity | `/operations`, `/operations/{operation}`, cluster `/operations`, `/events`, `/events/stream` |
 | Member observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` |

@@ -7,12 +7,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
+
+const restoreMetadataGrace = time.Minute
+
+func restoreMetadataPending(err error) bool {
+	var failure *commandFailure
+	if !errors.As(err, &failure) || failure.command != "describe-restore" || failure.exitCode != 1 {
+		return false
+	}
+	// PBM can print warnings before its final error. Classify only the last
+	// nonempty stderr line, never stdout or a substring of a different error.
+	line := strings.TrimSpace(failure.stderr)
+	if index := strings.LastIndexByte(line, '\n'); index >= 0 {
+		line = strings.TrimSpace(line[index+1:])
+	}
+	return line == "Error: get restore meta: not found"
+}
 
 // RunRestore resumes logical, PITR, physical and clone restores. Every member lifecycle change advances a durable index.
 // After success with PITR desired, the provider must enqueue a fresh base snapshot before applying enabled PITR configuration.
@@ -259,6 +276,10 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 			return result(cp, false), errors.New("PBM restore start returned no name")
 		}
 		cp.PBMName = started.Name
+		if cp.RestoreMetadataDeadline == nil {
+			deadline := now(env).Add(restoreMetadataGrace)
+			cp.RestoreMetadataDeadline = &deadline
+		}
 		if err = event(ctx, env, op, "RestoreStarted", "PBM restore "+cp.PBMName+" started"); err != nil {
 			return result(cp, false), err
 		}
@@ -275,6 +296,13 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		data, e := command(ctx, active, cp.Member, "", "describe-restore", cfg, args...)
 		if e != nil {
+			// PBM can accept a restore before publishing its metadata. Only
+			// this specific startup absence gets a bounded progress window.
+			if cp.RestoreMetadataDeadline != nil && now(env).Before(*cp.RestoreMetadataDeadline) && restoreMetadataPending(e) {
+				progress := result(cp, false)
+				progress.Message = "restore starting: waiting for PBM restore metadata"
+				return progress, nil
+			}
 			return result(cp, false), e
 		}
 		var desc struct {
@@ -284,6 +312,11 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		if e = decodeLast(data, &desc); e != nil {
 			return result(cp, false), e
+		}
+		if desc.Status != "" {
+			// Once PBM reports the restore, later missing metadata is no
+			// longer an expected initiation delay, even before the deadline.
+			cp.RestoreMetadataDeadline = nil
 		}
 		switch desc.Status {
 		case "done":

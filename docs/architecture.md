@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Architecture
 
-Karakoram is a self-hosted control plane for PSMDB/PBM and RabbitMQ on Zerops, managing its own project and additional projects as namespaces. It does not run Kubernetes or reuse OpenEverest's Kubernetes provider runtime. The [ADRs](adr/README.md) record the design rationale; current implementation details and explicit limitations are summarized here.
+Karakoram is a self-hosted control plane for MongoDB (PSMDB/PBM), RabbitMQ and Elasticsearch with optional Kibana, Logstash and APM Server on Zerops, managing its own project and additional projects as namespaces. It does not run Kubernetes or reuse OpenEverest's Kubernetes provider runtime. The [ADRs](adr/README.md) record the design rationale; current implementation details and explicit limitations are summarized here.
 
 ## Deployment and trust boundaries
 
@@ -12,20 +12,26 @@ flowchart LR
   L7 -->|HTTP 8080| CP[Karakoram control plane]
   CP --> DB[(SQLite on karakoramdata)]
   CP -->|Project-scoped token| Z[Zerops REST API]
+  CP -->|RabbitMQ Management API| R[RabbitMQ]
+  CP -->|CA-verified HTTPS| E[Elasticsearch / Elastic Stack]
   CP -->|MongoDB wire protocol| M[PSMDB / mongos]
   CP -->|Pinned CA + member token, TLS 9443| A[Node agent]
   A -->|Pull config, TLS 9443| CP
   A -->|Supervise / render files| M
+  A -->|Supervise / render files| R
+  A -->|Supervise / render files| E
   A --> P[PBM agent / bounded PBM CLI]
   P --> S[S3-compatible backup storage]
+  CP -->|RabbitMQ definitions| S
+  E -->|Native snapshots| S
 ```
 
 - **Control plane:** one runtime service, normally `karakoram`, with one container and a `karakoramdata` Local Storage volume mounted at `/mnt/karakoramdata`. Public UI/API is HTTP 8080 behind Zerops HTTPS; the private agent listener is TLS 9443. The service holds its own project's token, sealed credentials for additional namespaces and the operator-held master key.
-- **Data-bearing members:** one Ubuntu 24.04 runtime plus one Local Storage volume per mongod, including config servers. Singleton services provide stable replica-set identities; horizontal runtime scaling is not MongoDB replication. Persistent dbpath is under `KARAKORAM_DATA_DIR/db`.
-- **Routers:** one stateless mongos service per sharded cluster, potentially multiple containers. It has no durable data volume. Multiple router containers share a service identity; they are not independent data-bearing voters.
-- **Node agent:** the same executable as the control plane, started as `karakoram agent`, supervises mongod/mongos and PBM agents and exposes a bounded private API. It is not a remote shell.
+- **Data-bearing members:** one Ubuntu 24.04 runtime plus one Local Storage volume per mongod (including config servers), RabbitMQ broker or Elasticsearch node (including dedicated masters). Singleton services provide stable identities; horizontal runtime scaling is not engine replication.
+- **Stateless components:** mongos routers and optional Kibana, Logstash and APM Server runtimes have no durable data volumes. Multiple containers share a service identity; they are not independent data-bearing voters.
+- **Node agent:** the same executable as the control plane, started as `karakoram agent`, runs the selected engine supervisor and exposes a bounded private API. MongoDB members also run PBM agents. It is not a remote shell.
 
-Private networking is not a security boundary on its own: agent traffic has pinned trust roots and per-member bearer tokens. Database keyfile authentication, database TLS, internal agent TLS and public HTTPS protect different paths. See [security](security.md).
+Private networking is not a security boundary on its own: agent traffic has pinned trust roots and per-member bearer tokens. Engine authentication, engine TLS, internal agent TLS and public HTTPS protect different paths. See [security](security.md).
 
 ## Namespaces and relay routing
 
@@ -44,11 +50,11 @@ flowchart LR
   subgraph Remote[Additional namespace project]
     Relay[karakoram relay]
     Agent[Node agent]
-    Mongo[PSMDB / mongos]
-    Relay -->|Policy-allowed 27017 / 9443| Mongo
+    Engine[MongoDB / RabbitMQ / Elasticsearch]
+    Relay -->|Provider-allowed administration ports| Engine
     Relay -->|Policy-allowed 9443| Agent
     Agent -->|End-to-end TLS config pull through relay| Relay
-    Mongo -->|PBM backup data directly| S3[S3]
+    Engine -->|Native backup data directly where supported| S3[S3]
   end
   Relay -->|Outbound WSS / inner mTLS 1.3 / smux v2| L7
 ```
@@ -57,9 +63,12 @@ flowchart LR
 | --- | --- | --- |
 | Zerops infrastructure API | Environment-token Backend | Namespace-token Backend |
 | MongoDB administration | Direct private TCP | Namespace smux dial stream to private 27017 |
+| RabbitMQ / Elasticsearch administration | Direct private Management API / HTTPS | Namespace dial streams to provider-declared ports |
 | Control plane → node agent | Direct pinned TLS 9443 | Namespace dial stream; agent TLS/token unchanged |
 | Agent configuration pull | Direct internal TLS listener | Private relay 9443 → reverse stream → internal TLS listener; end-to-end TLS |
 | PBM data → S3 | Direct member-to-S3 | Direct member-to-S3; not tunneled |
+| RabbitMQ definitions → S3 | Control-plane upload | Control-plane upload after Management API export through relay |
+| Elasticsearch snapshots → S3 | Direct node-to-S3 | Direct node-to-S3; not tunneled |
 
 The hub admits only enrolled relay certificate identities/serials and keeps one active session per namespace. Target policy is pushed on change/reconnect and refreshed every thirty seconds; the relay validates host/port and DNS answers before dialing. The namespace reconciler runs independent project workers, tracks token/relay health, renews client certificates and redeploys mismatched executable digests. Reconciliation, scheduling, orphan cleanup and monitoring use namespace-qualified identities and backends. A token/routing failure affects that namespace's clusters, not every project.
 
@@ -110,15 +119,15 @@ Clusters have desired `spec`, observed `status`, generation/observedGeneration a
 
 The provider exposes `Describe`, `ApplyDefaults`, `Validate`, `Sync`, `Status`, `RunOperation` and `Cleanup`. It receives store/secret/backend/agent capabilities rather than constructing generic API responses. A cluster worker serializes operations and Sync; unrelated clusters can progress separately. Steps persist checkpoints and platform identifiers and observe completion before advancing. Pending PSMDB work normally requeues after five seconds; converged clusters after thirty seconds. One Sync call performs at most one disruptive database/infrastructure step.
 
-Neither an accepted HTTP mutation nor a successful Zerops configuration Process means a database is healthy. Platform Process success is `FINISHED`; `FAILED` and `CANCELED` are errors. Engine observation supplies health, elected role, lag, binary version and FCV. There is no distributed exactly-once transaction across SQLite, Zerops and PBM; durable IDs, receipts and observation reduce unsafe replay, and uncertain outcomes remain explicit errors.
+Neither an accepted HTTP mutation nor a successful Zerops configuration Process means an engine is healthy. Platform Process success is `FINISHED`; `FAILED` and `CANCELED` are errors. Engine observation supplies provider-specific health, roles and version information; lag and FCV apply to MongoDB. There is no distributed exactly-once transaction across SQLite, Zerops and engine/backup APIs; durable IDs, receipts and observation reduce unsafe replay, and uncertain outcomes remain explicit errors.
 
 Failed platform actions are retried with durable backoff. When an action is rate-limited, Karakoram persists a retry deadline rather than continuously resubmitting it; CPU-mode waits are surfaced as `PlatformCooldown`.
 
-## Provisioning and database changes
+## MongoDB provisioning and database changes
 
 A member progresses through planned/imported/deployed/healthy state. Karakoram imports runtimes/volumes **without inline pipeline YAML**, then creates an app version, uploads a gzip-tar containing its own executable and deploys the complete generated pipeline. Version-pinned apt preparation text determines the cached runtime image. `temporaryShutdown` prevents overlapping writers on a dbpath, and readiness uses `/var/www/karakoram agent readiness`.
 
-The first member bootstraps a set and `userAdmin` through MongoDB's localhost exception. Authenticated administration establishes the five system accounts. Sharded plans initialize `cfg`, shard sets `rs0` onward and routers, then register shards. New members initially join non-voting/priority-zero, synchronize and are promoted after observed health/lag. Removal/rolling changes check quorum and transfer primary leadership as needed. Config servers precede shards and routers in binary upgrades; FCV promotion is separate.
+For MongoDB, the first member bootstraps a set and `userAdmin` through MongoDB's localhost exception. Authenticated administration establishes the five system accounts. Sharded plans initialize `cfg`, shard sets `rs0` onward and routers, then register shards. New members initially join non-voting/priority-zero, synchronize and are promoted after observed health/lag. Removal/rolling changes check quorum and transfer primary leadership as needed. Config servers precede shards and routers in binary upgrades; FCV promotion is separate.
 
 Cluster names are 2–12 lowercase alphanumeric characters beginning with a letter. Runtime identities are `{cluster}m{index}`, `{cluster}s{shard}m{index}`, `{cluster}c{index}` and `{cluster}r`; volume names append `v`. Monotonic indexes are not reused after replacement. Compact generated hostnames leave room for component and member suffixes.
 
@@ -147,3 +156,23 @@ RabbitMQ uses the same provider, namespace, secret, operation and node-control b
 Rolling changes gate on quorum, drain client traffic and stop the broker before disruptive platform actions because Zerops's roughly five-second SIGTERM deadline is insufficient. Durable maintenance holds prevent premature restart; configuration acknowledgement, running membership and revive gate the next node. Scale-down grows quorum replicas/migrates streams before shrink/forget/deletion. Feature flags are enabled after all binary upgrades finish; only 4.3.5 → 4.3.6 is cataloged. Erlang distribution TLS is fixed at creation.
 
 Engine-owned Management API routes administer vhosts/users/grants/policies through namespace-aware dialing; they are direct changes, not a second declarative topology controller. Definitions backups are gzip JSON in S3, preserve sensitive application-user hashes and exclude reserved users/grants before upload; restore merges and repeats that filter for older backups. They contain no messages and no PITR. Native management exposure is opt-in HTTPS at Zerops L7 with a private HTTP hop, separate from allowlisted per-node AMQPS routes. Built-in monitoring scrapes loopback Prometheus and exports a fixed RabbitMQ vocabulary. See the [RabbitMQ guide](user-guide/rabbitmq.md) and [ADRs 0020–0022](adr/README.md).
+
+## Elasticsearch and Elastic Stack
+
+The `elasticsearch` provider uses combined master/data nodes or dedicated
+masters plus data nodes. Every Elasticsearch node has a singleton Ubuntu
+runtime and Local Storage volume; optional Kibana, Logstash and APM Server
+components use stateless runtimes at the same exact version. Preparation
+verifies official tarballs against their SHA-512 sidecars. The agent renders
+configuration below `DATA_DIR/karakoram`, manages keystores and explicit heap
+bounds, and supervises component processes. Local readiness does not establish
+cluster formation or shard redundancy.
+
+Formation is a one-time bootstrap. Rolling maintenance is health/quorum-gated;
+scale-down drains data shards before node removal. Native users, roles and API
+keys use Elasticsearch-specific APIs with CA-verified HTTPS; a protected
+file-realm identity supports recovery administration. S3 backups are native
+snapshots, not PBM archives, and have no PITR. Public Kibana/APM HTTPS routes
+are separate opt-ins, not database TCP allowlist entries. See the
+[Elasticsearch guide](user-guide/elasticsearch.md), [limitations](limitations.md#elasticsearch-and-elastic-stack)
+and [ADRs 0025–0029](adr/README.md), including Elastic licensing obligations.

@@ -383,6 +383,9 @@ func TestRestoreSourceAdmissionChecksProviderAndRabbitMQFormat(t *testing.T) {
 				if w.Code != want {
 					t.Fatalf("status=%d want=%d body=%s", w.Code, want, w.Body.String())
 				}
+				if provider == "rabbitmq" && source == "PITR" && !strings.Contains(w.Body.String(), "RabbitMQ does not support PITR") {
+					t.Fatal(w.Body.String())
+				}
 				restores, err := s.Store.ListRestores(t.Context(), c.Ref())
 				if err != nil {
 					t.Fatal(err)

@@ -135,6 +135,9 @@ func (a *app) connect(cmd *cobra.Command) error {
 		token = a.token
 	}
 	if server == "" {
+		if cmd.Name() == "version" {
+			return nil
+		}
 		return fmt.Errorf("server is required: use --server, KARAKORAM_SERVER, or login to a context")
 	}
 	u, err := url.Parse(server)

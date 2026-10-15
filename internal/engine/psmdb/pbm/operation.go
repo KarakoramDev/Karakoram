@@ -20,25 +20,26 @@ import (
 
 // checkpoint contains no credentials or YAML. Steps are committed before non-idempotent starts.
 type checkpoint struct {
-	Step             string       `json:"step"`
-	Cancelling       bool         `json:"cancelling,omitempty"`
-	CancelIssued     bool         `json:"cancelIssued,omitempty"`
-	Member           string       `json:"member,omitempty"`
-	PBMName          string       `json:"pbmName,omitempty"`
-	Snapshot         string       `json:"snapshot,omitempty"`
-	Physical         bool         `json:"physical,omitempty"`
-	Source           string       `json:"source,omitempty"`
-	SourceNamespace  string       `json:"sourceNamespace,omitempty"`
-	TargetTime       *time.Time   `json:"targetTime,omitempty"`
-	Index            int          `json:"index,omitempty"`
-	Failure          string       `json:"failure,omitempty"`
-	FreshBase        bool         `json:"freshBaseBackupRequired,omitempty"`
-	Destination      string       `json:"destination,omitempty"`
-	Storage          string       `json:"storage,omitempty"`
-	Prefix           string       `json:"prefix,omitempty"`
-	RecoveryIdentity string       `json:"recoveryIdentity,omitempty"`
-	RouterOp         *infra.Op    `json:"routerOp,omitempty"`
-	RouterRetry      *routerRetry `json:"routerRetry,omitempty"`
+	Step                    string       `json:"step"`
+	Cancelling              bool         `json:"cancelling,omitempty"`
+	CancelIssued            bool         `json:"cancelIssued,omitempty"`
+	Member                  string       `json:"member,omitempty"`
+	PBMName                 string       `json:"pbmName,omitempty"`
+	Snapshot                string       `json:"snapshot,omitempty"`
+	Physical                bool         `json:"physical,omitempty"`
+	Source                  string       `json:"source,omitempty"`
+	SourceNamespace         string       `json:"sourceNamespace,omitempty"`
+	TargetTime              *time.Time   `json:"targetTime,omitempty"`
+	Index                   int          `json:"index,omitempty"`
+	Failure                 string       `json:"failure,omitempty"`
+	FreshBase               bool         `json:"freshBaseBackupRequired,omitempty"`
+	Destination             string       `json:"destination,omitempty"`
+	Storage                 string       `json:"storage,omitempty"`
+	Prefix                  string       `json:"prefix,omitempty"`
+	RecoveryIdentity        string       `json:"recoveryIdentity,omitempty"`
+	RouterOp                *infra.Op    `json:"routerOp,omitempty"`
+	RouterRetry             *routerRetry `json:"routerRetry,omitempty"`
+	RestoreMetadataDeadline *time.Time   `json:"restoreMetadataDeadline,omitempty"`
 }
 
 type routerRetry struct {
@@ -151,6 +152,15 @@ func healthyMember(ctx context.Context, env Env) (string, error) {
 	return "", errors.New("no healthy mongod/PBM agent available")
 }
 
+type commandFailure struct {
+	command  string
+	exitCode int
+	stderr   string
+	message  string
+}
+
+func (e *commandFailure) Error() string { return e.message }
+
 func command(ctx context.Context, env Env, member, requestID, name string, cfg []byte, args ...string) ([]byte, error) {
 	if member == "" {
 		var err error
@@ -181,7 +191,10 @@ func command(ctx context.Context, env Env, member, requestID, name string, cfg [
 		data = []byte(text)
 	}
 	if out.ExitCode != 0 {
-		return nil, fmt.Errorf("pbm %s failed (exit %d): %s %s", name, out.ExitCode, out.Stderr, data)
+		return nil, &commandFailure{
+			command: name, exitCode: out.ExitCode, stderr: out.Stderr,
+			message: fmt.Sprintf("pbm %s failed (exit %d): %s %s", name, out.ExitCode, out.Stderr, data),
+		}
 	}
 	return data, nil
 }

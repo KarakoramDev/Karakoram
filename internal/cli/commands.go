@@ -39,14 +39,14 @@ func (a *app) addCommands(root *cobra.Command) {
 			prefix = strings.TrimSpace(prefix + " " + word)
 			g := groups[prefix]
 			if g == nil {
-				g = groupCommand(word, "Manage "+prefix)
+				g = groupCommand(word, commandGroupDescriptions[prefix])
 				parent.AddCommand(g)
 				groups[prefix] = g
 			}
 			parent = g
 		}
 		use := strings.Join(words[end-1:], " ")
-		c := &cobra.Command{Use: use, Short: commandDescription(s), Args: cobra.ExactArgs(s.args)}
+		c := &cobra.Command{Use: use, Short: commandDescription(s.path), Args: cobra.ExactArgs(s.args)}
 		if strings.Contains(s.path, "[") {
 			c.Args = cobra.RangeArgs(s.args, s.args+1)
 		}
@@ -103,22 +103,10 @@ func (a *app) addCommands(root *cobra.Command) {
 	a.addConfig(root)
 	a.addElastic(root)
 }
-func commandDescription(s commandSpec) string {
-	words := strings.Fields(s.path)
-	end := len(words)
-	for i, word := range words {
-		if strings.HasPrefix(word, "<") || strings.HasPrefix(word, "[") {
-			end = i
-			break
-		}
-	}
-	description := strings.Join(words[:end], " ")
-	if s.body {
-		description += ": submit a JSON/YAML request body with -f"
-	}
-	return description
-}
 func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
+	if s.operation == "getVersion" {
+		return a.printVersion(cmd.Context())
+	}
 	q := map[string]any{}
 	for _, f := range s.query {
 		if !cmd.Flags().Changed(f.name) {

@@ -40,6 +40,10 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 
 Use the [verification guide](../verification.md) for automated test coverage and deployment checks. Recovery, authorization and platform integration should be exercised against your own installation; design rationale alone does not establish those behaviors.
 
+Engine operating guides: [MongoDB replica sets](../user-guide/replica-sets.md)
+and [sharding](../user-guide/sharding.md), [RabbitMQ](../user-guide/rabbitmq.md),
+and [Elasticsearch and Elastic Stack](../user-guide/elasticsearch.md).
+
 Primary references: [Zerops API](https://docs.zerops.io/references/api.md), [Local Storage](https://docs.zerops.io/local-storage/overview.md), [public networking](https://docs.zerops.io/references/networking/public-access.md), [Percona system users](https://docs.percona.com/percona-operator-for-mongodb/latest/system-users.html), [PBM](https://docs.percona.com/percona-backup-mongodb/latest/), and [OpenEverest provider runtime](https://github.com/openeverest/openeverest/blob/main/provider-runtime/controller/interface.go).
 
 Changing an accepted decision requires updating its consequences, dependent ADRs and affected implementation/docs; preserve numbering. Karakoram is the product name. OpenEverest, Percona and MongoDB appear only as descriptive references, not product branding or endorsement claims.
