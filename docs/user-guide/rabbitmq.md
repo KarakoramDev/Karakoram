@@ -296,7 +296,9 @@ up, then checks quorum-critical resources before draining the broker. A failed
 wait also diagnoses the remaining blockers. `QuorumCriticalQueues` names up to ten
 affected queues/vhosts and their known members (plus the remaining count); the
 warning event is `RollingRestartBlocked`. Membership-inventory changes alone do
-not repeat that warning. The operation and cluster message name the same blockers.
+not repeat that warning. A known blocker waits at the safety gate without additional
+generic `ReconcileError` warnings; failed safety observations still report errors.
+The operation and cluster message name the same blockers.
 When quorum recovers, the condition clears and a Normal `RollingRestartRecovered`
 event records that the rolling change can continue.
 An empty diagnosis after a failed quorum wait clears stale blocker details

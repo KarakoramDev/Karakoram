@@ -71,16 +71,18 @@ func clearQuorumBlockers(ctx context.Context, rc *engine.Context, m *member) err
 	return nil
 }
 
-func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *member) error {
+// checkQuorum distinguishes a known safety wait from a failed observation.
+// The caller must stay at the safety gate while blocked, without failing reconciliation.
+func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *member) (blocked bool, err error) {
 	var out rmqspec.QuorumCriticalResponse
 	if err := p.call(ctx, rc, m.Name, "quorum-critical", rmqspec.EmptyRequest{}, &out); err != nil {
-		return err
+		return false, err
 	}
 	if len(out.Blockers) == 0 {
-		return clearQuorumBlockers(ctx, rc, m)
+		return false, clearQuorumBlockers(ctx, rc, m)
 	}
 	if err := validateQuorumBlockers(out.Blockers); err != nil {
-		return err
+		return false, err
 	}
 	// The native health check supplies identities but not membership in 4.3.
 	// A failed inventory must not hide the already-known restart blockers.
@@ -93,7 +95,7 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 					if queue.Vhost == out.Blockers[i].VHost && queue.Name == out.Blockers[i].Queue {
 						for _, node := range queue.Members {
 							if !quorumMemberPattern.MatchString(node) {
-								return fmt.Errorf("invalid quorum blocker member")
+								return false, fmt.Errorf("invalid quorum blocker member")
 							}
 						}
 						out.Blockers[i].Members = slices.Clone(queue.Members)
@@ -126,10 +128,10 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 		if err := warningEvent(ctx, rc, "RollingRestartBlocked", message); err != nil {
 			m.QuorumBlockers = previous
 			m.QuorumBlockerCount = previousCount
-			return err
+			return false, err
 		}
 	}
-	return fmt.Errorf("%w: %s", engine.ErrConflict, message)
+	return true, nil
 }
 
 func quorumMessage(m *member) string {

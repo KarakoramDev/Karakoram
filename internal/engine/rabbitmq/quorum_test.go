@@ -36,7 +36,7 @@ func TestRollingQuorumBlockHasQueuesConditionOperationMessageAndSingleEvent(t *t
 	op.Checkpoint = result.Checkpoint
 	for range 2 {
 		result, err = p.RunOperation(t.Context(), rc, op)
-		if !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), `"orders" in vhost "/"`) || !strings.Contains(result.Message, "orders") {
+		if err != nil || result.Done || result.RequeueAfter <= 0 || !strings.Contains(result.Message, `"orders" in vhost "/"`) {
 			t.Fatal(result, err)
 		}
 		op.Checkpoint = result.Checkpoint
@@ -104,11 +104,64 @@ func TestQuorumWaitFailureRunsDiagnosis(t *testing.T) {
 	}
 	a.log.clear()
 	_, err := p.changeStep(t.Context(), rc, s, m)
-	if err == nil || !strings.Contains(err.Error(), "orders") || strings.Contains(err.Error(), "HTTP 503") {
+	if err != nil {
 		t.Fatal(err)
 	}
 	if countCall(a.log.snapshot(), "agent:demom0:quorum-critical") != 1 || len(m.QuorumBlockers) != 1 {
 		t.Fatal(a.log.snapshot(), m)
+	}
+}
+
+func TestQuorumBlockedSyncWaitsWithoutReconcileErrors(t *testing.T) {
+	for _, gate := range []string{"quorum", "critical"} {
+		t.Run(gate, func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			events := &definitionsTestEvents{}
+			rc.Events = events
+			s := state(t, rc)
+			m := s.find("demom0")
+			beginChange(rc, s, m, "deploy")
+			m.ChangeStep = gate
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			if gate == "quorum" {
+				a.failures[m.Name+":await-quorum"] = 503
+			}
+			a.log.clear()
+			before := f.mutations
+			for _, queue := range []string{"orders", "orders", "payments", "payments"} {
+				a.broker(m.Name).blockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: queue, Type: "quorum"}}
+				result, err := p.Sync(t.Context(), rc)
+				// Returning an error here makes the reconciler emit ReconcileError
+				// on every pass, duplicating the transition-only blocked event.
+				if err != nil || result.RequeueAfter <= 0 {
+					t.Fatal(result, err)
+				}
+				rc.Cluster = cloneCluster(t, rc.Cluster)
+				current := state(t, rc).find(m.Name)
+				if current.ChangeStep != gate || len(current.QuorumBlockers) != 1 || current.QuorumBlockers[0].Queue != queue {
+					t.Fatal("blocked change advanced or lost its diagnosis", current)
+				}
+			}
+			if len(events.events) != 2 {
+				t.Fatal("expected one warning per distinct blocking reason", events.events)
+			}
+			for i, queue := range []string{"orders", "payments"} {
+				event := events.events[i]
+				if event.Reason != "RollingRestartBlocked" || event.Type != "Warning" || !strings.Contains(event.Message, queue) {
+					t.Fatal(event)
+				}
+			}
+			if f.mutations != before || slices.Contains(a.log.snapshot(), "agent:"+m.Name+":drain") {
+				t.Fatal("blocked restart disrupted a broker", a.log.snapshot())
+			}
+			a.failures[m.Name+":quorum-critical"] = 503
+			if _, err := p.Sync(t.Context(), rc); err == nil {
+				t.Fatal("failed safety observation was treated as a known blocker")
+			}
+		})
 	}
 }
 
@@ -262,7 +315,7 @@ func TestQuorumWarningIgnoresMembershipInventoryChanges(t *testing.T) {
 		a.queueSource = func() []mgmt.Queue {
 			return []mgmt.Queue{{Name: "orders", Vhost: "/", Members: members}}
 		}
-		if err := p.checkQuorum(t.Context(), rc, m); !errors.Is(err, engine.ErrConflict) {
+		if blocked, err := p.checkQuorum(t.Context(), rc, m); !blocked || err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -311,8 +364,8 @@ func TestQuorumBlockersValidateAgentAndInventoryIdentities(t *testing.T) {
 			m.QuorumBlockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "previous", Type: "quorum"}}
 			a.broker(m.Name).blockers = []rmqspec.QuorumBlocker{tc.blocker}
 			a.queueSource = func() []mgmt.Queue { return tc.inventory }
-			err := p.checkQuorum(t.Context(), rc, m)
-			if err == nil || errors.Is(err, engine.ErrConflict) || strings.Contains(err.Error(), "command") {
+			blocked, err := p.checkQuorum(t.Context(), rc, m)
+			if blocked || err == nil || errors.Is(err, engine.ErrConflict) || strings.Contains(err.Error(), "command") {
 				t.Fatal("unsafe blocker accepted or exposed", err)
 			}
 			if len(m.QuorumBlockers) != 1 || m.QuorumBlockers[0].Queue != "previous" || len(events.events) != 0 {
@@ -331,7 +384,7 @@ func TestQuorumBlockersBoundStoredStateAndKeepTotalCount(t *testing.T) {
 		a.broker(m.Name).blockers = append(a.broker(m.Name).blockers,
 			rmqspec.QuorumBlocker{VHost: "/", Queue: fmt.Sprintf("queue-%03d", i), Type: "quorum"})
 	}
-	if err := p.checkQuorum(t.Context(), rc, m); !errors.Is(err, engine.ErrConflict) {
+	if blocked, err := p.checkQuorum(t.Context(), rc, m); !blocked || err != nil {
 		t.Fatal(err)
 	}
 	if len(m.QuorumBlockers) != 50 {
@@ -348,7 +401,7 @@ func TestQuorumBlockersBoundStoredStateAndKeepTotalCount(t *testing.T) {
 		}
 	}
 	a.broker(m.Name).blockers = nil
-	if err := p.checkQuorum(t.Context(), rc, m); err != nil {
+	if blocked, err := p.checkQuorum(t.Context(), rc, m); blocked || err != nil {
 		t.Fatal(err)
 	}
 	m.QuorumBlockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "single", Type: "quorum"}}
