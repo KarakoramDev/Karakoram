@@ -266,7 +266,11 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 	}
 	r := runtimeResources(m, comp.Resources)
 	if service == nil {
-		specs = append(specs, infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: r, MinContainers: containers, MaxContainers: containers, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Volume: m.Volume})
+		env := ownershipEnv(rc.Cluster.Name, m.Name, tok.Token)
+		if m.Volume != "" {
+			env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+		}
+		specs = append(specs, infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: r, MinContainers: containers, MaxContainers: containers, Env: env, Volume: m.Volume})
 	}
 	if len(specs) == 0 {
 		m.Stage = stageImported

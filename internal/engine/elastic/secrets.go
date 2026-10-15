@@ -229,6 +229,7 @@ func ownershipEnv(cluster, member, token string) map[string]string {
 	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
 }
 func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) error {
+	var runtimeOwnership map[string]string
 	for _, volume := range []bool{false, true} {
 		name := m.Name
 		recorded := m.ServiceID
@@ -266,6 +267,12 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 			}
 			env := service.Ownership
 			verified = tok != nil && tok.Token != "" && env["KARAKORAM_CLUSTER"] == rc.Cluster.Name && env["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(env["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1
+			// Local-storage services may have no environment after a partial
+			// import. Only the token-verified runtime's exact mount is evidence.
+			if !verified && volume && runtimeOwnership["KARAKORAM_DATA_DIR"] == "/mnt/"+name {
+				env = runtimeOwnership
+				verified = tok != nil && tok.Token != "" && env["KARAKORAM_CLUSTER"] == rc.Cluster.Name && env["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(env["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1
+			}
 		}
 		if !verified {
 			return fmt.Errorf("%w: service %s has no verified cluster ownership", engine.ErrConflict, name)
@@ -274,6 +281,7 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 			m.VolumeID = service.ID
 		} else {
 			m.ServiceID = service.ID
+			runtimeOwnership = service.Ownership
 		}
 	}
 	return nil
