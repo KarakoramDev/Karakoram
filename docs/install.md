@@ -14,6 +14,9 @@ before production use. Follow the [Elasticsearch and Elastic Stack guide](user-g
 for its runtime sizing, licensing, project-network connections and native snapshots;
 MongoDB/PBM procedures do not apply to either engine.
 
+Just want it running? The [quick start](quickstart.md) covers the dashboard-only
+install in five steps; this guide is the complete reference.
+
 ## Prerequisites
 
 - An existing Zerops project, with permission to import services and deploy code.

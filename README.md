@@ -47,6 +47,8 @@ You own the infrastructure, credentials, data and recovery procedures. Zerops is
 
 ## Quick start on Zerops
 
+**Fastest path:** the [10-minute quick start](docs/quickstart.md) installs Karakoram by pasting one YAML into the Zerops dashboard; no checkout, build tools or CLI needed. The steps below deploy from a local checkout instead.
+
 You need an existing Zerops project, an authenticated zcli and a **project-scoped Full access integration token**. From a local checkout, import the template in `deploy/`:
 
 ```sh
@@ -86,7 +88,7 @@ These guides belong to a complete repository checkout. Keep `docs/` beside
 OpenAPI specification, architecture decisions and UI development instructions
 are repository paths, not a standalone documentation-bundle layout.
 
-- [Installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
+- [Quick start](docs/quickstart.md), [installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
 - [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)
 - MongoDB: [replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
 - [RabbitMQ clusters, access, TLS and definitions backups](docs/user-guide/rabbitmq.md)
