@@ -275,3 +275,50 @@ func TestRabbitMQDefinitionsBackupPagination(t *testing.T) {
 		t.Fatal(items)
 	}
 }
+
+func TestRabbitMQRetainedDefinitionsCloneRemainsPatchableAfterSourceDeletion(t *testing.T) {
+	s, _, token := testServer(t)
+	provider := rabbitmq.New(rabbitmq.Options{Store: s.Store})
+	var err error
+	s.Registry, err = engine.NewRegistry(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := domain.Cluster{Name: "source"}
+	provider.ApplyDefaults(&source.Spec)
+	if err := s.Store.CreateCluster(t.Context(), &source); err != nil {
+		t.Fatal(err)
+	}
+	backup := domain.Backup{Name: "saved", Cluster: source.Name, Provider: "rabbitmq", Type: "definitions", Phase: domain.PhaseSucceeded, Location: "source/saved.json.gz", Storage: "archive"}
+	if err := s.Store.CreateBackup(t.Context(), &backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.DeleteCluster(t.Context(), source.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	spec := specAPI(source.Spec)
+	spec.DataSource = &api.DataSource{Cluster: source.Name, Backup: &backup.Name}
+	body, err := json.Marshal(map[string]any{"name": "copy", "spec": spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := call(s, "POST", "/api/v1/clusters", string(body), token)
+	if created.Code != http.StatusCreated {
+		t.Fatal("retained definitions backup rejected after source cluster deletion", created.Code, created.Body.String())
+	}
+	if err := s.Store.DeleteBackup(t.Context(), source.Ref(), backup.Name); err != nil {
+		t.Fatal(err)
+	}
+	patched := call(s, "PATCH", "/api/v1/clusters/copy", `{"spec":{"engineConfig":"consumer_timeout = 600000"}}`, token)
+	if patched.Code != http.StatusOK {
+		t.Fatal("clone update re-resolved the deleted source", patched.Code, patched.Body.String())
+	}
+	persisted, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "copy"})
+	if err != nil || persisted.Spec.EngineConfig != "consumer_timeout = 600000" || persisted.Spec.DataSource.Cluster != source.Name || persisted.Spec.DataSource.Backup != backup.Name {
+		t.Fatal(persisted, err)
+	}
+	changed := call(s, "PATCH", "/api/v1/clusters/copy", `{"spec":{"dataSource":{"backup":"different"}}}`, token)
+	if changed.Code != http.StatusBadRequest || !strings.Contains(changed.Body.String(), "dataSource is immutable") {
+		t.Fatal("clone source became mutable", changed.Code, changed.Body.String())
+	}
+}

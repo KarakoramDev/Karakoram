@@ -207,6 +207,36 @@ func TestDataSourceValidation(t *testing.T) {
 			t.Errorf("%s: %v", variant, err)
 		}
 	}
+	if err := st.UpdateBackup(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteCluster(ctx, source.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Validate(ctx, nil, c); err != nil {
+		t.Fatal("retained definitions backup rejected after source cluster deletion", err)
+	}
+	if err := st.DeleteBackup(ctx, source.Ref(), b.Name); err != nil {
+		t.Fatal(err)
+	}
+	next := cloneCluster(t, c)
+	next.Spec.EngineConfig = "consumer_timeout = 600000"
+	if err := p.Validate(ctx, c, next); err != nil {
+		t.Fatal("day-2 update revalidated the original source backup", err)
+	}
+	next.Spec.DataSource.Backup = "different"
+	if err := p.Validate(ctx, c, next); !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "immutable") {
+		t.Fatal("dataSource mutation accepted after source deletion", err)
+	}
+	err := p.Validate(ctx, nil, c)
+	if !errors.Is(err, engine.ErrInvalid) {
+		t.Fatal("creation accepted a deleted source backup", err)
+	}
+	for _, identity := range []string{`namespace "default"`, `cluster "source"`, `backup "definitions"`} {
+		if !strings.Contains(err.Error(), identity) {
+			t.Fatalf("creation error omits %s: %v", identity, err)
+		}
+	}
 }
 
 func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {

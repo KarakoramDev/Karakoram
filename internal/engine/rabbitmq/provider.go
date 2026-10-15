@@ -367,7 +367,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			return invalid("dataSource is immutable")
 		}
 	}
-	if d := s.DataSource; d != nil {
+	if d := s.DataSource; old == nil && d != nil {
 		ref := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
 		if ref.Namespace == "" {
 			ref.Namespace = n.Ref().Namespace
@@ -380,7 +380,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		}
 		b, err := p.options.Store.GetBackup(ctx, ref, d.Backup)
 		if err != nil || b.Phase != domain.PhaseSucceeded || b.Provider != "rabbitmq" || b.Type != "definitions" {
-			return invalid("source must be a succeeded rabbitmq definitions backup")
+			return invalid("source backup %q in namespace %q, cluster %q must be a succeeded RabbitMQ definitions backup", d.Backup, domain.NormalizedNamespace(ref.Namespace), ref.Name)
 		}
 	}
 	return nil

@@ -381,6 +381,12 @@ The UI repeats the password-hash sensitivity warning when choosing storage for a
 schedule or a manual backup. Restrict bucket access and protect stored exports
 even though they do not contain message payloads.
 
+`dataSource` is immutable creation provenance, not an ongoing dependency. New
+clones can use retained definitions backups after their source cluster is deleted.
+Keep the backup and its storage available until the import completes; a completed
+clone does not re-import or block later spec updates when that source backup is
+deleted or pruned.
+
 Deletion drains/stops brokers and removes public routes/subdomains before runtime removal. `keepVolumes` suspends the cluster, retaining broker volumes and secrets for resume. `keepBackups` independently retains definitions records/objects for later recovery/deletion. Full deletion removes owned volumes/secrets; volumes the platform refuses to delete are ownership-checked and tracked for orphan cleanup. Retained backups still require the control-plane state, original master key and storage credentials. Preserve these separately from message durability.
 
 Resume starts every retained broker before waiting for individual readiness/revive, so the retained Khepri majority can recover together; it is not a one-node-at-a-time fresh bootstrap.

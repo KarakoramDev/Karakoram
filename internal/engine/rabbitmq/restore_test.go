@@ -127,6 +127,8 @@ func TestDefinitionsCloneOnceCrossNamespace(t *testing.T) {
 	// Round-trip persisted state rather than retaining an in-memory flag.
 	raw := append(json.RawMessage(nil), f.rc.Cluster.Internal...)
 	f.rc.Cluster.Internal = raw
+	// A completed import must no longer resolve even the backup inventory.
+	f.store.backup = nil
 	if done, err := f.p.cloneStep(context.Background(), f.rc); err != nil || !done {
 		t.Fatalf("done=%v err=%v", done, err)
 	}
