@@ -134,7 +134,7 @@ func (p *Provider) cancelRemoval(ctx context.Context, rc *engine.Context, s *sta
 }
 
 func blockDrain(ctx context.Context, rc *engine.Context, s *state, m *member, reason string) error {
-	message := fmt.Sprintf("Shard drain blocked for %s: %s. Restore or raise the desired data-node count to cancel an unfinished drain, then raise it further if more capacity is needed; or lower index replicas to an intentional redundancy policy. Restore unavailable primaries before retrying. Never force removal.", m.Name, reason)
+	message := fmt.Sprintf("Shard drain blocked for %s: %s. Remove restrictive index allocation filters when they pin shards. Restore or raise the desired data-node count to cancel an unfinished drain, then raise it further if more capacity is needed; or lower index replicas to an intentional redundancy policy. Restore unavailable primaries before retrying. Never force removal.", m.Name, reason)
 	if s.DrainBlocked == message {
 		return nil
 	}
@@ -227,7 +227,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return blockDrain(ctx, rc, s, m, "unassigned primary shards prevent safe removal")
 		}
 		shards := counts[m.Name]
-		if h.Status == "yellow" && shards != 0 && h.RelocatingShards == 0 && h.InitializingShards == 0 {
+		if shards != 0 && h.RelocatingShards == 0 && h.InitializingShards == 0 {
 			if shards != m.DrainShardCount {
 				m.DrainIdleObservations = 0
 			}
@@ -239,7 +239,19 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 		}
 		m.DrainShardCount = shards
 		if m.DrainIdleObservations >= 3 {
-			return blockDrain(ctx, rc, s, m, "unassigned replica shards prevent the remaining shards from draining")
+			reason := "remaining shards have not relocated for three consecutive observations; check allocation filters, eligible data nodes and capacity"
+			// Diagnostics are best-effort: unavailable explanation metadata must
+			// not hide an observed persistent drain stall.
+			if allocation, err := c.ExplainDrain(ctx, m.Name); err == nil && allocation.Index != "" {
+				reason = fmt.Sprintf("index %q still holds shards on the removing node without relocation progress", allocation.Index)
+				if allocation.NoEligibleNode {
+					reason = fmt.Sprintf("index %q has no eligible destination for its remaining shard", allocation.Index)
+					if allocation.Filter {
+						reason += "; allocation filters reject destination nodes"
+					}
+				}
+			}
+			return blockDrain(ctx, rc, s, m, reason)
 		}
 		s.DrainBlocked = ""
 		if counts[m.Name] != 0 || h.RelocatingShards != 0 || h.InitializingShards != 0 {

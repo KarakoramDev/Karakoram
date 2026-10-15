@@ -148,6 +148,72 @@ func (c *Client) ShardCounts(ctx context.Context) (map[string]int, error) {
 	return out, nil
 }
 
+// DrainAllocation identifies a remaining shard and its allocation constraints.
+// Native explanation text is deliberately not retained in status or events.
+type DrainAllocation struct {
+	Index          string
+	NoEligibleNode bool
+	Filter         bool
+}
+
+// ExplainDrain diagnoses one deterministic started shard on the draining node.
+func (c *Client) ExplainDrain(ctx context.Context, node string) (DrainAllocation, error) {
+	var shards []struct {
+		Index   string `json:"index"`
+		Shard   string `json:"shard"`
+		State   string `json:"state"`
+		Primary string `json:"prirep"`
+		Node    string `json:"node"`
+	}
+	if err := c.do(ctx, "GET", "/_cat/shards", url.Values{"format": {"json"}, "h": {"index,shard,state,prirep,node"}}, nil, &shards); err != nil {
+		return DrainAllocation{}, err
+	}
+	selected := -1
+	for i, shard := range shards {
+		if shard.Node != node || shard.State != "STARTED" || shard.Index == "" {
+			continue
+		}
+		if selected == -1 || shard.Index < shards[selected].Index || (shard.Index == shards[selected].Index && shard.Shard < shards[selected].Shard) {
+			selected = i
+		}
+	}
+	if selected == -1 {
+		return DrainAllocation{}, nil
+	}
+	shard := shards[selected]
+	id, err := strconv.Atoi(shard.Shard)
+	if err != nil || id < 0 || (shard.Primary != "p" && shard.Primary != "r") {
+		return DrainAllocation{}, errors.New("invalid Elasticsearch shard identity")
+	}
+	var explanation struct {
+		CanMove string `json:"can_move_to_other_node"`
+		Nodes   []struct {
+			Deciders []struct {
+				Decider  string `json:"decider"`
+				Decision string `json:"decision"`
+			} `json:"deciders"`
+		} `json:"node_allocation_decisions"`
+	}
+	body := struct {
+		Index       string `json:"index"`
+		Shard       int    `json:"shard"`
+		Primary     bool   `json:"primary"`
+		CurrentNode string `json:"current_node"`
+	}{shard.Index, id, shard.Primary == "p", node}
+	if err := c.do(ctx, "POST", "/_cluster/allocation/explain", nil, body, &explanation); err != nil {
+		return DrainAllocation{}, err
+	}
+	result := DrainAllocation{Index: shard.Index, NoEligibleNode: explanation.CanMove == "no"}
+	for _, node := range explanation.Nodes {
+		for _, decider := range node.Deciders {
+			if decider.Decider == "filter" && strings.EqualFold(decider.Decision, "no") {
+				result.Filter = true
+			}
+		}
+	}
+	return result, nil
+}
+
 // ClusterSettings holds explicit persistent and transient settings in flat form.
 type ClusterSettings struct {
 	Persistent map[string]any `json:"persistent,omitempty"`

@@ -553,3 +553,64 @@ func TestAllocationExclusionsMigrateTransient(t *testing.T) {
 		t.Fatalf("operator exclusion lost: %v %v", names, err)
 	}
 }
+
+func TestExplainDrainUsesAssignedShardAndStructuredDecisions(t *testing.T) {
+	for _, tc := range []struct {
+		name, move, decider string
+		status              int
+		filter, unavailable bool
+	}{
+		{"filter", "no", "filter", 200, true, true},
+		{"capacity", "no", "disk_threshold", 200, false, true},
+		{"movable", "yes", "filter", 200, true, false},
+		{"explanation unavailable", "", "", 503, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			explanations := 0
+			c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/_cat/shards":
+					fmt.Fprint(w, `[{"index":"ignored","shard":"0","state":"STARTED","prirep":"p","node":"other"},{"index":"z-last","shard":"0","state":"STARTED","prirep":"p","node":"draining"},{"index":"pinned","shard":"2","state":"STARTED","prirep":"r","node":"draining"},{"index":"pinned","shard":"0","state":"STARTED","prirep":"p","node":"draining"}]`)
+				case "/_cluster/allocation/explain":
+					explanations++
+					var body struct {
+						Index       string `json:"index"`
+						Shard       int    `json:"shard"`
+						Primary     bool   `json:"primary"`
+						CurrentNode string `json:"current_node"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || r.Method != "POST" || body.Index != "pinned" || body.Shard != 0 || !body.Primary || body.CurrentNode != "draining" {
+						t.Error("wrong assigned-shard explanation request", body, err)
+					}
+					w.WriteHeader(tc.status)
+					fmt.Fprintf(w, `{"can_move_to_other_node":%q,"node_allocation_decisions":[{"deciders":[{"decider":%q,"decision":"NO","explanation":"private-native-detail"}]}]}`, tc.move, tc.decider)
+				default:
+					t.Error("unexpected request", r.URL)
+				}
+			})
+			got, err := c.ExplainDrain(t.Context(), "draining")
+			if explanations != 1 || (err != nil) != (tc.status != 200) {
+				t.Fatal("explanation result", got, err, explanations)
+			}
+			if err == nil && (got.Index != "pinned" || got.Filter != tc.filter || got.NoEligibleNode != tc.unavailable) {
+				t.Fatal("structured decision changed", got)
+			}
+		})
+	}
+}
+
+func TestExplainDrainDoesNotSelectOtherNodesShards(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/_cat/shards" {
+			t.Error("unexpected explanation without a shard on the node", r.URL)
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `[{"index":"other","shard":"0","state":"STARTED","prirep":"p","node":"other"}]`)
+	})
+	got, err := c.ExplainDrain(t.Context(), "draining")
+	if err != nil || got != (DrainAllocation{}) {
+		t.Fatal(got, err)
+	}
+}

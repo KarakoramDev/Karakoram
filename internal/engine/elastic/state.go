@@ -126,7 +126,7 @@ type member struct {
 	Removing bool `json:"removing,omitempty"`
 	// AllocationExcluded records managed exclusion intent before its ES write.
 	AllocationExcluded bool `json:"allocationExcluded,omitempty"`
-	// DrainIdleObservations counts consecutive yellow, idle observations with
+	// DrainIdleObservations counts consecutive healthy-primary, idle observations with
 	// the same remaining shard count; transient relocation gaps are not blocks.
 	DrainIdleObservations int `json:"drainIdleObservations,omitempty"`
 	DrainShardCount       int `json:"drainShardCount,omitempty"`

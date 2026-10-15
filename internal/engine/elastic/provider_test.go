@@ -222,6 +222,7 @@ type coreES struct {
 	relocating, initializing int
 	voters                   []string
 	shardRows                []map[string]string
+	allocationExplain        map[string]any
 }
 
 func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -296,6 +297,8 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		reply(rows)
+	case r.URL.Path == "/_cluster/allocation/explain":
+		reply(f.allocationExplain)
 	case r.URL.Path == "/_all/_settings":
 		settings := map[string]string{"index.number_of_replicas": strconv.Itoa(f.replicas)}
 		if f.autoExpand != "" {

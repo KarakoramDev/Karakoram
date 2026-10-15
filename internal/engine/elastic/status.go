@@ -147,7 +147,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		condition("QuorumWarning", true, "EvenVotingCount", "Even combined-node counts do not improve voting fault tolerance over the preceding odd count")
 	}
 	if s.DrainBlocked != "" && !s.Suspended {
-		condition("ShardDrainBlocked", true, "InsufficientDataNodes", s.DrainBlocked)
+		condition("ShardDrainBlocked", true, "ShardAllocationBlocked", s.DrainBlocked)
 		v.Message = s.DrainBlocked
 	}
 	if s.Retry != nil {

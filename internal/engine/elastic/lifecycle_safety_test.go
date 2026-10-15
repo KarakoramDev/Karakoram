@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -209,6 +210,106 @@ func TestYellowDrainRequiresPersistentStallAndDoesNotRepeatFlapWarnings(t *testi
 	observe()
 	if s.DrainBlocked != "" || m.Stage != stageExcluded {
 		t.Fatal("empty node did not finish draining", m)
+	}
+}
+
+func TestGreenPinnedPrimaryReportsBlockedDrain(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 3)
+	coreConverge(t, p, rc, f)
+	es.health, es.replicas, es.shards["demon2"] = "green", 0, 1
+	es.shardRows = []map[string]string{{"index": "pinned", "shard": "0", "prirep": "p", "state": "STARTED", "node": "demon2"}}
+	es.allocationExplain = map[string]any{
+		"can_move_to_other_node": "no",
+		"node_allocation_decisions": []any{map[string]any{
+			"node_name": "demon1",
+			"deciders": []any{map[string]string{
+				"decider": "filter", "decision": "NO",
+				"explanation": "index.routing.allocation.require._name is demon2; private-native-detail",
+			}},
+		}},
+	}
+	rc.Cluster.Spec.Components.Engine.Replicas = 2
+	events := rc.Events.(*coreEvents)
+	events.events = nil
+	for range 8 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.find("demon2").Stage != stageDraining || f.services["demon2"] == nil {
+		t.Fatal("pinned primary was removed", s.Members)
+	}
+	status, err := p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{`index "pinned"`, "no eligible destination", "allocation filters", "Remove restrictive index allocation filters", "Restore or raise the desired data-node count"} {
+		if !strings.Contains(status.Message, text) {
+			t.Fatalf("blocked drain message is missing %q: %s", text, status.Message)
+		}
+	}
+	if strings.Contains(status.Message, "private-native-detail") {
+		t.Fatal("native diagnostic text leaked into status")
+	}
+	found := false
+	for _, condition := range status.Conditions {
+		if condition.Type == "ShardDrainBlocked" && condition.Status == "True" && condition.Reason == "ShardAllocationBlocked" && condition.Message == status.Message {
+			found = true
+		}
+	}
+	if !found || len(events.events) != 1 || events.events[0].Reason != "ShardDrainBlocked" || events.events[0].Type != "Warning" {
+		t.Fatal("green stalled drain did not publish one warning and condition", status.Conditions, events.events)
+	}
+	// A relocation gap must not re-emit the same blocked reason.
+	es.relocating = 1
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	es.relocating = 0
+	for range 3 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(events.events) != 1 {
+		t.Fatal("relocation flap repeated warning", events.events)
+	}
+	// Removing the filter lets the primary relocate, after which removal finishes.
+	es.shards["demon2"] = 0
+	es.shardRows[0]["node"] = "demon1"
+	s = coreConverge(t, p, rc, f)
+	if s.find("demon2") != nil || s.DrainBlocked != "" {
+		t.Fatal("drain did not finish after the pinned primary relocated", s)
+	}
+}
+
+func TestGreenDrainStillBlocksWhenAllocationDiagnosticsFail(t *testing.T) {
+	p, rc, s, _ := opsFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/_cat/allocation":
+			opsJSON(w, []map[string]string{{"node": "example.com", "shards": "1"}})
+		case "/_cluster/health":
+			opsJSON(w, esapi.Health{Status: "green"})
+		case "/_cat/shards":
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		default:
+			t.Error("unexpected drain diagnostic request", r.URL)
+			http.NotFound(w, r)
+		}
+	})
+	m := s.find("example.com")
+	m.Removing, m.Stage = true, stageDraining
+	for range 3 {
+		if err := p.removeStep(t.Context(), rc, s, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s.DrainBlocked == "" || !strings.Contains(s.DrainBlocked, "remaining shards have not relocated") || m.Stage != stageDraining {
+		t.Fatal("failed diagnostics hid an observed stalled drain", s.DrainBlocked, m)
 	}
 }
 

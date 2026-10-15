@@ -15,8 +15,12 @@ register('../../../../test/tsx-loader.mjs', import.meta.url);
 // Static import runs before loader registration; this test must load TSX afterward.
 const { OverviewTab } = await import('./OverviewTab.tsx');
 
-test('Overview renders observed draining nodes and a blocked-drain callout above its tables', () => {
-  const message = 'Shard drain blocked for searchn2: insufficient data nodes for index replicas. Add capacity or lower index replicas; never force removal.';
+for (const scenario of [
+  { name: 'capacity', health: 'yellow', message: 'Shard drain blocked for searchn2: insufficient data nodes for index replicas. Restore the node count or lower index replicas; never force removal.' },
+  { name: 'green pinned primary', health: 'green', message: 'Shard drain blocked for searchn2: index pinned has no eligible destination; allocation filters reject destination nodes. Remove restrictive index allocation filters or restore the desired data-node count to cancel.' },
+]) {
+test(`Overview renders the blocked-drain callout above its tables: ${scenario.name}`, () => {
+  const message = scenario.message;
   const cluster: Schemas['Cluster'] = {
     name: 'search', namespace: 'default', generation: 2,
     createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
@@ -31,7 +35,10 @@ test('Overview renders observed draining nodes and a blocked-drain callout above
         { name: 'searchn1', set: '', role: 'master,data', state: 'joined', health: true },
         { name: 'searchn2', set: '', role: 'master,data', state: 'draining', health: false },
       ],
-      conditions: [{ type: 'ShardDrainBlocked', status: 'True', reason: 'InsufficientDataNodes', message, lastTransitionTime: '2026-01-01T00:00:00Z' }],
+      conditions: [
+        { type: 'ShardDrainBlocked', status: 'True', reason: 'ShardAllocationBlocked', message, lastTransitionTime: '2026-01-01T00:00:00Z' },
+        { type: 'ClusterHealth', status: 'True', reason: scenario.health, message: scenario.health === 'green' ? 'All shards are allocated' : 'Replica shards are unassigned', lastTransitionTime: '2026-01-01T00:00:00Z' },
+      ],
     },
   };
   const context: ClusterContext = { cluster, provider: undefined, namespace: 'default', name: 'search', base: '/clusters/default/search', can: () => false };
@@ -50,8 +57,14 @@ test('Overview renders observed draining nodes and a blocked-drain callout above
     assert.match(summary, /1 desired · 3 observed · 1 draining/);
     assert.match(markup, /searchn2/);
     assert.match(markup, /Elasticsearch scaling guide/);
+    if (scenario.health === 'green') {
+      assert.match(summary, /allocation filters reject destination nodes/);
+      assert.match(summary, /restore the desired data-node count to cancel/);
+      assert.doesNotMatch(summary, /Elasticsearch health: yellow/);
+    }
   } finally {
     router.dispose();
     client.clear();
   }
 });
+}
