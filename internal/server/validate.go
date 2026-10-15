@@ -183,6 +183,10 @@ func schemaFailure(err error) response {
 	}
 	var schema *openapi3.SchemaError
 	if errors.As(err, &schema) {
+		if schema.SchemaField == "not" && schema.Schema != nil && schema.Schema.Not != nil &&
+			strings.Join(schema.Schema.Not.Value.Required, ",") == "password,passwordHash" {
+			return invalidField("password", domain.ReasonConflict, "password and passwordHash are mutually exclusive")
+		}
 		if schema.SchemaField == "oneOf" && strings.Join(schema.JSONPointer(), ".") == "source" {
 			return invalidField("source", domain.ReasonConflict, "source must set exactly one of source.backup or source.pitrTime")
 		}

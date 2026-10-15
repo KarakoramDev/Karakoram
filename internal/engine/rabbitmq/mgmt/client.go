@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"errors"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
 
@@ -99,6 +100,31 @@ func (c *Client) request(ctx context.Context, method string, parts []string, bod
 			sentinel = engine.ErrConflict
 		case 400, 422:
 			sentinel = engine.ErrInvalid
+			if method == http.MethodPut && len(parts) > 0 {
+				// Recognize fixed native diagnostics without exposing submitted data.
+				var rejection struct {
+					Reason json.RawMessage `json:"reason"`
+				}
+				_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&rejection)
+				reason := string(rejection.Reason)
+				switch parts[0] {
+				case "permissions", "topic-permissions":
+					if reason == `"vhost_or_user_not_found"` {
+						sentinel = engine.InvalidField("user,vhost", domain.ReasonNotFound, "user or vhost does not exist in RabbitMQ")
+					} else if parts[0] == "permissions" {
+						sentinel = engine.InvalidField("configure,write,read", domain.ReasonInvalid, "configure, write or read contains a regular expression rejected by RabbitMQ")
+					} else {
+						sentinel = engine.InvalidField("write,read", domain.ReasonInvalid, "write or read contains a regular expression rejected by RabbitMQ")
+					}
+				case "policies", "operator-policies":
+					sentinel = engine.InvalidField("pattern,definition", domain.ReasonInvalid, "pattern or definition was rejected by RabbitMQ; check regular expression syntax and supported policy definition keys and values")
+					if strings.Contains(reason, "not a recognised policy setting") || strings.Contains(reason, "not a recognized policy setting") || strings.Contains(reason, "are not recognised policy settings") || strings.Contains(reason, "are not recognized policy settings") {
+						sentinel = engine.InvalidField("definition", domain.ReasonInvalid, "definition contains a policy setting not supported by RabbitMQ")
+					} else if strings.Contains(reason, "invalid regular expression") {
+						sentinel = engine.InvalidField("pattern", domain.ReasonInvalid, "pattern contains a regular expression rejected by RabbitMQ")
+					}
+				}
+			}
 		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 		return &HTTPError{StatusCode: resp.StatusCode, Cause: sentinel}

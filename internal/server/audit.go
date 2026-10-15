@@ -102,11 +102,50 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = in.Cluster + "/" + b.Database + "/" + b.Name
 	case "ReplaceDatabaseRole", "DeleteDatabaseRole":
 		e.Target = in.Cluster + "/" + in.Database + "/" + in.Role
+	case "CreateRabbitMQVhost", "ReplaceRabbitMQVhost", "DeleteRabbitMQVhost":
+		e.Resource = "rabbitmq-vhosts"
+		vhost := in.Name
+		if body, ok := in.Body.(*api.RabbitMQVhost); ok {
+			vhost = body.Name
+		}
+		e.Target = in.Cluster + "/" + vhost
+	case "CreateRabbitMQUser", "ReplaceRabbitMQUser", "DeleteRabbitMQUser":
+		e.Resource = "rabbitmq-users"
+		user := in.Name
+		if body, ok := in.Body.(*api.RabbitMQUserWrite); ok {
+			user = body.Name
+		}
+		e.Target = in.Cluster + "/" + user
+	case "CreateRabbitMQPermission", "ReplaceRabbitMQPermission", "DeleteRabbitMQPermission":
+		e.Resource = "rabbitmq-permissions"
+		vhost, user := in.Vhost, in.User
+		if body, ok := in.Body.(*api.RabbitMQPermission); ok {
+			vhost, user = body.Vhost, body.User
+		}
+		e.Target = in.Cluster + "/" + vhost + "/" + user
+	case "CreateRabbitMQTopicPermission", "ReplaceRabbitMQTopicPermission", "DeleteRabbitMQTopicPermission":
+		e.Resource = "rabbitmq-topic-permissions"
+		vhost, user := in.Vhost, in.User
+		if body, ok := in.Body.(*api.RabbitMQTopicPermission); ok {
+			vhost, user = body.Vhost, body.User
+		}
+		e.Target = in.Cluster + "/" + vhost + "/" + user
+	case "CreateRabbitMQPolicy", "ReplaceRabbitMQPolicy", "DeleteRabbitMQPolicy",
+		"CreateRabbitMQOperatorPolicy", "ReplaceRabbitMQOperatorPolicy", "DeleteRabbitMQOperatorPolicy":
+		e.Resource = "rabbitmq-policies"
+		if strings.Contains(name, "OperatorPolicy") {
+			e.Resource = "rabbitmq-operator-policies"
+		}
+		vhost, policy := in.Vhost, in.Name
+		if body, ok := in.Body.(*api.RabbitMQPolicy); ok {
+			vhost, policy = body.Vhost, body.Name
+		}
+		e.Target = in.Cluster + "/" + vhost + "/" + policy
 	}
 	if in.Member != "" {
 		e.Target += "/" + in.Member
 	}
-	if in.User != "" {
+	if in.User != "" && !strings.Contains(name, "RabbitMQ") {
 		e.Target += "/" + in.User
 	}
 	if in.Backup != "" {

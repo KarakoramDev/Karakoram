@@ -17,7 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/getkin/kin-openapi/routers/legacy"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 )
 
 func init() {
@@ -57,7 +57,7 @@ func conformingHandler(s *Server, handler http.Handler) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router, err := legacy.NewRouter(doc)
+	router, err := gorillamux.NewRouter(doc)
 	if err != nil {
 		t.Fatal(err)
 	}

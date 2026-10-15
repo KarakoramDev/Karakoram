@@ -11,11 +11,25 @@ Karakoram manages RabbitMQ on your own Zerops runtimes; Zerops does not provide 
 - Each node costs **one singleton runtime plus one Local Storage volume, at least 5 GB**. Runtime disk is separate from broker storage. Defaults per node are shared CPU, 1 core, 1 GB RAM and a 5 GB volume; validation permits RAM from 0.5 GB. Replacement temporarily adds another runtime/volume. Retained and orphaned volumes continue consuming storage and may incur charges.
 - Nodes keep stable `rabbit@<service hostname>` identities and persistent data across redeployment/restart. Member indexes are monotonic and not reused. Separate services/volumes do not guarantee separate hosts ([ADR 0016](../adr/0016-placement-anti-affinity.md)).
 
+Runtime preparation installs the repository key and Team RabbitMQ sources,
+disables package-triggered broker startup with `policy-rc.d`, then writes
+`/etc/apt/preferences.d/erlang` before the final package-index refresh and install:
+
+```text
+Package: erlang*
+Pin: version 1:27.3.4.17-1
+Pin-Priority: 1001
+```
+
+The preference covers transitive Erlang dependencies as well as the explicitly
+version-pinned packages, so newer upstream packages cannot create a mixed-version
+dependency set. Its version comes from the same broker catalog.
+
 RabbitMQ 4.3 uses **Khepri-only metadata**. Metadata replication does not replicate classic-queue messages. Karakoram defaults new queues to `quorum`, with a stable initial replica target of **3**; RabbitMQ caps it to the available cluster size when each queue is declared. This default does not depend on the seed broker's initial discovery list. Clients can explicitly select another queue type. Five/seven brokers do not automatically give each queue five/seven replicas. Use durable quorum queues, publisher confirms, acknowledgements and reconnect-capable clients for replicated messaging. One broker has no HA.
 
 ## Create and configure
 
-A creation file accepted by `karactl clusters create -f FILE` can be as small as:
+Save this creation file as `rabbit.yaml`:
 
 ```yaml
 name: brokers
@@ -38,11 +52,30 @@ spec:
     consumer_timeout = 1800000
 ```
 
-Provider defaults fill omitted resources. Use `-n NAME` for another namespace; the same project-scoped backend and authenticated relay model applies. Observe cluster generation, member health and events rather than treating request acceptance as completion.
+Provider defaults fill omitted resources. Replace `NS` below with the selected namespace; its existing Zerops project, project-scoped backend and authenticated relay provide the broker network.
+
+```sh
+karactl -n NS clusters create -f rabbit.yaml --wait --timeout 30m
+karactl -n NS clusters get brokers -o json
+karactl -n NS clusters status brokers -o json
+karactl -n NS clusters members brokers -o json
+karactl -n NS events list --cluster brokers --order desc
+```
+
+Request acceptance is not completion. Success means the cluster is **Ready**, `status.observedGeneration` is at least `generation`, all three expected brokers are present, running and healthy, and no broker reports alarms, partitions or maintenance. Each broker must see the same expected running membership. Inspect status conditions, member details and events together rather than relying on a successful create response.
+
+A timeout or interruption does not cancel provisioning. Resume observation in the same context and namespace; **do not re-create the cluster**:
+
+```sh
+karactl -n NS clusters wait brokers --timeout 30m
+karactl -n NS events list --cluster brokers --order desc
+```
 
 RabbitMQ access request objects reject undeclared fields with an `invalid_request` error naming the field. Policy `definition` remains an open RabbitMQ-defined object. Collection responses always use arrays, including empty collections and user or virtual-host tags.
 
 ### Engine options and overrides
+
+Discover the running server's provider catalog with `karactl providers get rabbitmq -o json` (`GET /api/v1/providers/rabbitmq`). Its `engineOptions` metadata describes optional plugin groups/dependencies, always-enabled plugins and public-management TLS restrictions; `engineConfig` metadata describes the `rabbitmq.conf` format, syntax and managed-key matching. Use it alongside the detailed constraints below.
 
 `engineOptions` must be one JSON object (or its YAML equivalent). Unknown fields, `null`, unsupported plugins and duplicate plugins are rejected. `rabbitmq_management` and `rabbitmq_prometheus` are always enabled; do not add them to the optional list. Allowed extras are:
 
@@ -58,13 +91,13 @@ Each optional management extension requires its corresponding base plugin in the
 
 | Managed area | Keys / prefixes |
 | --- | --- |
-| Listeners and TLS | `listeners.`, `ssl_options.`, `management.tcp.`, `management.ssl.`, `prometheus.`, `distribution.` |
+| Listeners and TLS | `listeners.`, `ssl_options.`, `management.listener.`, `management.tcp.`, `management.ssl.`, `prometheus.`, `distribution.`, `stream.listeners.`, `stream.replication.`, `stream.ssl.`, `osiris.` |
 | Discovery and queue defaults | `cluster_formation.`, `quorum_queue.initial_cluster_size`, `default_queue_type` |
-| Resource limits and logs | `vm_memory_high_watermark*`, `total_memory_available_override_value*`, `disk_free_limit*`, `log.` |
-| Credentials and authentication | `default_user*`, `default_pass*`, `loopback_users*`, `auth_backends*`, `ssl_cert_login*` |
-| Definitions loading | `management.load_definitions*`, `load_definitions*`, `definitions.` |
+| Resource limits and logs | `vm_memory_high_watermark`, `total_memory_available_override_value`, `disk_free_limit`, `log.` |
+| Credentials and authentication | `default_user`, `default_pass`, `loopback_users`, `auth_backends`, `ssl_cert_login` |
+| Definitions loading | `management.load_definitions`, `load_definitions`, `definitions.` |
 
-The corresponding bare keys are also protected. Other syntactically valid settings are still subject to RabbitMQ's own validation; a setting accepted by Karakoram can fail broker startup. Configuration, plugin, certificate and relevant resource changes roll through nodes rather than restarting every broker together.
+Each entry is a literal prefix: any key starting with it is protected, as is the corresponding bare key when the prefix ends with a dot. Other syntactically valid settings are still subject to RabbitMQ's own validation; a setting accepted by Karakoram can fail broker startup. Configuration, plugin, certificate and relevant resource changes roll through nodes rather than restarting every broker together.
 
 ## TLS and connectivity
 
@@ -78,7 +111,83 @@ The Erlang transport is **fixed at creation**: `disabled ↔ preferTLS` can roll
 
 Until patched OTP 27.3.4.18 is packaged in the configured Team RabbitMQ noble repositories, generated Erlang distribution and CLI TLS clients plus Osiris stream replication client/server are restricted to **TLS 1.2** to mitigate [CVE-2026-89422 / GHSA-rgxr-4g4w-j875](https://github.com/erlang/otp/security/advisories/GHSA-rgxr-4g4w-j875) in OTP 27.3.4.17. Peer verification remains enabled; public AMQPS, stream and management TLS server versions are unchanged. User-supplied Shovel/Federation runtime parameters need their own safe outbound TLS settings.
 
-Connection status exposes password-free per-node `amqp`/`amqps` and `management` endpoints. Explicit credential reveal through the UI or `karactl clusters connection brokers --reveal` requires `cluster-credentials:read` and returns the customer `admin` password and CA when applicable. Use separate least-privilege application users, not `admin`, in workloads. Configure clients with multiple endpoints and connection recovery; Karakoram does not provide a shared AMQP load balancer.
+Connection status exposes password-free per-broker `amqp`/`amqps` and `management` endpoints. Explicit credential reveal through the UI or `karactl -n NS clusters connection brokers --reveal -o json` requires `cluster-credentials:read`. Each `credentials` entry contains `username: admin`, its `password`, `database: "/"` (**virtual host**, not a MongoDB database), and a credential-bearing `uri`. There is one URI per broker endpoint, not a shared cluster URI: the URI's hostname identifies that broker; `preferTLS` can return both plaintext and TLS entries for a broker. The response's `caCertificate` is the PEM CA for TLS; [export it separately](cli.md#requests-output-and-waits) with `karactl -n NS clusters ca brokers > ca.pem`. Use separate least-privilege application users, not `admin`, in workloads. Karakoram does not provide a shared AMQP load balancer.
+
+### Connect an application over TLS
+
+Install a [RabbitMQ-capable CLI](cli.md#build-and-install) and log in first. The following smoke test uses Python 3, `jq` and [Pika](https://pika.readthedocs.io/). Run it **inside the selected namespace's Zerops project**: private broker service hostnames are not reachable from an unrelated project or your laptop. Use a TLS-enabled cluster (`requireTLS` or `preferTLS`).
+
+From a private directory, export the CA and select **one broker's AMQPS credential**, not a comma-joined list of URIs:
+
+```sh
+umask 077
+karactl -n NS clusters ca brokers > ca.pem
+karactl -n NS clusters connection brokers --reveal -o json |
+  jq -e '[.credentials[] | select(.uri | startswith("amqps://"))][0] // error("no AMQPS broker")' \
+  > connection.json
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install pika
+```
+
+`connection.json` contains the administrator password: keep it out of logs, source control and shared directories. Selection `[0]` chooses the first broker; choose another array index to test another broker. The private URI uses **5671** and includes the encoded `/` vhost. No client certificate or private key is needed: the CA authenticates the server, and the username/password authenticate the application.
+
+Save this as `tls_smoke.py`. It publishes and acknowledges one persistent message on a dedicated durable quorum queue; use an otherwise unused smoke-test queue, not a live application queue:
+
+```python
+import json
+import ssl
+from urllib.parse import urlsplit
+
+import pika
+
+with open("connection.json", encoding="utf-8") as source:
+    credential = json.load(source)
+uri = credential["uri"]
+endpoint = urlsplit(uri)
+if endpoint.scheme != "amqps" or not endpoint.hostname:
+    raise ValueError("Select one broker's amqps URI")
+
+context = ssl.create_default_context(cafile="ca.pem")
+context.check_hostname = True
+context.verify_mode = ssl.CERT_REQUIRED
+parameters = pika.URLParameters(uri)
+parameters.credentials = pika.PlainCredentials(
+    credential["username"], credential["password"]
+)
+parameters.virtual_host = credential["database"]
+parameters.ssl_options = pika.SSLOptions(context, endpoint.hostname)
+parameters.heartbeat = 30
+parameters.blocked_connection_timeout = 30
+parameters.socket_timeout = 10
+
+connection = pika.BlockingConnection(parameters)
+try:
+    channel = connection.channel()
+    queue = "tls-smoke"
+    channel.queue_declare(
+        queue=queue, durable=True, arguments={"x-queue-type": "quorum"}
+    )
+    channel.confirm_delivery()
+    channel.basic_publish(
+        exchange="",
+        routing_key=queue,
+        body=b"hello over AMQPS",
+        properties=pika.BasicProperties(delivery_mode=2),
+        mandatory=True,
+    )
+    method, properties, body = channel.basic_get(queue=queue, auto_ack=False)
+    if method is None:
+        raise RuntimeError("No message received from the smoke-test queue")
+    channel.basic_ack(delivery_tag=method.delivery_tag)
+    print(body.decode("utf-8"))
+finally:
+    connection.close()
+```
+
+Run `python3 tls_smoke.py`; successful output is `hello over AMQPS`. This leaves the empty queue in place. Remove the private credential file after the test with `rm connection.json`. For an application, obtain its scoped username/password and virtual host from your secret manager instead of revealing/distributing `admin` credentials, and use its permitted queue; see the [least-privilege example](#least-privilege-application-access).
+
+This is a single-connection smoke test, not a reconnect loop. Production clients should retain the returned per-broker endpoints and reconnect to another broker with bounded backoff after a connection failure or rolling drain. Pika's blocking connection does not automatically recover an established connection: recreate connections/channels, declarations and consumers, and enable confirms again. Retry unconfirmed publishes with application-level deduplication because their delivery may be uncertain; acknowledge deliveries only after processing. Keep CA and hostname verification enabled on every connection. Public clients must use the returned public host/port (which can differ from 5671), its certificate-covered hostname and an allowed source address; private service URIs are not public endpoints.
 
 ### Public access
 
@@ -88,7 +197,7 @@ Connection status exposes password-free per-node `amqp`/`amqps` and `management`
 
 ## Access API, CLI and UI
 
-The cluster's **Access** tab manages virtual hosts, users, vhost permissions, topic permissions, policies and operator policies. Equivalent REST collections are under `/api/v1/clusters/{cluster}/rabbitmq/`, with `?namespace=NAME`; URL-encode names such as `/` in path segments. These are direct Management API changes, not durable declarative topology resources continuously reconciled by Karakoram.
+The cluster's **Access** tab manages virtual hosts, users, vhost permissions, topic permissions, policies and operator policies. Equivalent REST collections are under `/api/v1/clusters/{cluster}/rabbitmq/`, with `?namespace=NAME`. In raw HTTP API paths, encode each name **once**: vhost `/` is `%2F`, for example `/api/v1/clusters/brokers/rabbitmq/vhosts/%2F?namespace=NS`. Do not double-encode it as `%252F`. CLI arguments and UI inputs take the literal `/`; typed clients likewise take the raw name and perform transport encoding. These are direct Management API changes, not durable declarative topology resources continuously reconciled by Karakoram.
 
 ```sh
 karactl rabbitmq vhosts list brokers -o json
@@ -98,11 +207,78 @@ karactl rabbitmq permissions create brokers -f permission.yaml
 karactl rabbitmq policies list brokers
 ```
 
-All six command groups have `list/get/create/update/delete`. Reads and writes require the corresponding `database-users` permission on `<namespace>/<cluster>`. See the [CLI access reference](cli.md#rabbitmq-access) for payloads and argument order. Generic MongoDB database-users/roles endpoints are not RabbitMQ access endpoints.
+All six command groups have `list/get/create/update/delete`. Reads and writes require the corresponding `database-users` permission on `<namespace>/<cluster>`. See the [CLI build/install instructions](cli.md#build-and-install) and [access reference](cli.md#rabbitmq-access) for argument order. The `rabbitmq` group is available in binaries built from a release containing RabbitMQ support; an older CLI will not gain commands by connecting to a newer server. Generic MongoDB database-users/roles endpoints are not RabbitMQ access endpoints.
 
-User tags govern management access; vhost/topic permissions govern messaging access. Password and passwordHash are mutually exclusive. Creating a user without either generates a password returned **once**; subsequent reads expose neither passwords nor hashes. Updating without either preserves the password. `karakoram`, `admin`, `monitor` and `guest` are reserved: access mutations cannot change their users or grants. Bootstrap creates `karakoram` (control-plane administration) and `admin` (customer administrator), with administrator tags and all permissions on `/`, and removes `guest`; `monitor` is reserved but not created by bootstrap. System rotation supports `karakoram` and `admin`.
+All six access collections support [safe retries with `Idempotency-Key`](api.md#safe-retries-with-idempotency-key)
+on create (POST) and update (PUT). Reusing the same key and body replays the
+original successful status and body for 24 hours with `Idempotent-Replayed: true`,
+including any generated user password. Reusing a key with a changed body returns
+409. Omitted `namespace` and `namespace=default` share the same key scope;
+different namespaces and object paths are independent. Deletes are not covered.
+The Access UI sends a body-bound key automatically and reuses it when retrying an
+unchanged submission in the open editor. Editing the submission starts a new key.
+
+User tags govern management access; they do **not** grant messaging permission. Vhost/topic permission grants govern messaging access. Password and passwordHash are mutually exclusive. Creating a user without either generates a password returned **once**; subsequent reads expose neither passwords nor hashes. Updating without either preserves the password. `karakoram`, `admin`, `monitor` and `guest` are reserved: access routes cannot create, modify or delete these identities or mutate their permission/topic-permission grants. Bootstrap creates `karakoram` (control-plane administration) and `admin` (customer administrator), with administrator tags and all permissions on `/`, and removes `guest`; `monitor` is reserved but not created by bootstrap. Use `karactl -n NS system-users rotate brokers admin` (or `karakoram`) for supported system-user rotation, not an access-user update.
+
+Malformed permission regexes and rejected policy-definition keys return field errors. Check the named field (`configure`, `write`, `read` or `definition`) and RabbitMQ's accepted PCRE/policy definition rules; a syntactically valid regex can still grant more access than intended. A permission or topic-permission write referencing a missing user or vhost instead names `user,vhost` with reason `not_found`; create or correct that identity before retrying the grant.
+RabbitMQ's array-shaped native regex diagnostics are translated to fixed field
+messages without echoing the submitted pattern or native diagnostic text.
+
+Vhost create/update/delete audit events use resource `rabbitmq-vhosts` and name the affected vhost in the target (`<cluster>/<vhost>`), including `/`. Filter them with:
+
+```sh
+karactl -n NS events list --cluster brokers --resource rabbitmq-vhosts
+```
 
 Deleting a vhost deletes its queues and messages. Topic-permission deletion removes **all exchanges' grants for the vhost/user pair**, not just one displayed row. Review policy effects before applying them; changes take effect directly in RabbitMQ.
+
+### Least-privilege application access
+
+Save these three complete YAML payloads separately. This creates a dedicated `orders` vhost and a user that can configure/read/write only the `orders` queue and publish through the default exchange. The user has **no management tags**.
+
+`vhost.yaml`:
+
+```yaml
+name: orders
+tags: []
+defaultQueueType: quorum
+description: Orders application
+limits:
+  maxConnections: 20
+  maxQueues: 1
+```
+
+`user.yaml` (omit password fields to generate a password once):
+
+```yaml
+name: orders-app
+tags: []
+```
+
+`permission.yaml`:
+
+```yaml
+vhost: orders
+user: orders-app
+configure: '^orders$'
+write: '^(orders|amq\.default)$'
+read: '^orders$'
+```
+
+Apply the vhost, user and grant in that order:
+
+```sh
+umask 077
+karactl -n NS rabbitmq vhosts create brokers -f vhost.yaml
+karactl -n NS rabbitmq users create brokers -f user.yaml -o json > created-user.json
+karactl -n NS rabbitmq permissions create brokers -f permission.yaml
+jq -er '.generatedPassword' created-user.json
+karactl -n NS rabbitmq permissions get brokers orders orders-app
+```
+
+The `jq` command deliberately reveals the new password once; run it only in a private terminal, store the result in your application's secret manager and remove `created-user.json` afterward. Use virtual host `orders` and username `orders-app` in the application. Setting `tags: []` removes management UI/API access, but neither empty nor administrator tags substitute for a messaging permission grant.
+
+The anchored expressions match exact names, not every queue beginning with `orders`. For `basic_publish(exchange="", routing_key="orders", ...)`, RabbitMQ checks write access to the default exchange as **`amq.default`**; `write: '^orders$'` alone is insufficient. The example explicitly allows both `orders` and `amq.default`, while configure/read remain limited to `orders`. It does not grant access to arbitrary named exchanges, other queues or vhosts. With the TLS recipe, use these scoped credentials, set the virtual host to `orders` and change the queue name from `tls-smoke` to `orders`.
 
 ## Lifecycle and maintenance
 
@@ -119,11 +295,100 @@ RAM updates can be live at the platform, but the broker memory limit/watermark a
 
 Replacement provisions and joins a fresh identity before growing/migrating replicas and removing the old member. A reachable broker follows the drain/application-stop/forget/full-stop sequence; an unreachable lost broker skips local drain/stop and is forgotten through a survivor only with a surviving Khepri voter majority. Surviving queue/stream majorities are also needed: replacement cannot recover classic messages or messages whose last surviving copy is lost. Preserve data/state and consult the [operations notes](../operations.md#rabbitmq-operations) after permanent node/volume loss or majority loss; never reset survivors to make a join succeed.
 
+### Quorum-blocked restarts and replica growth
+
+Adding brokers does **not** enlarge existing quorum queues. A queue originally
+created on one broker can still have just one replica after scale-up. Restarting
+that broker would make the queue unavailable, even when the other brokers are
+healthy. Karakoram first waits for online quorum so recovering replicas can catch
+up, then checks quorum-critical resources before draining the broker. A failed
+wait also diagnoses the remaining blockers. `QuorumCriticalQueues` names up to ten
+affected queues/vhosts and their known members (plus the remaining count); the
+warning event is `RollingRestartBlocked`. Membership-inventory changes alone do
+not repeat that warning. A known blocker waits at the safety gate and rechecks
+approximately every 30 seconds without additional generic `ReconcileError`
+warnings; failed safety observations still report errors.
+The operation and cluster message name the same blockers.
+When quorum recovers, the condition clears and a Normal `RollingRestartRecovered`
+event records that the rolling change can continue.
+An empty diagnosis after a failed quorum wait clears stale blocker details
+silently; a recovery event is emitted only once the pre-drain safety check passes.
+Blocker identities are validated before storage; the cluster retains at most fifty
+blocker details while messages preserve the full remaining count.
+Stream or metadata-component blockers require their own majority recovery, not
+quorum queue additions.
+If the native quorum check cannot run, the error reports that failure and its
+command exit status rather than inventing queue blockers or exposing CLI output.
+
+Open **cluster detail → Queue recovery** from the blocked-queue callout. It shows
+targeted, copyable Management API commands with the actual broker, vhost, queue and
+candidate node names. This is an explicit native administrative procedure, **not**
+a Karakoram `grow-replicas` operation or CLI command: it requires the revealed
+RabbitMQ `admin` credential and bypasses Karakoram RBAC. It does not require a
+broker shell, Erlang cookie, deleting/recreating a queue or purging messages.
+
+Run from an application/administration environment **inside the cluster's project**
+so private broker DNS and management ports are reachable. Export the CA with
+`karactl -n NS clusters ca CLUSTER > ca.pem` and reveal the admin password from
+Connection details. `--user admin` prompts for the password; do not put it in
+shell history. For example, for queue `orders` in `/`, adding `rabbit@ordersm1`:
+
+```sh
+# Inspect type, members and online replicas first.
+curl --fail-with-body --user admin --cacert ca.pem \
+  'https://ordersm0:15671/api/queues/%2F/orders'
+# Only when an existing majority is online and the target is a healthy joined broker:
+curl --fail-with-body --user admin --cacert ca.pem \
+  -X POST -H 'Content-Type: application/json' \
+  --data '{"node":"rabbit@ordersm1"}' \
+  'https://ordersm0:15671/api/queues/quorum/%2F/orders/replicas/add'
+# Observe Raft state before adding the next missing replica.
+curl --fail-with-body --user admin --cacert ca.pem \
+  'https://ordersm0:15671/api/queues/quorum/%2F/orders/status'
+```
+
+Use **your** values from Queue recovery, not these example hostnames. Encode each
+vhost/queue path segment once (`/` becomes `%2F`). With explicitly disabled TLS,
+use private `http://BROKER:15672` without `--cacert`; never disable TLS verification
+for an HTTPS listener. Do not expose management publicly just for this recovery.
+The endpoint/body and status endpoint are supported by the pinned RabbitMQ
+[4.3.6 Management API](https://github.com/rabbitmq/rabbitmq-server/blob/v4.3.6/deps/rabbitmq_management/src/rabbit_mgmt_dispatcher.erl).
+
+Add **one** missing member at a time, normally growing a one-replica group to three
+across healthy brokers. After each addition, inspect the queue and Raft status:
+the new member must be online, promoted to voting membership and caught up to the
+leader's committed log (allowing for active writes). An HTTP success or a changed
+`members` list alone is not proof of synchronization. Re-read membership before
+retrying a timed-out request; it may already have added the replica. If the queue
+already uses all brokers, recover its offline members instead of adding duplicates.
+Do not add replicas without a live majority, force membership or restart several
+brokers. Once safe quorum is restored, the existing rolling workflow retries its
+checkpoint; observe it rather than submitting duplicate resource edits/restarts.
+
+During creation, member state identifies `PLANNED` (platform import pending),
+`IMPORTED` (package deployment pending), `DEPLOYED` (agent/broker readiness pending)
+and `AGENT_READY` (bootstrap or join pending). `RUNNING` means the joined broker
+has been observed; cluster readiness still requires every expected broker and
+healthy membership. A blocked departing broker remains in member inventory as
+`LEAVING_BLOCKED`, is not counted healthy, and emits one `MemberRemovalBlocked`
+warning when its blocking reason changes. Resolve the reported cause; the broker
+remains visible as `LEAVING` until its removal completes.
+
+
 ## Definitions backups and cleanup
 
 RabbitMQ supports only the **`definitions`** backup type. Manual and UTC scheduled backups export definitions through the Management API, gzip them and upload to registered S3-compatible storage. Successful scheduled-backup count retention and explicit backup deletion remove recorded objects. No PBM is deployed for RabbitMQ.
 
 **Definitions contain no messages and provide no PITR.** They contain topology, application users/password hashes, grants, policies and runtime parameters; treat the object storage and exports as sensitive. Before compression/upload, Karakoram excludes `karakoram`, `admin`, `monitor` and `guest` users and their vhost/topic grants. Restore imports **merge** objects into the target, not rewind it or remove unrelated existing objects. The same reserved-user/grant filter applies on import, including older backups, so target credentials remain authoritative. Imports are bounded to 64 MiB of uncompressed definitions. A creation-time `dataSource` clone needs a successful RabbitMQ definitions backup and imports after the target is ready; it does not replicate source messages continuously.
+The UI repeats the password-hash sensitivity warning when choosing storage for a
+schedule or a manual backup. Restrict bucket access and protect stored exports
+even though they do not contain message payloads.
+
+`dataSource` is immutable creation provenance, not an ongoing dependency. New
+clones can use retained definitions backups after their source cluster is deleted.
+Keep the backup and its storage available until the import completes; a completed
+clone does not re-import or block later spec updates when that source backup is
+deleted or pruned.
 
 Deletion drains/stops brokers and removes public routes/subdomains before runtime removal. `keepVolumes` suspends the cluster, retaining broker volumes and secrets for resume. `keepBackups` independently retains definitions records/objects for later recovery/deletion. Full deletion removes owned volumes/secrets; volumes the platform refuses to delete are ownership-checked and tracked for orphan cleanup. Retained backups still require the control-plane state, original master key and storage credentials. Preserve these separately from message durability.
 

@@ -65,9 +65,6 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		names = append(names, "rabbit@"+m.Name)
 	}
 	for _, m := range ordered(s) {
-		if m.Removing {
-			continue
-		}
 		ms := domain.MemberStatus{Name: m.Name, Set: "rabbitmq", Role: "broker", Version: m.Version, State: "UNKNOWN"}
 		if r, ok := resources[m.Name]; ok {
 			copy := r
@@ -76,7 +73,6 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		st, e := p.agentStatus(ctx, rc, m.Name)
 		if e == nil {
 			ms.Agent = domain.AgentStatus{Healthy: running(st), ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
-			ms.Version = st.EngineVersion
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
 			ms.PlacementGroup = st.HostFingerprint
@@ -88,7 +84,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		}
 		b, e := p.brokerStatus(ctx, rc, m.Name)
 		if e == nil {
-			ms.Health = ms.Agent.Healthy && slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && !b.Maintenance
+			// The generic agent version is cached before the broker finishes
+			// starting; cluster_status observes the running local broker.
+			ms.Version = b.Version
+			ms.Health = ms.Agent.Healthy && b.Version != "" && slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && !b.Maintenance
 			ms.State = "RUNNING"
 			if !ms.Health {
 				ms.State = "DOWN"
@@ -139,6 +138,17 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				v.Connection.PublicHosts = append(v.Connection.PublicHosts, ms.PublicHost)
 			}
 		}
+		if m.Removing {
+			ms.State = "LEAVING"
+			if m.RemovalBlocked != "" {
+				ms.State = "LEAVING_BLOCKED"
+			}
+			ms.Health = false
+			ms.Agent.Message = m.RemovalBlocked
+		} else if m.Stage != "ready" && m.Stage != "joined" {
+			ms.State = memberStage(s, m, ms.Agent.Healthy)
+			ms.Health = false
+		}
 		allHealthy = allHealthy && ms.Health
 		v.Members = append(v.Members, ms)
 		if m.ManagementPublic {
@@ -179,6 +189,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			v.Message = m.RemovalBlocked
 		}
 	}
+	projectQuorumStatus(rc, s, &v)
 	if s.Retry != nil {
 		if r := s.PlatformRetries[platformRetryKey(s.Retry)]; r != nil && r.CPUModeCooldown {
 			condition("PlatformCooldown", true, "CPUModeChangeTooRecent")

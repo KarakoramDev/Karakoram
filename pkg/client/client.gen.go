@@ -403,21 +403,27 @@ const (
 
 // Defines values for ListEventsParamsResource.
 const (
-	ListEventsParamsResourceAccounts           ListEventsParamsResource = "accounts"
-	ListEventsParamsResourceApiTokens          ListEventsParamsResource = "api-tokens"
-	ListEventsParamsResourceAuth               ListEventsParamsResource = "auth"
-	ListEventsParamsResourceBackupStorages     ListEventsParamsResource = "backup-storages"
-	ListEventsParamsResourceBackups            ListEventsParamsResource = "backups"
-	ListEventsParamsResourceClusterCredentials ListEventsParamsResource = "cluster-credentials"
-	ListEventsParamsResourceClusters           ListEventsParamsResource = "clusters"
-	ListEventsParamsResourceDatabaseUsers      ListEventsParamsResource = "database-users"
-	ListEventsParamsResourceEmpty              ListEventsParamsResource = ""
-	ListEventsParamsResourceNamespaces         ListEventsParamsResource = "namespaces"
-	ListEventsParamsResourceOperations         ListEventsParamsResource = "operations"
-	ListEventsParamsResourceOrphanedVolumes    ListEventsParamsResource = "orphaned-volumes"
-	ListEventsParamsResourceRbac               ListEventsParamsResource = "rbac"
-	ListEventsParamsResourceRestores           ListEventsParamsResource = "restores"
-	ListEventsParamsResourceSettings           ListEventsParamsResource = "settings"
+	ListEventsParamsResourceAccounts                 ListEventsParamsResource = "accounts"
+	ListEventsParamsResourceApiTokens                ListEventsParamsResource = "api-tokens"
+	ListEventsParamsResourceAuth                     ListEventsParamsResource = "auth"
+	ListEventsParamsResourceBackupStorages           ListEventsParamsResource = "backup-storages"
+	ListEventsParamsResourceBackups                  ListEventsParamsResource = "backups"
+	ListEventsParamsResourceClusterCredentials       ListEventsParamsResource = "cluster-credentials"
+	ListEventsParamsResourceClusters                 ListEventsParamsResource = "clusters"
+	ListEventsParamsResourceDatabaseUsers            ListEventsParamsResource = "database-users"
+	ListEventsParamsResourceEmpty                    ListEventsParamsResource = ""
+	ListEventsParamsResourceNamespaces               ListEventsParamsResource = "namespaces"
+	ListEventsParamsResourceOperations               ListEventsParamsResource = "operations"
+	ListEventsParamsResourceOrphanedVolumes          ListEventsParamsResource = "orphaned-volumes"
+	ListEventsParamsResourceRabbitmqOperatorPolicies ListEventsParamsResource = "rabbitmq-operator-policies"
+	ListEventsParamsResourceRabbitmqPermissions      ListEventsParamsResource = "rabbitmq-permissions"
+	ListEventsParamsResourceRabbitmqPolicies         ListEventsParamsResource = "rabbitmq-policies"
+	ListEventsParamsResourceRabbitmqTopicPermissions ListEventsParamsResource = "rabbitmq-topic-permissions"
+	ListEventsParamsResourceRabbitmqUsers            ListEventsParamsResource = "rabbitmq-users"
+	ListEventsParamsResourceRabbitmqVhosts           ListEventsParamsResource = "rabbitmq-vhosts"
+	ListEventsParamsResourceRbac                     ListEventsParamsResource = "rbac"
+	ListEventsParamsResourceRestores                 ListEventsParamsResource = "restores"
+	ListEventsParamsResourceSettings                 ListEventsParamsResource = "settings"
 )
 
 // Defines values for StreamEventsParamsType.
@@ -429,21 +435,27 @@ const (
 
 // Defines values for StreamEventsParamsResource.
 const (
-	StreamEventsParamsResourceAccounts           StreamEventsParamsResource = "accounts"
-	StreamEventsParamsResourceApiTokens          StreamEventsParamsResource = "api-tokens"
-	StreamEventsParamsResourceAuth               StreamEventsParamsResource = "auth"
-	StreamEventsParamsResourceBackupStorages     StreamEventsParamsResource = "backup-storages"
-	StreamEventsParamsResourceBackups            StreamEventsParamsResource = "backups"
-	StreamEventsParamsResourceClusterCredentials StreamEventsParamsResource = "cluster-credentials"
-	StreamEventsParamsResourceClusters           StreamEventsParamsResource = "clusters"
-	StreamEventsParamsResourceDatabaseUsers      StreamEventsParamsResource = "database-users"
-	StreamEventsParamsResourceEmpty              StreamEventsParamsResource = ""
-	StreamEventsParamsResourceNamespaces         StreamEventsParamsResource = "namespaces"
-	StreamEventsParamsResourceOperations         StreamEventsParamsResource = "operations"
-	StreamEventsParamsResourceOrphanedVolumes    StreamEventsParamsResource = "orphaned-volumes"
-	StreamEventsParamsResourceRbac               StreamEventsParamsResource = "rbac"
-	StreamEventsParamsResourceRestores           StreamEventsParamsResource = "restores"
-	StreamEventsParamsResourceSettings           StreamEventsParamsResource = "settings"
+	StreamEventsParamsResourceAccounts                 StreamEventsParamsResource = "accounts"
+	StreamEventsParamsResourceApiTokens                StreamEventsParamsResource = "api-tokens"
+	StreamEventsParamsResourceAuth                     StreamEventsParamsResource = "auth"
+	StreamEventsParamsResourceBackupStorages           StreamEventsParamsResource = "backup-storages"
+	StreamEventsParamsResourceBackups                  StreamEventsParamsResource = "backups"
+	StreamEventsParamsResourceClusterCredentials       StreamEventsParamsResource = "cluster-credentials"
+	StreamEventsParamsResourceClusters                 StreamEventsParamsResource = "clusters"
+	StreamEventsParamsResourceDatabaseUsers            StreamEventsParamsResource = "database-users"
+	StreamEventsParamsResourceEmpty                    StreamEventsParamsResource = ""
+	StreamEventsParamsResourceNamespaces               StreamEventsParamsResource = "namespaces"
+	StreamEventsParamsResourceOperations               StreamEventsParamsResource = "operations"
+	StreamEventsParamsResourceOrphanedVolumes          StreamEventsParamsResource = "orphaned-volumes"
+	StreamEventsParamsResourceRabbitmqOperatorPolicies StreamEventsParamsResource = "rabbitmq-operator-policies"
+	StreamEventsParamsResourceRabbitmqPermissions      StreamEventsParamsResource = "rabbitmq-permissions"
+	StreamEventsParamsResourceRabbitmqPolicies         StreamEventsParamsResource = "rabbitmq-policies"
+	StreamEventsParamsResourceRabbitmqTopicPermissions StreamEventsParamsResource = "rabbitmq-topic-permissions"
+	StreamEventsParamsResourceRabbitmqUsers            StreamEventsParamsResource = "rabbitmq-users"
+	StreamEventsParamsResourceRabbitmqVhosts           StreamEventsParamsResource = "rabbitmq-vhosts"
+	StreamEventsParamsResourceRbac                     StreamEventsParamsResource = "rbac"
+	StreamEventsParamsResourceRestores                 StreamEventsParamsResource = "restores"
+	StreamEventsParamsResourceSettings                 StreamEventsParamsResource = "settings"
 )
 
 // APIToken Only metadata and a non-sensitive identifying prefix; the token value is never returned here.
@@ -990,7 +1002,7 @@ type CreatedDatabaseUser struct {
 
 // CreatedRabbitMQUser defines model for CreatedRabbitMQUser.
 type CreatedRabbitMQUser struct {
-	// GeneratedPassword Present only when a password was generated at creation; store it securely once.
+	// GeneratedPassword Present only when a password was generated at creation. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
 	GeneratedPassword *string                   `json:"generatedPassword,omitempty"`
 	Name              string                    `json:"name"`
 	Tags              []CreatedRabbitMQUserTags `json:"tags"`
@@ -1505,13 +1517,19 @@ type Provider struct {
 	BackupTypes  []ProviderBackupTypes `json:"backupTypes"`
 	Capabilities *[]string             `json:"capabilities,omitempty"`
 	DisplayName  string                `json:"displayName"`
-	Name         string                `json:"name"`
-	Operations   *[]string             `json:"operations,omitempty"`
-	Presets      []Preset              `json:"presets"`
-	Processes    *[]string             `json:"processes,omitempty"`
-	Topologies   []ProviderTopology    `json:"topologies"`
-	UpgradePaths []UpgradePath         `json:"upgradePaths"`
-	Versions     []ProviderVersion     `json:"versions"`
+
+	// EngineConfig Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics.
+	EngineConfig *map[string]interface{} `json:"engineConfig,omitempty"`
+
+	// EngineOptions Provider-specific engine option descriptions and constraints, such as plugin groups, dependencies, always-enabled plugins and management exposure settings.
+	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
+	Name          string                  `json:"name"`
+	Operations    *[]string               `json:"operations,omitempty"`
+	Presets       []Preset                `json:"presets"`
+	Processes     *[]string               `json:"processes,omitempty"`
+	Topologies    []ProviderTopology      `json:"topologies"`
+	UpgradePaths  []UpgradePath           `json:"upgradePaths"`
+	Versions      []ProviderVersion       `json:"versions"`
 }
 
 // ProviderBackupTypes defines model for Provider.BackupTypes.
@@ -2753,6 +2771,21 @@ type CreateRabbitMQOperatorPolicyParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DeleteRabbitMQOperatorPolicyParams defines parameters for DeleteRabbitMQOperatorPolicy.
@@ -2777,6 +2810,21 @@ type ReplaceRabbitMQOperatorPolicyParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListRabbitMQPermissionsParams defines parameters for ListRabbitMQPermissions.
@@ -2792,6 +2840,21 @@ type CreateRabbitMQPermissionParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DeleteRabbitMQPermissionParams defines parameters for DeleteRabbitMQPermission.
@@ -2816,6 +2879,21 @@ type ReplaceRabbitMQPermissionParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListRabbitMQPoliciesParams defines parameters for ListRabbitMQPolicies.
@@ -2831,6 +2909,21 @@ type CreateRabbitMQPolicyParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DeleteRabbitMQPolicyParams defines parameters for DeleteRabbitMQPolicy.
@@ -2855,6 +2948,21 @@ type ReplaceRabbitMQPolicyParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListRabbitMQTopicPermissionsParams defines parameters for ListRabbitMQTopicPermissions.
@@ -2870,6 +2978,21 @@ type CreateRabbitMQTopicPermissionParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DeleteRabbitMQTopicPermissionParams defines parameters for DeleteRabbitMQTopicPermission.
@@ -2894,6 +3017,21 @@ type ReplaceRabbitMQTopicPermissionParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListRabbitMQUsersParams defines parameters for ListRabbitMQUsers.
@@ -2909,6 +3047,21 @@ type CreateRabbitMQUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DeleteRabbitMQUserParams defines parameters for DeleteRabbitMQUser.
@@ -2933,6 +3086,21 @@ type ReplaceRabbitMQUserParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListRabbitMQVhostsParams defines parameters for ListRabbitMQVhosts.
@@ -2948,6 +3116,21 @@ type CreateRabbitMQVhostParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DeleteRabbitMQVhostParams defines parameters for DeleteRabbitMQVhost.
@@ -2972,6 +3155,21 @@ type ReplaceRabbitMQVhostParams struct {
 
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
@@ -10070,6 +10268,17 @@ func NewCreateRabbitMQOperatorPolicyRequestWithBody(server string, cluster Clust
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10323,6 +10532,17 @@ func NewReplaceRabbitMQOperatorPolicyRequestWithBody(server string, cluster Clus
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10461,6 +10681,17 @@ func NewCreateRabbitMQPermissionRequestWithBody(server string, cluster ClusterPa
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
 	}
@@ -10716,6 +10947,17 @@ func NewReplaceRabbitMQPermissionRequestWithBody(server string, cluster ClusterP
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10854,6 +11096,17 @@ func NewCreateRabbitMQPolicyRequestWithBody(server string, cluster ClusterPath, 
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
 	}
@@ -11109,6 +11362,17 @@ func NewReplaceRabbitMQPolicyRequestWithBody(server string, cluster ClusterPath,
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11247,6 +11511,17 @@ func NewCreateRabbitMQTopicPermissionRequestWithBody(server string, cluster Clus
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
 	}
@@ -11502,6 +11777,17 @@ func NewReplaceRabbitMQTopicPermissionRequestWithBody(server string, cluster Clu
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11640,6 +11926,17 @@ func NewCreateRabbitMQUserRequestWithBody(server string, cluster ClusterPath, pa
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
 	}
@@ -11874,6 +12171,17 @@ func NewReplaceRabbitMQUserRequestWithBody(server string, cluster ClusterPath, u
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12012,6 +12320,17 @@ func NewCreateRabbitMQVhostRequestWithBody(server string, cluster ClusterPath, p
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
 	}
@@ -12244,6 +12563,17 @@ func NewReplaceRabbitMQVhostRequestWithBody(server string, cluster ClusterPath, 
 			}
 
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
 	}

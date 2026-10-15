@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	specification "github.com/KarakoramDev/Karakoram/api"
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
@@ -21,6 +20,18 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 )
+
+// Cancel a streaming request only after authentication and the initial flush.
+// A deadline can otherwise expire during authentication on a busy test runner.
+type cancelOnFlushRecorder struct {
+	*httptest.ResponseRecorder
+	cancel context.CancelFunc
+}
+
+func (w cancelOnFlushRecorder) Flush() {
+	w.ResponseRecorder.Flush()
+	w.cancel()
+}
 
 // Enumerate the specification, not a hand-maintained subset of GET operations.
 // Populated inventories ensure item schemas are exercised, not just envelopes.
@@ -96,16 +107,16 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if operationID == "oidcCallback" {
 				url += "?code=test&state=test"
 			}
-			requestCtx := ctx
-			if operationID == "streamEvents" {
-				var cancel context.CancelFunc
-				requestCtx, cancel = context.WithTimeout(ctx, 10*time.Millisecond)
-				defer cancel()
-			}
+			requestCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
 			r := httptest.NewRequest(http.MethodGet, url, nil).WithContext(requestCtx)
 			r.Header.Set("Authorization", "Bearer "+token)
 			w := httptest.NewRecorder()
-			testHandler(s).ServeHTTP(w, r)
+			var responseWriter http.ResponseWriter = w
+			if operationID == "streamEvents" {
+				responseWriter = cancelOnFlushRecorder{ResponseRecorder: w, cancel: cancel}
+			}
+			testHandler(s).ServeHTTP(responseWriter, r)
 			want := http.StatusOK
 			if operationID == "oidcLogin" {
 				want = http.StatusServiceUnavailable
@@ -133,6 +144,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if w := call(s, "GET", "/api/v1/providers/psmdb", "", token); w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	t.Run("rabbitmq-native", testRabbitMQNativeGETResponses)
 }
 
 func TestOpenAPISpecIsPublicAndCacheable(t *testing.T) {

@@ -103,10 +103,11 @@ func TestAccessValidation(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, pattern := range []string{strings.Repeat("x", 4097)} {
-		if e := permissionValidation(Permission{Vhost: "/", User: "app", Configure: pattern, Write: ".*", Read: ".*"}); !errors.Is(e, engine.ErrInvalid) {
+		var field *engine.ValidationError
+		if e := permissionValidation(Permission{Vhost: "/", User: "app", Configure: pattern, Write: ".*", Read: ".*"}); !errors.Is(e, engine.ErrInvalid) || !errors.As(e, &field) || field.Field != "configure,write,read" {
 			t.Fatal(e)
 		}
-		if e := topicValidation(TopicPermission{Vhost: "/", User: "app", Exchange: "events", Write: pattern, Read: ".*"}); !errors.Is(e, engine.ErrInvalid) {
+		if e := topicValidation(TopicPermission{Vhost: "/", User: "app", Exchange: "events", Write: pattern, Read: ".*"}); !errors.Is(e, engine.ErrInvalid) || !errors.As(e, &field) || field.Field != "write,read" {
 			t.Fatal(e)
 		}
 	}

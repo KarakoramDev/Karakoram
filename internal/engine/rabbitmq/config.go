@@ -43,7 +43,11 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 			sources = append(sources, "deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://"+mirror+".rabbitmq.com/"+repo+"/ubuntu/noble noble main")
 		}
 	}
-	prepare = append(prepare, "printf '%s\\n' '"+strings.Join(sources, "' '")+"' | sudo tee /etc/apt/sources.list.d/rabbitmq.list", "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d && sudo chmod 755 /usr/sbin/policy-rc.d", "sudo apt-get update")
+	prepare = append(prepare,
+		"printf '%s\\n' '"+strings.Join(sources, "' '")+"' | sudo tee /etc/apt/sources.list.d/rabbitmq.list",
+		"printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d && sudo chmod 755 /usr/sbin/policy-rc.d",
+		"printf '%s\\n' 'Package: erlang*' 'Pin: version "+catalog.ErlangVersion+"' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang",
+		"sudo apt-get update")
 	packages := []string{"rabbitmq-server=" + version + "-1"}
 	for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
 		packages = append(packages, "erlang-"+pkg+"="+catalog.ErlangVersion)
@@ -75,7 +79,9 @@ func ownershipEnv(cluster, member, token string) map[string]string {
 	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
 }
 func serviceSpec(c *domain.Cluster, m *member, token string) infra.ServiceSpec {
-	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(c.Spec.Components.Engine.Resources), MinContainers: 1, MaxContainers: 1, Env: ownershipEnv(c.Name, m.Name, token), Volume: m.Volume}
+	env := ownershipEnv(c.Name, m.Name, token)
+	env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(c.Spec.Components.Engine.Resources), MinContainers: 1, MaxContainers: 1, Env: env, Volume: m.Volume}
 }
 func missing(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound)
@@ -278,7 +284,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	if r.MinRAM == 0 {
 		r = runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
 	}
-	spec := rmqspec.MemberSpec{NodeName: "rabbit@" + name, Peers: peers, Cookie: string(cookie), Version: m.DesiredVersion, Plugins: append([]string{"rabbitmq_management", "rabbitmq_prometheus"}, options.Plugins...), PrometheusPort: 15692, ConfigOverrides: m.EngineConfig, TotalMemoryBytes: int64(r.MinRAM * 1e9), MemoryHighWatermarkBytes: int64(r.MinRAM * 1e9 * 0.6), DiskFreeLimitBytes: int64(max(0.5, r.MinRAM) * 1e9), DefaultQueueType: "quorum", InterNodeTLS: s.InterNodeTLS}
+	spec := rmqspec.MemberSpec{NodeName: "rabbit@" + name, Peers: peers, Cookie: string(cookie), Version: m.DesiredVersion, Plugins: slices.Concat(alwaysEnabledPlugins, options.Plugins), PrometheusPort: 15692, ConfigOverrides: m.EngineConfig, TotalMemoryBytes: int64(r.MinRAM * 1e9), MemoryHighWatermarkBytes: int64(r.MinRAM * 1e9 * 0.6), DiskFreeLimitBytes: int64(max(0.5, r.MinRAM) * 1e9), DefaultQueueType: "quorum", InterNodeTLS: s.InterNodeTLS}
 	switch m.TLSMode {
 	case "disabled":
 		spec.AMQPPort = 5672

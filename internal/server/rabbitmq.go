@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 )
@@ -86,7 +87,7 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		b := in.Body.(*api.RabbitMQVhost)
 		v := rabbitMQVhost(*b)
 		if v.Name != in.Name {
-			return invalid()
+			return invalidField("name", domain.ReasonInvalid, "name must match the path parameter")
 		}
 		if e := a.UpdateVhost(ctx, rc, v); e != nil {
 			return s.failure(e)
@@ -134,7 +135,7 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 	case "ReplaceRabbitMQUser":
 		b := in.Body.(*api.RabbitMQUserWrite)
 		if b.Name != in.Name {
-			return invalid()
+			return invalidField("name", domain.ReasonInvalid, "name must match the path parameter")
 		}
 		if !s.rabbitMQUserTagsAllowed(ctx, name, rc, b.Tags) {
 			return fail(403, "forbidden", "RabbitMQ privileged user tags require clusters/update permission")
@@ -172,10 +173,10 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		b := in.Body.(*api.RabbitMQPermission)
 		v := rabbitMQPermission(*b)
 		if v.Vhost != in.Vhost {
-			return invalid()
+			return invalidField("vhost", domain.ReasonInvalid, "vhost must match the path parameter")
 		}
 		if v.User != in.User {
-			return invalid()
+			return invalidField("user", domain.ReasonInvalid, "user must match the path parameter")
 		}
 		if e := a.UpdatePermission(ctx, rc, v); e != nil {
 			return s.failure(e)
@@ -209,10 +210,10 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		b := in.Body.(*api.RabbitMQTopicPermission)
 		v := rabbitMQTopicPermission(*b)
 		if v.Vhost != in.Vhost {
-			return invalid()
+			return invalidField("vhost", domain.ReasonInvalid, "vhost must match the path parameter")
 		}
 		if v.User != in.User {
-			return invalid()
+			return invalidField("user", domain.ReasonInvalid, "user must match the path parameter")
 		}
 		if e := a.UpdateTopicPermission(ctx, rc, v); e != nil {
 			return s.failure(e)
@@ -246,10 +247,10 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		b := in.Body.(*api.RabbitMQPolicy)
 		v := rabbitMQPolicy(*b)
 		if v.Vhost != in.Vhost {
-			return invalid()
+			return invalidField("vhost", domain.ReasonInvalid, "vhost must match the path parameter")
 		}
 		if v.Name != in.Name {
-			return invalid()
+			return invalidField("name", domain.ReasonInvalid, "name must match the path parameter")
 		}
 		if e := a.UpdatePolicy(ctx, rc, v); e != nil {
 			return s.failure(e)
@@ -283,10 +284,10 @@ func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine
 		b := in.Body.(*api.RabbitMQPolicy)
 		v := rabbitMQPolicy(*b)
 		if v.Vhost != in.Vhost {
-			return invalid()
+			return invalidField("vhost", domain.ReasonInvalid, "vhost must match the path parameter")
 		}
 		if v.Name != in.Name {
-			return invalid()
+			return invalidField("name", domain.ReasonInvalid, "name must match the path parameter")
 		}
 		if e := a.UpdateOperatorPolicy(ctx, rc, v); e != nil {
 			return s.failure(e)

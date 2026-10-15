@@ -277,6 +277,9 @@ type ProviderInfo struct {
 	Capabilities []string       `json:"capabilities"`
 	Operations   []string       `json:"operations"`
 	Processes    []string       `json:"processes"`
+	// EngineOptions and EngineConfig describe provider-specific configuration constraints.
+	EngineOptions map[string]any `json:"engineOptions,omitempty"`
+	EngineConfig  map[string]any `json:"engineConfig,omitempty"`
 }
 
 // MetricDescriptor maps an agent exposition metric to a monitoring series.

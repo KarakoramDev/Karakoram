@@ -7,12 +7,16 @@ import { validateRabbitMQSpec } from './helpers.ts';
 
 const Wizard = lazy(() => import('./WizardSection'));
 const Access = lazy(() => import('./AccessTab'));
+const QuorumRecovery = lazy(() => import('./QuorumRecovery'));
 
 export const rabbitmqUI: EngineUI = {
   label: 'RabbitMQ',
   description: 'RabbitMQ clusters with quorum queues and definitions backups.',
   wizardSection: (props: WizardSectionProps) => createElement(Suspense, { fallback: 'Loading RabbitMQ configuration…' }, createElement(Wizard, props)),
-  detailTabs: [{ id: 'access', label: 'Access', element: createElement(Suspense, { fallback: 'Loading RabbitMQ access…' }, createElement(Access)) }],
+  detailTabs: [
+    { id: 'access', label: 'Access', element: createElement(Suspense, { fallback: 'Loading RabbitMQ access…' }, createElement(Access)) },
+    { id: 'queue-recovery', label: 'Queue recovery', element: createElement(Suspense, { fallback: 'Loading queue recovery…' }, createElement(QuorumRecovery)) },
+  ],
   publicPort: (spec) => spec.tls?.mode === 'disabled' ? 5672 : 5671,
   publicPortLabel: (spec) => spec.tls?.mode === 'disabled' ? 'AMQP' : 'AMQPS',
   engineConfigLabel: 'rabbitmq.conf overrides',

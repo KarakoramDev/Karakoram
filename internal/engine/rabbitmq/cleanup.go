@@ -45,18 +45,26 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, e
 		}
 	}
-	if s.Retry != nil {
-		if s.Retry.Action != "cleanup-runtime" && s.Retry.Action != "cleanup-volume" || opts.KeepVolumes && volumeDelete(s.Retry.Action) {
-			s.resetPlatformRetry(s.Retry)
-		} else {
-			_, e := p.retryPending(ctx, rc, s)
-			return false, e
-		}
+	if s.Retry != nil && (s.Retry.Action != "cleanup-runtime" && s.Retry.Action != "cleanup-volume" || opts.KeepVolumes && volumeDelete(s.Retry.Action)) {
+		s.resetPlatformRetry(s.Retry)
 	}
+	ownershipChanged := false
 	for _, m := range ordered(s) {
+		serviceID, volumeID := m.ServiceID, m.VolumeID
 		if e = verifyMemberServices(ctx, rc, m); e != nil {
 			return false, e
 		}
+		ownershipChanged = ownershipChanged || m.ServiceID != serviceID || m.VolumeID != volumeID
+	}
+	if ownershipChanged {
+		// The deferred save returns the adopted IDs to the reconciler for
+		// persistence. Delete the runtime only in a subsequent invocation,
+		// after its mount evidence is no longer needed to prove ownership.
+		return false, nil
+	}
+	if s.Retry != nil {
+		_, e := p.retryPending(ctx, rc, s)
+		return false, e
 	}
 	if !opts.KeepBackups && !s.CleanupBackups {
 		backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Ref())

@@ -65,7 +65,11 @@ func invalid(format string, args ...any) error { return engine.Invalid(format, a
 func (*Provider) Describe() domain.ProviderInfo {
 	r := defaultResources()
 	ci := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 3, Resources: r}, MinReplicas: 1, MaxReplicas: 7, AllowedReplicas: []int{1, 3, 5, 7}}
-	return domain.ProviderInfo{Name: "rabbitmq", DisplayName: "RabbitMQ", Versions: append([]domain.VersionInfo(nil), catalog.Versions...), UpgradePaths: []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}}, Topologies: []domain.TopologyInfo{{Type: "cluster", Components: map[string]domain.ComponentInfo{"engine": ci}}}, Presets: []domain.Preset{{Name: "dev", Description: "Single broker; no queue redundancy", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}}}, {Name: "prod", Description: "Three brokers; placement separation is not guaranteed", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: ci.Defaults}}}, Capabilities: []string{"systemUsers", "backups", "restores", "publicExposure", "tls", "monitoring", "engineConfig", "rabbitmqAccess"}, Operations: []string{"backup", "delete-backup", "restore", "restart", "replace-member", "rotate-system-user", "rotate-tls"}, Processes: []string{"rabbitmq-server"}, BackupTypes: []string{"definitions"}}
+	return domain.ProviderInfo{Name: "rabbitmq", DisplayName: "RabbitMQ", Versions: append([]domain.VersionInfo(nil), catalog.Versions...), UpgradePaths: []domain.UpgradePath{{From: "4.3.5", To: "4.3.6"}}, Topologies: []domain.TopologyInfo{{Type: "cluster", Components: map[string]domain.ComponentInfo{"engine": ci}}}, Presets: []domain.Preset{{Name: "dev", Description: "Single broker; no queue redundancy", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: domain.ComponentSpec{Replicas: 1, Resources: r}}}, {Name: "prod", Description: "Three brokers; placement separation is not guaranteed", Topology: domain.Topology{Type: "cluster"}, Components: domain.Components{Engine: ci.Defaults}}}, Capabilities: []string{"systemUsers", "backups", "restores", "publicExposure", "tls", "monitoring", "engineConfig", "rabbitmqAccess"}, Operations: []string{"backup", "delete-backup", "restore", "restart", "replace-member", "rotate-system-user", "rotate-tls"}, Processes: []string{"rabbitmq-server"}, BackupTypes: []string{"definitions"}, EngineOptions: optionsDescription(), EngineConfig: map[string]any{
+		"format": "rabbitmq.conf", "syntax": "key = value",
+		"managedKeyPrefixes": slices.Clone(managedConfigPrefixes),
+		"managedKeyMatching": "A key is rejected when it starts with a listed prefix or equals that prefix with its trailing dot removed.",
+	}}
 }
 func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Provider == "" {
@@ -114,6 +118,50 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 	}
 }
 
+type pluginGroup struct {
+	ID           string              `json:"id"`
+	Label        string              `json:"label"`
+	Plugins      []string            `json:"plugins"`
+	Dependencies map[string][]string `json:"dependencies"`
+}
+
+var optionalPluginGroups = []pluginGroup{
+	{ID: "shovel", Label: "Shovel", Plugins: []string{"rabbitmq_shovel", "rabbitmq_shovel_management"}, Dependencies: map[string][]string{"rabbitmq_shovel_management": {"rabbitmq_shovel"}}},
+	{ID: "federation", Label: "Federation", Plugins: []string{"rabbitmq_federation", "rabbitmq_federation_management"}, Dependencies: map[string][]string{"rabbitmq_federation_management": {"rabbitmq_federation"}}},
+	{ID: "stream", Label: "Stream", Plugins: []string{"rabbitmq_stream", "rabbitmq_stream_management"}, Dependencies: map[string][]string{"rabbitmq_stream_management": {"rabbitmq_stream"}}},
+}
+
+var alwaysEnabledPlugins = []string{"rabbitmq_management", "rabbitmq_prometheus"}
+var managementPublicUnavailableTLSModes = []string{"requireTLS"}
+
+var managedConfigPrefixes = []string{
+	"listeners.", "ssl_options.", "management.listener.", "management.tcp.", "management.ssl.",
+	"prometheus.", "cluster_formation.", "vm_memory_high_watermark", "total_memory_available_override_value",
+	"disk_free_limit", "log.", "default_user", "default_pass", "loopback_users", "distribution.",
+	"quorum_queue.initial_cluster_size", "default_queue_type", "management.load_definitions",
+	"load_definitions", "definitions.", "auth_backends", "ssl_cert_login", "stream.listeners.",
+	"stream.replication.", "stream.ssl.", "osiris.",
+}
+
+func optionsDescription() map[string]any {
+	groups := make([]pluginGroup, 0, len(optionalPluginGroups))
+	for _, group := range optionalPluginGroups {
+		dependencies := make(map[string][]string, len(group.Dependencies))
+		for plugin, required := range group.Dependencies {
+			dependencies[plugin] = slices.Clone(required)
+		}
+		groups = append(groups, pluginGroup{ID: group.ID, Label: group.Label, Plugins: slices.Clone(group.Plugins), Dependencies: dependencies})
+	}
+	return map[string]any{
+		"pluginGroups":         groups,
+		"alwaysEnabledPlugins": slices.Clone(alwaysEnabledPlugins),
+		"managementUI": map[string]any{"public": map[string]any{
+			"type": "boolean", "default": false, "unavailableTLSModes": slices.Clone(managementPublicUnavailableTLSModes),
+			"description": "Publishes the RabbitMQ management UI/API through Zerops HTTPS routing with a private plaintext HTTP hop. Uses RabbitMQ credentials and is not limited by the AMQP allowlist.",
+		}},
+	}
+}
+
 type engineOptions struct {
 	Plugins      []string `json:"plugins,omitempty"`
 	ManagementUI struct {
@@ -138,17 +186,28 @@ func parseOptions(raw json.RawMessage) (engineOptions, error) {
 	if strings.TrimSpace(string(raw)) == "null" {
 		return o, invalid("engineOptions must be an object")
 	}
-	allowed := map[string]bool{"rabbitmq_shovel": true, "rabbitmq_shovel_management": true, "rabbitmq_federation": true, "rabbitmq_federation_management": true, "rabbitmq_stream": true, "rabbitmq_stream_management": true}
+	allowed := func(plugin string) bool {
+		for _, group := range optionalPluginGroups {
+			if slices.Contains(group.Plugins, plugin) {
+				return true
+			}
+		}
+		return false
+	}
 	seen := map[string]bool{}
 	for _, plugin := range o.Plugins {
-		if !allowed[plugin] || seen[plugin] {
+		if !allowed(plugin) || seen[plugin] {
 			return o, invalid("unsupported or duplicate plugin %q", plugin)
 		}
 		seen[plugin] = true
 	}
-	for _, base := range []string{"rabbitmq_stream", "rabbitmq_shovel", "rabbitmq_federation"} {
-		if seen[base+"_management"] && !seen[base] {
-			return o, invalid("plugin %q requires %q", base+"_management", base)
+	for _, group := range optionalPluginGroups {
+		for plugin, dependencies := range group.Dependencies {
+			for _, dependency := range dependencies {
+				if seen[plugin] && !seen[dependency] {
+					return o, invalid("plugin %q requires %q", plugin, dependency)
+				}
+			}
 		}
 	}
 	return o, nil
@@ -167,7 +226,7 @@ func validateEngineConfig(config string) error {
 		if !ok || !configKey.MatchString(k) || strings.TrimSpace(v) == "" {
 			return invalid("engineConfig requires key = value lines")
 		}
-		for _, prefix := range []string{"listeners.", "ssl_options.", "management.listener.", "management.tcp.", "management.ssl.", "prometheus.", "cluster_formation.", "vm_memory_high_watermark", "total_memory_available_override_value", "disk_free_limit", "log.", "default_user", "default_pass", "loopback_users", "distribution.", "quorum_queue.initial_cluster_size", "default_queue_type", "management.load_definitions", "load_definitions", "definitions.", "auth_backends", "ssl_cert_login", "stream.listeners.", "stream.replication.", "stream.ssl.", "osiris."} {
+		for _, prefix := range managedConfigPrefixes {
 			if k == strings.TrimSuffix(prefix, ".") || strings.HasPrefix(k, prefix) {
 				return invalid("engineConfig key %q is managed", k)
 			}
@@ -238,7 +297,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if err != nil {
 		return err
 	}
-	if s.TLS.Mode == "requireTLS" && options.ManagementUI.Public {
+	if slices.Contains(managementPublicUnavailableTLSModes, s.TLS.Mode) && options.ManagementUI.Public {
 		return invalid("managementUI.public is unavailable with requireTLS: public management requires certificate-verified HTTPS backend routing or TLS TCP passthrough; Zerops subdomains forward plaintext HTTP")
 	}
 	if err := validateEngineConfig(s.EngineConfig); err != nil {
@@ -308,7 +367,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			return invalid("dataSource is immutable")
 		}
 	}
-	if d := s.DataSource; d != nil {
+	if d := s.DataSource; old == nil && d != nil {
 		ref := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
 		if ref.Namespace == "" {
 			ref.Namespace = n.Ref().Namespace
@@ -321,7 +380,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		}
 		b, err := p.options.Store.GetBackup(ctx, ref, d.Backup)
 		if err != nil || b.Phase != domain.PhaseSucceeded || b.Provider != "rabbitmq" || b.Type != "definitions" {
-			return invalid("source must be a succeeded rabbitmq definitions backup")
+			return invalid("source backup %q in namespace %q, cluster %q must be a succeeded RabbitMQ definitions backup", d.Backup, domain.NormalizedNamespace(ref.Namespace), ref.Name)
 		}
 	}
 	return nil

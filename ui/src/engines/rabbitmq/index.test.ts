@@ -21,7 +21,7 @@ test('RabbitMQ extension exposes its wizard, access tab and topology summary', (
   assert.equal(engines.rabbitmq, rabbitmqUI);
   assert.equal(rabbitmqUI.label, 'RabbitMQ');
   assert.ok(rabbitmqUI.wizardSection);
-  assert.deepEqual(rabbitmqUI.detailTabs?.map((tab) => [tab.id, tab.label]), [['access', 'Access']]);
+  assert.deepEqual(rabbitmqUI.detailTabs?.map((tab) => [tab.id, tab.label]), [['access', 'Access'], ['queue-recovery', 'Queue recovery']]);
   assert.equal(rabbitmqUI.topologySummary?.(cluster), '3-node RabbitMQ cluster');
   assert.equal(rabbitmqUI.topologySummary?.({ ...cluster, spec: { ...cluster.spec, components: { engine: { ...cluster.spec.components.engine, replicas: 1 } } } }), '1-node RabbitMQ cluster');
   assert.equal(rabbitmqUI.engineConfigLabel, 'rabbitmq.conf overrides');

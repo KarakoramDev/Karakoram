@@ -805,6 +805,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -856,6 +857,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -907,6 +909,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -958,6 +961,7 @@ export type paths = {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -1064,6 +1068,7 @@ export type paths = {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -2151,7 +2156,7 @@ export type components = {
             username: string;
         };
         CreatedRabbitMQUser: {
-            /** @description Present only when a password was generated at creation; store it securely once. */
+            /** @description Present only when a password was generated at creation. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it. */
             readonly generatedPassword?: string;
             name: string;
             tags: ("management" | "policymaker" | "monitoring" | "administrator" | "impersonator")[];
@@ -2575,6 +2580,14 @@ export type components = {
             backupTypes: ("logical" | "physical" | "definitions" | "snapshot")[];
             capabilities?: string[];
             displayName: string;
+            /** @description Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics. */
+            engineConfig?: {
+                [key: string]: unknown;
+            };
+            /** @description Provider-specific engine option descriptions and constraints, such as plugin groups, dependencies, always-enabled plugins and management exposure settings. */
+            engineOptions?: {
+                [key: string]: unknown;
+            };
             name: string;
             operations?: string[];
             presets: components["schemas"]["Preset"][];
@@ -5608,6 +5621,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -5651,6 +5680,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5681,6 +5711,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -5688,6 +5734,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5729,6 +5776,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5789,6 +5837,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -5832,6 +5896,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5862,6 +5927,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -5869,6 +5950,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5910,6 +5992,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -5970,6 +6053,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6013,6 +6112,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6043,6 +6143,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6050,6 +6166,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6091,6 +6208,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 name: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6151,6 +6269,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6194,6 +6328,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6224,6 +6359,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6231,6 +6382,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6272,6 +6424,7 @@ export interface operations {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
                 user: string;
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6332,6 +6485,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6404,6 +6573,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6510,6 +6695,22 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
@@ -6552,6 +6753,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6582,12 +6784,29 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
             };
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -6628,6 +6847,7 @@ export interface operations {
             path: {
                 /** @description Managed cluster name; the RBAC object is namespace/cluster. */
                 cluster: components["parameters"]["ClusterPath"];
+                /** @description Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F. */
                 vhost: string;
             };
             cookie?: never;
@@ -7171,7 +7391,7 @@ export interface operations {
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -7215,7 +7435,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };

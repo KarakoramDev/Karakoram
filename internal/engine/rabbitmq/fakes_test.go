@@ -198,16 +198,18 @@ type testClock struct{ at time.Time }
 func (c *testClock) Now() time.Time { return c.at }
 
 type fakeBroker struct {
-	running     bool
-	down        bool
-	joined      bool
-	critical    bool
-	maintenance bool
-	appStopped  bool
-	version     string
-	config      int64
-	alarms      json.RawMessage
-	partitions  json.RawMessage
+	running      bool
+	down         bool
+	joined       bool
+	critical     bool
+	blockers     []rmqspec.QuorumBlocker
+	maintenance  bool
+	appStopped   bool
+	version      string
+	agentVersion *string
+	config       int64
+	alarms       json.RawMessage
+	partitions   json.RawMessage
 }
 type fakeAgents struct {
 	t             *testing.T
@@ -221,6 +223,7 @@ type fakeAgents struct {
 	streamHandler func(rmqspec.StreamReplicasRequest)
 	queueSource   func() []mgmt.Queue
 	forgetHandler func(string)
+	requestHook   func(string)
 }
 
 func (a *fakeAgents) broker(name string) *fakeBroker {
@@ -255,6 +258,9 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 		if r.URL.Path != "/v1/status" && action != "status" {
 			a.log.add("agent:" + name + ":" + action)
 		}
+		if a.requestHook != nil {
+			a.requestHook(action)
+		}
 		if code := a.failures[name+":"+action]; code != 0 {
 			http.Error(w, "scripted agent failure", code)
 			return
@@ -276,7 +282,11 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if b.running {
 				state = "running"
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: b.version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}})
+			version := b.version
+			if b.agentVersion != nil {
+				version = *b.agentVersion
+			}
+			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}})
 		case "/v1/reload":
 			cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
 			if err != nil {
@@ -319,7 +329,11 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			}
 			_ = json.NewEncoder(w).Encode(rmqspec.StatusResponse{NodeName: "rabbit@" + name, RunningNodes: nodes, DiskNodes: diskNodes, Alarms: alarms, Partitions: partitions, Maintenance: b.maintenance, Version: b.version})
 		case "/v1/rabbitmq/quorum-critical":
-			_ = json.NewEncoder(w).Encode(rmqspec.QuorumCriticalResponse{Critical: b.critical})
+			blockers := b.blockers
+			if b.critical && len(blockers) == 0 {
+				blockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "orders", Type: "quorum", Members: []string{"rabbit@" + name}}}
+			}
+			_ = json.NewEncoder(w).Encode(rmqspec.QuorumCriticalResponse{Blockers: blockers})
 		case "/v1/rabbitmq/stream-replicas":
 			var req rmqspec.StreamReplicasRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

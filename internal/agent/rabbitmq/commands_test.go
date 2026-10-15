@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -75,9 +76,9 @@ func TestCommandTimeoutAndOutputLimit(t *testing.T) {
 func TestQuorumCriticalDoesNotSuppressCLIError(t *testing.T) {
 	t.Setenv("KARAKORAM_RABBITMQ_BIN", t.TempDir())
 	e := New()
-	fakeCLI(t, "rabbitmq-queues", "printf 'Erlang warning\\n' >&2\nprintf '%s' '{\"result\":\"error\",\"queues\":[{\"name\":\"q\"}]}' >&2\nexit 69\n")
+	fakeCLI(t, "rabbitmq-queues", "printf 'Erlang warning\\n' >&2\nprintf '%s' '{\"result\":\"error\",\"queues\":[{\"name\":\"q\",\"virtual_host\":\"/\",\"type\":\"rabbit_quorum_queue\"}]}' >&2\nexit 69\n")
 	result, err := e.execute(context.Background(), nil, "quorum-critical", &rmqspec.EmptyRequest{})
-	if err != nil || !result.(rmqspec.QuorumCriticalResponse).Critical {
+	if err != nil || len(result.(rmqspec.QuorumCriticalResponse).Blockers) != 1 {
 		t.Fatal(result, err)
 	}
 	fakeCLI(t, "rabbitmq-queues", "printf '%s' '{\"result\":\"error\",\"message\":\"broker unavailable\"}' >&2\nexit 69\n")
@@ -86,7 +87,7 @@ func TestQuorumCriticalDoesNotSuppressCLIError(t *testing.T) {
 	}
 	fakeCLI(t, "rabbitmq-queues", "printf '%s' '{\"result\":\"ok\"}'\n")
 	result, err = e.execute(context.Background(), nil, "quorum-critical", &rmqspec.EmptyRequest{})
-	if err != nil || result.(rmqspec.QuorumCriticalResponse).Critical {
+	if err != nil || len(result.(rmqspec.QuorumCriticalResponse).Blockers) != 0 {
 		t.Fatal(result, err)
 	}
 }
@@ -130,5 +131,22 @@ func TestMemberSpecValidation(t *testing.T) {
 		if _, err := spec(memberConfig(s)); err == nil {
 			t.Fatalf("accepted invalid member spec: %#v", s)
 		}
+	}
+}
+
+func TestQuorumCriticalNonJSONFailurePreservesSafeCommandError(t *testing.T) {
+	t.Setenv("KARAKORAM_RABBITMQ_BIN", t.TempDir())
+	fakeCLI(t, "rabbitmq-queues", "printf 'private stdout credentials'\nprintf 'private stderr credentials' >&2\nexit 69\n")
+	result, err := New().execute(t.Context(), nil, "quorum-critical", &rmqspec.EmptyRequest{})
+	var commandErr *commandFailure
+	var exitErr *exec.ExitError
+	if err == nil || !errors.As(err, &commandErr) || !errors.As(err, &exitErr) || exitErr.ExitCode() != 69 {
+		t.Fatalf("command cause lost: result=%+v error=%v", result, err)
+	}
+	if !strings.Contains(err.Error(), "quorum-critical check could not run") || !strings.Contains(err.Error(), "exit status 69") || strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "credentials") {
+		t.Fatal("unsafe or unhelpful failure", err)
+	}
+	if len(result.(rmqspec.QuorumCriticalResponse).Blockers) != 0 {
+		t.Fatal("failed command fabricated blockers", result)
 	}
 }

@@ -329,6 +329,12 @@ func providerAPI(p engine.Provider) api.Provider {
 	if d.Processes != nil {
 		a.Processes = &d.Processes
 	}
+	if d.EngineOptions != nil {
+		a.EngineOptions = &d.EngineOptions
+	}
+	if d.EngineConfig != nil {
+		a.EngineConfig = &d.EngineConfig
+	}
 	for _, v := range d.Versions {
 		a.Versions = append(a.Versions, api.ProviderVersion{Version: v.Version, Major: v.Major, Default: v.Default, Status: api.ProviderVersionStatus(v.Status), PbmVersion: ptr(v.PBMVersion)})
 	}

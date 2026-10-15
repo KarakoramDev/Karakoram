@@ -4,6 +4,11 @@
 // Package rabbitmq manages RabbitMQ 4.3 singleton brokers with one persistent
 // Local Storage volume per broker. Names use monotonically increasing member
 // indexes; hostname matches alone never establish infrastructure ownership.
+// An untagged volume can be adopted at any member stage only when a runtime
+// verified by its member token binds KARAKORAM_DATA_DIR to that exact volume.
+// Observed service IDs are checkpointed before retrying import. Cleanup returns
+// newly adopted IDs to the reconciler before deleting any runtime in a subsequent
+// invocation, preserving volume ownership after the mount evidence disappears.
 //
 // Sync checkpoints imports, deployments, joining and membership removal. Rolling
 // changes gate on online quorum and quorum-critical checks, then drain and stop
@@ -33,6 +38,9 @@
 // allowing the retained Khepri majority to recover. Persistently mounted volumes
 // are handed to orphan-volume cleanup only after their runtime is absent and
 // their ownership is verified again.
+// Member versions come from the local broker's cluster_status observation, not
+// the agent's startup-cached version. A missing observed broker version blocks
+// readiness, including for a one-member definitions clone.
 //
 // Broker credentials, Erlang cookies, CA keys, leaf certificates and pending
 // password rotations exist only in SecretStore. Public AMQP requires an explicit

@@ -33,9 +33,26 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 	if err != nil {
 		return err
 	}
-	o := service.Ownership
-	if tok != nil && tok.Token != "" && o["KARAKORAM_CLUSTER"] == rc.Cluster.Name && o["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(o["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1 {
-		return nil
+	if tok != nil && tok.Token != "" {
+		owned := func(s *infra.Service) bool {
+			o := s.Ownership
+			return o["KARAKORAM_CLUSTER"] == rc.Cluster.Name && o["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(o["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1
+		}
+		if owned(service) {
+			return nil
+		}
+		if volume {
+			runtime, err := rc.Backend.GetService(ctx, m.Name)
+			if err != nil {
+				return err
+			}
+			// Local Storage has no ownership environment. A token-verified
+			// runtime's exact mount binding also proves ownership after a
+			// partial import, before the member leaves the planned stage.
+			if runtime != nil && owned(runtime) && runtime.Ownership["KARAKORAM_DATA_DIR"] == "/mnt/"+service.Hostname {
+				return nil
+			}
+		}
 	}
 	return fmt.Errorf("%w: service %s has no verified cluster ownership", engine.ErrConflict, service.Hostname)
 }

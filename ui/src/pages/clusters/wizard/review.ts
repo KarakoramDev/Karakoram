@@ -2,6 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import type { Schemas } from '@/api/client';
+import { managementIsPublic, PLUGIN_GROUPS, selectedPluginGroups } from '../../../engines/rabbitmq/helpers.ts';
 import { engineRules } from './engine.ts';
 import { componentEntries } from './validation.ts';
 
@@ -27,10 +28,27 @@ export function totalFootprint(spec: Schemas['ClusterSpec']) {
   return totals;
 }
 
-/** Every provider-specific public surface should be added to this single review seam. */
+/** Database exposure is independent from provider-specific management endpoints. */
 export function exposureSummary(spec: Schemas['ClusterSpec']): string {
   const exposure = spec.exposure;
   return exposure?.public
     ? `Public database (${exposure.ipType}), allowlist: ${(exposure.allowlist ?? []).join(', ') || 'missing (required)'}`
     : 'Database private to the selected Zerops project';
+}
+
+export function exposureReviewRows(spec: Schemas['ClusterSpec']): [string, string][] {
+  const rows: [string, string][] = [[spec.provider === 'rabbitmq' ? 'AMQP exposure' : 'Exposure', exposureSummary(spec)]];
+  if (spec.provider === 'rabbitmq') rows.push(['Management UI exposure', managementIsPublic(spec.engineOptions)
+    ? 'Public RabbitMQ management UI/API over HTTPS, using RabbitMQ credentials. Not limited by the AMQP allowlist; routing includes a private plaintext HTTP hop.'
+    : 'RabbitMQ management UI/API private to the selected Zerops project']);
+  return rows;
+}
+
+export function configurationReviewRows(spec: Schemas['ClusterSpec']): [string, string][] {
+  const rows: [string, string][] = [['Engine configuration', spec.engineConfig?.trim() || 'Provider defaults']];
+  if (spec.provider === 'rabbitmq') {
+    const selected = selectedPluginGroups(spec.engineOptions);
+    rows.push(['Optional plugins', PLUGIN_GROUPS.filter((group) => selected.includes(group.id)).map((group) => group.label).join(', ') || 'none']);
+  }
+  return rows;
 }

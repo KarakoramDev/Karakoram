@@ -20,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"gopkg.in/yaml.v3"
 )
 
 func TestProvidedCAMemberCertificates(t *testing.T) {
@@ -344,6 +345,30 @@ func TestCatalogErlangPackageControlsAllBrokerVersions(t *testing.T) {
 			if !strings.Contains(text, "erlang-"+pkg+"="+catalog.ErlangVersion) {
 				t.Fatalf("%s does not use catalog Erlang package for %s", v.Version, pkg)
 			}
+		}
+		var doc map[string]any
+		if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
+			t.Fatal(err)
+		}
+		run := doc["zerops"].([]any)[0].(map[string]any)["run"].(map[string]any)
+		preference := "printf '%s\\n' 'Package: erlang*' 'Pin: version " + catalog.ErlangVersion + "' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang"
+		repositoryIndex, preferenceIndex, updateIndex, installIndex := -1, -1, -1, -1
+		for i, entry := range run["prepareCommands"].([]any) {
+			command := entry.(string)
+			switch {
+			case strings.Contains(command, "/etc/apt/sources.list.d/rabbitmq.list"):
+				repositoryIndex = i
+			case command == preference:
+				preferenceIndex = i
+			case command == "sudo apt-get update":
+				updateIndex = i
+			case strings.Contains(command, "rabbitmq-server="+v.Version+"-1"):
+				installIndex = i
+			}
+		}
+		if repositoryIndex < 0 || preferenceIndex <= repositoryIndex || updateIndex <= preferenceIndex || installIndex <= updateIndex {
+			t.Fatalf("%s must pin all Erlang dependencies before repository refresh and broker install: repository=%d preference=%d update=%d install=%d",
+				v.Version, repositoryIndex, preferenceIndex, updateIndex, installIndex)
 		}
 		if strings.Contains(text, original) {
 			t.Fatalf("%s retains the previous Erlang pin", v.Version)

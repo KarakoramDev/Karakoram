@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -368,5 +369,46 @@ func TestRestoreSourceAdmissionChecksProviderAndRabbitMQFormat(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestRabbitMQProviderCatalogConfigurationMetadata(t *testing.T) {
+	s, _, token := testServer(t)
+	provider := rabbitmq.New(rabbitmq.Options{})
+	var err error
+	s.Registry, err = engine.NewRegistry(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "GET", "/api/v1/providers/rabbitmq", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var got api.Provider
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.EngineOptions == nil || got.EngineConfig == nil {
+		t.Fatalf("missing configuration metadata: %s", w.Body.String())
+	}
+	info := provider.Describe()
+	for name, pair := range map[string][2]any{
+		"engineOptions": {*got.EngineOptions, info.EngineOptions},
+		"engineConfig":  {*got.EngineConfig, info.EngineConfig},
+	} {
+		raw, err := json.Marshal(pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var expected map[string]any
+		if err := json.Unmarshal(raw, &expected); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(pair[0], expected) {
+			t.Errorf("%s metadata lost during HTTP mapping: got %#v, want %#v", name, pair[0], expected)
+		}
+	}
+	if providerAPI(psmdb.New(psmdb.Options{})).EngineOptions != nil {
+		t.Fatal("provider-specific metadata leaked to another engine")
 	}
 }

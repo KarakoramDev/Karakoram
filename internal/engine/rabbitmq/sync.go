@@ -81,7 +81,7 @@ func (p *Provider) healthy(ctx context.Context, rc *engine.Context, m *member) (
 	if err != nil {
 		return false, err
 	}
-	return slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && noProblems(b.Alarms) && noProblems(b.Partitions) && !b.Maintenance, nil
+	return b.Version != "" && slices.Contains(b.RunningNodes, "rabbit@"+m.Name) && noProblems(b.Alarms) && noProblems(b.Partitions) && !b.Maintenance, nil
 }
 func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *internalState, m *member) error {
 	if err := verifyMemberServices(ctx, rc, m); err != nil {
@@ -229,6 +229,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		if m.ChangeAction != "" && m.ChangeAction != "password" {
 			s.Phase = "upgrade"
 			_, e = p.changeStep(ctx, rc, s, m)
+			if e == nil && len(m.QuorumBlockers) > 0 {
+				result.RequeueAfter = quorumBlockedRequeueAfter
+			}
 			return result, e
 		}
 	}
@@ -478,19 +481,20 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 	case "quorum":
 		if len(s.runningMembers()) > 1 {
 			if err := p.action(ctx, rc, m.Name, "await-quorum", rmqspec.AwaitQuorumRequest{TimeoutSeconds: 30}); err != nil {
+				if blocked, checkErr := p.checkQuorum(ctx, rc, m); blocked || checkErr != nil {
+					return false, checkErr
+				}
 				return false, err
 			}
 		}
 		m.ChangeStep = "critical"
 	case "critical":
 		if len(s.runningMembers()) > 1 {
-			var out rmqspec.QuorumCriticalResponse
-			if err := p.call(ctx, rc, m.Name, "quorum-critical", rmqspec.EmptyRequest{}, &out); err != nil {
+			if blocked, err := p.checkQuorum(ctx, rc, m); blocked || err != nil {
 				return false, err
 			}
-			if out.Critical {
-				return false, fmt.Errorf("%w: member %s is quorum critical", engine.ErrConflict, m.Name)
-			}
+		} else if err := clearQuorumBlockers(ctx, rc, m); err != nil {
+			return false, err
 		}
 		m.ChangeStep = "drain"
 	case "drain":
@@ -596,7 +600,15 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 	}
 	return false, nil
 }
-func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *internalState, m *member) error {
+func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *internalState, m *member) (err error) {
+	previousBlock := m.RemovalBlocked
+	defer func() {
+		if m.RemovalBlocked != "" && m.RemovalBlocked != previousBlock {
+			if eventErr := warningEvent(ctx, rc, "MemberRemovalBlocked", "Member "+m.Name+": "+m.RemovalBlocked); eventErr != nil {
+				err = eventErr
+			}
+		}
+	}()
 	survivors := s.runningMembers()
 	if m.RemoveStep == "" {
 		if m.Stage == "planned" || m.Stage == "imported" {

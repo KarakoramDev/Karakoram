@@ -4,6 +4,7 @@
 import type { Schemas } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
+import { Callout } from '@/components/ui/Primitives';
 import { scheduleErrors } from '../wizard/schedules';
 
 type Schedule = Schemas['BackupSchedule'];
@@ -24,12 +25,14 @@ export interface SchedulesEditorProps {
   storages: string[];
   defaultStorage?: string;
   backupTypes: BackupType[];
+  provider: string;
 }
 
-export function SchedulesEditor({ value, onChange, storages, defaultStorage, backupTypes }: SchedulesEditorProps) {
+export function SchedulesEditor({ value, onChange, storages, defaultStorage, backupTypes, provider }: SchedulesEditorProps) {
   const update = (i: number, patch: Partial<Schedule>) => onChange(value.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   return (
     <div className="stack" style={{ gap: 12 }}>
+      <RabbitMQBackupNotice provider={provider} />
       {value.length === 0 ? <p className="small muted">No schedules. Backups can still be taken on demand.</p> : null}
       {value.map((s, i) => {
         const errors = scheduleErrors(s, value);
@@ -104,4 +107,10 @@ export function SchedulesEditor({ value, onChange, storages, defaultStorage, bac
       </div>
     </div>
   );
+}
+
+export function RabbitMQBackupNotice({ provider }: { provider?: string }) {
+  return provider === 'rabbitmq' ? <Callout tone="info" title="Definitions backups only">
+    RabbitMQ definitions backups capture broker definitions (vhosts, users, permissions, policies, and queues/exchanges/bindings metadata), not messages. They do not provide point-in-time restore. Exports contain user password hashes. Treat exports and their object storage as sensitive. See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md#definitions-backups-and-cleanup" target="_blank" rel="noreferrer">RabbitMQ backup and restore guide</a>.
+  </Callout> : null;
 }

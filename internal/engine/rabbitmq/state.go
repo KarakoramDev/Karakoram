@@ -11,6 +11,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -37,41 +38,43 @@ type internalState struct {
 	DistributionSet bool                      `json:"distributionSet"`
 }
 type member struct {
-	Name                    string           `json:"name"`
-	Volume                  string           `json:"volume"`
-	Index                   int              `json:"index"`
-	Stage                   string           `json:"stage"`
-	ServiceID               string           `json:"serviceId,omitempty"`
-	VolumeID                string           `json:"volumeId,omitempty"`
-	VolumeOrphaned          bool             `json:"volumeOrphaned,omitempty"`
-	Resume                  bool             `json:"resume,omitempty"`
-	Version                 string           `json:"version"`
-	DesiredVersion          string           `json:"desiredVersion"`
-	ConfigVersion           int64            `json:"configVersion"`
-	TLSMode                 string           `json:"tlsMode"`
-	ProvidedCertificateHash string           `json:"providedCertificateHash,omitempty"`
-	EngineConfig            string           `json:"engineConfig"`
-	EngineOptions           json.RawMessage  `json:"engineOptions,omitempty"`
-	Resources               domain.Resources `json:"resources"`
-	Disk                    domain.Resources `json:"disk"`
-	ConfigResources         domain.Resources `json:"configResources"`
-	ConfigDisk              domain.Resources `json:"configDisk"`
-	CPUModeChangedAt        time.Time        `json:"cpuModeChangedAt,omitempty"`
-	Removing                bool             `json:"removing"`
-	PublicPort              int              `json:"publicPort,omitempty"`
-	PublicHash              string           `json:"publicHash"`
-	ManagementPublic        bool             `json:"managementPublic"`
-	RemoveStep              string           `json:"removeStep,omitempty"`
-	GrowIndex               int              `json:"growIndex"`
-	Lost                    bool             `json:"lost,omitempty"`
-	RemovalBlocked          string           `json:"removalBlocked,omitempty"`
-	ChangeAction            string           `json:"changeAction,omitempty"`
-	ChangeStep              string           `json:"changeStep,omitempty"`
-	TargetVersion           string           `json:"targetVersion,omitempty"`
-	TargetResources         domain.Resources `json:"targetResources"`
-	TargetTLS               string           `json:"targetTLS,omitempty"`
-	TargetConfig            string           `json:"targetConfig,omitempty"`
-	TargetOptions           json.RawMessage  `json:"targetOptions,omitempty"`
+	Name                    string                  `json:"name"`
+	Volume                  string                  `json:"volume"`
+	Index                   int                     `json:"index"`
+	Stage                   string                  `json:"stage"`
+	ServiceID               string                  `json:"serviceId,omitempty"`
+	VolumeID                string                  `json:"volumeId,omitempty"`
+	VolumeOrphaned          bool                    `json:"volumeOrphaned,omitempty"`
+	Resume                  bool                    `json:"resume,omitempty"`
+	Version                 string                  `json:"version"`
+	DesiredVersion          string                  `json:"desiredVersion"`
+	ConfigVersion           int64                   `json:"configVersion"`
+	TLSMode                 string                  `json:"tlsMode"`
+	ProvidedCertificateHash string                  `json:"providedCertificateHash,omitempty"`
+	EngineConfig            string                  `json:"engineConfig"`
+	EngineOptions           json.RawMessage         `json:"engineOptions,omitempty"`
+	Resources               domain.Resources        `json:"resources"`
+	Disk                    domain.Resources        `json:"disk"`
+	ConfigResources         domain.Resources        `json:"configResources"`
+	ConfigDisk              domain.Resources        `json:"configDisk"`
+	CPUModeChangedAt        time.Time               `json:"cpuModeChangedAt,omitempty"`
+	Removing                bool                    `json:"removing"`
+	PublicPort              int                     `json:"publicPort,omitempty"`
+	PublicHash              string                  `json:"publicHash"`
+	ManagementPublic        bool                    `json:"managementPublic"`
+	RemoveStep              string                  `json:"removeStep,omitempty"`
+	GrowIndex               int                     `json:"growIndex"`
+	Lost                    bool                    `json:"lost,omitempty"`
+	RemovalBlocked          string                  `json:"removalBlocked,omitempty"`
+	ChangeAction            string                  `json:"changeAction,omitempty"`
+	QuorumBlockers          []rmqspec.QuorumBlocker `json:"quorumBlockers,omitempty"`
+	QuorumBlockerCount      int                     `json:"quorumBlockerCount,omitempty"`
+	ChangeStep              string                  `json:"changeStep,omitempty"`
+	TargetVersion           string                  `json:"targetVersion,omitempty"`
+	TargetResources         domain.Resources        `json:"targetResources"`
+	TargetTLS               string                  `json:"targetTLS,omitempty"`
+	TargetConfig            string                  `json:"targetConfig,omitempty"`
+	TargetOptions           json.RawMessage         `json:"targetOptions,omitempty"`
 }
 type pending struct {
 	Op        infra.Op         `json:"op"`

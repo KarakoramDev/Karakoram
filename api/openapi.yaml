@@ -2678,6 +2678,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQVhost'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2691,6 +2692,7 @@ paths:
     - name: vhost
       in: path
       required: true
+      description: Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F.
       schema:
         type: string
         minLength: 1
@@ -2750,6 +2752,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQVhost'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2850,6 +2853,7 @@ paths:
                 $ref: '#/components/schemas/CreatedRabbitMQUser'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2932,6 +2936,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQUser'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3023,6 +3028,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3036,6 +3042,7 @@ paths:
     - name: vhost
       in: path
       required: true
+      description: Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F.
       schema:
         type: string
         minLength: 1
@@ -3101,6 +3108,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3192,6 +3200,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQTopicPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3205,6 +3214,7 @@ paths:
     - name: vhost
       in: path
       required: true
+      description: Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F.
       schema:
         type: string
         minLength: 1
@@ -3270,6 +3280,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQTopicPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3361,6 +3372,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3374,6 +3386,7 @@ paths:
     - name: vhost
       in: path
       required: true
+      description: Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F.
       schema:
         type: string
         minLength: 1
@@ -3439,6 +3452,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3530,6 +3544,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3543,6 +3558,7 @@ paths:
     - name: vhost
       in: path
       required: true
+      description: Raw virtual host name, encoded exactly once as a path segment on the wire. The default host / is %2F; the literal name %2F is %252F.
       schema:
         type: string
         minLength: 1
@@ -3608,6 +3624,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -5117,7 +5134,7 @@ paths:
           description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
           schema:
             type: string
-            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
+            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
   /events/stream:
     parameters:
       - $ref: '#/components/parameters/NamespaceQuery'
@@ -5207,7 +5224,7 @@ paths:
           description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
           schema:
             type: string
-            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rbac, restores, settings]
+            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
         - name: cursor
           in: query
           schema:
@@ -6371,6 +6388,14 @@ components:
           type: array
           items:
             type: string
+        engineOptions:
+          type: object
+          additionalProperties: true
+          description: Provider-specific engine option descriptions and constraints, such as plugin groups, dependencies, always-enabled plugins and management exposure settings.
+        engineConfig:
+          type: object
+          additionalProperties: true
+          description: Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics.
       required:
         - name
         - displayName
@@ -7076,6 +7101,8 @@ components:
     RabbitMQUserWrite:
       type: object
       additionalProperties: false
+      not:
+        required: [password, passwordHash]
       properties:
         name:
           type: string
@@ -7105,7 +7132,7 @@ components:
         generatedPassword:
           type: string
           readOnly: true
-          description: Present only when a password was generated at creation; store it securely once.
+          description: Present only when a password was generated at creation. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
       required: [name, tags]
     RabbitMQPermission:
       type: object

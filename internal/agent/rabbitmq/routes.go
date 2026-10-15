@@ -301,23 +301,7 @@ func (e *Runner) execute(ctx context.Context, n *agent.Node, action string, requ
 				out = data[bytes.LastIndexByte(data, '\n')+1:]
 			}
 		}
-		var result struct {
-			Result string            `json:"result"`
-			Queues []json.RawMessage `json:"queues"`
-		}
-		if parseErr := json.Unmarshal(out, &result); parseErr != nil {
-			return nil, errors.Join(err, parseErr)
-		}
-		if err != nil {
-			if result.Result == "error" && len(result.Queues) > 0 {
-				return rmqspec.QuorumCriticalResponse{Critical: true}, nil
-			}
-			return nil, err
-		}
-		if result.Result != "ok" {
-			return nil, errors.New("unexpected quorum check result")
-		}
-		return rmqspec.QuorumCriticalResponse{}, nil
+		return parseQuorumCritical(out, err)
 	case "drain":
 		return ok, run("rabbitmq-upgrade", "drain")
 	case "revive":
