@@ -6,6 +6,8 @@ package rabbitmq
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -94,6 +96,35 @@ func TestCatalogConfigMatchesValidation(t *testing.T) {
 	}
 	if err := validateEngineConfig("# comment\nconsumer_timeout = 600000"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestManagedConfigDocumentationMatchesPrefixes(t *testing.T) {
+	guide, err := os.ReadFile("../../../docs/user-guide/rabbitmq.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, table, ok := strings.Cut(string(guide), "| Managed area | Keys / prefixes |\n")
+	if !ok {
+		t.Fatal("managed configuration table is missing")
+	}
+	table, _, _ = strings.Cut(table, "\n\n")
+	codeSpan := regexp.MustCompile("`([^`]+)`")
+	var documented []string
+	for _, row := range strings.Split(table, "\n") {
+		cells := strings.Split(row, "|")
+		if len(cells) != 4 {
+			t.Fatalf("invalid managed configuration table row: %q", row)
+		}
+		for _, match := range codeSpan.FindAllStringSubmatch(cells[2], -1) {
+			documented = append(documented, match[1])
+		}
+	}
+	expected := slices.Clone(managedConfigPrefixes)
+	slices.Sort(expected)
+	slices.Sort(documented)
+	if !slices.Equal(documented, expected) {
+		t.Fatalf("managed configuration documentation differs from validation:\ndocumented: %v\nexpected: %v", documented, expected)
 	}
 }
 

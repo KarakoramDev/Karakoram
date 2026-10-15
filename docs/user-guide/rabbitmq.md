@@ -91,13 +91,13 @@ Each optional management extension requires its corresponding base plugin in the
 
 | Managed area | Keys / prefixes |
 | --- | --- |
-| Listeners and TLS | `listeners.`, `ssl_options.`, `management.tcp.`, `management.ssl.`, `prometheus.`, `distribution.` |
+| Listeners and TLS | `listeners.`, `ssl_options.`, `management.listener.`, `management.tcp.`, `management.ssl.`, `prometheus.`, `distribution.`, `stream.listeners.`, `stream.replication.`, `stream.ssl.`, `osiris.` |
 | Discovery and queue defaults | `cluster_formation.`, `quorum_queue.initial_cluster_size`, `default_queue_type` |
-| Resource limits and logs | `vm_memory_high_watermark*`, `total_memory_available_override_value*`, `disk_free_limit*`, `log.` |
-| Credentials and authentication | `default_user*`, `default_pass*`, `loopback_users*`, `auth_backends*`, `ssl_cert_login*` |
-| Definitions loading | `management.load_definitions*`, `load_definitions*`, `definitions.` |
+| Resource limits and logs | `vm_memory_high_watermark`, `total_memory_available_override_value`, `disk_free_limit`, `log.` |
+| Credentials and authentication | `default_user`, `default_pass`, `loopback_users`, `auth_backends`, `ssl_cert_login` |
+| Definitions loading | `management.load_definitions`, `load_definitions`, `definitions.` |
 
-The corresponding bare keys are also protected. Other syntactically valid settings are still subject to RabbitMQ's own validation; a setting accepted by Karakoram can fail broker startup. Configuration, plugin, certificate and relevant resource changes roll through nodes rather than restarting every broker together.
+Each entry is a literal prefix: any key starting with it is protected, as is the corresponding bare key when the prefix ends with a dot. Other syntactically valid settings are still subject to RabbitMQ's own validation; a setting accepted by Karakoram can fail broker startup. Configuration, plugin, certificate and relevant resource changes roll through nodes rather than restarting every broker together.
 
 ## TLS and connectivity
 
