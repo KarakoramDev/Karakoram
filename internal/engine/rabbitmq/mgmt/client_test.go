@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
 
@@ -259,5 +260,54 @@ func TestWritesWithoutResponseAcceptAnyRepresentation(t *testing.T) {
 	}
 	if limits, err := c.GetVhostLimits(ctx, "app"); err != nil || len(limits) != 1 || limits[0].Value["max-queues"] != 5 {
 		t.Fatalf("limits=%+v err=%v", limits, err)
+	}
+}
+
+func TestPermissionNativeRejectionReasons(t *testing.T) {
+	for _, resource := range []string{"permissions", "topic-permissions"} {
+		for _, tc := range []struct {
+			name, body, field, reason string
+		}{
+			{"missing identity", `{"error":"bad_request","reason":"vhost_or_user_not_found"}`, "user,vhost", domain.ReasonNotFound},
+			{"regex", `{"error":"bad_request","reason":"invalid regexp: submitted-secret"}`, "write,read", domain.ReasonInvalid},
+			{"unknown", `{"error":"bad_request","reason":"submitted-secret"}`, "", ""},
+		} {
+			t.Run(resource+"/"+tc.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprint(w, tc.body)
+				}))
+				defer srv.Close()
+				c, err := New(srv.URL, "admin", "secret", srv.Client())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if resource == "permissions" {
+					err = c.PutPermission(t.Context(), Permission{Vhost: "/", User: "missing"})
+				} else {
+					err = c.PutTopicPermission(t.Context(), TopicPermission{Vhost: "/", User: "missing"})
+				}
+				if !errors.Is(err, engine.ErrInvalid) || strings.Contains(err.Error(), "submitted-secret") {
+					t.Fatal(err)
+				}
+				var field *engine.ValidationError
+				if tc.field == "" {
+					if errors.As(err, &field) {
+						t.Fatal("unknown rejection misreported as a field error", field)
+					}
+					return
+				}
+				wantField := tc.field
+				if tc.name == "regex" && resource == "permissions" {
+					wantField = "configure,write,read"
+				}
+				if !errors.As(err, &field) || field.Field != wantField || field.Reason != tc.reason {
+					t.Fatalf("error=%v field=%+v", err, field)
+				}
+				if strings.Contains(field.Message, "submitted-secret") || (tc.name == "missing identity" && !strings.Contains(field.Message, "user or vhost does not exist")) {
+					t.Fatal(field)
+				}
+			})
+		}
 	}
 }
