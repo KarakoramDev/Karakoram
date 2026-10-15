@@ -64,6 +64,9 @@ The agent renders product configuration below `DATA_DIR/karakoram/config` and ru
 Kibana deployment readiness requires local `/api/status` to return HTTP 200,
 not merely an open port. Startup HTTP 503 responses keep the deployment pending
 until Kibana's application initialization finishes; redirects are not accepted.
+`server.rewriteBasePath` is managed as `false` so this local status endpoint
+remains unprefixed. If you set `server.basePath`, your reverse proxy must strip
+that prefix before forwarding requests to Kibana.
 
 ## Create
 

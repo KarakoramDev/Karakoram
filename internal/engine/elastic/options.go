@@ -92,7 +92,7 @@ func (o Options) Validate() error {
 }
 
 var esManaged = []string{"cluster.name", "node.name", "node.roles", "path.", "network.", "http.port", "transport.port", "discovery.", "cluster.initial_master_nodes", "xpack.security.", "s3.client.", "bootstrap.memory_lock", "readiness."}
-var kibanaManaged = []string{"server.host", "server.port", "server.publicBaseUrl", "elasticsearch.", "xpack.security.encryptionKey", "xpack.encryptedSavedObjects.", "xpack.reporting.encryptionKey", "path.data"}
+var kibanaManaged = []string{"server.host", "server.port", "server.publicBaseUrl", "server.rewriteBasePath", "elasticsearch.", "xpack.security.encryptionKey", "xpack.encryptedSavedObjects.", "xpack.reporting.encryptionKey", "path.data"}
 
 func validateSettings(component string, settings map[string]any, managed []string) error {
 	flat, err := FlattenSettings(settings)

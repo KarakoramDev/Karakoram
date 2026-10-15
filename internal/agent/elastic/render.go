@@ -88,7 +88,7 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 			return nil, p, errors.New("missing Kibana spec")
 		}
 		config = map[string]any{
-			"server.host": "::", "server.port": 5601, "elasticsearch.hosts": k.ESHosts,
+			"server.host": "::", "server.port": 5601, "server.rewriteBasePath": false, "elasticsearch.hosts": k.ESHosts,
 			"elasticsearch.serviceAccountToken":        k.ServiceAccountToken,
 			"elasticsearch.ssl.certificateAuthorities": []string{ca}, "elasticsearch.ssl.verificationMode": "full",
 			"xpack.security.encryptionKey":              k.SecurityKey,
@@ -109,7 +109,7 @@ func render(s agentspec.Spec, data, home, cluster, member string) (map[string][]
 		files["config/node.options"] = []byte(opts)
 		p.Env = []string{"KBN_PATH_CONF=" + conf}
 		name, extra = "kibana.yml", k.Settings
-		reserved = []string{"server.host", "server.port", "server.publicBaseUrl", "elasticsearch", "xpack.security.encryptionKey", "xpack.security.secureCookies", "xpack.encryptedSavedObjects.encryptionKey", "xpack.reporting.encryptionKey", "path.data", "telemetry", "logging"}
+		reserved = []string{"server.host", "server.port", "server.publicBaseUrl", "server.rewriteBasePath", "elasticsearch", "xpack.security.encryptionKey", "xpack.security.secureCookies", "xpack.encryptedSavedObjects.encryptionKey", "xpack.reporting.encryptionKey", "path.data", "telemetry", "logging"}
 	case agentspec.ComponentLogstash:
 		l := s.Logstash
 		if l == nil {

@@ -510,6 +510,25 @@ func TestComponentConfigs(t *testing.T) {
 	}
 }
 
+func TestKibanaBasePathKeepsLocalStatusUnprefixed(t *testing.T) {
+	r, h := fixture(t)
+	spec := agentspec.Spec{Component: "kibana", Version: "9.5.5", Kibana: &agentspec.KibanaSpec{Settings: map[string]any{"server.basePath": "/kibana"}}}
+	apply(t, r, h, spec)
+	config := readYAML(t, h, "kibana.yml")
+	if config["server.basePath"] != "/kibana" || config["server.rewriteBasePath"] != false {
+		t.Fatal("local readiness requires proxy-stripped base paths", config)
+	}
+	for _, settings := range []map[string]any{
+		{"server.rewriteBasePath": true},
+		{"server": map[string]any{"rewriteBasePath": true}},
+	} {
+		spec.Kibana.Settings = settings
+		if _, err := r.Apply(t.Context(), h, spec, "test", "testkb"); err == nil || !strings.Contains(err.Error(), "managed") {
+			t.Fatal("managed base-path rewrite accepted", err)
+		}
+	}
+}
+
 func TestReadiness(t *testing.T) {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
