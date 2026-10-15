@@ -124,7 +124,7 @@ type member struct {
 	Containers int              `json:"containers,omitempty"`
 	// Removing marks scale-down or replacement removal in progress.
 	Removing bool `json:"removing,omitempty"`
-	// AllocationExcluded records an exclusion added by this removal, not an operator.
+	// AllocationExcluded records managed exclusion intent before its ES write.
 	AllocationExcluded bool `json:"allocationExcluded,omitempty"`
 	// DrainIdleObservations counts consecutive yellow, idle observations with
 	// the same remaining shard count; transient relocation gaps are not blocks.

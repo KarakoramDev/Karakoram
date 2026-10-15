@@ -200,7 +200,12 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return err
 		}
 		if !slices.Contains(names, m.Name) {
-			m.AllocationExcluded = true
+			if !m.AllocationExcluded {
+				// Commit ownership in a separate reconciliation before the ES
+				// write, so cancellation can recover an interrupted write.
+				m.AllocationExcluded = true
+				return nil
+			}
 			names = append(names, m.Name)
 		}
 		if err = c.SetAllocationExcludeNames(ctx, names); err != nil {

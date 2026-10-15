@@ -1646,6 +1646,16 @@ func TestRemovalPreservesOperatorExclusions(t *testing.T) {
 		if err := p.removeStep(context.Background(), rc, s, m); err != nil {
 			t.Fatal(err)
 		}
+		if m.Stage == stageJoined {
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = load(rc.Cluster)
+			m = s.find("demon2")
+			if err := p.removeStep(context.Background(), rc, s, m); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if es.persistent["cluster.routing.allocation.exclude._name"] != "operator,demon2" || es.transient["cluster.routing.allocation.exclude._name"] != nil || m.AllocationExcluded == alreadyExcluded {
 			t.Fatal("effective drain exclusion was not applied with ownership", es.persistent, es.transient, m)
 		}

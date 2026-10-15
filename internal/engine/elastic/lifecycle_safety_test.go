@@ -53,6 +53,46 @@ func TestDedicatedMasterScaleDownCompletesWithoutAllocationRows(t *testing.T) {
 	}
 }
 
+func TestRemovalRecordsExclusionOwnershipBeforeNativeWrite(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 3)
+	coreConverge(t, p, rc, f)
+	es.persistent["cluster.routing.allocation.exclude._name"] = "operator"
+	rc.Cluster.Spec.Components.Engine.Replicas = 2
+	for range 2 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := s.find("demon2")
+	if !m.Removing || !m.AllocationExcluded || m.Stage != stageJoined || es.persistent["cluster.routing.allocation.exclude._name"] != "operator" {
+		t.Fatal("exclusion was written before ownership was checkpointed", m, es.persistent)
+	}
+	// Apply the native write, then discard the in-memory stage transition to
+	// model interruption before the next state checkpoint.
+	if err := p.removeStep(t.Context(), rc, s, m); err != nil {
+		t.Fatal(err)
+	}
+	if es.persistent["cluster.routing.allocation.exclude._name"] != "operator,demon2" {
+		t.Fatal("native exclusion was not applied", es.persistent)
+	}
+	rc.Cluster.Spec.Components.Engine.Replicas = 3
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	s, err = load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = s.find("demon2")
+	if m.Removing || m.AllocationExcluded || es.persistent["cluster.routing.allocation.exclude._name"] != "operator" {
+		t.Fatal("cancellation lost exclusion ownership after interruption", m, es.persistent)
+	}
+}
+
 func TestScaleUpCancelsUnfinishedDrain(t *testing.T) {
 	for _, stage := range []string{stageJoined, stageDraining} {
 		t.Run(stage, func(t *testing.T) {
@@ -415,6 +455,11 @@ func TestRemovalPreflightUsesProjectedAutoExpandReplicas(t *testing.T) {
 			es.autoExpand, m.Stage = tc.setting, stageJoined
 			if err := p.removeStep(context.Background(), rc, s, m); err != nil {
 				t.Fatal(err)
+			}
+			if !tc.blocked && m.Stage == stageJoined {
+				if err := p.removeStep(context.Background(), rc, s, m); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if got := s.DrainBlocked != ""; got != tc.blocked {
 				t.Fatalf("blocked=%v, want %v", got, tc.blocked)

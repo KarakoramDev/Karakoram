@@ -549,6 +549,8 @@ Yellow health alone does not prove a drain is blocked: the removing node must re
 
 Dedicated masters do not hold shards and are absent from Elasticsearch's allocation inventory. Their scale-down proceeds to voting exclusion without waiting for a data-node allocation row; primary-shard safety checks still apply before removal.
 
+Managed allocation-exclusion ownership is checkpointed before sending the exclusion to Elasticsearch. Cancellation therefore removes its own exclusion even if the native write was interrupted before the drain stage was recorded, while preserving exclusions supplied by the operator.
+
 Removal never advances to voting exclusion or runtime/volume deletion while any primary shard is unassigned (red health), including for a node that disappeared mid-drain and for retried platform deletions. Auto-expanded replica settings are evaluated for the topology after removal. Restarts, replacements, backups, restores and credential/TLS rotations submitted before the cluster first forms fail immediately instead of waiting behind provisioning.
 
 RAM/heap or restart-relevant Elasticsearch settings use rolling maintenance. CPU/disk-only resource changes use nondisruptive resource updates, subject to platform constraints. Optional component replica changes adjust container count; zero deletes that component service and its ephemeral disk/queue contents.
