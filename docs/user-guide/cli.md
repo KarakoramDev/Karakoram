@@ -6,14 +6,17 @@
 
 ## Build and install
 
-From a release checkout, build and install the CLI with Go 1.24 or newer:
+Prebuilt binaries for MongoDB, RabbitMQ and Elasticsearch are attached to
+[GitHub releases](https://github.com/KarakoramDev/Karakoram/releases) starting
+with **v0.1.0**. Follow [download and checksum verification](../install.md#install-karactl)
+before installing. Building from a release checkout with Go 1.24 or newer remains an option:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl
 install -Dm755 /tmp/karactl "$HOME/.local/bin/karactl"
 ```
 
-Put `$HOME/.local/bin` on `PATH`, then run `karactl --help`. Alternatively, `make build` produces `bin/karactl`. The `rabbitmq` command group requires a binary built from a release containing RabbitMQ support; connecting an older binary to a newer server does not add commands. See the [RabbitMQ walkthrough](rabbitmq.md) for first-cluster, TLS and least-privilege examples.
+Put `$HOME/.local/bin` on `PATH`, then run `karactl --help`. Alternatively, `make build` produces `bin/karactl`. An older binary does not gain commands by connecting to a newer server. See the [RabbitMQ walkthrough](rabbitmq.md) and [Elasticsearch guide](elasticsearch.md) for engine-specific setup.
 
 ## Login and contexts
 
@@ -43,7 +46,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `-o table` is default; resource details use hierarchical sections rather than flattened nested cells, while lists stay compact and summarize nested fields with a hint to structured output. Numbers use decimal rather than scientific notation. Provider lists summarize engines, versions/defaults, topology types and preset names. Provider details show one row per topology with key defaults, separate limits and `from → to` upgrade paths; UI/component schemas and full resource defaults remain available with `-o json`/`-o yaml`. Status conditions appear as rows. Structured output preserves the full response unchanged.
 - Small scalar-only objects in list columns are shown inline (up to three fields and forty characters): resource targets use `kind/name`, and other objects use `key=value` pairs. Larger or nested objects show a field/item count instead.
 - `karactl openapi > openapi.yaml` downloads the running server's authoritative OpenAPI document as raw YAML. This public endpoint does not require login.
-- `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. Use protected input for secret fields. When supplied, the file defines the request body instead of convenience body flags.
+- `-f FILE` normally accepts API-shaped YAML/JSON; `-f -` reads stdin. Elasticsearch role/API-key commands instead accept their documented JSON definitions/descriptors. Use protected input for secret fields. When supplied, an API request file defines the body instead of convenience body flags.
 - Cluster **create** files contain `name` and `spec`; **edit** replaces the full `spec` and can open the configured editor when no file is supplied; **patch/scale/upgrade** files have `{spec: {...}}` merge-patch shape. Arrays such as schedules are replaced, not appended.
 - Convenience create flags default to the `psmdb` provider and its topology/resource defaults. `--version` is optional: when omitted or empty, the CLI omits `spec.version` so the server applies the selected provider's catalog default. Supply `--version VERSION` to pin an exact version. For another provider, presets or optional components, run `karactl providers get <provider> -o json`, copy a preset's `spec` into a JSON/YAML body with `name` and `spec`, customize components, then submit with `clusters create -f FILE`. There is no `--preset` flag.
 - `clusters create --backup-storage NAME` sets the default backup destination. A `--schedule` can instead supply its own `storage=NAME`; without `--backup-storage`, the CLI omits the optional default storage field, including for `--pitr` alone. Each schedule still needs either its own storage or the default, and the server validates PITR prerequisites.
@@ -104,6 +107,11 @@ The default output is a table; `-o json` preserves the structured `{items: [...]
 The `rabbitmq` group administers RabbitMQ clusters through their Management API. It accepts the same `--namespace/-n` selection and `-o table|json|yaml` output options as other cluster commands. All requests require the corresponding `database-users` read/create/update/delete permission on the cluster; other providers return HTTP 409.
 
 Each of `vhosts`, `users`, `permissions`, `topic-permissions`, `policies`, and `operator-policies` has `list`, `get`, `create`, `update`, and `delete` commands. Creation and update use API-shaped YAML/JSON with `-f FILE` or `-f -`. An update body must match the identities supplied in its arguments.
+
+For all six groups, `create` and `update` require `-f, --file string`
+(`API request YAML/JSON file ('-' for stdin)`); `delete` accepts `-y, --yes`
+to confirm without stdin. `list` and `get` have no command-specific flags.
+RabbitMQ lists do **not** accept `--limit` or `--cursor`.
 
 ```sh
 karactl rabbitmq vhosts list brokers -n production -o json
@@ -239,7 +247,9 @@ karactl
     rotate-token <namespace>
     update <namespace>
     validate <namespace>
+  openapi
   operations
+    cancel <id>
     cluster <cluster>
     get <id>
     list
@@ -277,16 +287,16 @@ karactl
       update <cluster> <vhost> <user>
     users
       create <cluster>
-      delete <cluster> <user>
-      get <cluster> <user>
+      delete <cluster> <name>
+      get <cluster> <name>
       list <cluster>
-      update <cluster> <user>
+      update <cluster> <name>
     vhosts
       create <cluster>
-      delete <cluster> <vhost>
-      get <cluster> <vhost>
+      delete <cluster> <name>
+      get <cluster> <name>
       list <cluster>
-      update <cluster> <vhost>
+      update <cluster> <name>
   rbac
     can
     policy
@@ -329,6 +339,7 @@ karactl
       --csrf-token string          Session CSRF token (advanced auth flows; not saved)
   -h, --help                       help for karactl
       --insecure-skip-tls-verify   Disable server certificate verification (unsafe)
+  -n, --namespace string           Namespace (overrides context; collections default to all)
   -o, --output string              Output: table, json, yaml (default "table")
       --server string              Server URL (overrides KARAKORAM_SERVER and context)
       --token string               API token (prefer KARAKORAM_TOKEN to avoid shell history)
@@ -390,9 +401,10 @@ Commands absent below have no additional flags except confirmation: destructive 
       --type string      Provider backup type (default "logical")
 ```
 
-MongoDB supports `logical` and `physical`; Elasticsearch supports only
-`snapshot`. Inspect `karactl providers get elasticsearch -o json` for the running
-catalog and pass `--type snapshot` explicitly:
+MongoDB supports `logical` and `physical`; RabbitMQ supports only `definitions`;
+Elasticsearch supports only `snapshot`. Pass `--type definitions` for RabbitMQ
+or `--type snapshot` for Elasticsearch; the CLI default remains `logical`.
+Inspect `karactl providers get PROVIDER -o json` for the running catalog:
 
 ```sh
 karactl backups create search beforechange --type snapshot --storage archive
@@ -461,6 +473,7 @@ for native repositories, retention and recovery.
       --schedule stringArray     Schedule: NAME=CRON,type=TYPE,retain=COUNT[,storage=NAME]
       --shards int               Shard count (default 1)
       --source-cluster string    Source cluster for initial data
+      --source-namespace string  Namespace of the initial data source (defaults to target)
       --start-cpu float          CPU cores (default 1)
       --timeout duration         Maximum wait duration (default 30m0s)
       --tls-mode string          disabled, preferTLS or requireTLS (default "requireTLS")
@@ -469,12 +482,26 @@ for native repositories, retention and recovery.
       --wait                     Wait for operation completion and observed cluster generation
 ```
 
-The default provider is explicitly `psmdb`. When `--provider` selects another
-engine, create sends no implicit MongoDB topology, replica-count, or resource
-defaults; the provider fills omitted settings. Use `--topology` and `--replicas`
-to supply generic overrides, and `--engine-options '{"option":true}'` or
-`--engine-options @options.json` for a provider-validated JSON object. Supported
-backup types and operations are advertised by `karactl providers get PROVIDER`.
+The provider names are `psmdb` (MongoDB, the default), `rabbitmq` and
+`elasticsearch`. When `--provider` selects another engine, create sends no
+implicit MongoDB topology, replica-count, or resource defaults; the provider
+fills omitted settings. Use `--topology` and `--replicas` for generic overrides:
+MongoDB uses `replicaSet` or `sharded`, RabbitMQ uses `cluster`, and Elasticsearch
+uses `cluster` or `dedicatedMasters`. `--engine-options '{"option":true}'` or
+`--engine-options @options.json` supplies a provider-validated JSON object.
+`--engine-config FILE` supplies provider-supported configuration overrides;
+MongoDB sharding and PBM/PITR flags do not apply to other engines.
+Supported backup types and operations are advertised by `karactl providers get PROVIDER`.
+
+For example, create a private RabbitMQ cluster with catalog defaults:
+
+```sh
+karactl clusters create brokers --provider rabbitmq --topology cluster --replicas 3 --wait
+```
+
+Use a complete `-f` body for presets, optional components or component-specific
+resource sizing, as in the [RabbitMQ creation example](rabbitmq.md#create-and-configure)
+and the Elasticsearch example below.
 
 #### Elasticsearch create from a file
 
@@ -886,6 +913,17 @@ latest result. Storage reads include optional `verification` only after a check.
 Elasticsearch native users, roles and API keys have a separate command group and
 use the `database-users` RBAC resource with read/create/update/delete actions.
 Every command accepts the inherited namespace and output flags.
+
+Command-specific flags (inherited globals and `--help` omitted):
+
+| Commands | Flags |
+| --- | --- |
+| `users list`, `roles list`, `api-keys list` | `--cursor string`, `--limit int` (default `100`) |
+| `users get`, `roles get` | None |
+| `users create`, `users update` | `--disabled`, `--email string`, `--full-name string`, `--password-stdin`, `--roles strings` (comma-separated names) |
+| `roles create`, `roles update` | `-f, --file string` (role definition JSON; `-` reads stdin) |
+| `api-keys create` | `--expiration string`, `-f, --file string` (role descriptors JSON map; `-` reads stdin), `--name string` |
+| `users delete`, `roles delete`, `api-keys invalidate` | `-y, --yes` |
 
 ```sh
 karactl elasticsearch users list search -n production -o json

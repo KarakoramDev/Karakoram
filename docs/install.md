@@ -266,6 +266,36 @@ Both templates use `#yamlPreprocessor=on` to generate the bootstrap password and
 master key. If adding multi-argument preprocessor functions yourself, include a
 space after each comma; Zerops's parser requires it.
 
+## Install karactl
+
+`karactl` binaries for all three engines are attached to
+[GitHub releases](https://github.com/KarakoramDev/Karakoram/releases) starting
+with **v0.1.0**. Assets are available for Linux and macOS (`linux`/`darwin`,
+`amd64`/`arm64`) and Windows (`windows-amd64.exe`).
+For example, download and verify the Linux amd64 binary before installing:
+
+```sh
+RELEASE=v0.1.0
+ASSET=karactl-linux-amd64
+BASE="https://github.com/KarakoramDev/Karakoram/releases/download/$RELEASE"
+curl --fail --location --remote-name "$BASE/$ASSET"
+curl --fail --location --remote-name "$BASE/checksums.txt"
+# Check the selected asset; the manifest also lists the other platform binaries.
+sha256sum --ignore-missing -c checksums.txt && \
+  install -Dm755 "$ASSET" "$HOME/.local/bin/karactl"
+```
+
+Run checksum verification in the download directory and proceed only after the
+selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing
+checksums.txt`; on Windows use a SHA-256 verifier against the same manifest.
+Put `$HOME/.local/bin` on `PATH` for the POSIX example. Building from source
+with Go 1.24 or newer remains an option:
+
+```sh
+go build -o /tmp/karactl ./cmd/karactl
+install -Dm755 /tmp/karactl "$HOME/.local/bin/karactl"
+```
+
 ## First sign-in and CLI connection
 
 1. Wait until the `karakoram` service is `ACTIVE`. Open its HTTPS subdomain from
@@ -285,12 +315,11 @@ space after each comma; Zerops's parser requires it.
    recovery](operations.md#recovering-local-admin-access): set the temporary
    `KARAKORAM_RECOVERY_PASSWORD` service secret, restart, sign in and change it,
    then delete the secret and restart. No container exec or fresh install is needed.
-3. Build the CLI locally with Go 1.24 or newer:
+3. [Install the CLI](#install-karactl), then connect:
 
    ```sh
-   go build -o karactl ./cmd/karactl
-   ./karactl --server https://YOUR-SUBDOMAIN --context production login --username admin
-   ./karactl --context production health
+   karactl --server https://YOUR-SUBDOMAIN --context production login --username admin
+   karactl --context production health
    ```
 
    Login prompts without echoing the password, creates a Karakoram API token,
@@ -303,7 +332,7 @@ space after each comma; Zerops's parser requires it.
    ```sh
    export KARAKORAM_SERVER='https://YOUR-SUBDOMAIN'
    # Set KARAKORAM_TOKEN securely in the calling environment, without logging it.
-   ./karactl health
+   karactl health
    ```
 
    Karakoram API tokens are **not Zerops integration tokens**. They inherit the
@@ -378,9 +407,10 @@ and [operations](operations.md#namespace-and-relay-operations).
 - Port 9443 is the control plane's authenticated, private agent TLS endpoint.
   Declaring a TCP port does not create public TCP routing. Do not publish 9443.
   Member agent traffic uses pinned internal CAs and member-specific tokens.
-- Cluster database ports are private by default. Public database access is a
+- Engine endpoints are private by default. MongoDB/AMQP public TCP access is a
   separate opt-in operation with an IP allowlist; an HTTP subdomain does not
-  expose MongoDB TCP traffic. Public UI/CLI access needs no Zerops VPN.
+  expose those protocols. RabbitMQ management and Kibana/APM public HTTPS are
+  separate engine-specific options. Public Karakoram UI/CLI access needs no Zerops VPN.
 - The project token can manage services and read service secrets in this project.
   Treat Karakoram and project full-access users as trusted infrastructure
   administrators. Retain Zerops's default service environment isolation.
@@ -390,8 +420,10 @@ and [operations](operations.md#namespace-and-relay-operations).
 - The control plane and Local Storage are not highly available. Zerops does not
   guarantee database-member anti-affinity across physical hosts. Replica count
   alone is not a host-failure-tolerance guarantee.
-- Back up the control-plane state and master key, and configure PBM backups for
-  database data separately. See [Upgrading and recovering Karakoram](upgrade.md).
+- Back up the control-plane state and master key separately from engine data.
+  Use PBM for MongoDB, native snapshots for Elasticsearch and definitions backups
+  for RabbitMQ (which do not contain messages). See
+  [Upgrading and recovering Karakoram](upgrade.md) and each engine guide.
 
 ## Troubleshooting
 

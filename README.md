@@ -11,21 +11,37 @@
 
 <p align="center"><a href="https://karakoram.dev">karakoram.dev</a> · <a href="#documentation-index">Documentation</a> · <a href="https://github.com/KarakoramDev/Karakoram/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
-**Self-hosted database and messaging orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) with Percona Backup for MongoDB (PBM), RabbitMQ, and [Elasticsearch with optional Kibana, Logstash and APM Server](docs/user-guide/elasticsearch.md), across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
+**Self-hosted MongoDB, RabbitMQ and Elasticsearch orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) with Percona Backup for MongoDB (PBM), RabbitMQ, and Elasticsearch with optional Kibana, Logstash and APM Server across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
 
 You own the infrastructure, credentials, data and recovery procedures. Zerops is the infrastructure backend, not the operator of your databases. Project site: [karakoram.dev](https://karakoram.dev) · Source: [github.com/KarakoramDev/Karakoram](https://github.com/KarakoramDev/Karakoram).
 
 ## Features
+
+### MongoDB
 
 - Replica sets with 1/3/5/7 members, initial-sync-aware scaling/replacement, quorum-aware removal and retained-volume suspend/resume.
 - Sharded clusters with config-server and shard replica sets, mongos routers, shard addition and balancer controls.
 - S3-compatible PBM logical/physical backups, UTC schedules and count retention, PITR, in-place restore and clone.
 - CPU/RAM configuration, persistent disk growth, rolling binary upgrades/restarts and explicit FCV promotion.
 - Database users/roles, independently rotatable system accounts, keyfile authentication, generated or supplied TLS certificates and opt-in public TCP access.
-- Elasticsearch combined-node or dedicated-master topologies, native users/roles/API keys, CA-verified HTTPS, S3 snapshots/restore and optional same-version Elastic Stack components. See the [Elasticsearch guide](docs/user-guide/elasticsearch.md) for licensing and operating constraints.
+
+### RabbitMQ
+
+- [RabbitMQ 4.3 clusters](docs/user-guide/rabbitmq.md) with persistent per-node storage and quorum-gated rolling scaling, upgrades, restarts and replacement.
+- Vhost, user, permission, topic-permission, policy and operator-policy administration; AMQPS and optional public management.
+- S3 definitions backups and restore (**no messages or PITR**).
+
+### Elasticsearch
+
+- [Combined-node or dedicated-master topologies](docs/user-guide/elasticsearch.md), rolling maintenance and shard-draining scale-down.
+- Native users, roles and API keys, CA-verified HTTPS, S3 snapshots and restore.
+- Optional same-version Kibana, Logstash and APM Server. Review the engine guide's licensing and operating constraints.
+
+### Across engines
+
+- Catalog-driven creation, CPU/RAM configuration, persistent disk growth and capability-gated operations.
 - Per-member monitoring, authenticated Prometheus output, actor-attributed events/audit activity and operations, logs, local accounts, OIDC, namespace-aware RBAC and owner-scoped API tokens.
 - Multi-project [namespaces](docs/user-guide/namespaces.md), project-scoped tokens, outbound authenticated relays and permission-gated cross-namespace restore/clone.
-- [RabbitMQ 4.3 clusters](docs/user-guide/rabbitmq.md) with persistent per-node storage, quorum-gated rolling changes, vhost/user/permission/policy administration, AMQPS, optional public management and definitions backups (**no messages or PITR**).
 
 **Read the [limitations](docs/limitations.md) before production use.** Zerops does not guarantee physical-host anti-affinity, Local Storage is single-host and the control plane has one replica. Healthy voters do not prove independent failure domains. Public replica-set routing does not automatically solve external member discovery. Configure backups and exercise recovery before loading important data.
 
@@ -46,7 +62,7 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
 zcli service enable-subdomain karakoram -P "$PROJECT_ID"
 ```
 
-Open the service's HTTPS subdomain. Sign in as **admin** with the generated password from its secret variables, complete the required password change, then sign in again. Create a cluster in the UI using an advertised version, keep TLS required and public exposure disabled, and wait for observed readiness.
+Open the service's HTTPS subdomain. Sign in as **admin** with the generated password from its secret variables, complete the required password change, then sign in again. In the create wizard, choose **MongoDB**, **RabbitMQ** or **Elasticsearch**, use an advertised version, keep TLS required and public exposure disabled, and wait for observed readiness. Follow the [MongoDB replica-set](docs/user-guide/replica-sets.md), [RabbitMQ](docs/user-guide/rabbitmq.md) or [Elasticsearch](docs/user-guide/elasticsearch.md) guide for engine-specific setup.
 
 See the [installation guide](docs/install.md) for prerequisites, secret handling, custom domains, CLI login and the Git-import alternative using `deploy/zerops/import.yaml`.
 
@@ -72,11 +88,11 @@ are repository paths, not a standalone documentation-bundle layout.
 
 - [Installation](docs/install.md), [control-plane upgrades](docs/upgrade.md), [architecture](docs/architecture.md) and [architecture decisions](docs/adr/README.md)
 - [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)
-- [Replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
+- MongoDB: [replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
 - [RabbitMQ clusters, access, TLS and definitions backups](docs/user-guide/rabbitmq.md)
 - [Elasticsearch and the Elastic Stack](docs/user-guide/elasticsearch.md): topologies, connections, native access, snapshots and maintenance
-- [Backups, PITR, restore and clone](docs/user-guide/backups-and-restore.md)
-- [Scaling and upgrades](docs/user-guide/scaling-and-upgrades.md), [database users, TLS and access](docs/user-guide/users-tls-access.md), [monitoring](docs/user-guide/monitoring.md)
+- MongoDB: [backups, PITR, restore and clone](docs/user-guide/backups-and-restore.md), [scaling and upgrades](docs/user-guide/scaling-and-upgrades.md), [database users, TLS and access](docs/user-guide/users-tls-access.md)
+- [Monitoring](docs/user-guide/monitoring.md)
 - [Web UI](docs/user-guide/web-ui.md), [RBAC and authentication](docs/user-guide/rbac-and-auth.md), [REST API](docs/user-guide/api.md), [CLI reference](docs/user-guide/cli.md)
 - [Day-2 operations and recovery](docs/operations.md), [security and vulnerability reporting](docs/security.md), [limitations](docs/limitations.md), [verification matrix](docs/verification.md)
 - [Contributing](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md)

@@ -207,7 +207,7 @@ karactl rabbitmq permissions create brokers -f permission.yaml
 karactl rabbitmq policies list brokers
 ```
 
-All six command groups have `list/get/create/update/delete`. Reads and writes require the corresponding `database-users` permission on `<namespace>/<cluster>`. See the [CLI build/install instructions](cli.md#build-and-install) and [access reference](cli.md#rabbitmq-access) for argument order. The `rabbitmq` group is available in binaries built from a release containing RabbitMQ support; an older CLI will not gain commands by connecting to a newer server. Generic MongoDB database-users/roles endpoints are not RabbitMQ access endpoints.
+All six command groups have `list/get/create/update/delete`. Reads and writes require the corresponding `database-users` permission on `<namespace>/<cluster>`. See the [CLI download/build instructions](cli.md#build-and-install) and [access reference](cli.md#rabbitmq-access) for argument order. The `rabbitmq` group is included in [GitHub release binaries](https://github.com/KarakoramDev/Karakoram/releases) starting with v0.1.0; an older CLI will not gain commands by connecting to a newer server. Generic MongoDB database-users/roles endpoints are not RabbitMQ access endpoints.
 
 All six access collections support [safe retries with `Idempotency-Key`](api.md#safe-retries-with-idempotency-key)
 on create (POST) and update (PUT). Reusing the same key and body replays the
