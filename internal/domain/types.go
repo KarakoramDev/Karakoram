@@ -314,17 +314,34 @@ type Preset struct {
 
 // BackupStorage describes an S3-compatible destination; credentials never marshal publicly.
 type BackupStorage struct {
-	Namespace      string             `json:"namespace,omitempty"`
-	Name           string             `json:"name"`
-	Type           string             `json:"type"`
-	EndpointURL    string             `json:"endpointURL"`
-	Region         string             `json:"region"`
-	Bucket         string             `json:"bucket"`
-	Prefix         string             `json:"prefix"`
-	ForcePathStyle bool               `json:"forcePathStyle"`
-	VerifyTLS      bool               `json:"verifyTLS"`
-	Credentials    StorageCredentials `json:"-"`
-	Description    string             `json:"description"`
+	Namespace      string               `json:"namespace,omitempty"`
+	Name           string               `json:"name"`
+	Type           string               `json:"type"`
+	EndpointURL    string               `json:"endpointURL"`
+	Region         string               `json:"region"`
+	Bucket         string               `json:"bucket"`
+	Prefix         string               `json:"prefix"`
+	ForcePathStyle bool                 `json:"forcePathStyle"`
+	VerifyTLS      bool                 `json:"verifyTLS"`
+	Credentials    StorageCredentials   `json:"-"`
+	Description    string               `json:"description"`
+	Verification   *StorageVerification `json:"verification,omitempty"`
+}
+
+// StorageVerification records the latest access check for the current connection configuration.
+type StorageVerification struct {
+	Verified      bool      `json:"verified"`
+	CheckedAt     time.Time `json:"checkedAt"`
+	Message       string    `json:"message"`
+	FailureReason string    `json:"failureReason,omitempty"`
+}
+
+// SameConnection compares fields that determine the destination, transport and authentication.
+func (b BackupStorage) SameConnection(other BackupStorage) bool {
+	return b.Type == other.Type && b.EndpointURL == other.EndpointURL &&
+		b.Region == other.Region && b.Bucket == other.Bucket && b.Prefix == other.Prefix &&
+		b.ForcePathStyle == other.ForcePathStyle && b.VerifyTLS == other.VerifyTLS &&
+		b.Credentials == other.Credentials
 }
 
 // StorageCredentials contains write-only S3 authentication material.

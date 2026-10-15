@@ -206,7 +206,7 @@ func TestProviderDrivenBackupAndPITRDiagnostics(t *testing.T) {
 func TestStorageFieldConflictAndVerificationDiagnostics(t *testing.T) {
 	s, _, token := testServer(t)
 	base := map[string]any{"name": "archive", "type": "s3", "endpointURL": "https://s3.example.test", "region": "us-east-1", "bucket": "bucket", "credentials": map[string]string{"accessKeyId": "private-access", "secretAccessKey": "private-secret"}}
-	for _, name := range []string{"bad/name", "bad:name", "", strings.Repeat("a", 129), "   "} {
+	for _, name := range []string{"bad/name", "bad:name", "", "a", strings.Repeat("a", 64), "bad_name", "storé", "Upper", "-name", "1name", "   "} {
 		body := make(map[string]any)
 		for k, v := range base {
 			body[k] = v
@@ -216,7 +216,7 @@ func TestStorageFieldConflictAndVerificationDiagnostics(t *testing.T) {
 		reason := "invalid"
 		if name == "" {
 			reason = "required"
-		} else if len(name) > 128 {
+		} else if len(name) < 2 || len(name) > 63 {
 			reason = "out_of_range"
 		}
 		requireDependencyError(t, call(s, "POST", "/api/v1/backup-storages", string(raw), token), 400, "invalid_request", map[string]string{"field": "name", "reason": reason})

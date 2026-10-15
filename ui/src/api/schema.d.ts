@@ -1555,6 +1555,8 @@ export type components = {
             type: "s3";
             /** Format: date-time */
             updatedAt?: string;
+            /** @description Latest access check for the current connection configuration. Absent until checked, and cleared when connection settings or credentials change. */
+            readonly verification?: components["schemas"]["StorageVerification"];
             /** @default true */
             verifyTLS: boolean;
         };
@@ -1778,7 +1780,7 @@ export type components = {
             endpointURL: string;
             /** @default true */
             forcePathStyle: boolean;
-            /** @description New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable. */
+            /** @description Use lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed. Existing stored names remain usable. */
             name: string;
             prefix?: string;
             region: string;

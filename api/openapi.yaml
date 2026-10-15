@@ -6357,6 +6357,11 @@ components:
         credentialsConfigured:
           type: boolean
           readOnly: true
+        verification:
+          allOf:
+            - $ref: '#/components/schemas/StorageVerification'
+          readOnly: true
+          description: Latest access check for the current connection configuration. Absent until checked, and cleared when connection settings or credentials change.
         createdAt:
           type: string
           format: date-time
@@ -6379,10 +6384,10 @@ components:
       properties:
         name:
           type: string
-          minLength: 1
-          maxLength: 128
-          pattern: '^[^:/]+$'
-          description: New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable.
+          minLength: 2
+          maxLength: 63
+          pattern: '^[a-z][a-z0-9-]{1,62}$'
+          description: Use lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed. Existing stored names remain usable.
         type:
           type: string
           enum:

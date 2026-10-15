@@ -546,7 +546,10 @@ type BackupStorage struct {
 	Region                string            `json:"region"`
 	Type                  BackupStorageType `json:"type"`
 	UpdatedAt             *time.Time        `json:"updatedAt,omitempty"`
-	VerifyTLS             bool              `json:"verifyTLS"`
+
+	// Verification Latest access check for the current connection configuration. Absent until checked, and cleared when connection settings or credentials change.
+	Verification *StorageVerification `json:"verification,omitempty"`
+	VerifyTLS    bool                 `json:"verifyTLS"`
 }
 
 // BackupStorageType defines model for BackupStorage.Type.
@@ -854,7 +857,7 @@ type CreateBackupStorageRequest struct {
 	EndpointURL    string        `json:"endpointURL"`
 	ForcePathStyle *bool         `json:"forcePathStyle,omitempty"`
 
-	// Name New storage names must not contain ':' or '/'. Existing default storages with these characters remain readable and updatable.
+	// Name Use lowercase letters, digits or hyphens, starting with a letter. A trailing hyphen is allowed. Existing stored names remain usable.
 	Name      string                         `json:"name"`
 	Prefix    *string                        `json:"prefix,omitempty"`
 	Region    string                         `json:"region"`

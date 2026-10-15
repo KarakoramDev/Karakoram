@@ -7,13 +7,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
+	"regexp"
 	"time"
-	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
+
+var backupStorageNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
 
 // ValidateBackupStorageName applies the creation rule; legacy names remain updatable.
 func ValidateBackupStorageName(name string) error {
@@ -21,8 +22,8 @@ func ValidateBackupStorageName(name string) error {
 	if name == "" {
 		reason = domain.ReasonRequired
 	}
-	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 128 || strings.ContainsAny(name, ":/") {
-		e := domain.InvalidField("name", reason, "name must contain 1–128 characters, must not be blank, and must not contain ':' or '/'")
+	if !backupStorageNamePattern.MatchString(name) {
+		e := domain.InvalidField("name", reason, "name must contain 2–63 lowercase letters, digits or hyphens, starting with a letter")
 		e.Err = ErrInvalid
 		return e
 	}
@@ -209,17 +210,59 @@ func (s *Store) CreateBackupStorage(ctx context.Context, v *domain.BackupStorage
 	return tx.Commit()
 }
 
-// UpdateBackupStorage persists changes to backup storage.
+// UpdateBackupStorage persists configuration and invalidates checks of a changed connection.
 func (s *Store) UpdateBackupStorage(ctx context.Context, v *domain.BackupStorage) error {
+	return s.updateBackupStorage(ctx, v, false)
+}
+
+// SaveBackupStorageVerification records a probe only if its connection is still current.
+func (s *Store) SaveBackupStorageVerification(ctx context.Context, v *domain.BackupStorage) error {
+	return s.updateBackupStorage(ctx, v, true)
+}
+
+func (s *Store) updateBackupStorage(ctx context.Context, v *domain.BackupStorage, verificationOnly bool) error {
 	v.Namespace = domain.NormalizedNamespace(v.Namespace)
 	if err := domain.ValidateNamespaceName(v.Namespace); err != nil {
 		return err
 	}
-	sealed, err := s.seal(storageAAD(v.Namespace, v.Name), v.Credentials)
+	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	return s.update(ctx, "storage", namespaceScope(v.Namespace), v.Name, v, sealed, "", "")
+	defer tx.Rollback()
+	var data []byte
+	var sealed string
+	if err = tx.QueryRowContext(ctx, "SELECT data,secret FROM records WHERE kind='storage' AND scope=? AND key=?", namespaceScope(v.Namespace), v.Name).Scan(&data, &sealed); err != nil {
+		return resourceError("storage", v.Name, typed(err))
+	}
+	var current domain.BackupStorage
+	if err = json.Unmarshal(data, &current); err != nil {
+		return err
+	}
+	if err = s.unseal(storageAAD(v.Namespace, v.Name), sealed, &current.Credentials); err != nil {
+		return err
+	}
+	same := current.SameConnection(*v)
+	if verificationOnly {
+		if !same {
+			return domain.Conflict("backupStorage", v.Name, domain.ReasonInvalidState, ErrConflict, "backupStorage %q connection changed during verification; verify again", v.Name)
+		}
+		current.Verification = v.Verification
+		*v = current
+	} else {
+		v.Verification = nil
+		if same {
+			v.Verification = current.Verification
+		}
+		sealed, err = s.seal(storageAAD(v.Namespace, v.Name), v.Credentials)
+		if err != nil {
+			return err
+		}
+	}
+	if err = put(ctx, tx, "storage", namespaceScope(v.Namespace), v.Name, v, sealed, "", "", false); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // GetBackupStorage loads backup storage.

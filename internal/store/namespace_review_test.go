@@ -48,7 +48,7 @@ func TestStorageAADSeparatesLegacyAndNamespacedIdentities(t *testing.T) {
 }
 
 func TestLegacyDefaultStorageNamesRemainReadableAndUpdatable(t *testing.T) {
-	for _, name := range []string{"prod:archive", "prod/archive"} {
+	for _, name := range []string{"prod:archive", "prod/archive", "a", "old_name", "storé", "Upper"} {
 		t.Run(name, func(t *testing.T) {
 			s, _ := testStore(t)
 			ctx := t.Context()

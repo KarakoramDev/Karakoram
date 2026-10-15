@@ -16,7 +16,14 @@ import (
 
 func storageAPI(b domain.BackupStorage) api.BackupStorage {
 	configured := b.Credentials.AccessKeyID != "" && b.Credentials.SecretAccessKey != ""
-	return api.BackupStorage{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Type: api.BackupStorageType(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: &b.Prefix, ForcePathStyle: b.ForcePathStyle, VerifyTLS: b.VerifyTLS, Description: &b.Description, CredentialsConfigured: &configured}
+	out := api.BackupStorage{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Type: api.BackupStorageType(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: &b.Prefix, ForcePathStyle: b.ForcePathStyle, VerifyTLS: b.VerifyTLS, Description: &b.Description, CredentialsConfigured: &configured}
+	if v := b.Verification; v != nil {
+		out.Verification = &api.StorageVerification{Verified: v.Verified, CheckedAt: v.CheckedAt, Message: v.Message}
+		if v.FailureReason != "" {
+			out.Verification.FailureReason = ptr(api.StorageVerificationFailureReason(v.FailureReason))
+		}
+	}
+	return out
 }
 func credentialsDomain(c api.S3Credentials) domain.StorageCredentials {
 	return domain.StorageCredentials{AccessKeyID: value(c.AccessKeyId), SecretAccessKey: value(c.SecretAccessKey)}
@@ -145,6 +152,10 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		if reason != "" {
 			category := api.StorageVerificationFailureReason(reason)
 			result.FailureReason = &category
+		}
+		b.Verification = &domain.StorageVerification{Verified: result.Verified, CheckedAt: result.CheckedAt, Message: result.Message, FailureReason: reason}
+		if err := s.Store.SaveBackupStorageVerification(ctx, b); err != nil {
+			return s.failure(err)
 		}
 		return ok(result)
 	}

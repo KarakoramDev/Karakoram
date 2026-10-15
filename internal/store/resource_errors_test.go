@@ -97,10 +97,12 @@ func TestNamespaceDuplicateNamesAreStructured(t *testing.T) {
 }
 
 func TestStorageNameCharacterLimit(t *testing.T) {
-	if err := ValidateBackupStorageName(strings.Repeat("é", 128)); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"ab", "a-", strings.Repeat("a", 63), "storage-12"} {
+		if err := ValidateBackupStorageName(name); err != nil {
+			t.Fatal(name, err)
+		}
 	}
-	for _, name := range []string{strings.Repeat("é", 129), "   ", "bad/name", "bad:name"} {
+	for _, name := range []string{"a", strings.Repeat("a", 64), "bad_name", "storé", "Upper", "-name", "1name", "   ", "bad/name", "bad:name"} {
 		err := ValidateBackupStorageName(name)
 		var field *domain.FieldError
 		if !errors.Is(err, ErrInvalid) || !errors.As(err, &field) || field.Field != "name" {

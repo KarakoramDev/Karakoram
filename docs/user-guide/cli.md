@@ -632,6 +632,9 @@ Commands absent below have no additional flags except confirmation: destructive 
   -f, --file string   API request YAML/JSON file ('-' for stdin)
 ```
 
+New storage names use 2–63 lowercase letters, digits or hyphens, beginning with
+a letter; a trailing hyphen is allowed. Existing stored names remain usable.
+
 ### `karactl storages list`
 
 ```text
@@ -644,6 +647,10 @@ Commands absent below have no additional flags except confirmation: destructive 
 ```text
   -f, --file string   API request YAML/JSON file ('-' for stdin)
 ```
+
+Connection or credential changes clear the stored verification result. Run
+`karactl storages verify <storage>` after saving; description-only edits keep the
+latest result. Storage reads include optional `verification` only after a check.
 
 ### `karactl tokens create`
 

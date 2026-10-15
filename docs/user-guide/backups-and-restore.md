@@ -14,11 +14,11 @@ backup settings and schedules resolve storage names in their own namespace.
 Verification runs from the control plane's network, while backup payloads go
 directly between members and S3, not through the relay.
 
-New storage names must contain 1–128 characters, must not be blank, and must not
-contain `:` or `/`; violations return **400** naming `name` and the rule.
-Existing storages in namespace `default` with either character remain readable
-and updatable. Missing configuration or credential fields return **400** with
-the specific field; an existing storage name returns **409** `already_exists`.
+New storage names must contain 2–63 lowercase letters, digits or hyphens and
+start with a letter. A trailing hyphen is allowed. Violations return **400**
+naming `name` and the rule. Existing stored names remain readable, editable and
+deletable. Missing configuration or credential fields return **400** with the
+specific field; an existing storage name returns **409** `already_exists`.
 
 For the CLI, prepare a protected API-shaped YAML/JSON request and pass it with `-f`:
 
@@ -53,12 +53,13 @@ Use **Settings → Backup storages → Edit**, or `karactl storages set archive 
 Registration saves configuration, not proof of S3 access. A verification failure still returns **HTTP 200**, with `verified: false`, `failureReason` and a secret-free message; success omits `failureReason`. The probe checks put/get/delete from the control plane, not connectivity from every database member.
 
 The UI separates **Options** (HTTP without TLS, or HTTPS with certificate
-verification on/off) from **Verification** (not checked in this session,
-checking, successful or failed). A failed result shows its category, message and
-check time; a later configuration change asks you to verify again. Results are
-kept for the current page session, not a durable history. HTTPS/certificate
-verification settings alone do not prove credentials or bucket access, and a
-successful probe does not make plaintext HTTP safe.
+verification on/off) from **Verification** (not checked, checking, successful or
+failed). The API's optional `verification` field stores the latest result and
+check time, not a history. Changing credentials, endpoint, region, bucket,
+prefix, addressing style or TLS settings clears that result immediately;
+description-only edits preserve it. Run Verify again after a connection change.
+HTTPS/certificate verification settings alone do not prove credentials or
+bucket access, and a successful probe does not make plaintext HTTP safe.
 
 | `failureReason` | What to check |
 | --- | --- |
@@ -226,6 +227,10 @@ dataSource:
   backup: beforechange
 # Use pitrTime instead of backup for a point-in-time clone.
 ```
+
+After the initial restore completes, the immutable source is provenance only:
+later cluster changes do not require the source cluster or backup to remain.
+Delete or retain those recovery objects according to your recovery policy.
 
 This fragment belongs under `spec` in a normal cluster create request, not a standalone create payload. The destination is initialized, then Karakoram queues a deterministic restore. Inspect destination cluster/restore/operation readiness before connecting.
 
