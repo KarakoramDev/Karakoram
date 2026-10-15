@@ -516,7 +516,7 @@ Karakoram stops all Kibana/Logstash/APM services **at the platform level**, dele
 
 ### New cluster from backup
 
-`spec.dataSource` requires the source cluster to **still exist** and use Elasticsearch. Create a complete destination request with provider `elasticsearch`, a compatible version and this immutable fragment:
+At creation, `spec.dataSource` requires the source cluster to **still exist** and use Elasticsearch, and the named snapshot to have succeeded. Create a complete destination request with provider `elasticsearch`, a compatible version and this immutable fragment:
 
 ```yaml
 dataSource:
@@ -531,6 +531,8 @@ karactl operations cluster searchcopy
 ```
 
 The destination registers the source repository **read-only**, restores after formation, establishes its own managed credentials and uses its own unique writable prefix afterward. Target version must not be older than the snapshot and may be at most one major ahead; snapshot/index compatibility still applies ([Elastic compatibility](https://www.elastic.co/docs/deploy-manage/tools/snapshot-and-restore)). Restore is not a downgrade path or continuous replication link. Select source namespace in `dataSource.namespace` for cross-namespace recovery and ensure required source export/target permissions and direct S3 reachability.
+
+Keep the source snapshot and its storage available until the initial restore finishes. After a successful initial restore, unrelated destination updates do not re-resolve the source cluster or snapshot: deleting those source records does not prevent scaling or monitoring changes. The `dataSource` reference remains immutable historical provenance; it cannot be changed by an update.
 
 To recover a retained backup of a **deleted** source cluster, create a destination without `spec.dataSource`, wait for formation, then submit an explicit restore operation using the retained backup's original source cluster/namespace. For example, with a retained backup `beforechange` from deleted cluster `search`:
 

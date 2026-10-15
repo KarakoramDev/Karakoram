@@ -329,7 +329,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			return invalid("dataSource is immutable")
 		}
 	}
-	if d := s.DataSource; d != nil {
+	if d := s.DataSource; old == nil && d != nil {
 		if p.options.Store == nil {
 			return invalid("dataSource requires store")
 		}
@@ -342,11 +342,11 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		}
 		source, err := p.options.Store.GetCluster(ctx, ref)
 		if err != nil || source.Spec.Provider != "elasticsearch" {
-			return invalid("source cluster must exist and use Elasticsearch")
+			return invalid("dataSource cluster %s/%s for snapshot %q must exist and use Elasticsearch", ref.Namespace, ref.Name, d.Backup)
 		}
 		b, err := p.options.Store.GetBackup(ctx, ref, d.Backup)
 		if err != nil || b.Phase != domain.PhaseSucceeded || b.Type != "snapshot" {
-			return invalid("source snapshot must have succeeded")
+			return invalid("dataSource snapshot %s/%s/%s must exist, have succeeded and use snapshot type", ref.Namespace, ref.Name, d.Backup)
 		}
 		version := b.SourceVersion
 		if version == "" {
@@ -355,7 +355,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		a, ok := parseVersion(snapshotReleaseVersion(version))
 		target, _ := parseVersion(s.Version)
 		if !ok || a[0] > target[0] || target[0] > a[0]+1 || a[0] == target[0] && (a[1] > target[1] || a[1] == target[1] && a[2] > target[2]) {
-			return invalid("source version is incompatible with target")
+			return invalid("dataSource snapshot %s/%s/%s version %q is incompatible with target %q", ref.Namespace, ref.Name, d.Backup, version, s.Version)
 		}
 	}
 	// Public subdomains have no source-IP policy. Acknowledgement is request-only:
