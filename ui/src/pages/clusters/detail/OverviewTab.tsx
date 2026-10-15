@@ -202,7 +202,7 @@ export function OverviewTab() {
         <Card title="Connection">
           {conn?.endpoints?.map((endpoint) => <div key={`${endpoint.name}:${endpoint.url}`} className="stack" style={{ marginBottom: 12 }}>
             <strong className="small">{endpoint.name} <Badge plain>{endpoint.public ? 'Public' : 'Private'}</Badge></strong>
-            {spec.provider === 'elasticsearch' && endpoint.name === 'kibana' && !kibanaReady(list) ? <span className="small muted">Kibana is starting — retry shortly.</span> : <CodeLine value={endpoint.url} />}
+            {spec.provider === 'elasticsearch' && endpoint.name === 'kibana' && (suspended || !kibanaReady(list)) ? <span className="small muted">{suspended ? 'Kibana is suspended. Resume the cluster to make it available.' : 'Kibana is starting — retry shortly.'}</span> : <CodeLine value={endpoint.url} />}
           </div>)}
           {conn?.hosts?.length ? (
             <div className="stack">

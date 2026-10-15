@@ -122,7 +122,7 @@ export function ElasticAccessTab() {
       <div className="grid-2">
         <StackTopology members={cluster.status.members} />
         <Card title="Endpoints">
-          <ElasticEndpoints connection={cluster.status.connection} members={cluster.status.members} />
+          <ElasticEndpoints connection={cluster.status.connection} members={cluster.status.members} phase={cluster.status.phase} />
           <CredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} />
         </Card>
       </div>
@@ -403,7 +403,7 @@ function StackTopology({ members }: { members: Schemas['Member'][] }) {
   );
 }
 
-export function ElasticEndpoints({ connection, members }: { connection: Schemas['ConnectionSummary'] | undefined; members: Pick<Schemas['Member'], 'role' | 'state' | 'health'>[] }) {
+export function ElasticEndpoints({ connection, members, phase }: { connection: Schemas['ConnectionSummary'] | undefined; members: Pick<Schemas['Member'], 'role' | 'state' | 'health'>[]; phase: Schemas['Cluster']['status']['phase'] }) {
   const kibana = members.filter((member) => member.role === 'kibana');
   const kibanaReady = kibana.length > 0 && kibana.every((member) => member.health && member.state === 'joined');
   const endpoints = connection?.endpoints ?? [];
@@ -415,7 +415,9 @@ export function ElasticEndpoints({ connection, members }: { connection: Schemas[
           <strong className="small">
             {ENDPOINT_LABEL[endpoint.name] ?? endpoint.name} <Badge plain tone={endpoint.public ? 'info' : 'neutral'}>{endpoint.public ? 'Public' : 'Private'}</Badge>
           </strong>
-          {endpoint.name.toLowerCase() === 'kibana' && !kibanaReady ? (
+          {endpoint.name.toLowerCase() === 'kibana' && phase === 'Suspended' ? (
+            <Callout tone="info">Kibana is suspended. Resume the cluster to make it available.</Callout>
+          ) : endpoint.name.toLowerCase() === 'kibana' && !kibanaReady ? (
             <Callout tone="info">Kibana is starting—retry shortly. Its link will be available once Kibana reports ready.</Callout>
           ) : endpoint.public && endpoint.url.startsWith('https://') ? (
             <span className="row" style={{ gap: 6 }}>

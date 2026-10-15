@@ -76,13 +76,23 @@ test('access panel renders Kibana startup instead of an actionable link until ev
   const ready = { role: 'kibana' as const, state: 'joined', health: true };
   const starting = { ...ready, state: 'starting', health: false };
   for (const members of [[], [starting], [ready, starting]]) {
-    const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members }));
+    const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members, phase: 'Ready' }));
     assert.match(markup, /Kibana is starting—retry shortly/);
     assert.doesNotMatch(markup, /href="https:\/\/dashboards\.example"/);
   }
-  const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members: [ready] }));
+  const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members: [ready], phase: 'Ready' }));
   assert.match(markup, /href="https:\/\/dashboards\.example"/);
   assert.doesNotMatch(markup, /Kibana is starting/);
+});
+
+test('suspended access endpoints do not promise Kibana startup or expose its route', () => {
+  const connection = { hosts: [], uri: '', endpoints: [{ name: 'Kibana', url: 'https://dashboards.example', public: true }] };
+  for (const state of ['suspended', 'joined']) {
+    const members = [{ role: 'kibana' as const, state, health: state === 'joined' }];
+    const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members, phase: 'Suspended' }));
+    assert.match(markup, /Kibana is suspended\. Resume the cluster/);
+    assert.doesNotMatch(markup, /Kibana is starting|href="https:\/\/dashboards\.example"/);
+  }
 });
 
 test('role and user dialogs keep native errors visible, and submit edited application grants', () => {

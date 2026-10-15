@@ -176,6 +176,12 @@ test('Kibana routes are starting until all Kibana members are joined and healthy
   assert.doesNotMatch(ready, /Kibana is starting/);
 });
 
+test('suspended overview describes Kibana as suspended rather than starting', () => {
+  const markup = renderDetail(createElement(OverviewTab), { ...cluster, status: { ...cluster.status, phase: 'Suspended', members: [{ name: 'kibana', set: '', role: 'kibana', state: 'suspended', health: false }] } });
+  assert.match(markup, /Kibana is suspended\. Resume the cluster/);
+  assert.doesNotMatch(markup, /Kibana is starting|https:\/\/dashboards.example/);
+});
+
 test('health panels retain native categories and label fractional samples as averages', () => {
   const health = elasticsearchMonitoringPanels.find((panel) => panel.names.includes('elasticsearch.cluster.status'))!;
   const kibana = elasticsearchMonitoringPanels.find((panel) => panel.names.includes('kibana.status.level'))!;

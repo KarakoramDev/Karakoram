@@ -247,7 +247,8 @@ Set `spec.engineOptions.kibana.public: true` for the Zerops subdomain HTTPS rout
 
 A provisioned Kibana route can exist while the application is still starting.
 Wait for component readiness and retry after initialization; a route alone is
-not proof Kibana is usable.
+not proof Kibana is usable. Suspended clusters show Kibana as suspended, not
+starting; resume the cluster before waiting for readiness.
 
 ## Logstash pipelines and queues
 
