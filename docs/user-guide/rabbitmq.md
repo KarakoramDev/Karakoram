@@ -215,6 +215,8 @@ original successful status and body for 24 hours with `Idempotent-Replayed: true
 including any generated user password. Reusing a key with a changed body returns
 409. Omitted `namespace` and `namespace=default` share the same key scope;
 different namespaces and object paths are independent. Deletes are not covered.
+The Access UI sends a body-bound key automatically and reuses it when retrying an
+unchanged submission in the open editor. Editing the submission starts a new key.
 
 User tags govern management access; they do **not** grant messaging permission. Vhost/topic permission grants govern messaging access. Password and passwordHash are mutually exclusive. Creating a user without either generates a password returned **once**; subsequent reads expose neither passwords nor hashes. Updating without either preserves the password. `karakoram`, `admin`, `monitor` and `guest` are reserved: access routes cannot create, modify or delete these identities or mutate their permission/topic-permission grants. Bootstrap creates `karakoram` (control-plane administration) and `admin` (customer administrator), with administrator tags and all permissions on `/`, and removes `guest`; `monitor` is reserved but not created by bootstrap. Use `karactl -n NS system-users rotate brokers admin` (or `karakoram`) for supported system-user rotation, not an access-user update.
 
@@ -303,8 +305,9 @@ up, then checks quorum-critical resources before draining the broker. A failed
 wait also diagnoses the remaining blockers. `QuorumCriticalQueues` names up to ten
 affected queues/vhosts and their known members (plus the remaining count); the
 warning event is `RollingRestartBlocked`. Membership-inventory changes alone do
-not repeat that warning. A known blocker waits at the safety gate without additional
-generic `ReconcileError` warnings; failed safety observations still report errors.
+not repeat that warning. A known blocker waits at the safety gate and rechecks
+approximately every 30 seconds without additional generic `ReconcileError`
+warnings; failed safety observations still report errors.
 The operation and cluster message name the same blockers.
 When quorum recovers, the condition clears and a Normal `RollingRestartRecovered`
 event records that the rolling change can continue.

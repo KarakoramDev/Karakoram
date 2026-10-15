@@ -114,7 +114,8 @@ karactl rabbitmq policies get brokers / retention
 karactl rabbitmq operator-policies delete brokers / safety --yes
 ```
 
-Deletes require confirmation: interactively type the cluster name; without a TTY,
+Deletes require confirmation: interactively type the final argument (the vhost,
+user, or policy name shown in the prompt), not the cluster name. Without a TTY,
 pass `--yes` or pipe `y`/`yes`. An empty non-interactive input submits no request.
 
 Pass vhost `/` literally in CLI arguments and UI fields. A raw HTTP API client must encode the name exactly once as `%2F` in a path segment, never `%252F`; generated clients accept the raw name. See the [API path example](rabbitmq.md#access-api-cli-and-ui).
@@ -123,7 +124,8 @@ A vhost body contains `name`, `tags`, optional `defaultQueueType` (`classic`, `q
 
 When a user creation omits its password, `generatedPassword` is returned **once**. Store it securely; subsequent reads never return passwords or password hashes. Updates that omit both password fields preserve the existing password. The protected identities `karakoram`, `admin`, `monitor` and `guest` cannot be created, modified or deleted through access commands, nor can their permission/topic-permission grants be changed there. Only `karakoram` and `admin` are rotatable system users: use `karactl -n NS system-users rotate brokers admin` (or `karakoram`). `guest` and `monitor` are reserved names that cannot be created or modified; they are not rotation targets.
 
-For direct HTTP clients, access create/update routes accept `Idempotency-Key`.
+The Access UI sends `Idempotency-Key` on create/update requests and retains it
+when retrying an unchanged submission. Direct HTTP clients can also supply the header.
 Matching retries replay the original successful response for 24 hours, including
 the generated password; a changed body with the same key returns 409. This does
 not make passwords recoverable through GET. See [safe API retries](api.md#safe-retries-with-idempotency-key).
