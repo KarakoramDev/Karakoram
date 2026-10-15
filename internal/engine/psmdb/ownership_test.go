@@ -192,3 +192,23 @@ func TestUntaggedVolumeRequiresTokenVerifiedRuntimeMount(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordedVolumeMismatchRejectsVerifiedRuntimeMount(t *testing.T) {
+	p, rc, f := failedMemberImport(t)
+	s := retryState(t, rc)
+	m := s.Members[0]
+	m.VolumeID = "original-volume-id"
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	before := f.mutations
+	if _, err := p.Sync(t.Context(), rc); !errors.Is(err, engine.ErrConflict) {
+		t.Fatal("runtime mount replaced a recorded volume identity", err)
+	}
+	if done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepBackups: true}); done || !errors.Is(err, engine.ErrConflict) {
+		t.Fatal("cleanup accepted a replacement volume", done, err)
+	}
+	if f.mutations != before || retryState(t, rc).Members[0].VolumeID != "original-volume-id" {
+		t.Fatal("recorded volume identity was changed or replacement was mutated")
+	}
+}

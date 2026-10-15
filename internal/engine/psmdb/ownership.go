@@ -20,6 +20,9 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 	if recorded != "" && service.ID == recorded {
 		return nil
 	}
+	if volume && recorded != "" {
+		return fmt.Errorf("%w: service %s no longer matches its recorded volume identity", engine.ErrConflict, service.Hostname)
+	}
 	if volume {
 		retained, err := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
 		if err != nil {

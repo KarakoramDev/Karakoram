@@ -65,10 +65,12 @@ tokens and member/agent certificates. A member progresses planned -> imported
 -> deployed -> healthy. Runtime and local-storage services are imported
 without inline deployment YAML to avoid Zerops's empty-artifact build;
 a retained volume is reused only with verified recorded identity or matching
-cluster/member/agent-token ownership. Legacy deployed plans without IDs verify
-the runtime's identity and its KARAKORAM_DATA_DIR mount before recording volume
-IDs; planned hostname collisions never qualify. All members are verified before
-mutations or cleanup, preserving this evidence before deleting runtimes.
+cluster/member/agent-token ownership. Untagged volumes without recorded IDs
+require a token-verified runtime and its exact KARAKORAM_DATA_DIR mount, even
+when a partial import left the member planned. A recorded volume ID remains
+authoritative: a different service at that hostname is a conflict. All members
+are verified before mutations or cleanup, checkpointing newly adopted IDs
+before deleting runtimes.
 Import/deploy operation IDs are persisted and observed non-blockingly. Deploy
 uses the real agent artifact, exact package pins, temporaryShutdown and the
 absolute readiness executable.
