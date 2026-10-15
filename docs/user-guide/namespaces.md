@@ -20,7 +20,7 @@ The UI switcher, namespace settings list and namespace selectors follow every au
 
 ## Add, validate and rotate
 
-Create a Zerops token with **Custom access per project → Full access** for the additional project only. Organization-wide authority and project-creation rights are unnecessary. The control-plane public HTTPS origin must be reachable from the project, with WebSocket Upgrade allowed at `/relay/v1/connect`. Allow capacity for the relay and a free relay hostname (normally `karakoramrelay`). See [installation prerequisites](../install.md#adding-a-namespace).
+Create a Zerops token with **Custom access per project → Full access** for the additional project only. **Sudo mode is not required; create the token without sudo mode** for least privilege. A sudo-mode token can read every sensitive variable in the project, including database and Karakoram secrets; Karakoram never needs to read them. Organization-wide authority and project-creation rights are unnecessary. The control-plane public HTTPS origin must be reachable from the project, with WebSocket Upgrade allowed at `/relay/v1/connect`. Allow capacity for the relay and a free relay hostname (normally `karakoramrelay`). See [installation prerequisites](../install.md#adding-a-namespace).
 
 Use **Settings → Namespaces → Add namespace**, enter name/project/token/optional description and select **Validate and add**. The server validates token/project before saving; relay deployment then proceeds asynchronously. The token field is write-only and is not returned by namespace reads.
 
@@ -66,6 +66,12 @@ their recorded relay hostname. Agent URLs and internal TLS SANs use that
 recorded name. Transport bounds are 1 MiB per WebSocket message and 256 active
 data streams per session (control excluded), not a limit on total streamed
 management payload.
+
+Relay ownership uses its recorded service ID or `KARAKORAM_RELAY_OWNER`, a
+random per-namespace marker stored as a **non-sensitive** variable. It is not a
+credential and may be visible to anyone who can read the project's variables.
+The relay certificate and key remain sensitive. A hostname alone never proves
+ownership; see the [ownership model](../security.md#service-ownership).
 
 Namespace detail shows:
 

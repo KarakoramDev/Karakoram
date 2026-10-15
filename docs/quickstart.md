@@ -13,9 +13,11 @@ enough; the databases you create later run as extra services in the same project
 ## 1. Create a Zerops token
 
 In Zerops, open **Settings → Access Tokens Management** and create a token with
-**Custom access per project → Full access** for your project only. Copy the
-value; it is shown once. Karakoram uses it to create and manage database
-services in that project.
+**Custom access per project → Full access** for your project only. **Leave sudo
+mode disabled**: it is not required. A sudo-mode token can read every sensitive
+variable in the project, including database and Karakoram secrets; Karakoram
+never needs to read them. Copy the value; it is shown once. Karakoram uses it to
+create and manage database services in that project.
 
 ## 2. Import Karakoram
 

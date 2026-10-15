@@ -17,6 +17,9 @@ karactl events list --cluster demo
 
 `/healthz` reports the control-plane store check, not database/PBM health. Inspect cluster phase/conditions, observedGeneration, member role/health/lag, observed binary/FCV, agent config/connectivity, disk capacity and backup/PITR status. A Zerops runtime marked ACTIVE is not sufficient. The platform member exec readiness command `karakoram agent readiness` checks **local TCP 127.0.0.1:27017 only**, without needing credentials/environment; it does not validate replication, users or PBM registration. The provider's authenticated replica-set health gate determines database readiness.
 
+The control plane logs at startup whether its Zerops token is in sudo mode.
+This is informational only: sudo mode is not required and should be disabled.
+
 Two log paths serve different purposes:
 
 1. **Zerops runtime/deployment logs:** use the service dashboard's process/application logs. They capture preparation, readiness, startup and forwarded child output. The backend implements the platform's signed project-log mechanism; signed log URLs/access tokens are credentials and must not be pasted into tickets. These logs also cover failures before the node-agent API is reachable.
@@ -311,7 +314,7 @@ The offline command needs the existing DB and master key, not a fresh bootstrap.
 
 | Symptom | Inspect | Safe next action |
 | --- | --- | --- |
-| Member stuck importing/deploying | Cluster events/internal pending Process, Zerops service/process error and preparation/readiness logs; Local Storage ≥5 GB, name collisions, package/artifact availability | Wait for actual terminal Process and agent health. READY_TO_DEPLOY means no successful artifact deployment; import HTTP success is not cluster readiness. Provisioning imports services, then deploys the executable with the generated pipeline. Ensure readiness uses an absolute `/var/www/karakoram agent readiness` path. Do not delete retained data to reset a pipeline. |
+| Member stuck importing/deploying | Cluster events/internal pending Process, Zerops service/process error and preparation/readiness logs; Local Storage ≥5 GB, name collisions, package/artifact availability | Observe the actual services if a platform Process has expired; otherwise wait for the terminal Process and agent health. For ownership conflicts, see [ownership recovery](#unverified-cluster-ownership). READY_TO_DEPLOY means no successful artifact deployment; import HTTP success is not cluster readiness. Provisioning imports services, then deploys the executable with the generated pipeline. Ensure readiness uses an absolute `/var/www/karakoram agent readiness` path. Do not delete retained data to reset a pipeline. |
 | Agent cannot pull config | Runtime logs for waiting-first-config vs using-cache, private DNS/origin 9443, pinned CA validity, member token/state identity and volume permissions | Restore the original controller endpoint/state/CA/token environment; environment-secret updates require process restart. Do not disable verification or expose 9443 publicly. Cached data-bearing members can continue, uncached/new/router deployments cannot. |
 | PBM agent not registered | PBM process tail, backup storage/config, correct backup roles/TLS/local URI and no duplicate agent | PBM uses local `127.0.0.1` **without directConnection=true**, even on secondaries, so it can discover the primary. Maintain one agent per mongod, none on mongos, same OS user as mongod. Process-running metric alone is not registration proof. |
 | Physical restore stuck/offline | Restore/Operation step, PBM describe-restore through stored S3 config, all member PBM logs, durable maintenance/stop holds and receipt ambiguity | Offline mongod/successful PBM exit can be expected. Keep writers stopped; do not auto-restart processes while PBM owns dbpath. Follow terminal restore progress and provider recovery steps; resync is nonblocking and observed, not an unbounded `--wait`. Ambiguous initiation needs observation before any new request. |
@@ -324,6 +327,53 @@ The offline command needs the existing DB and master key, not a fresh bootstrap.
 | Events watch/UI live updates arrive in batches, but ordinary requests work | Compare durable `/events` and operation/status reads; inspect SSE proxy buffering and padded heartbeat delivery | Approximately 16-KiB random-base64 initial/heartbeat comments reduce buffering; small events may still wait for the fifteen-second heartbeat. Account for ~1.1 KiB/s padding per stream plus startup. Keep no-cache/no-transform/X-Accel-Buffering:no and configure a nonbuffering proxy path where possible. Preserve cursors and refresh/read durable state rather than resubmitting work. |
 
 For destructive repairs or ambiguous restore recovery, preserve redacted evidence and involve a maintainer/operator who can inspect the original state and PBM metadata. Never silently mark an uncertain operation successful or remove safety files to suppress its error.
+
+### Unverified cluster ownership
+
+**Symptom:** `service <cluster>m0 has no verified cluster ownership` during
+initial provisioning.
+
+**Cause:** the cluster was created by Karakoram v0.1.0 or earlier with a token
+without sudo mode. Sensitive variables are masked for tokens without sudo mode,
+and those versions proved ownership by reading a sensitive variable back.
+
+**Recovery:** upgrade to **v0.1.1**. If the cluster has been stuck for less than
+about a day, it recovers automatically: Karakoram proves ownership from its own
+recorded import while Zerops still retains the import's process records.
+
+If it has been stuck longer, the error now explains the missing ownership
+evidence. Choose one of these recovery paths:
+
+1. In Zerops, delete the stuck member's runtime service and its volume so
+   Karakoram recreates them. For member `<cluster>m0`, these are `<cluster>m0`
+   and `<cluster>m0v`. Other member names depend on topology; a member's volume
+   is its hostname with `v` appended (see [resource naming](adr/0009-resource-naming.md#decision)).
+   **Only delete services from this failed initial import that were never
+   deployed and hold no data. Do not delete healthy members or retained data
+   volumes.**
+2. Temporarily supply a project-scoped Full access token **with sudo mode** for
+   one reconcile. Karakoram records the verified service IDs and writes the
+   non-sensitive ownership marker. Then switch back to a token **without sudo
+   mode**. For `default`, update `KARAKORAM_ZEROPS_TOKEN` on the control-plane
+   service and restart after each token change; for another namespace, use
+   [token rotation](user-guide/namespaces.md#add-validate-and-rotate).
+
+Neither path makes a hostname proof of ownership. See the
+[ownership model](security.md#service-ownership) for the evidence Karakoram uses.
+
+### Repeated processNotFound errors
+
+**Symptom:** `zerops HTTP 400 (processNotFound)` repeats every minute.
+
+**Cause:** earlier versions kept polling a platform process that Zerops had
+already forgotten. Zerops retains process records for about 24 hours.
+
+**Recovery:** upgrade to **v0.1.1**. An expired import is finished with an unknown
+outcome, not treated as successful. Karakoram observes the services it may have
+created and re-imports any missing ones. Any other expired action is retried
+with the normal bounded backoff instead of polling the missing process forever.
+If initial provisioning reports an ownership conflict, follow
+[ownership recovery](#unverified-cluster-ownership).
 
 ## RabbitMQ operations
 

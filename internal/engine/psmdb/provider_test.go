@@ -35,6 +35,7 @@ type fakeInfra struct {
 	publicPorts []infra.PublicPortRoute
 	exposed     []string
 	unexposed   []string
+	envWrites   []string
 }
 
 func (f *fakeInfra) ListPublicPorts(context.Context) ([]infra.PublicPortRoute, error) {
@@ -48,10 +49,19 @@ func (f *fakeInfra) ProjectInfo(context.Context) (infra.Project, error) {
 func (f *fakeInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec) (infra.Op, error) {
 	f.mutations++
 	f.imports = append(f.imports, specs)
+	ids := make(map[string]string, len(specs))
 	for _, s := range specs {
-		f.services[s.Hostname] = &infra.Service{Hostname: s.Hostname, ID: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: s.Env}
+		ownership := make(map[string]string, len(s.Env)+len(s.Vars))
+		for key, value := range s.Env {
+			ownership[key] = value
+		}
+		for key, value := range s.Vars {
+			ownership[key] = value
+		}
+		f.services[s.Hostname] = &infra.Service{Hostname: s.Hostname, ID: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: ownership}
+		ids[s.Hostname] = s.Hostname
 	}
-	return infra.Op{ID: "import"}, nil
+	return infra.Op{ID: "import", Services: ids}, nil
 }
 func (f *fakeInfra) GetService(_ context.Context, n string) (*infra.Service, error) {
 	return f.services[n], nil
@@ -78,6 +88,20 @@ func (f *fakeInfra) Deploy(_ context.Context, _ string, d infra.Deployment) (inf
 	return infra.Op{ID: "deploy"}, nil
 }
 func (*fakeInfra) SetEnvSecrets(context.Context, string, map[string]string) error { return nil }
+func (f *fakeInfra) SetEnvVars(_ context.Context, name string, vars map[string]string) error {
+	f.envWrites = append(f.envWrites, name)
+	service := f.services[name]
+	if service == nil {
+		return errors.New("service not found")
+	}
+	if service.Ownership == nil {
+		service.Ownership = make(map[string]string)
+	}
+	for key, value := range vars {
+		service.Ownership[key] = value
+	}
+	return nil
+}
 func (f *fakeInfra) Start(context.Context, string) (infra.Op, error) {
 	f.mutations++
 	return infra.Op{ID: "start"}, nil

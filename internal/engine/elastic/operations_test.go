@@ -64,6 +64,10 @@ type opsSecrets struct {
 	values map[string][]byte
 }
 
+func (*opsSecrets) GetAgentToken(context.Context, domain.ClusterRef, string) (*domain.AgentToken, error) {
+	return nil, nil
+}
+
 func (s *opsSecrets) GetClusterSecret(_ context.Context, _ domain.ClusterRef, key string) ([]byte, error) {
 	v, ok := s.values[key]
 	if !ok {

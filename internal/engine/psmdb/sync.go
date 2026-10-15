@@ -80,8 +80,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 	if v == nil {
 		return false, nil
 	}
+	var st infra.OpState
 	if v.Op.ID != "" {
-		st, e := rc.Backend.OpStatus(ctx, v.Op)
+		var e error
+		st, e = rc.Backend.OpStatus(ctx, v.Op)
 		if e != nil {
 			return true, e
 		}
@@ -96,10 +98,18 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 	if m != nil {
 		switch v.Action {
 		case "import":
+			complete, err := adoptImported(ctx, rc, m, v.Op, st)
+			if err != nil {
+				return true, err
+			}
 			if err := verifyMemberServices(ctx, rc, m); err != nil {
 				return true, err
 			}
-			m.Stage = "imported"
+			// An expired or partial import may have created only some services;
+			// leave the member planned so importMember creates the rest.
+			if complete {
+				m.Stage = "imported"
+			}
 		case "deploy":
 			m.Stage = "deployed"
 			m.Version = v.Version
@@ -171,7 +181,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		}
 		if v == nil {
 			r := component(rc.Cluster.Spec, m).Resources
-			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token)})
+			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Volume)})
 		} else {
 			if err := verifyServiceOwnership(ctx, rc, m, v, true); err != nil {
 				return err

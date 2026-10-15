@@ -106,7 +106,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		}
 		if volume {
 			r := rc.Cluster.Spec.Components.Engine.Resources
-			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token)})
+			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Volume)})
 		} else {
 			specs = append(specs, serviceSpec(rc.Cluster, m, tok.Token))
 		}

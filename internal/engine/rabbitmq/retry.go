@@ -155,8 +155,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 	if v == nil {
 		return false, nil
 	}
+	var st infra.OpState
 	if v.Op.ID != "" {
-		st, err := rc.Backend.OpStatus(ctx, v.Op)
+		var err error
+		st, err = rc.Backend.OpStatus(ctx, v.Op)
 		if err != nil {
 			return true, err
 		}
@@ -173,10 +175,18 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 	}
 	switch v.Action {
 	case "import":
+		complete, err := adoptImported(ctx, rc, m, v.Op, st)
+		if err != nil {
+			return true, err
+		}
 		if err := verifyMemberServices(ctx, rc, m); err != nil {
 			return true, err
 		}
-		m.Stage = "imported"
+		// An expired or partial import may have created only some services;
+		// leave the member planned so importMember creates the rest.
+		if complete {
+			m.Stage = "imported"
+		}
 	case "deploy":
 		m.Stage = "deployed"
 		if m.Resume {

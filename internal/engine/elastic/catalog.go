@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-// Package elastic implements Elasticsearch control-plane configuration helpers.
 package elastic
 
 import (

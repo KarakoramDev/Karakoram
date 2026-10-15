@@ -27,10 +27,13 @@ func (f *partialImportInfra) ImportServices(ctx context.Context, specs []infra.S
 	for _, spec := range specs {
 		service := f.services[spec.Hostname]
 		service.ID = spec.Hostname + "-id"
+		// Model services imported before non-sensitive markers were written.
+		delete(service.Ownership, engine.OwnerVariable)
 		if spec.Type == "local-storage:single@1" {
 			service.Ownership = nil
 		}
 	}
+	op.Services = nil
 	if f.processFailure {
 		return op, nil
 	}

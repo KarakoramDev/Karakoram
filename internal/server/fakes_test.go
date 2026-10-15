@@ -177,6 +177,7 @@ func (fakeBackend) Deploy(context.Context, string, infra.Deployment) (infra.Op, 
 	return infra.Op{}, nil
 }
 func (fakeBackend) SetEnvSecrets(context.Context, string, map[string]string) error { return nil }
+func (fakeBackend) SetEnvVars(context.Context, string, map[string]string) error    { return nil }
 func (fakeBackend) Start(context.Context, string) (infra.Op, error)                { return infra.Op{}, nil }
 func (fakeBackend) Stop(context.Context, string) (infra.Op, error)                 { return infra.Op{}, nil }
 func (fakeBackend) Restart(context.Context, string) (infra.Op, error)              { return infra.Op{}, nil }

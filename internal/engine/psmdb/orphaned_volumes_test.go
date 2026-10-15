@@ -202,6 +202,9 @@ func TestCleanupOrphanContinuesLaterMembersAndCompletes(t *testing.T) {
 			later.ServiceID, later.VolumeID = "later-runtime", "later-volume"
 			f.services[later.Name] = &infra.Service{ID: later.ServiceID, Hostname: later.Name}
 			f.services[later.Volume] = &infra.Service{ID: later.VolumeID, Hostname: later.Volume}
+			if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
+				t.Fatal(err)
+			}
 			if err := save(rc.Cluster, s); err != nil {
 				t.Fatal(err)
 			}

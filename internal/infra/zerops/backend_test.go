@@ -39,6 +39,12 @@ func serviceHandler(t *testing.T, w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 func TestImportNoInlineAndAggregatesEveryProcess(t *testing.T) {
+	var imported ImportResult
+	if err := json.Unmarshal(fixture(t, "import"), &imported); err != nil {
+		t.Fatal(err)
+	}
+	imported.ServiceStacks[0].Name = "kkv"
+	imported.ServiceStacks[1].Name = "kkm"
 	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]string
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -61,13 +67,13 @@ func TestImportNoInlineAndAggregatesEveryProcess(t *testing.T) {
 			if s["hostname"] == "kkv" && (v["minDisk"] != 5 || v["maxDisk"] != 5) {
 				t.Errorf("volume floor: %v", v)
 			}
-			if s["hostname"] == "kkm" && (s["minContainers"] != 1 || s["envSecrets"].(map[string]any)["TOKEN"] != "secret" || v["cpuMode"] != "SHARED") {
+			if s["hostname"] == "kkm" && (s["minContainers"] != 1 || s["envSecrets"].(map[string]any)["TOKEN"] != "secret" || s["envVariables"].(map[string]any)["KARAKORAM_OWNER"] != "marker" || v["cpuMode"] != "SHARED") {
 				t.Error("runtime config")
 			}
 		}
-		reply(t, w, "import")
+		_ = json.NewEncoder(w).Encode(imported)
 	})
-	op, err := b.ImportServices(context.Background(), []infra.ServiceSpec{{Hostname: "kkv", Type: "local-storage:single@1", Resources: infra.Resources{MinDisk: 1, MaxDisk: 2}}, {Hostname: "kkm", Type: "ubuntu@24.04", Env: map[string]string{"TOKEN": "secret"}, ZeropsYAML: "must not import"}})
+	op, err := b.ImportServices(context.Background(), []infra.ServiceSpec{{Hostname: "kkv", Type: "local-storage:single@1", Resources: infra.Resources{MinDisk: 1, MaxDisk: 2}}, {Hostname: "kkm", Type: "ubuntu@24.04", Env: map[string]string{"TOKEN": "secret"}, Vars: map[string]string{"KARAKORAM_OWNER": "marker"}, ZeropsYAML: "must not import"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,14 +81,20 @@ func TestImportNoInlineAndAggregatesEveryProcess(t *testing.T) {
 	if err = json.Unmarshal([]byte(strings.TrimPrefix(op.ID, "multi:")), &ids); err != nil {
 		t.Fatal(err)
 	}
-	var imported ImportResult
-	_ = json.Unmarshal(fixture(t, "import"), &imported)
 	want := 0
 	for _, s := range imported.ServiceStacks {
 		want += len(s.Processes)
+		if s.Name == "kkv" || s.Name == "kkm" {
+			if op.Services[s.Name] != s.ID {
+				t.Errorf("imported service %s: got %q want %q", s.Name, op.Services[s.Name], s.ID)
+			}
+		}
 	}
 	if len(ids) != want {
 		t.Fatalf("process IDs %d want %d", len(ids), want)
+	}
+	if len(op.Services) != 2 {
+		t.Fatalf("import ownership included services outside the request: %v", op.Services)
 	}
 }
 func TestOpAggregateTerminalStates(t *testing.T) {
@@ -513,7 +525,7 @@ func TestSubdomainAccessSchedulesAndPollsDurableOperations(t *testing.T) {
 			ctx := context.Background()
 			op, err := b.SetSubdomainAccess(ctx, "dashboard", enabled)
 			want := infra.Op{ID: "subdomain-process", Kind: action, ServiceID: "service-id"}
-			if err != nil || op != want || writes != 1 || polls != 0 {
+			if err != nil || !reflect.DeepEqual(op, want) || writes != 1 || polls != 0 {
 				t.Fatalf("schedule %+v: %v, writes %d polls %d", op, err, writes, polls)
 			}
 			// Reconstruct both backend and operation: polling needs no in-memory state.

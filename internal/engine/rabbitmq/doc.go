@@ -4,8 +4,14 @@
 // Package rabbitmq manages RabbitMQ 4.3 singleton brokers with one persistent
 // Local Storage volume per broker. Names use monotonically increasing member
 // indexes; hostname matches alone never establish infrastructure ownership.
-// An untagged volume can be adopted at any member stage only when a runtime
-// verified by its member token binds KARAKORAM_DATA_DIR to that exact volume.
+// Recorded service IDs, IDs returned by the member's own import, non-sensitive
+// ownership markers and readable legacy agent-token secrets establish ownership.
+// Sensitive variables are masked for tokens without sudo mode; verified legacy
+// services receive a non-sensitive marker so later checks need no secret reads.
+// An untagged volume can also be adopted when a marker- or token-verified runtime
+// binds KARAKORAM_DATA_DIR to that exact volume. Expired imports are reconciled
+// against observed services; absent services are re-imported, while masked legacy
+// services without other evidence require operator recovery.
 // Observed service IDs are checkpointed before retrying import. Cleanup returns
 // newly adopted IDs to the reconciler before deleting any runtime in a subsequent
 // invocation, preserving volume ownership after the mount evidence disappears.

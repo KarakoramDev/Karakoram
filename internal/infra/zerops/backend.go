@@ -58,6 +58,10 @@ func (b *Backend) Name() string { return "zerops" }
 // SetToken swaps the live client's credential without restarting services.
 func (b *Backend) SetToken(token string) { b.client.SetToken(token) }
 
+// SudoMode reports whether the token can read sensitive variables. Karakoram
+// never requires it: ownership uses recorded IDs and non-sensitive markers.
+func (b *Backend) SudoMode(ctx context.Context) (bool, error) { return b.client.SudoMode(ctx) }
+
 // ValidateProject confirms both project identity and service-list permissions.
 func ValidateProject(ctx context.Context, o Options) (*Backend, infra.Project, error) {
 	b, err := New(o)
@@ -116,6 +120,21 @@ func notFound(err error) bool {
 	var e *APIError
 	return errors.As(err, &e) && (e.StatusCode == 404 || (e.StatusCode == 400 && e.Code == "serviceStackNotFound"))
 }
+
+// processExpired recognizes a process the platform no longer retains. Zerops
+// forgets finished processes after about a day.
+func processExpired(err error) bool {
+	var e *APIError
+	return errors.As(err, &e) && (e.StatusCode == 404 || e.StatusCode == 400) && e.Code == "processNotFound"
+}
+
+// maskedValue is how Zerops returns sensitive variables to tokens without
+// sudo mode. It is never a value: it only means "not readable".
+const maskedValue = "REDACTED"
+
+// ownershipKeys are the only variables GetService exposes.
+var ownershipKeys = map[string]bool{"KARAKORAM_OWNER": true, "KARAKORAM_CLUSTER": true, "KARAKORAM_MEMBER": true, "KARAKORAM_AGENT_TOKEN": true, "KARAKORAM_DATA_DIR": true, "KARAKORAM_RELAY_OWNER": true}
+
 func (b *Backend) resolve(ctx context.Context, name string) (*ServiceStack, error) {
 	if name == "core" {
 		return nil, errors.New("zerops: refusing protected service")
@@ -196,6 +215,7 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		MaxContainers int               `yaml:"maxContainers,omitempty"`
 		Vertical      vertical          `yaml:"verticalAutoscaling"`
 		Env           map[string]string `yaml:"envSecrets,omitempty"`
+		Vars          map[string]string `yaml:"envVariables,omitempty"`
 	}
 	doc := struct {
 		Services []service `yaml:"services"`
@@ -230,7 +250,12 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		if minCount < 0 || maxCount < minCount {
 			return infra.Op{}, errors.New("zerops: invalid container bounds")
 		}
-		doc.Services = append(doc.Services, service{s.Hostname, s.Type, minCount, maxCount, v, s.Env})
+		for k := range s.Vars {
+			if _, dup := s.Env[k]; dup {
+				return infra.Op{}, errors.New("zerops: variable declared both sensitive and non-sensitive")
+			}
+		}
+		doc.Services = append(doc.Services, service{s.Hostname, s.Type, minCount, maxCount, v, s.Env, s.Vars})
 	}
 	if len(specs) == 0 {
 		return infra.Op{Kind: "import"}, nil
@@ -244,6 +269,7 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		return infra.Op{}, err
 	}
 	var ids []string
+	created := make(map[string]string, len(result.ServiceStacks))
 	for _, s := range result.ServiceStacks {
 		for _, p := range s.Processes {
 			if p.ID == "" {
@@ -251,12 +277,19 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 			}
 			ids = append(ids, p.ID)
 		}
+		if s.ID != "" && seen[s.Name] {
+			created[s.Name] = s.ID
+		}
 		b.invalidate(s.Name)
 	}
 	ids = slices.Compact(slices.Sorted(slices.Values(ids)))
 	// JSON IDs are durable and unambiguous; no in-memory operation registry needed.
 	encoded, _ := json.Marshal(ids)
-	return infra.Op{ID: "multi:" + string(encoded), Kind: "import"}, nil
+	op := infra.Op{ID: "multi:" + string(encoded), Kind: "import"}
+	if len(created) > 0 {
+		op.Services = created
+	}
+	return op, nil
 }
 func decodeObject(raw json.RawMessage) (map[string]json.RawMessage, error) {
 	m := map[string]json.RawMessage{}
@@ -305,10 +338,15 @@ func (b *Backend) GetService(ctx context.Context, name string) (*infra.Service, 
 	}
 	v.Ownership = map[string]string{}
 	for _, item := range items {
-		switch item.Key {
-		case "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_AGENT_TOKEN", "KARAKORAM_DATA_DIR", "KARAKORAM_RELAY_OWNER":
-			v.Ownership[item.Key] = item.Content
+		if !ownershipKeys[item.Key] {
+			continue
 		}
+		// A masked sensitive value is "unreadable", never a value to compare or keep.
+		if item.Content == maskedValue {
+			v.Masked = true
+			continue
+		}
+		v.Ownership[item.Key] = item.Content
 	}
 	return &v, nil
 }
@@ -441,6 +479,15 @@ func (r contextReader) Read(p []byte) (int, error) {
 // SetEnvSecrets waits for user-data operations but deliberately does not restart
 // members: engine providers own quorum-safe rolling restarts.
 func (b *Backend) SetEnvSecrets(ctx context.Context, name string, kv map[string]string) error {
+	return b.setUserData(ctx, name, kv, true)
+}
+
+// SetEnvVars writes non-sensitive variables, readable by tokens without sudo
+// mode; existing sensitive entries with the same key become non-sensitive.
+func (b *Backend) SetEnvVars(ctx context.Context, name string, kv map[string]string) error {
+	return b.setUserData(ctx, name, kv, false)
+}
+func (b *Backend) setUserData(ctx context.Context, name string, kv map[string]string, sensitive bool) error {
 	ctx, cancel := context.WithTimeout(ctx, b.waitTimeout)
 	defer cancel()
 	s, err := b.require(ctx, name)
@@ -464,15 +511,21 @@ func (b *Backend) SetEnvSecrets(ctx context.Context, name string, kv map[string]
 				if item.Type != "USER" {
 					return errors.New("zerops: cannot replace system environment entry")
 				}
+				// Only ownership markers may turn a sensitive entry into a
+				// readable one; anything else could publish a secret.
+				if item.Sensitive && !sensitive && !convertibleToPlain[key] {
+					return errors.New("zerops: refusing to make a sensitive variable readable")
+				}
 				id = item.ID
-				unchanged = item.Content == kv[key] && item.Sensitive
+				// A masked value never equals anything: rewrite it.
+				unchanged = item.Content != maskedValue && item.Content == kv[key] && item.Sensitive == sensitive
 				break
 			}
 		}
 		if unchanged {
 			continue
 		}
-		p, e := b.client.SetUserData(ctx, s.ID, id, key, kv[key])
+		p, e := b.client.SetUserData(ctx, s.ID, id, key, kv[key], sensitive)
 		if e != nil {
 			return e
 		}
@@ -482,6 +535,11 @@ func (b *Backend) SetEnvSecrets(ctx context.Context, name string, kv map[string]
 	}
 	return nil
 }
+
+// convertibleToPlain lists the markers earlier versions stored as sensitive
+// variables; they carry no secret and may be rewritten as readable.
+var convertibleToPlain = map[string]bool{"KARAKORAM_OWNER": true, "KARAKORAM_RELAY_OWNER": true}
+
 func (b *Backend) lifecycle(ctx context.Context, name, action string) (infra.Op, error) {
 	s, err := b.require(ctx, name)
 	if err != nil {
@@ -862,7 +920,11 @@ func (b *Backend) Logs(ctx context.Context, name string, q infra.LogQuery) ([]in
 }
 
 // OpStatus aggregates durable process IDs: only all FINISHED means success;
-// FAILED or CANCELED wins even when a sibling process is still running.
+// FAILED or CANCELED wins even when a sibling process is still running. Zerops
+// forgets processes after about a day; an expired process has an unknown
+// outcome. Imports then finish as Expired so callers observe the services they
+// may have created; any other expired action fails as Expired so the caller's
+// bounded retry re-issues it instead of polling a missing process forever.
 func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
 	if op.ID == "" {
 		return infra.OpState{Done: true, Status: "FINISHED"}, nil
@@ -874,10 +936,18 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		}
 	}
 	state := infra.OpState{Done: true, Status: "FINISHED"}
+	expired := 0
 	for _, id := range ids {
 		p, err := b.client.GetProcess(ctx, id)
+		if processExpired(err) {
+			expired++
+			continue
+		}
 		if err != nil {
 			return infra.OpState{}, err
+		}
+		if p.ServiceStackID != "" && !slices.Contains(state.ServiceIDs, p.ServiceStackID) {
+			state.ServiceIDs = append(state.ServiceIDs, p.ServiceStackID)
 		}
 		switch p.Status {
 		case "FINISHED":
@@ -895,6 +965,17 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		default:
 			state.Done = false
 			state.Status = p.Status
+		}
+	}
+	if expired > 0 {
+		state.Expired = true
+		if !state.Done {
+			return state, nil
+		}
+		state.Status = "EXPIRED"
+		if op.Kind != "import" {
+			state.Failed = true
+			state.Message = "platform process expired before its outcome was observed; retrying the action"
 		}
 	}
 	return state, nil

@@ -108,7 +108,7 @@ func TestClientExactResponses(t *testing.T) {
 		t.Fatalf("env: %v", e)
 	}
 	for _, id := range []string{"", "existing"} {
-		if p, e := c.SetUserData(ctx, "sid", id, "key", "value"); e != nil || p.ID == "" {
+		if p, e := c.SetUserData(ctx, "sid", id, "key", "value", true); e != nil || p.ID == "" {
 			t.Fatalf("secret: %v", e)
 		}
 	}

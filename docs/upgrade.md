@@ -5,6 +5,18 @@
 This guide upgrades **Karakoram itself**, not a database engine. Database version
 changes and feature-compatibility changes are separate cluster operations.
 
+## v0.1.1: tokens without sudo mode
+
+No action is needed for healthy clusters. Sudo mode is not required; tokens
+without sudo mode are recommended. Existing member services and volumes receive
+the non-sensitive `KARAKORAM_OWNER` marker automatically on their next reconcile.
+Agent tokens and other credentials remain sensitive.
+
+Clusters stuck during initial provisioning on v0.1.0 or earlier should follow
+[ownership recovery](operations.md#unverified-cluster-ownership). v0.1.1 also
+handles [expired platform processes](operations.md#repeated-processnotfound-errors)
+without repeatedly polling a process Zerops has forgotten.
+
 ## Before deploying a new version
 
 1. Read the target version's release notes and any state-schema compatibility

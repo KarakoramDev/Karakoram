@@ -15,8 +15,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-// failedImportInfra models an import error after both services were created,
-// with ownership environment available only on the runtime.
+// failedImportInfra models a legacy import error after both services were
+// created, with readable ownership secrets available only on the runtime.
 type failedImportInfra struct{ *coreInfra }
 
 func (f *failedImportInfra) ImportServices(ctx context.Context, specs []infra.ServiceSpec) (infra.Op, error) {
@@ -31,6 +31,7 @@ func (f *failedImportInfra) ImportServices(ctx context.Context, specs []infra.Se
 			service.Ownership = nil
 		} else {
 			service.ID = "runtime-id"
+			delete(service.Ownership, engine.OwnerVariable)
 		}
 	}
 	return op, errors.New("internalServerError")

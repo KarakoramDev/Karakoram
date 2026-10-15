@@ -79,6 +79,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	logTokenCapability(ctx, logger, backend)
 	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger})
 	registry, err := engine.NewRegistry(providers...)
 	if err != nil {
@@ -186,4 +187,22 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return nil
 	}
 	return runErr
+}
+
+// logTokenCapability reports, without blocking startup, whether the Zerops
+// token is in sudo mode. Karakoram works either way; sudo is not recommended.
+func logTokenCapability(ctx context.Context, logger *slog.Logger, backend *zerops.Backend) {
+	go func() {
+		probe, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		sudo, err := backend.SudoMode(probe)
+		switch {
+		case err != nil:
+			logger.Info("Zerops token capability check unavailable", "error", err.Error())
+		case sudo:
+			logger.Info("Zerops token is in sudo mode; Karakoram does not need it and a token without sudo mode is recommended")
+		default:
+			logger.Info("Zerops token is not in sudo mode; sensitive variables are masked and Karakoram does not need to read them")
+		}
+	}()
 }

@@ -13,8 +13,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-// A failed platform import can still create both services. Local Storage does
-// not expose ownership environment variables even when they were submitted.
+// A failed legacy platform import can still create both services, leaving Local
+// Storage without ownership variables and the runtime with only legacy evidence.
 type partialImportInfra struct {
 	*fakeInfra
 	importFailed bool
@@ -28,6 +28,8 @@ func (f *partialImportInfra) ImportServices(ctx context.Context, specs []infra.S
 	for _, spec := range specs {
 		service := f.services[spec.Hostname]
 		service.ID = spec.Hostname + "-id"
+		delete(service.Ownership, engine.OwnerVariable)
+		op.Services[spec.Hostname] = service.ID
 		service.Status = "READY_TO_DEPLOY"
 		if spec.Type == "local-storage:single@1" {
 			service.Ownership = nil

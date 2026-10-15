@@ -62,7 +62,7 @@ func serviceSpec(c *domain.Cluster, m *member, token string) infra.ServiceSpec {
 	if m.Volume != "" {
 		env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
 	}
-	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(comp.Resources), MinContainers: containers, MaxContainers: containers, Env: env, Volume: m.Volume}
+	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(comp.Resources), MinContainers: containers, MaxContainers: containers, Env: env, Vars: engine.OwnerVars(token, c.Name, m.Name, m.Name), Volume: m.Volume}
 }
 
 func ownershipEnv(cluster, member, token string) map[string]string {

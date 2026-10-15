@@ -64,16 +64,24 @@ ensures the CA, keyfile, five system-user passwords, hashed/encrypted agent
 tokens and member/agent certificates. A member progresses planned -> imported
 -> deployed -> healthy. Runtime and local-storage services are imported
 without inline deployment YAML to avoid Zerops's empty-artifact build;
-a retained volume is reused only with verified recorded identity or matching
-cluster/member/agent-token ownership. Untagged volumes without recorded IDs
-require a token-verified runtime and its exact KARAKORAM_DATA_DIR mount, even
-when a partial import left the member planned. A recorded volume ID remains
-authoritative: a different service at that hostname is a conflict. All members
-are verified before mutations or cleanup, checkpointing newly adopted IDs
-before deleting runtimes.
-Import/deploy operation IDs are persisted and observed non-blockingly. Deploy
-uses the real agent artifact, exact package pins, temporaryShutdown and the
-absolute readiness executable.
+ownership is proven by recorded service or retained-volume IDs, IDs from the
+member's own import, a non-sensitive KARAKORAM_OWNER marker bound to the token,
+cluster, member and hostname, or readable legacy cluster/member/agent-token
+variables. Sensitive variables are masked for tokens without sudo mode.
+Verified services receive the non-sensitive marker so subsequent reconciles
+do not need readable secrets. Untagged volumes without recorded IDs require
+a marker- or legacy-token-verified runtime and its exact KARAKORAM_DATA_DIR
+mount, even when a partial import left the member planned. A recorded volume
+ID remains authoritative: a different service at that hostname is a conflict.
+All members are verified before mutations or cleanup, checkpointing newly
+adopted IDs before deleting runtimes.
+Import/deploy operation IDs are persisted and observed non-blockingly. When
+the platform no longer retains an import process, existing services still
+require ownership evidence and missing services are imported again. Masked
+legacy services without recorded IDs or markers require deleting the services
+for recreation or one reconcile with a sudo-mode token to record ownership.
+Deploy uses the real agent artifact, exact package pins, temporaryShutdown
+and the absolute readiness executable.
 
 Each replica set progresses planned -> users -> ready: bootstrap initiates all
 configured members, follows the elected primary's agent for localhost-exception

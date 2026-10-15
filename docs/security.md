@@ -15,6 +15,9 @@ The design protects against unauthorized public API use, accidental credential d
 - **Control plane → agent:** pinned per-cluster CA/server hostname and that member's bearer token; bounded authenticated commands, not remote shell.
 - **Database clients/members:** MongoDB authentication, cluster keyfile and configured database TLS, distinct from agent transport.
 - **Control plane → Zerops:** a server-held project-scoped Full access token per namespace. The public UI/CLI never receives tokens.
+  Sudo mode is not required and should be left disabled: a sudo-mode token can
+  read every sensitive variable in the project, including database and Karakoram
+  secrets. Karakoram never needs to read those values.
 - **PBM → object storage:** S3 credentials and endpoint TLS verification, plus cluster-isolated prefixes.
 
 The public service listener is HTTP 8080 behind Zerops's HTTPS L7 termination. Traffic within the project to that HTTP listener is not end-to-end browser TLS; treat the project private network and platform as trusted infrastructure. Do not bind it directly to an untrusted public plaintext route. Agent traffic uses end-to-end TLS independently of the L7 path.
@@ -35,7 +38,7 @@ authenticated agent protocol. Default namespace traffic remains direct.
 | Carrier/relay reads agent configuration | Agent config pulls preserve **end-to-end TLS** to the internal listener, pinned internal CA/relay hostname SAN and member-specific bearer authentication |
 | Public unauthenticated connections exhaust admission | At most thirty-two pending handshakes; ten-second TLS/introduction deadline and a separately bounded policy-acknowledgment interval, not a ten-second total slot lifetime; bounded protocol/control frames and policies |
 | State copy discloses enrolled project authority | Per-namespace token/client-key sealing and sealed installation relay PKI; no tokens, fingerprints, client keys or serials in public health responses |
-| Pipeline/artifact enrollment leakage or foreign service deletion | Certificate/key/CA delivery through service env secrets; ownership marker checked before adopting/deleting a relay |
+| Pipeline/artifact enrollment leakage or foreign service deletion | Certificate/key/CA delivery through service env secrets; recorded service ID or non-sensitive ownership marker checked before adopting/deleting a relay |
 
 The control plane pushes current target policy on change/reconnect and every
 thirty seconds. A new authenticated namespace session replaces its old session;
@@ -94,22 +97,53 @@ See [ADR 0018](adr/0018-multi-project-namespaces-relay.md) and
 | SQLite verifiers | Argon2id local password hashes; SHA-256 API/refresh-token hashes and agent-token lookup hashes |
 | SQLite plaintext metadata | Specs/status, member ownership/process IDs, checkpoints/events, policy/account/token metadata, settings and metric samples; encryption does not hide all metadata |
 | Member secret environment | Its own `KARAKORAM_AGENT_TOKEN`; not the infrastructure token or master key |
+| Member nonsecret environment | `KARAKORAM_OWNER`, a service-bound ownership marker, on each member service and volume |
 | Member config/files | Owner-only cached MemberConfig and rendered key/certificate files, containing plaintext secrets needed by local processes |
-| Relay secret environment | Its enrolled client certificate/key, relay CA and ownership marker; not the namespace infrastructure token or master key |
+| Relay secret environment | Its enrolled client certificate/key and relay CA; not the namespace infrastructure token or master key |
+| Relay nonsecret environment | `KARAKORAM_RELAY_OWNER`, a random per-namespace ownership marker, not a credential |
 | CLI context | Plain bearer token in owner-only `~/.config/karakoram/config.yaml`; filesystem permissions are its protection |
 
 Write-only TLS/storage inputs are removed from ordinary cluster/storage response models and retained sealed separately. Agents receive locally needed backup/monitor credentials, not general system-account disclosure. PBM's connection URI is placed in its process environment; local process/root access can expose it. Member config cache is **0600**, keyfile **0400**, controls/receipts **0600**, protected directories normally **0700**. Volume/runtime administrators can read these files: state encryption does not extend to node-cache plaintext.
 
-MongoDB and Elasticsearch adopt an untagged local-storage service after a
-partial import only when its member runtime's cluster, member and agent-token
-environment is verified and `KARAKORAM_DATA_DIR` names that volume's exact mount.
-This applies even before import completion is recorded. Verified runtime and
-volume IDs are persisted before subsequent cleanup steps, so deletion can finish
-after the runtime is gone. A matching hostname or member stage is not ownership
-evidence; an untagged volume without a verified runtime or previously recorded
-ownership remains a conflict.
-
 Use a strong random master key (installer generates 48 characters); minimum input length is 32. Keep it outside state snapshots in a separate secret manager. Loss means encrypted state is unusable. Replacing the variable is **not** rotation: no master-key re-encryption command exists. Back up the original key and consistent complete state independently, encrypted off-platform. Do not assume a live `.db` copy or Local Storage tarball is transactionally consistent.
+
+## Service ownership
+
+Karakoram records the service IDs returned by its own imports and writes a
+**non-sensitive** `KARAKORAM_OWNER` variable on each member service and volume.
+The marker is an HMAC-SHA256 keyed by that member's random agent token over the
+cluster, member and service hostname. It cannot be reversed to recover the
+token or produced for another service without that token. Anyone who can read
+the project's variables can see the marker; it reveals no secret and grants no
+access. `KARAKORAM_AGENT_TOKEN` and other credentials remain sensitive.
+
+Ownership evidence is checked in this order:
+
+1. Previously recorded service or volume IDs, including retained-volume IDs.
+2. Service IDs from Karakoram's own recorded import, either its import response
+   or the import's process records while Zerops still retains them.
+3. A matching `KARAKORAM_OWNER` marker.
+4. Legacy cluster/member/agent-token environment values, only when readable.
+
+A volume can also be verified through a runtime proven by its marker or legacy
+environment when the runtime's readable `KARAKORAM_DATA_DIR` is exactly
+`/mnt/<volume hostname>`. This variable becomes non-sensitive once the member is
+deployed; a sudo-mode token can also read it while sensitive. Verified IDs are
+persisted before subsequent cleanup, allowing deletion after the runtime is
+gone. A recorded volume-ID mismatch remains a conflict for MongoDB. RabbitMQ
+and Elasticsearch accept a replacement volume only with that volume's own
+ownership evidence: its marker or readable legacy variables. A matching
+hostname or member stage alone is never ownership evidence, and a volume with
+no verified evidence remains a conflict.
+
+The namespace relay similarly uses its recorded service ID or
+`KARAKORAM_RELAY_OWNER`, a random per-namespace, non-sensitive marker that is not
+a credential. Its certificate and key remain sensitive.
+
+Sensitive variables are masked for tokens without sudo mode, so ownership does
+not depend on reading credentials back from Zerops. Existing verified services
+receive the non-sensitive marker on their next reconcile. For clusters stuck
+with earlier versions, see [ownership recovery](operations.md#unverified-cluster-ownership).
 
 ## PKI, database TLS and authentication
 

@@ -138,8 +138,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 	if v == nil {
 		return false, nil
 	}
+	var status infra.OpState
 	if v.Op.ID != "" {
-		status, err := rc.Backend.OpStatus(ctx, v.Op)
+		var err error
+		status, err = rc.Backend.OpStatus(ctx, v.Op)
 		if err != nil {
 			return true, err
 		}
@@ -154,16 +156,24 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 	if m != nil {
 		switch v.Action {
 		case "import":
+			complete, err := adoptImported(ctx, rc, m, v.Op, status)
+			if err != nil {
+				return true, err
+			}
 			if err := verifyMemberServices(ctx, rc, m); err != nil {
 				return true, err
 			}
-			m.Stage = stageImported
-			m.Resources = v.Resources
-			m.Containers = v.Containers
-			m.Disk = component(rc.Cluster.Spec, m).Resources
-			if rc.Store != nil && m.Volume != "" {
-				if err := rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), m.Name); err != nil && !missing(err) {
-					return true, err
+			// Expired or partial imports can leave services absent; keep the
+			// pre-import stage so the normal import step creates the rest.
+			if complete {
+				m.Stage = stageImported
+				m.Resources = v.Resources
+				m.Containers = v.Containers
+				m.Disk = component(rc.Cluster.Spec, m).Resources
+				if rc.Store != nil && m.Volume != "" {
+					if err := rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), m.Name); err != nil && !missing(err) {
+						return true, err
+					}
 				}
 			}
 		case "deploy", "upgrade":
@@ -253,7 +263,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 			return err
 		}
 		if volume == nil {
-			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: comp.Resources.MinDisk, MaxDisk: comp.Resources.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token)})
+			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: comp.Resources.MinDisk, MaxDisk: comp.Resources.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Volume)})
 		}
 	}
 	service, err := rc.Backend.GetService(ctx, m.Name)
@@ -270,7 +280,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 		if m.Volume != "" {
 			env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
 		}
-		specs = append(specs, infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: r, MinContainers: containers, MaxContainers: containers, Env: env, Volume: m.Volume})
+		specs = append(specs, infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: r, MinContainers: containers, MaxContainers: containers, Env: env, Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Name), Volume: m.Volume})
 	}
 	if len(specs) == 0 {
 		m.Stage = stageImported

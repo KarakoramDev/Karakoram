@@ -5,16 +5,15 @@ package elastic
 
 import (
 	"context"
-	"crypto/subtle"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"net"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
@@ -228,8 +227,12 @@ func (p *Provider) issueLeafs(ctx context.Context, rc *engine.Context, s *state,
 func ownershipEnv(cluster, member, token string) map[string]string {
 	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
 }
+
+// verifyMemberServices records proven identities, then backfills non-sensitive
+// markers only after both runtime and storage have passed ownership checks.
 func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) error {
-	var runtimeOwnership map[string]string
+	var runtime *infra.Service
+	var verifiedServices [2]*infra.Service
 	for _, volume := range []bool{false, true} {
 		name := m.Name
 		recorded := m.ServiceID
@@ -265,26 +268,76 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 			if e != nil {
 				return e
 			}
-			env := service.Ownership
-			verified = tok != nil && tok.Token != "" && env["KARAKORAM_CLUSTER"] == rc.Cluster.Name && env["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(env["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1
-			// Local-storage services may have no environment after a partial
-			// import. Only the token-verified runtime's exact mount is evidence.
-			if !verified && volume && runtimeOwnership["KARAKORAM_DATA_DIR"] == "/mnt/"+name {
-				env = runtimeOwnership
-				verified = tok != nil && tok.Token != "" && env["KARAKORAM_CLUSTER"] == rc.Cluster.Name && env["KARAKORAM_MEMBER"] == m.Name && subtle.ConstantTimeCompare([]byte(env["KARAKORAM_AGENT_TOKEN"]), []byte(tok.Token)) == 1
+			verified = tok != nil && engine.HasOwnership(service, tok.Token, rc.Cluster.Name, m.Name)
+			// Local Storage may have no environment after a partial import.
+			// A recorded runtime ID alone cannot authorize a new volume;
+			// its marker or readable legacy secret and exact mount must match.
+			if !verified && volume && tok != nil && engine.HasOwnership(runtime, tok.Token, rc.Cluster.Name, m.Name) && runtime.Ownership["KARAKORAM_DATA_DIR"] == "/mnt/"+name {
+				verified = true
 			}
 		}
 		if !verified {
-			return fmt.Errorf("%w: service %s has no verified cluster ownership", engine.ErrConflict, name)
+			return engine.UnverifiedOwnership(service)
 		}
 		if volume {
 			m.VolumeID = service.ID
+			verifiedServices[1] = service
 		} else {
 			m.ServiceID = service.ID
-			runtimeOwnership = service.Ownership
+			runtime = service
+			verifiedServices[0] = service
+		}
+	}
+	// Writing the runtime marker before checking storage would let a recorded
+	// runtime ID become new evidence for an otherwise unverifiable volume.
+	// Services of a cluster being deleted are left alone, and a member without
+	// a stored agent token has nothing to derive a marker from.
+	if (verifiedServices[0] == nil && verifiedServices[1] == nil) || rc.Cluster.Deleting {
+		return nil
+	}
+	tok, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
+	if missing(err) {
+		return nil
+	}
+	if err != nil || tok == nil {
+		return err
+	}
+	for _, service := range verifiedServices {
+		if service == nil {
+			continue
+		}
+		if err := engine.EnsureOwnerMarker(ctx, rc.Backend, service, tok.Token, rc.Cluster.Name, m.Name); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// adoptImported records identities proven by this member's own import and
+// reports whether all its services exist, including component runtimes.
+func adoptImported(ctx context.Context, rc *engine.Context, m *member, op infra.Op, st infra.OpState) (bool, error) {
+	complete := true
+	for _, volume := range []bool{false, true} {
+		name, recorded := m.Name, &m.ServiceID
+		if volume {
+			if m.Volume == "" || m.VolumeOrphaned {
+				continue
+			}
+			name, recorded = m.Volume, &m.VolumeID
+		}
+		service, err := rc.Backend.GetService(ctx, name)
+		if err != nil {
+			return false, err
+		}
+		if service == nil {
+			complete = false
+			continue
+		}
+		if *recorded == "" {
+			*recorded = engine.ImportedServiceID(op, st, service)
+		}
+	}
+	return complete, nil
 }
 func deleteMemberSecrets(ctx context.Context, rc *engine.Context, name string) error {
 	if err := rc.Secrets.DeleteAgentToken(ctx, rc.Cluster.Ref(), name); err != nil && !missing(err) {

@@ -2,6 +2,8 @@
 // Copyright 2026 The Karakoram Authors
 
 // Package namespaces manages project credentials and enrolled project relays.
+// Relay ownership uses a recorded service identity or a non-sensitive marker;
+// enrollment certificates and keys remain sensitive variables.
 package namespaces
 
 import (
@@ -625,7 +627,13 @@ func (r *Registry) renewHubCertificate(ctx context.Context, now time.Time) error
 	return nil
 }
 func owned(n *domain.Namespace, s *infra.Service) bool {
-	return s != nil && n.OwnershipMarker != "" && subtle.ConstantTimeCompare([]byte(s.Ownership["KARAKORAM_RELAY_OWNER"]), []byte(n.OwnershipMarker)) == 1
+	if s == nil {
+		return false
+	}
+	if n.Relay.ServiceID != "" && n.Relay.ServiceID == s.ID {
+		return true
+	}
+	return n.OwnershipMarker != "" && subtle.ConstantTimeCompare([]byte(s.Ownership["KARAKORAM_RELAY_OWNER"]), []byte(n.OwnershipMarker)) == 1
 }
 func (r *Registry) issue(n *domain.Namespace) ([]byte, error) {
 	cert, key, err := relay.IssueClientCertificate(r.pki.CACert, r.pki.CAKey, n.Name, time.Now())

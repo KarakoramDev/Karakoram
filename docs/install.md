@@ -27,12 +27,18 @@ install in five steps; this guide is the complete reference.
   scale storage, or configure routing. Organization Owner/Admin access and project
   creation rights are not required. Create the token in **Settings → Access Tokens
   Management** and retain its one-time-displayed value in a password manager.
+  **Sudo mode is not required; create the token without sudo mode** for least
+  privilege. A sudo-mode token can read every sensitive variable in the project,
+  including database and Karakoram secrets; Karakoram never needs to read them.
   See [Zerops token permissions](https://docs.zerops.io/features/rbac#integration-tokens).
 - For a local checkout: [zcli](https://docs.zerops.io/references/cli), already logged
   in with deployment access, and a complete checkout including `ui/package-lock.json`.
   Go and Node are installed by the remote build; local compilation is not required.
 - Free service names `karakoram` and `karakoramdata` in the target project, or
   [choose different names](#use-different-service-names) before importing.
+
+At startup, the control plane logs whether its Zerops token is in sudo mode.
+This is informational, not a requirement for operation.
 
 The installer creates one Ubuntu 24.04 runtime (one container, 0.5–1 GB RAM,
 shared CPU) and a 5 GB Local Storage volume. `zerops.yaml` builds the UI using
@@ -356,9 +362,11 @@ karactl -n dev clusters list
 ```
 
 The token needs **Custom access per project → Full access for that project**.
-Read-only and organization-wide tokens are not the intended scope. The project
-must differ from `default` and every registered project. Namespace names are
-2–32 lowercase letters/digits/hyphens, start with a letter, end with a
+Sudo mode is not required; create it without sudo mode to avoid granting access
+to read every sensitive variable in the project. Karakoram never needs to read
+those values. Read-only and organization-wide tokens are not the intended scope.
+The project must differ from `default` and every registered project. Namespace
+names are 2–32 lowercase letters/digits/hyphens, start with a letter, end with a
 letter/digit, and cannot be `default`.
 
 The control-plane `KARAKORAM_PUBLIC_URL` must be an HTTPS origin reachable from
@@ -414,7 +422,8 @@ and [operations](operations.md#namespace-and-relay-operations).
   separate opt-in operation with an IP allowlist; an HTTP subdomain does not
   expose those protocols. RabbitMQ management and Kibana/APM public HTTPS are
   separate engine-specific options. Public Karakoram UI/CLI access needs no Zerops VPN.
-- The project token can manage services and read service secrets in this project.
+- A Full access project token can manage services; sudo mode additionally lets it
+  read every sensitive variable in the project. Leave sudo mode disabled.
   Treat Karakoram and project full-access users as trusted infrastructure
   administrators. Retain Zerops's default service environment isolation.
 - SQLite lives on Local Storage, not the disposable runtime filesystem. Keep
@@ -441,3 +450,8 @@ and [operations](operations.md#namespace-and-relay-operations).
   deployment, enable **Subdomain access** in the service's Public access page.
 - Token unauthorized: ensure it is scoped to this project with Full access;
   replacing the Karakoram API token does not fix the Zerops integration token.
+- `service <cluster>m0 has no verified cluster ownership`: upgrade to v0.1.1 and
+  follow [ownership recovery](operations.md#unverified-cluster-ownership) for a
+  cluster stuck during initial provisioning.
+- `zerops HTTP 400 (processNotFound)` repeating every minute: upgrade to v0.1.1;
+  see [expired platform processes](operations.md#repeated-processnotfound-errors).

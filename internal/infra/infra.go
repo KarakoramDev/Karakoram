@@ -24,14 +24,19 @@ type Project struct {
 
 // ServiceSpec declares a runtime or persistent volume service.
 type ServiceSpec struct {
-	Hostname      string            `json:"hostname"`
-	Type          string            `json:"type"`
-	Resources     Resources         `json:"resources"`
-	MinContainers int               `json:"minContainers"`
-	MaxContainers int               `json:"maxContainers"`
-	ZeropsYAML    string            `json:"zeropsYaml,omitempty"`
-	Env           map[string]string `json:"env,omitempty"`
-	Volume        string            `json:"volume,omitempty"`
+	Hostname      string    `json:"hostname"`
+	Type          string    `json:"type"`
+	Resources     Resources `json:"resources"`
+	MinContainers int       `json:"minContainers"`
+	MaxContainers int       `json:"maxContainers"`
+	ZeropsYAML    string    `json:"zeropsYaml,omitempty"`
+	// Env holds sensitive variables (secrets). Tokens without the platform's
+	// sensitive-read capability observe them masked, so they are never
+	// ownership evidence by themselves.
+	Env map[string]string `json:"env,omitempty"`
+	// Vars holds non-sensitive variables readable by every project token.
+	Vars   map[string]string `json:"vars,omitempty"`
+	Volume string            `json:"volume,omitempty"`
 }
 
 // Service describes an observed infrastructure service.
@@ -43,8 +48,12 @@ type Service struct {
 	Resources     Resources `json:"resources"`
 	MinContainers int       `json:"minContainers"`
 	MaxContainers int       `json:"maxContainers"`
-	// Ownership contains only Karakoram identity keys, never arbitrary environment secrets.
+	// Ownership contains only Karakoram identity keys, never arbitrary environment
+	// secrets. Values the token cannot read are omitted, never stored masked.
 	Ownership map[string]string `json:"-"`
+	// Masked reports that an ownership key exists but its sensitive value is
+	// masked for this token, so legacy secret evidence cannot be compared.
+	Masked bool `json:"-"`
 }
 
 // Deployment streams the executable artifact with its runtime configuration.
@@ -103,6 +112,9 @@ type Op struct {
 	ID        string `json:"id"`
 	Kind      string `json:"kind,omitempty"`
 	ServiceID string `json:"serviceId,omitempty"`
+	// Services maps hostnames to the service IDs an import created. They are
+	// authoritative ownership evidence: the IDs come from Karakoram's own request.
+	Services map[string]string `json:"services,omitempty"`
 }
 
 // OpState reports non-blocking infrastructure operation progress.
@@ -111,6 +123,13 @@ type OpState struct {
 	Failed  bool   `json:"failed"`
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
+	// Expired reports that the platform no longer knows the operation, so its
+	// outcome is unknown. An expired import is Done (not Failed): callers
+	// observe the services it may have created. Any other expired action is
+	// also Failed, so callers re-issue it through their retry path.
+	Expired bool `json:"expired,omitempty"`
+	// ServiceIDs lists the services the operation's processes acted on, when known.
+	ServiceIDs []string `json:"serviceIds,omitempty"`
 }
 
 // Backend defines the infrastructure operations required by engine providers.
@@ -123,6 +142,8 @@ type Backend interface {
 	DeleteService(context.Context, string) (Op, error)
 	Deploy(context.Context, string, Deployment) (Op, error)
 	SetEnvSecrets(context.Context, string, map[string]string) error
+	// SetEnvVars writes non-sensitive variables, converting existing keys.
+	SetEnvVars(context.Context, string, map[string]string) error
 	Start(context.Context, string) (Op, error)
 	Stop(context.Context, string) (Op, error)
 	Restart(context.Context, string) (Op, error)

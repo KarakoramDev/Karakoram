@@ -316,8 +316,9 @@ func (c *Client) Env(ctx context.Context, id string) ([]EnvItem, error) {
 	return v.Items, err
 }
 
-// SetUserData creates or updates a sensitive user entry (existingID empty means create).
-func (c *Client) SetUserData(ctx context.Context, serviceID, existingID, key, value string) (Process, error) {
+// SetUserData creates or updates a user entry (existingID empty means create).
+// Sensitive entries are masked for tokens without sudo mode.
+func (c *Client) SetUserData(ctx context.Context, serviceID, existingID, key, value string, sensitive bool) (Process, error) {
 	method, path, retry := "POST", "/service-stack/"+escape(serviceID)+"/user-data", false
 	if existingID != "" {
 		method, path, retry = "PUT", "/user-data/"+escape(existingID), true
@@ -326,10 +327,19 @@ func (c *Client) SetUserData(ctx context.Context, serviceID, existingID, key, va
 		Key       string `json:"key"`
 		Content   string `json:"content"`
 		Sensitive bool   `json:"sensitive"`
-	}{key, value, true}
+	}{key, value, sensitive}
 	var v Process
 	err := c.json(ctx, method, path, body, &v, retry)
 	return v, err
+}
+
+// SudoMode reports whether the token can currently read sensitive values.
+func (c *Client) SudoMode(ctx context.Context) (bool, error) {
+	var v struct {
+		InSudo bool `json:"inSudo"`
+	}
+	err := c.json(ctx, "GET", "/auth/sudo", nil, &v, true)
+	return v.InSudo, err
 }
 
 // Autoscaling replaces the COMPLETE custom autoscaling configuration.

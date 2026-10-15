@@ -258,7 +258,19 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		return errors.New("Cannot inspect relay service")
 	}
 	if service != nil && !owned(n, service) {
+		if service.Masked && service.Ownership["KARAKORAM_RELAY_OWNER"] == "" && n.Relay.ServiceID == "" {
+			return errors.New("Relay ownership cannot be verified: the relay was created by an earlier version and sensitive variables are masked for tokens without sudo mode; delete the relay service in Zerops so Karakoram recreates it, or run one reconciliation with a sudo-mode token")
+		}
 		return errors.New("Relay hostname belongs to a service this namespace does not own")
+	}
+	if service != nil {
+		n.Relay.ServiceID = service.ID
+		// A relay about to be deleted needs no marker.
+		if n.Phase != "Deleting" && (service.Ownership["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker || n.SecretsPending) {
+			if err = b.SetEnvVars(ctx, n.Relay.Hostname, map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}); err != nil {
+				return errors.New("Cannot update relay ownership marker")
+			}
+		}
 	}
 	if n.Phase == "Deleting" {
 		if service != nil {
@@ -305,19 +317,18 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	if err != nil {
 		return err
 	}
-	secrets := map[string]string{"KARAKORAM_RELAY_CERT": string(n.ClientCert), "KARAKORAM_RELAY_KEY": string(key), "KARAKORAM_RELAY_CA": string(r.pki.CACert), "KARAKORAM_RELAY_OWNER": n.OwnershipMarker}
+	secrets := map[string]string{"KARAKORAM_RELAY_CERT": string(n.ClientCert), "KARAKORAM_RELAY_KEY": string(key), "KARAKORAM_RELAY_CA": string(r.pki.CACert)}
 	if service == nil {
 		n.DeployedExecutableHash = ""
 		n.SecretsPending = false
-		op, err := b.ImportServices(ctx, []infra.ServiceSpec{{Hostname: n.Relay.Hostname, Type: "ubuntu@24.04", MinContainers: 1, MaxContainers: 1, Resources: domain.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 1, MaxDisk: 3}, Env: secrets}})
+		op, err := b.ImportServices(ctx, []infra.ServiceSpec{{Hostname: n.Relay.Hostname, Type: "ubuntu@24.04", MinContainers: 1, MaxContainers: 1, Resources: domain.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 1, MaxDisk: 3}, Env: secrets, Vars: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}})
 		if err != nil {
 			return errors.New("Cannot import relay service")
 		}
 		op.Kind = "import"
-		n.Relay.ServiceID = op.ServiceID
+		n.Relay.ServiceID = op.Services[n.Relay.Hostname]
 		return r.pending(ctx, n, b, op)
 	}
-	n.Relay.ServiceID = service.ID
 	if n.SecretsPending {
 		if err = b.SetEnvSecrets(ctx, n.Relay.Hostname, secrets); err != nil {
 			return errors.New("Cannot update relay enrollment secrets")

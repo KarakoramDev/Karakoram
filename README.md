@@ -49,7 +49,7 @@ You own the infrastructure, credentials, data and recovery procedures. Zerops is
 
 **Fastest path:** the [10-minute quick start](docs/quickstart.md) installs Karakoram by pasting one YAML into the Zerops dashboard; no checkout, build tools or CLI needed. The steps below deploy from a local checkout instead.
 
-You need an existing Zerops project, an authenticated zcli and a **project-scoped Full access integration token**. From a local checkout, import the template in `deploy/`:
+You need an existing Zerops project, an authenticated zcli and a **project-scoped Full access integration token**. **Sudo mode is not required; leave it disabled** for least privilege. A sudo-mode token can read every sensitive variable in the project, including database and Karakoram secrets; Karakoram never needs to read them. From a local checkout, import the template in `deploy/`:
 
 ```sh
 PROJECT_ID='your-project-id'

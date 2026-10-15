@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -43,6 +44,7 @@ type fakeInfra struct {
 	done, failed bool
 	mutations    int
 	imports      [][]infra.ServiceSpec
+	varWrites    map[string]map[string]string
 	deployments  []infra.Deployment
 	publicPorts  []infra.PublicPortRoute
 	subdomains   map[string]bool
@@ -76,8 +78,13 @@ func (f *fakeInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		return op, err
 	}
 	f.imports = append(f.imports, slices.Clone(specs))
+	op.Services = make(map[string]string, len(specs))
 	for _, s := range specs {
-		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: s.Env}
+		ownership := make(map[string]string, len(s.Env)+len(s.Vars))
+		maps.Copy(ownership, s.Env)
+		maps.Copy(ownership, s.Vars)
+		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: ownership}
+		op.Services[s.Hostname] = s.Hostname
 	}
 	return op, nil
 }
@@ -117,6 +124,24 @@ func (f *fakeInfra) Deploy(_ context.Context, name string, d infra.Deployment) (
 	return op, nil
 }
 func (f *fakeInfra) SetEnvSecrets(context.Context, string, map[string]string) error { return nil }
+func (f *fakeInfra) SetEnvVars(_ context.Context, name string, vars map[string]string) error {
+	if err := f.failures["vars:"+name]; err != nil {
+		return err
+	}
+	service := f.services[name]
+	if service == nil {
+		return engine.ErrNotFound
+	}
+	if service.Ownership == nil {
+		service.Ownership = make(map[string]string)
+	}
+	maps.Copy(service.Ownership, vars)
+	if f.varWrites == nil {
+		f.varWrites = make(map[string]map[string]string)
+	}
+	f.varWrites[name] = maps.Clone(vars)
+	return nil
+}
 func (f *fakeInfra) Start(_ context.Context, name string) (infra.Op, error) {
 	op, err := f.op("start", name)
 	if err == nil {

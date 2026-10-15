@@ -54,11 +54,20 @@ func (f *coreInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 	defer f.mu.Unlock()
 	f.mutations++
 	f.imports = append(f.imports, specs)
+	services := make(map[string]string, len(specs))
 	for _, s := range specs {
-		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: s.Env, MinContainers: s.MinContainers, MaxContainers: s.MaxContainers}
+		ownership := make(map[string]string, len(s.Env)+len(s.Vars))
+		for key, value := range s.Env {
+			ownership[key] = value
+		}
+		for key, value := range s.Vars {
+			ownership[key] = value
+		}
+		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: ownership, MinContainers: s.MinContainers, MaxContainers: s.MaxContainers}
+		services[s.Hostname] = s.Hostname
 		f.calls = append(f.calls, "import:"+s.Hostname)
 	}
-	return infra.Op{ID: "import"}, nil
+	return infra.Op{ID: "import", Services: services}, nil
 }
 func (f *coreInfra) GetService(_ context.Context, name string) (*infra.Service, error) {
 	f.mu.Lock()
@@ -97,6 +106,21 @@ func (f *coreInfra) Deploy(_ context.Context, name string, d infra.Deployment) (
 	return infra.Op{ID: "deploy"}, nil
 }
 func (*coreInfra) SetEnvSecrets(context.Context, string, map[string]string) error { return nil }
+func (f *coreInfra) SetEnvVars(_ context.Context, name string, vars map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	service := f.services[name]
+	if service == nil {
+		return errors.New("service " + name + " not found")
+	}
+	if service.Ownership == nil {
+		service.Ownership = map[string]string{}
+	}
+	for key, value := range vars {
+		service.Ownership[key] = value
+	}
+	return nil
+}
 func (f *coreInfra) lifecycle(name, action string) (infra.Op, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

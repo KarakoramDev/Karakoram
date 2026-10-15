@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math/big"
@@ -33,7 +34,11 @@ type projectBackend struct {
 	service                             *infra.Service
 	imports, deploys, restarts, deletes int
 	env                                 map[string]string
+	vars                                map[string]string
+	envVarWrites                        int
+	envVarError                         error
 	opDone                              bool
+	opExpired                           bool
 }
 
 func (b *projectBackend) SetToken(s string) { b.token = s }
@@ -46,11 +51,32 @@ func (b *projectBackend) GetService(context.Context, string) (*infra.Service, er
 func (b *projectBackend) ImportServices(_ context.Context, s []infra.ServiceSpec) (infra.Op, error) {
 	b.imports++
 	b.env = s[0].Env
-	b.service = &infra.Service{ID: "service-test", Hostname: s[0].Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": s[0].Env["KARAKORAM_RELAY_OWNER"]}}
-	return infra.Op{ID: "op-import", Kind: "import", ServiceID: b.service.ID}, nil
+	b.vars = s[0].Vars
+	ownership := make(map[string]string, len(s[0].Vars))
+	for key, value := range s[0].Vars {
+		ownership[key] = value
+	}
+	b.service = &infra.Service{ID: "service-test", Hostname: s[0].Hostname, Ownership: ownership}
+	return infra.Op{ID: "op-import", Kind: "import", Services: map[string]string{s[0].Hostname: b.service.ID}}, nil
 }
 func (b *projectBackend) SetEnvSecrets(_ context.Context, _ string, env map[string]string) error {
 	b.env = env
+	return nil
+}
+func (b *projectBackend) SetEnvVars(_ context.Context, _ string, vars map[string]string) error {
+	b.envVarWrites++
+	if b.envVarError != nil {
+		return b.envVarError
+	}
+	b.vars = vars
+	if b.service != nil {
+		if b.service.Ownership == nil {
+			b.service.Ownership = make(map[string]string)
+		}
+		for key, value := range vars {
+			b.service.Ownership[key] = value
+		}
+	}
 	return nil
 }
 func (b *projectBackend) Restart(context.Context, string) (infra.Op, error) {
@@ -73,8 +99,11 @@ func (b *projectBackend) DeleteService(context.Context, string) (infra.Op, error
 	b.service = nil
 	return infra.Op{ID: "op-delete"}, nil
 }
-func (b *projectBackend) OpStatus(context.Context, infra.Op) (infra.OpState, error) {
-	return infra.OpState{Done: b.opDone}, nil
+
+// OpStatus models the Zerops backend: an expired import finishes so callers
+// observe services; any other expired action fails so it is re-issued.
+func (b *projectBackend) OpStatus(_ context.Context, op infra.Op) (infra.OpState, error) {
+	return infra.OpState{Done: b.opDone || b.opExpired, Expired: b.opExpired, Failed: b.opExpired && op.Kind != "import"}, nil
 }
 
 type testArtifact struct{}
@@ -385,8 +414,11 @@ func TestRelayReconcileDurableOperationsAndSecretFreeYAML(t *testing.T) {
 	if err != nil || got.DeployedExecutableHash != "test-hash" {
 		t.Fatal("deploy checkpoint", err)
 	}
-	if b.env["KARAKORAM_RELAY_KEY"] == "" || b.env["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker {
-		t.Fatal("enrollment env secrets missing")
+	if b.env["KARAKORAM_RELAY_KEY"] == "" || b.vars["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker {
+		t.Fatal("enrollment secrets or ownership marker missing")
+	}
+	if _, sensitive := b.env["KARAKORAM_RELAY_OWNER"]; sensitive {
+		t.Fatal("ownership marker imported as a sensitive variable")
 	}
 	text, err := RelayYAML("controlrelay", "https://example.com", "testing")
 	if err != nil {
@@ -407,9 +439,9 @@ func TestRelayReconcileDurableOperationsAndSecretFreeYAML(t *testing.T) {
 	if len(env) != 2 || env["KARAKORAM_RELAY_URL"] != "https://example.com" || env["KARAKORAM_RELAY_NAMESPACE"] != "testing" {
 		t.Fatal("relay public configuration", env)
 	}
-	for _, secret := range []string{"KARAKORAM_RELAY_CERT", "KARAKORAM_RELAY_KEY", "KARAKORAM_RELAY_CA", "KARAKORAM_RELAY_OWNER"} {
-		if strings.Contains(text, secret) {
-			t.Fatal("enrollment secret in pipeline")
+	for _, key := range []string{"KARAKORAM_RELAY_CERT", "KARAKORAM_RELAY_KEY", "KARAKORAM_RELAY_CA", "KARAKORAM_RELAY_OWNER"} {
+		if strings.Contains(text, key) {
+			t.Fatal("enrollment configuration in pipeline")
 		}
 	}
 }
@@ -445,6 +477,15 @@ func TestClientRenewalUsesSecretsAndRestartWithoutRedeploy(t *testing.T) {
 	r.step(ctx, n.Name)
 	if b.restarts != 1 || b.deploys != 0 || b.env["KARAKORAM_RELAY_CERT"] != string(renewed.ClientCert) {
 		t.Fatal("renewal must update secrets and restart only")
+	}
+	if len(b.env) != 3 || b.env["KARAKORAM_RELAY_KEY"] != string(newKey) || b.env["KARAKORAM_RELAY_CA"] != string(r.pki.CACert) {
+		t.Fatal("renewal must write only the enrollment certificate, key, and CA as secrets")
+	}
+	if _, sensitive := b.env["KARAKORAM_RELAY_OWNER"]; sensitive {
+		t.Fatal("renewal wrote the ownership marker as a sensitive variable")
+	}
+	if b.envVarWrites != 1 || b.vars["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker {
+		t.Fatal("renewal did not write the non-sensitive ownership marker")
 	}
 	r.step(ctx, n.Name)
 	r.step(ctx, n.Name)
@@ -584,5 +625,208 @@ func TestRegistryLifecycleEventsUseSystemActor(t *testing.T) {
 		if !seen[reason] {
 			t.Error("missing lifecycle event", reason)
 		}
+	}
+}
+
+func TestRelayImportUsesPublicOwnershipAndRecordsServiceID(t *testing.T) {
+	r, b, _ := setupRegistry(t)
+	n := createTestNamespace(t, r)
+	if err := r.reconcile(t.Context(), n, b); err != nil {
+		t.Fatal(err)
+	}
+	if b.imports != 1 || b.vars["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker || len(b.vars) != 1 {
+		t.Fatal("relay import did not use a non-sensitive ownership marker")
+	}
+	if _, sensitive := b.env["KARAKORAM_RELAY_OWNER"]; sensitive {
+		t.Fatal("relay owner imported as a sensitive variable")
+	}
+	if len(b.env) != 3 || b.env["KARAKORAM_RELAY_CERT"] != string(n.ClientCert) || b.env["KARAKORAM_RELAY_KEY"] == "" || b.env["KARAKORAM_RELAY_CA"] != string(r.pki.CACert) {
+		t.Fatal("relay enrollment secrets missing")
+	}
+	stored, err := r.Get(t.Context(), n.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Relay.ServiceID != b.service.ID || stored.Relay.ServiceID == "" || stored.PendingOpKind != "import" {
+		t.Fatal("aggregate import did not persist the relay service identity")
+	}
+}
+
+func TestMaskedRelayRecordedIdentityBackfillsOwnership(t *testing.T) {
+	r, b, _ := setupRegistry(t)
+	n := createTestNamespace(t, r)
+	n.Relay.ServiceID = "owned-relay"
+	n.DeployedExecutableHash = r.o.ExecutableHash
+	n.SecretsPending = false
+	b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+	if !owned(n, b.service) {
+		t.Fatal("recorded service identity did not prove ownership")
+	}
+	if err := r.reconcile(t.Context(), n, b); err != nil {
+		t.Fatal(err)
+	}
+	if b.envVarWrites != 1 || b.vars["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker || b.service.Ownership["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker {
+		t.Fatal("legacy masked ownership marker was not made non-sensitive")
+	}
+	if b.env != nil || b.restarts != 0 || b.deploys != 0 {
+		t.Fatal("ownership migration changed relay enrollment or deployment")
+	}
+	if err := r.reconcile(t.Context(), n, b); err != nil {
+		t.Fatal(err)
+	}
+	if b.envVarWrites != 1 {
+		t.Fatal("ownership marker migration repeated")
+	}
+}
+
+func TestMaskedRelayWithoutIdentityRequiresOwnershipRecovery(t *testing.T) {
+	for _, deleting := range []bool{false, true} {
+		t.Run(fmt.Sprintf("deleting=%t", deleting), func(t *testing.T) {
+			r, b, _ := setupRegistry(t)
+			n := createTestNamespace(t, r)
+			if deleting {
+				n.Phase = "Deleting"
+			}
+			b.service = &infra.Service{ID: "unverified-relay", Hostname: n.Relay.Hostname, Masked: true}
+			err := r.reconcile(t.Context(), n, b)
+			if err == nil {
+				t.Fatal("masked hostname alone proved ownership")
+			}
+			for _, text := range []string{"earlier version", "sensitive variables are masked for tokens without sudo mode", "delete the relay service in Zerops", "sudo-mode token"} {
+				if !strings.Contains(err.Error(), text) {
+					t.Fatalf("ownership recovery diagnostic missing %q: %v", text, err)
+				}
+			}
+			if b.deletes != 0 || b.envVarWrites != 0 || b.restarts != 0 || b.deploys != 0 || b.imports != 0 {
+				t.Fatal("unverified relay was modified")
+			}
+		})
+	}
+}
+
+func TestRelayOwnershipRejectsForeignServices(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		recordedID string
+		marker     string
+		masked     bool
+	}{
+		{name: "foreign marker", marker: "foreign"},
+		{name: "foreign marker with masked secrets", marker: "foreign", masked: true},
+		{name: "replaced recorded service", recordedID: "previous-relay", masked: true},
+		{name: "hostname only"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, b, _ := setupRegistry(t)
+			n := createTestNamespace(t, r)
+			n.Relay.ServiceID = tc.recordedID
+			b.service = &infra.Service{ID: "foreign-relay", Hostname: n.Relay.Hostname, Masked: tc.masked, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": tc.marker}}
+			if owned(n, b.service) {
+				t.Fatal("foreign relay accepted")
+			}
+			err := r.reconcile(t.Context(), n, b)
+			if err == nil || err.Error() != "Relay hostname belongs to a service this namespace does not own" {
+				t.Fatal("foreign relay ownership error changed", err)
+			}
+			if b.deletes != 0 || b.envVarWrites != 0 || b.restarts != 0 || b.deploys != 0 {
+				t.Fatal("foreign relay was modified")
+			}
+		})
+	}
+}
+
+func TestMaskedRelayDeletionUsesRecordedIdentity(t *testing.T) {
+	r, b, _ := setupRegistry(t)
+	n := createTestNamespace(t, r)
+	n.Relay.ServiceID = "owned-relay"
+	b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+	if err := r.save(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Delete(t.Context(), n.Name); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		r.step(t.Context(), n.Name)
+	}
+	if b.deletes != 1 || b.service != nil {
+		t.Fatal("masked owned relay was not deleted")
+	}
+	if _, err := r.Get(t.Context(), n.Name); !errors.Is(err, ErrNotFound) {
+		t.Fatal("namespace deletion did not finish", err)
+	}
+}
+
+func TestRelayOwnershipMigrationFailureIsRetried(t *testing.T) {
+	r, b, _ := setupRegistry(t)
+	n := createTestNamespace(t, r)
+	n.Relay.ServiceID = "owned-relay"
+	n.DeployedExecutableHash = r.o.ExecutableHash
+	n.SecretsPending = false
+	b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+	b.envVarError = errors.New("write failed")
+	if err := r.reconcile(t.Context(), n, b); err == nil || err.Error() != "Cannot update relay ownership marker" {
+		t.Fatal("ownership migration failure was ignored", err)
+	}
+	b.envVarError = nil
+	if err := r.reconcile(t.Context(), n, b); err != nil {
+		t.Fatal(err)
+	}
+	if b.envVarWrites != 2 || b.vars["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker {
+		t.Fatal("ownership migration was not retried")
+	}
+}
+
+func TestExpiredRelayOperationsResumeFromObservedState(t *testing.T) {
+	for _, kind := range []string{"import", "deploy", "restart", "delete"} {
+		t.Run(kind, func(t *testing.T) {
+			r, b, _ := setupRegistry(t)
+			n := createTestNamespace(t, r)
+			n.PendingOpID = "expired-operation"
+			n.PendingOpKind = kind
+			n.Relay.ServiceID = "owned-relay"
+			n.SecretsPending = false
+			n.DeployedExecutableHash = "previous-hash"
+			if kind == "deploy" {
+				n.PendingExecutableHash = r.o.ExecutableHash
+			}
+			if kind == "delete" {
+				n.Phase = "Deleting"
+			} else {
+				b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+			}
+			b.opExpired = true
+			err := r.reconcile(t.Context(), n, b)
+			if kind == "import" && err != nil {
+				t.Fatal(err)
+			}
+			if kind != "import" && err == nil {
+				t.Fatal("expired action was not reported for retry")
+			}
+			if n.PendingOpID != "" || n.PendingOpKind != "" || n.PendingExecutableHash != "" {
+				t.Fatal("expired operation retained its pending checkpoint")
+			}
+			if n.DeployedExecutableHash != "previous-hash" {
+				t.Fatal("expired operation was mistaken for a successful deployment")
+			}
+			b.opExpired = false
+			if err := r.reconcile(t.Context(), n, b); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "delete":
+				if _, err := r.Get(t.Context(), n.Name); !errors.Is(err, ErrNotFound) {
+					t.Fatal("expired deletion did not observe the absent relay", err)
+				}
+			case "restart":
+				if n.PendingOpKind != "restart" || b.envVarWrites != 1 {
+					t.Fatal("expired restart was not re-issued", n.PendingOpKind, b.envVarWrites)
+				}
+			default:
+				if b.deploys != 1 || b.envVarWrites != 1 {
+					t.Fatal("expired operation did not resume from the observed relay")
+				}
+			}
+		})
 	}
 }
