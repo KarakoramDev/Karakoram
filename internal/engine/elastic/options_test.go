@@ -50,8 +50,11 @@ func TestStoredKibanaRewriteBasePathDoesNotBlockReconcile(t *testing.T) {
 			kibana.Replicas = 1
 			rc.Cluster.Spec.Components.Extra[kindKibana] = kibana
 			rc.Cluster.Spec.EngineOptions = json.RawMessage(raw)
-			if err := p.Validate(t.Context(), rc, rc.Cluster); err == nil || !strings.Contains(err.Error(), "managed") {
-				t.Fatal("write admission accepted the managed rewrite setting", err)
+			if err := p.Validate(t.Context(), nil, rc.Cluster); err == nil || !strings.Contains(err.Error(), "managed") {
+				t.Fatal("create admission accepted the managed rewrite setting", err)
+			}
+			if err := p.Validate(t.Context(), rc.Cluster, rc.Cluster); err == nil || !strings.Contains(err.Error(), "managed") {
+				t.Fatal("update admission accepted the managed rewrite setting", err)
 			}
 			coreConverge(t, p, rc, f)
 			config, err := p.MemberConfig(t.Context(), rc, "demokb")
