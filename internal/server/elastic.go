@@ -6,6 +6,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"time"
 	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
@@ -83,7 +84,7 @@ func (s *Server) elasticAccess(ctx context.Context, name string, in input) respo
 	case "CreateElasticUser":
 		b := in.Body.(*api.ElasticUserCreate)
 		if utf8.RuneCountInString(value(b.Password)) < 8 {
-			return invalid()
+			return invalidField("password", "out_of_range", "password must contain at least 8 characters")
 		}
 		u := elastic.UserWrite{User: elastic.User{Username: b.Username, Roles: b.Roles, FullName: value(b.FullName), Email: value(b.Email), Enabled: b.Enabled}, Password: value(b.Password)}
 		if err := access.CreateUser(ctx, rc, u); err != nil {
@@ -93,10 +94,10 @@ func (s *Server) elasticAccess(ctx context.Context, name string, in input) respo
 	case "UpdateElasticUser":
 		b := in.Body.(*api.ElasticUserWrite)
 		if b.Password != nil && utf8.RuneCountInString(*b.Password) < 8 {
-			return invalid()
+			return invalidField("password", "out_of_range", "password must contain at least 8 characters")
 		}
 		if b.Username != in.Username {
-			return invalid()
+			return invalidField("username", "conflict", "username must match the user named in the request path")
 		}
 		u := elastic.UserWrite{User: elastic.User{Username: in.Username, Roles: b.Roles, FullName: value(b.FullName), Email: value(b.Email), Enabled: b.Enabled}, Password: value(b.Password)}
 		if err := access.UpdateUser(ctx, rc, u); err != nil {
@@ -127,7 +128,7 @@ func (s *Server) elasticAccess(ctx context.Context, name string, in input) respo
 	case "CreateElasticRole", "UpdateElasticRole":
 		b := in.Body.(*api.ElasticRoleInput)
 		if name == "UpdateElasticRole" && b.Name != in.Role {
-			return invalid()
+			return invalidField("name", "conflict", "name must match the role named in the request path")
 		}
 		r := elastic.AccessRole{Name: b.Name, Role: elasticDescriptorDomain(b.Cluster, b.Indices, b.Applications)}
 		if err := access.PutRole(ctx, rc, r, name == "CreateElasticRole"); err != nil {
@@ -249,6 +250,9 @@ func (r response) VisitCreateElasticAPIKeyResponse(w http.ResponseWriter) error 
 
 // InvalidateElasticAPIKey implements the generated strict API operation.
 func (s *Server) InvalidateElasticAPIKey(ctx context.Context, request api.InvalidateElasticAPIKeyRequestObject) (api.InvalidateElasticAPIKeyResponseObject, error) {
+	// Finish revocation and its audit record even if the browser disconnects.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	return s.handle(ctx, "InvalidateElasticAPIKey", input{Cluster: request.Cluster, Token: request.Id}), nil
 }
 func (r response) VisitInvalidateElasticAPIKeyResponse(w http.ResponseWriter) error {

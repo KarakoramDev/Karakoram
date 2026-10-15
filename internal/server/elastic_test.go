@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -19,13 +21,14 @@ import (
 
 type fakeElasticAccess struct {
 	fakeProvider
-	err         error
-	user        elastic.UserWrite
-	role        elastic.AccessRole
-	createRole  bool
-	key         elastic.APIKeyCreate
-	invalidated string
-	namespace   string
+	err               error
+	user              elastic.UserWrite
+	role              elastic.AccessRole
+	createRole        bool
+	key               elastic.APIKeyCreate
+	invalidated       string
+	namespace         string
+	invalidateContext func(context.Context) error
 }
 
 func (f *fakeElasticAccess) ListUsers(_ context.Context, rc *engine.Context) ([]elastic.User, error) {
@@ -64,8 +67,11 @@ func (f *fakeElasticAccess) CreateAPIKey(_ context.Context, _ *engine.Context, k
 	f.key = k
 	return &elastic.APIKeyCreated{ID: "key", Name: k.Name, APIKey: "one-time-secret", Encoded: "one-time-encoded"}, f.err
 }
-func (f *fakeElasticAccess) InvalidateAPIKey(_ context.Context, _ *engine.Context, id string) error {
+func (f *fakeElasticAccess) InvalidateAPIKey(ctx context.Context, _ *engine.Context, id string) error {
 	f.invalidated = id
+	if f.invalidateContext != nil {
+		return f.invalidateContext(ctx)
+	}
 	return f.err
 }
 
@@ -253,5 +259,76 @@ func TestRestorePITRAdmissionUsesProviderCapability(t *testing.T) {
 				t.Fatal("unexpected restore queue", ops, err)
 			}
 		})
+	}
+}
+
+func TestElasticAccessStructuredErrors(t *testing.T) {
+	s, f, token := elasticTestServer(t)
+	for _, tc := range []struct {
+		name, method, path, body, field, resource, resourceName, reason, message string
+		err                                                                      error
+		status                                                                   int
+	}{
+		{name: "short password", method: "POST", path: "users", body: `{"username":"app","roles":["viewer"],"enabled":true,"password":"short"}`, field: "password", reason: domain.ReasonOutOfRange, message: "8", status: 400},
+		{name: "unknown role", method: "POST", path: "users", body: `{"username":"app","roles":["missing"],"enabled":true,"password":"long-password"}`, err: engine.InvalidField("roles[0]", domain.ReasonNotFound, `roles[0]: Elasticsearch role "missing" does not exist; create or select an existing role first`), field: "roles[0]", reason: domain.ReasonNotFound, message: `"missing"`, status: 400},
+		{name: "invalid privilege", method: "POST", path: "roles", body: `{"name":"app","cluster":["wrong"],"indices":[],"applications":[]}`, err: engine.InvalidField("cluster", domain.ReasonInvalid, "cluster contains an invalid Elasticsearch privilege"), field: "cluster", reason: domain.ReasonInvalid, message: "invalid Elasticsearch privilege", status: 400},
+		{name: "licence", method: "POST", path: "roles", body: `{"name":"app","cluster":[],"indices":[],"applications":[]}`, err: engine.InvalidField("indices[0].query", domain.ReasonUnsupported, "indices[0].query requires an Elasticsearch licence tier that includes document- and field-level security"), field: "indices[0].query", reason: domain.ReasonUnsupported, message: "licence tier", status: 400},
+		{name: "duplicate user", method: "POST", path: "users", body: `{"username":"app","roles":["viewer"],"enabled":true,"password":"long-password"}`, err: domain.Conflict("elasticsearchUser", "app", domain.ReasonAlreadyExists, engine.ErrConflict, `Elasticsearch user "app" already exists`), resource: "elasticsearchUser", resourceName: "app", reason: domain.ReasonAlreadyExists, message: `"app" already exists`, status: 409},
+		{name: "duplicate role", method: "POST", path: "roles", body: `{"name":"app","cluster":[],"indices":[],"applications":[]}`, err: domain.Conflict("elasticsearchRole", "app", domain.ReasonAlreadyExists, engine.ErrConflict, `Elasticsearch role "app" already exists`), resource: "elasticsearchRole", resourceName: "app", reason: domain.ReasonAlreadyExists, message: `"app" already exists`, status: 409},
+		{name: "protected elastic", method: "DELETE", path: "users/elastic", err: domain.Conflict("elasticsearchUser", "elastic", domain.ReasonProtected, engine.ErrInvalid, `Elasticsearch user "elastic" is protected`), resource: "elasticsearchUser", resourceName: "elastic", reason: domain.ReasonProtected, message: `"elastic" is protected`, status: 409},
+		{name: "protected kibana", method: "GET", path: "users/kibana_system", err: domain.Conflict("elasticsearchUser", "kibana_system", domain.ReasonProtected, engine.ErrInvalid, `Elasticsearch user "kibana_system" is protected`), resource: "elasticsearchUser", resourceName: "kibana_system", reason: domain.ReasonProtected, message: `"kibana_system" is protected`, status: 409},
+		{name: "protected role", method: "DELETE", path: "roles/superuser", err: domain.Conflict("elasticsearchRole", "superuser", domain.ReasonProtected, engine.ErrInvalid, `Elasticsearch role "superuser" is protected`), resource: "elasticsearchRole", resourceName: "superuser", reason: domain.ReasonProtected, message: `"superuser" is protected`, status: 409},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f.err = tc.err
+			w := call(s, tc.method, "/api/v1/clusters/prod/elasticsearch/"+tc.path, tc.body, token)
+			var failure api.Error
+			if err := json.Unmarshal(w.Body.Bytes(), &failure); err != nil {
+				t.Fatal(err)
+			}
+			if w.Code != tc.status || failure.Details == nil || !strings.Contains(failure.Message, tc.message) {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			details := *failure.Details
+			if details["reason"] != tc.reason || (tc.field != "" && details["field"] != tc.field) ||
+				(tc.resource != "" && (details["resource"] != tc.resource || details["name"] != tc.resourceName)) {
+				t.Fatal(details)
+			}
+		})
+	}
+}
+
+func TestElasticAPIKeyInvalidationSurvivesRequestCancellation(t *testing.T) {
+	s, f, token := elasticTestServer(t)
+	type contextKey struct{}
+	parent, cancel := context.WithCancel(context.WithValue(t.Context(), contextKey{}, "retained"))
+	defer cancel()
+	f.invalidateContext = func(ctx context.Context) error {
+		cancel()
+		if ctx.Err() != nil || ctx.Value(contextKey{}) != "retained" {
+			t.Fatal("request cancellation propagated or context values lost", ctx.Err())
+		}
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 30*time.Second {
+			t.Fatal("invalidation must have a bounded deadline", deadline)
+		}
+		return nil
+	}
+	r := httptest.NewRequest("DELETE", "/api/v1/clusters/prod/elasticsearch/api-keys/key", nil).WithContext(parent)
+	r.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != 204 || f.invalidated != "key" || parent.Err() == nil {
+		t.Fatal(w.Code, w.Body.String(), f.invalidated, parent.Err())
+	}
+}
+
+func TestElasticAPIKeyInvalidationRepeatedRequests(t *testing.T) {
+	s, f, token := elasticTestServer(t)
+	for range 2 {
+		w := call(s, "DELETE", "/api/v1/clusters/prod/elasticsearch/api-keys/key", "", token)
+		if w.Code != 204 || f.invalidated != "key" {
+			t.Fatal(w.Code, w.Body.String(), f.invalidated)
+		}
 	}
 }

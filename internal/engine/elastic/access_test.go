@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +56,7 @@ func TestAccessUsersRolesAndManagedKeys(t *testing.T) {
 	var mu sync.Mutex
 	enabled := true
 	users := map[string]esapi.User{"elastic": {Roles: []string{"superuser"}}, "karakoram_logstash": {}, "other_reserved": {Metadata: map[string]any{"_reserved": true}}, "existing": {Roles: []string{"viewer"}, Enabled: &enabled}}
-	roles := map[string]esapi.Role{"superuser": {Metadata: map[string]any{"_reserved": true}}, "karakoram_monitor": {}, "custom": {Cluster: []string{"monitor"}}, "dynamic_reserved": {Metadata: map[string]any{"_reserved": true}}}
+	roles := map[string]esapi.Role{"superuser": {Metadata: map[string]any{"_reserved": true}}, "karakoram_monitor": {}, "custom": {Cluster: []string{"monitor"}}, "dynamic_reserved": {Metadata: map[string]any{"_reserved": true}}, "viewer": {Metadata: map[string]any{"_reserved": true}}}
 	keys := []esapi.APIKeyInfo{{ID: "managed", Name: "app", Username: AdminUser, Metadata: map[string]any{"karakoram": true}}, {ID: "unmanaged", Username: AdminUser}, {ID: "other-owner", Username: "other", Metadata: map[string]any{"karakoram": true}}}
 	calls := 0
 	invalidated := ""
@@ -158,7 +159,7 @@ func TestAccessUsersRolesAndManagedKeys(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Username != "existing" || !list[0].Enabled {
 		t.Fatal(list, err)
 	}
-	if _, err := p.GetUser(ctx, rc, "elastic"); !errors.Is(err, engine.ErrNotFound) {
+	if _, err := p.GetUser(ctx, rc, "elastic"); !errors.Is(err, engine.ErrInvalid) {
 		t.Fatal(err)
 	}
 	u := UserWrite{User: User{Username: "analyst", Roles: []string{"viewer"}, FullName: "Analyst", Email: "analyst@example.com", Enabled: true}, Password: "test-password"}
@@ -191,7 +192,7 @@ func TestAccessUsersRolesAndManagedKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	roleList, err := p.ListRoles(ctx, rc)
-	if err != nil || len(roleList) != 3 {
+	if err != nil || len(roleList) != 4 {
 		t.Fatal(roleList, err)
 	}
 	builtin, err := p.GetRole(ctx, rc, "superuser")
@@ -286,5 +287,119 @@ func TestAccessErrorClassificationAndPasswordValidation(t *testing.T) {
 	}
 	if err := validateUser(UserWrite{User: User{Username: "app", Roles: []string{"viewer"}}}, false); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUserRoleReferencesCheckedBeforeWrite(t *testing.T) {
+	for _, create := range []bool{true, false} {
+		for _, role := range []string{"missing", "viewer", "custom"} {
+			t.Run(fmt.Sprintf("%t/%s", create, role), func(t *testing.T) {
+				writes := 0
+				p, rc := accessFixture(t, func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					switch {
+					case r.Method == "PUT":
+						writes++
+						fmt.Fprint(w, `{"created":true}`)
+					case r.URL.Path == "/_security/role":
+						fmt.Fprint(w, `{"viewer":{"metadata":{"_reserved":true}},"custom":{}}`)
+					case create:
+						http.Error(w, `{"error":{"type":"resource_not_found_exception","reason":"not found"}}`, 404)
+					default:
+						fmt.Fprint(w, `{"app":{"roles":["viewer"]}}`)
+					}
+				})
+				u := UserWrite{User: User{Username: "app", Roles: []string{role}}, Password: "long-password"}
+				err := p.putUser(t.Context(), rc, u, create)
+				if role == "missing" {
+					var field *engine.ValidationError
+					if !errors.As(err, &field) || field.Field != "roles[0]" || !strings.Contains(field.Message, `"missing"`) || writes != 0 {
+						t.Fatal(err, writes)
+					}
+				} else if err != nil || writes != 1 {
+					t.Fatal(err, writes)
+				}
+			})
+		}
+	}
+}
+
+func TestNativeRoleWriteErrors(t *testing.T) {
+	query := `{"term":{"tenant":"one"}}`
+	grant := []string{"public.*"}
+	for _, tc := range []struct {
+		name, body, field, reason string
+		status                    int
+		index                     IndexPrivileges
+	}{
+		{"document licence", `{"error":{"root_cause":[{"type":"security_exception","reason":"current license is non-compliant for [field and document level security]"}],"type":"security_exception","reason":"current license is non-compliant for [field and document level security]","license.expired.feature":"field and document level security"},"status":403}`, "indices[0].query", domain.ReasonUnsupported, 403, IndexPrivileges{Query: &query}},
+		{"field licence", `{"error":{"type":"security_exception","reason":"current license is non-compliant for [field and document level security]"},"status":403}`, "indices[0].fieldSecurity", domain.ReasonUnsupported, 403, IndexPrivileges{FieldSecurity: &FieldSecurity{Grant: &grant}}},
+		{"cluster privilege", `{"error":{"type":"action_request_validation_exception","reason":"Validation Failed: 1: unknown cluster privilege [not_a_privilege];"},"status":400}`, "cluster", domain.ReasonInvalid, 400, IndexPrivileges{}},
+		{"index privilege", `{"error":{"type":"illegal_argument_exception","reason":"unknown index privilege [not_a_privilege]"},"status":400}`, "indices[0].privileges", domain.ReasonInvalid, 400, IndexPrivileges{Privileges: []string{"not_a_privilege"}}},
+		{"ordinary forbidden", `{"error":{"type":"security_exception","reason":"action [cluster:admin/xpack/security/role/put] is unauthorized for user [operator]"},"status":403}`, "", "", 403, IndexPrivileges{Query: &query}},
+		{"unrelated licence document", `{"error":{"type":"security_exception","reason":"unauthorized to read document in [license] index"},"status":403}`, "", "", 403, IndexPrivileges{Query: &query}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc := accessFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == "GET" {
+					fmt.Fprint(w, `{}`)
+					return
+				}
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			})
+			err := p.PutRole(t.Context(), rc, AccessRole{Name: "custom", Role: Role{Cluster: []string{"not_a_privilege"}, Indices: []IndexPrivileges{tc.index}}}, true)
+			if tc.field == "" {
+				var native *esapi.Error
+				if !errors.As(err, &native) || native.Status != 403 {
+					t.Fatal(err)
+				}
+				return
+			}
+			var field *engine.ValidationError
+			if !errors.As(err, &field) || field.Field != tc.field || field.Reason != tc.reason || !strings.Contains(field.Message, tc.field) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestRepeatedAPIKeyInvalidation(t *testing.T) {
+	invalidated, writes := false, 0
+	p, rc := accessFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"api_keys": []esapi.APIKeyInfo{{ID: "key", Username: AdminUser, Invalidated: invalidated, Metadata: map[string]any{"karakoram": true}}}})
+			return
+		}
+		writes++
+		invalidated = true
+		fmt.Fprint(w, `{"invalidated_api_keys":["key"],"previously_invalidated_api_keys":[],"error_count":0}`)
+	})
+	for range 2 {
+		if err := p.InvalidateAPIKey(t.Context(), rc, "key"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if writes != 1 {
+		t.Fatalf("native invalidation called %d times", writes)
+	}
+}
+
+func TestAccessLicenceClassification(t *testing.T) {
+	native := &esapi.Error{Status: 403, Type: "security_exception", Reason: "current license is non-compliant for [field and document level security]"}
+	var field *engine.ValidationError
+	if err := accessError(native); !errors.As(err, &field) || field.Field != "query" || field.Reason != domain.ReasonUnsupported {
+		t.Fatal(err)
+	}
+	for _, native := range []*esapi.Error{
+		{Status: 403, Type: "security_exception", Reason: "action is unauthorized"},
+		{Status: 403, Type: "security_exception", Reason: "unauthorized to read document in [license] index"},
+		{Status: 403, Type: "other_exception", Reason: "current license is non-compliant for [field and document level security]"},
+	} {
+		if accessError(native) != native {
+			t.Fatal("non-licence rejection changed", native)
+		}
 	}
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
@@ -14,6 +14,7 @@ import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
 import { hasCapability } from '../index';
 import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, visibleElasticRoles, type MemberKind } from './spec';
 
+import { applicationDrafts, applicationGrants, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation, type ApplicationDraft, type PendingInvalidation } from './access-state';
 type ElasticUser = Schemas['ElasticUser'];
 type ElasticRole = Schemas['ElasticRole'];
 type ElasticAPIKey = Schemas['ElasticAPIKey'];
@@ -33,10 +34,13 @@ export function ElasticAccessTab() {
   const { cluster, provider, namespace, name, can } = useClusterContext();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [pendingKeys, setPendingKeys] = useState<PendingInvalidation[]>(() => pendingInvalidations(sessionStorage, namespace, name));
+  const [now, setNow] = useState(Date.now);
+  const checkingKeys = pendingKeys.some((marker) => now - marker.startedAt < INVALIDATION_WAIT_MS);
   const path = { params: { path: { cluster: name }, query: { namespace, limit: 500 } } };
   const users = useQuery({ queryKey: keys.clusterSub(namespace, name, 'elastic-users'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/elasticsearch/users', path)) });
   const roles = useQuery({ queryKey: keys.clusterSub(namespace, name, 'elastic-roles'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/elasticsearch/roles', path)) });
-  const apiKeys = useQuery({ queryKey: keys.clusterSub(namespace, name, 'elastic-api-keys'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/elasticsearch/api-keys', path)) });
+  const apiKeys = useQuery({ queryKey: keys.clusterSub(namespace, name, 'elastic-api-keys'), queryFn: () => unwrap(api.GET('/clusters/{cluster}/elasticsearch/api-keys', path)), refetchInterval: checkingKeys ? 2000 : false });
 
   const [userDialog, setUserDialog] = useState<null | { user?: ElasticUser }>(null);
   const [roleDialog, setRoleDialog] = useState<null | { role?: ElasticRole }>(null);
@@ -70,14 +74,42 @@ export function ElasticAccessTab() {
     onError: (e) => toast.error(errorMessage(e)),
   });
   const delKey = useMutation({
-    mutationFn: (k: ElasticAPIKey) => unwrap(api.DELETE('/clusters/{cluster}/elasticsearch/api-keys/{id}', { params: { path: { cluster: name, id: k.id }, query: { namespace } } })),
+    mutationFn: (k: ElasticAPIKey) => {
+      const marker = { id: k.id, startedAt: Date.now() };
+      rememberInvalidation(sessionStorage, namespace, name, marker);
+      setPendingKeys((items) => [...items.filter((item) => item.id !== k.id), marker]);
+      return unwrap(api.DELETE('/clusters/{cluster}/elasticsearch/api-keys/{id}', { params: { path: { cluster: name, id: k.id }, query: { namespace } } }));
+    },
     onSuccess: () => {
-      toast.success('API key invalidated.');
       setInvalidateKey(null);
       invalidate('elastic-api-keys');
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e, key) => {
+      const marker = { id: key.id, startedAt: 0 };
+      rememberInvalidation(sessionStorage, namespace, name, marker);
+      setPendingKeys((items) => items.map((item) => item.id === key.id ? marker : item));
+      toast.error(errorMessage(e));
+      invalidate('elastic-api-keys');
+    },
   });
+
+  useEffect(() => {
+    if (!checkingKeys) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [checkingKeys]);
+
+  useEffect(() => {
+    const items = apiKeys.data?.items;
+    if (!items || apiKeys.isFetching) return;
+    const completed = pendingKeys.filter((marker) => invalidationState(marker, items.find((key) => key.id === marker.id), Date.now()) === 'invalidated');
+    if (!completed.length) return;
+    for (const marker of completed) {
+      forgetInvalidation(sessionStorage, namespace, name, marker.id);
+      toast.success(`API key ${marker.id} invalidated.`);
+    }
+    setPendingKeys((items) => items.filter((item) => !completed.some((marker) => marker.id === item.id)));
+  }, [apiKeys.data, apiKeys.isFetching, pendingKeys, namespace, name, toast]);
 
   const roleItems = roles.data?.items ?? [];
   const visibleRoles = visibleElasticRoles(roleItems, showBuiltInRoles);
@@ -90,7 +122,7 @@ export function ElasticAccessTab() {
       <div className="grid-2">
         <StackTopology members={cluster.status.members} />
         <Card title="Endpoints">
-          <Endpoints connection={cluster.status.connection} />
+          <ElasticEndpoints connection={cluster.status.connection} members={cluster.status.members} />
           <CredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} />
         </Card>
       </div>
@@ -260,6 +292,7 @@ export function ElasticAccessTab() {
           ) : null
         }
       >
+        {pendingKeys.length ? <Callout tone="info">{checkingKeys ? 'Invalidating… Checking API-key status; this continues after a reload.' : 'Invalidation is not confirmed. If the key is still active, retry invalidation below.'}</Callout> : null}
         {apiKeys.isPending ? (
           <Loading />
         ) : apiKeys.error ? (
@@ -285,6 +318,7 @@ export function ElasticAccessTab() {
               <tbody>
                 {apiKeys.data.items.map((k) => {
                   const expired = k.expiration !== undefined && k.expiration < Date.now();
+                  const revocation = invalidationState(pendingKeys.find((marker) => marker.id === k.id), k, now);
                   const tone: Tone = k.invalidated ? 'neutral' : expired ? 'warn' : 'ok';
                   return (
                     <tr key={k.id}>
@@ -297,13 +331,13 @@ export function ElasticAccessTab() {
                       <td className="small">{k.expiration === undefined ? 'never' : <Time iso={new Date(k.expiration).toISOString()} />}</td>
                       <td>
                         <Badge tone={tone} plain>
-                          {k.invalidated ? 'invalidated' : expired ? 'expired' : 'active'}
+                          {revocation === 'checking' ? 'Invalidating…' : revocation === 'retry' ? 'still active — retry invalidation' : k.invalidated ? 'invalidated' : expired ? 'expired' : 'active'}
                         </Badge>
                       </td>
                       <td className="actions">
                         {canDelete && !k.invalidated ? (
-                          <Button size="sm" onClick={() => setInvalidateKey(k)}>
-                            Invalidate…
+                          <Button size="sm" disabled={revocation === 'checking'} onClick={() => setInvalidateKey(k)}>
+                            {revocation === 'retry' ? 'Retry invalidation…' : 'Invalidate…'}
                           </Button>
                         ) : null}
                       </td>
@@ -369,7 +403,9 @@ function StackTopology({ members }: { members: Schemas['Member'][] }) {
   );
 }
 
-function Endpoints({ connection }: { connection: Schemas['ConnectionSummary'] | undefined }) {
+export function ElasticEndpoints({ connection, members }: { connection: Schemas['ConnectionSummary'] | undefined; members: Pick<Schemas['Member'], 'role' | 'state' | 'health'>[] }) {
+  const kibana = members.filter((member) => member.role === 'kibana');
+  const kibanaReady = kibana.length > 0 && kibana.every((member) => member.health && member.state === 'joined');
   const endpoints = connection?.endpoints ?? [];
   if (!endpoints.length && !connection?.hosts?.length) return <p className="small muted">Endpoints appear once the cluster is initialized.</p>;
   return (
@@ -379,7 +415,9 @@ function Endpoints({ connection }: { connection: Schemas['ConnectionSummary'] | 
           <strong className="small">
             {ENDPOINT_LABEL[endpoint.name] ?? endpoint.name} <Badge plain tone={endpoint.public ? 'info' : 'neutral'}>{endpoint.public ? 'Public' : 'Private'}</Badge>
           </strong>
-          {endpoint.public && endpoint.url.startsWith('https://') ? (
+          {endpoint.name.toLowerCase() === 'kibana' && !kibanaReady ? (
+            <Callout tone="info">Kibana is starting—retry shortly. Its link will be available once Kibana reports ready.</Callout>
+          ) : endpoint.public && endpoint.url.startsWith('https://') ? (
             <span className="row" style={{ gap: 6 }}>
               <a className="mono small" href={endpoint.url} target="_blank" rel="noreferrer">
                 {endpoint.url}
@@ -515,6 +553,7 @@ function UserDialog({ namespace, cluster, existing, roleNames, onClose, onSaved 
         </>
       }
     >
+      {save.error ? <Callout tone="danger">{errorMessage(save.error)}</Callout> : null}
       <div className="grid-2">
         <TextField label="Username" mono value={username} onChange={(e) => setUsername(e.target.value)} required disabled={Boolean(existing)} autoFocus={!existing} error={username && !USERNAME_RE.test(username) ? 'Printable ASCII without leading or trailing spaces.' : undefined} />
         <TextField
@@ -543,14 +582,16 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [name, setName] = useState(existing?.name ?? '');
   const [clusterPrivileges, setClusterPrivileges] = useState(existing?.cluster.join(', ') ?? '');
   const [indicesText, setIndicesText] = useState(existing ? formatIndexPrivileges(existing.indices) : '');
+  const [applications, setApplications] = useState<ApplicationDraft[]>(() => applicationDrafts(existing?.applications ?? []));
+  const grants = applicationGrants(applications);
   const [error, setError] = useState<string | null>(null);
   const indices = parseIndexPrivileges(indicesText);
   const clusterList = list(clusterPrivileges);
-  const valid = ROLE_NAME_RE.test(name) && indices !== null && (indices.length > 0 || clusterList.length > 0 || Boolean(existing?.applications.length));
+  const valid = ROLE_NAME_RE.test(name) && indices !== null && grants !== null;
 
   const save = useMutation({
     mutationFn: () => {
-      const body: ElasticRole = { name: existing?.name ?? name, cluster: clusterList, indices: indices ?? [], applications: existing?.applications ?? [] };
+      const body: ElasticRole = { name: existing?.name ?? name, cluster: clusterList, indices: indices ?? [], applications: grants ?? [] };
       return existing
         ? unwrap(api.PUT('/clusters/{cluster}/elasticsearch/roles/{role}', { params: { path: { cluster, role: existing.name }, query: { namespace } }, body }))
         : unwrap(api.POST('/clusters/{cluster}/elasticsearch/roles', { params: { path: { cluster }, query: { namespace } }, body }));
@@ -588,10 +629,24 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
         rows={5}
         value={indicesText}
         onChange={(e) => setIndicesText(e.target.value)}
-        hint="Each line: <index patterns> <privileges> [restricted], lists comma-separated. Use a JSON array with query and fieldSecurity for document- or field-level restrictions; these are preserved when editing."
+        hint="Each line: <index patterns> <privileges> [restricted], lists comma-separated. Use a JSON array with query and fieldSecurity for document- or field-level restrictions. DLS/FLS requires an Elasticsearch licence tier that includes those features (not Basic)."
         error={indicesText.trim() && indices === null ? 'Use <patterns> <privileges> [restricted] per line or a JSON array of index privileges with valid security restrictions.' : undefined}
       />
-      {existing?.applications.length ? <p className="xs faint">Application privileges ({existing.applications.length}) are kept unchanged.</p> : null}
+      <div className="stack" style={{ gap: 12 }}>
+        <strong className="small">Application privileges (Kibana)</strong>
+        {applications.map((grant, index) => (
+          <div className="stack" key={index} style={{ gap: 8 }}>
+            <TextField label="Application" mono value={grant.application} required onChange={(event) => setApplications((items) => items.map((item, i) => i === index ? { ...item, application: event.target.value } : item))} hint="For example kibana-.kibana" />
+            <div className="grid-2">
+              <TextField label="Application privileges (comma-separated)" mono required value={grant.privileges} onChange={(event) => setApplications((items) => items.map((item, i) => i === index ? { ...item, privileges: event.target.value } : item))} hint="For example feature_discover.read" />
+              <TextField label="Resources (comma-separated)" mono required value={grant.resources} onChange={(event) => setApplications((items) => items.map((item, i) => i === index ? { ...item, resources: event.target.value } : item))} hint="For example space:default or *" />
+            </div>
+            <Button size="sm" onClick={() => setApplications((items) => items.filter((_, i) => i !== index))}>Remove application grant</Button>
+          </div>
+        ))}
+        <div><Button size="sm" onClick={() => setApplications((items) => [...items, { application: '', privileges: '', resources: '' }])}>+ Add application grant</Button></div>
+        {grants === null ? <p className="field-error">Each application grant needs an application, at least one privilege and at least one resource.</p> : null}
+      </div>
     </Dialog>
   );
 }

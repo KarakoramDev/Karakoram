@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
@@ -103,10 +104,67 @@ func accessError(err error) error {
 		return engine.ErrConflict
 	}
 	var e *esapi.Error
-	if errors.As(err, &e) && (e.Status == 400 || e.Status == 422) {
-		return engine.ErrInvalid
+	if errors.As(err, &e) {
+		if securityLicenseRejected(e) {
+			return engine.InvalidField("query", domain.ReasonUnsupported, "query and fieldSecurity require an Elasticsearch licence tier that includes document- and field-level security; the current licence does not include it")
+		}
+		if e.Status == 400 || e.Status == 422 {
+			return engine.ErrInvalid
+		}
 	}
 	return err
+}
+
+func securityLicenseRejected(native *esapi.Error) bool {
+	if native.Status != 403 || native.Type != "security_exception" {
+		return false
+	}
+	reason := strings.ToLower(native.Reason)
+	return (strings.Contains(reason, "license") || strings.Contains(reason, "licence")) &&
+		(strings.Contains(reason, "document level security") || strings.Contains(reason, "document-level security") ||
+			strings.Contains(reason, "field level security") || strings.Contains(reason, "field-level security"))
+}
+
+func protectedAccess(resource, name string) error {
+	return domain.Conflict(resource, name, domain.ReasonProtected, engine.ErrInvalid, "%s %q is protected and managed by Elasticsearch or Karakoram; it cannot be changed through native access management", resource, name)
+}
+
+func roleWriteError(err error, role Role) error {
+	var native *esapi.Error
+	if !errors.As(err, &native) {
+		return accessError(err)
+	}
+	if securityLicenseRejected(native) {
+		for i, index := range role.Indices {
+			field := ""
+			if index.Query != nil {
+				field = fmt.Sprintf("indices[%d].query", i)
+			} else if index.FieldSecurity != nil {
+				field = fmt.Sprintf("indices[%d].fieldSecurity", i)
+			}
+			if field != "" {
+				return engine.InvalidField(field, domain.ReasonUnsupported, "%s requires an Elasticsearch licence tier that includes document- and field-level security; the current licence does not include it", field)
+			}
+		}
+	}
+	if native.Status == 400 || native.Status == 422 {
+		reason := strings.ToLower(native.Reason)
+		if strings.Contains(reason, "privilege") {
+			if strings.Contains(reason, "cluster") {
+				return engine.InvalidField("cluster", domain.ReasonInvalid, "cluster contains an invalid Elasticsearch privilege; select a supported cluster privilege")
+			}
+			for i, index := range role.Indices {
+				for _, privilege := range index.Privileges {
+					if strings.Contains(reason, "["+strings.ToLower(privilege)+"]") {
+						field := fmt.Sprintf("indices[%d].privileges", i)
+						return engine.InvalidField(field, domain.ReasonInvalid, "%s contains invalid Elasticsearch privilege %q", field, privilege)
+					}
+				}
+			}
+			return engine.InvalidField("indices", domain.ReasonInvalid, "indices contains an invalid Elasticsearch privilege; select supported index privileges")
+		}
+	}
+	return accessError(err)
 }
 func invalidAccess(err error) error { return fmt.Errorf("%w: %s", engine.ErrInvalid, err) }
 func visibleUser(name string, u esapi.User) bool {
@@ -144,7 +202,7 @@ func (p *Provider) ListUsers(ctx context.Context, rc *engine.Context) ([]User, e
 // GetUser reads a visible native realm identity.
 func (p *Provider) GetUser(ctx context.Context, rc *engine.Context, name string) (*User, error) {
 	if ProtectedUserName(name) {
-		return nil, engine.ErrNotFound
+		return nil, protectedAccess("elasticsearchUser", name)
 	}
 	c, err := p.accessClient(ctx, rc)
 	if err != nil {
@@ -156,22 +214,28 @@ func (p *Provider) GetUser(ctx context.Context, rc *engine.Context, name string)
 		return nil, accessError(err)
 	}
 	u, ok := users[name]
-	if !ok || !visibleUser(name, u) {
+	if !ok {
 		return nil, engine.ErrNotFound
+	}
+	if !visibleUser(name, u) {
+		return nil, protectedAccess("elasticsearchUser", name)
 	}
 	out := userFromES(name, u)
 	return &out, nil
 }
 func validateUser(u UserWrite, create bool) error {
+	if ProtectedUserName(u.Username) {
+		return protectedAccess("elasticsearchUser", u.Username)
+	}
 	if err := ValidateUserName(u.Username); err != nil {
-		return invalidAccess(err)
+		return engine.InvalidField("username", domain.ReasonInvalid, "username: %s", err)
 	}
 	if (create || u.Password != "") && utf8.RuneCountInString(u.Password) < 8 {
-		return invalidAccess(errors.New("password must contain at least 8 characters"))
+		return engine.InvalidField("password", domain.ReasonOutOfRange, "password must contain at least 8 characters")
 	}
-	for _, r := range u.Roles {
+	for i, r := range u.Roles {
 		if !securityName.MatchString(r) {
-			return invalidAccess(errors.New("invalid role reference"))
+			return engine.InvalidField(fmt.Sprintf("roles[%d]", i), domain.ReasonInvalid, "roles[%d] contains invalid role name %q", i, r)
 		}
 	}
 	return nil
@@ -191,13 +255,24 @@ func (p *Provider) putUser(ctx context.Context, rc *engine.Context, u UserWrite,
 	}
 	existing, exists := users[u.Username]
 	if exists && !visibleUser(u.Username, existing) {
-		return engine.ErrInvalid
+		return protectedAccess("elasticsearchUser", u.Username)
 	}
 	if create && exists {
-		return engine.ErrConflict
+		return domain.Conflict("elasticsearchUser", u.Username, domain.ReasonAlreadyExists, engine.ErrConflict, "Elasticsearch user %q already exists; edit the existing user instead", u.Username)
 	}
 	if !create && !exists {
 		return engine.ErrNotFound
+	}
+	if len(u.Roles) > 0 {
+		roles, err := c.GetRoles(ctx)
+		if err != nil {
+			return accessError(err)
+		}
+		for i, name := range u.Roles {
+			if _, exists := roles[name]; !exists {
+				return engine.InvalidField(fmt.Sprintf("roles[%d]", i), domain.ReasonNotFound, "roles[%d]: Elasticsearch role %q does not exist; create or select an existing role first", i, name)
+			}
+		}
 	}
 	return accessError(c.PutUser(ctx, u.Username, esapi.User{Password: u.Password, Roles: u.Roles, FullName: u.FullName, Email: u.Email, Enabled: &u.Enabled}))
 }
@@ -214,8 +289,11 @@ func (p *Provider) UpdateUser(ctx context.Context, rc *engine.Context, u UserWri
 
 // DeleteUser removes an existing native realm user.
 func (p *Provider) DeleteUser(ctx context.Context, rc *engine.Context, name string) error {
+	if ProtectedUserName(name) {
+		return protectedAccess("elasticsearchUser", name)
+	}
 	if err := ValidateUserName(name); err != nil {
-		return invalidAccess(err)
+		return engine.InvalidField("username", domain.ReasonInvalid, "username: %s", err)
 	}
 	c, err := p.accessClient(ctx, rc)
 	if err != nil {
@@ -231,7 +309,7 @@ func (p *Provider) DeleteUser(ctx context.Context, rc *engine.Context, name stri
 		return engine.ErrNotFound
 	}
 	if !visibleUser(name, u) {
-		return engine.ErrInvalid
+		return protectedAccess("elasticsearchUser", name)
 	}
 	return accessError(c.DeleteUser(ctx, name))
 }
@@ -310,8 +388,11 @@ func (p *Provider) GetRole(ctx context.Context, rc *engine.Context, name string)
 
 // PutRole creates (create=true) or replaces an existing role (create=false).
 func (p *Provider) PutRole(ctx context.Context, rc *engine.Context, r AccessRole, create bool) error {
+	if ProtectedRoleName(r.Name) {
+		return protectedAccess("elasticsearchRole", r.Name)
+	}
 	if err := ValidateRoleName(r.Name); err != nil {
-		return invalidAccess(err)
+		return engine.InvalidField("name", domain.ReasonInvalid, "name: %s", err)
 	}
 	c, err := p.accessClient(ctx, rc)
 	if err != nil {
@@ -324,21 +405,24 @@ func (p *Provider) PutRole(ctx context.Context, rc *engine.Context, r AccessRole
 	}
 	existing, exists := roles[r.Name]
 	if existing.Metadata["_reserved"] == true {
-		return engine.ErrInvalid
+		return protectedAccess("elasticsearchRole", r.Name)
 	}
 	if create && exists {
-		return engine.ErrConflict
+		return domain.Conflict("elasticsearchRole", r.Name, domain.ReasonAlreadyExists, engine.ErrConflict, "Elasticsearch role %q already exists; edit the existing role instead", r.Name)
 	}
 	if !create && !exists {
 		return engine.ErrNotFound
 	}
-	return accessError(c.PutRole(ctx, r.Name, roleToES(r.Role)))
+	return roleWriteError(c.PutRole(ctx, r.Name, roleToES(r.Role)), r.Role)
 }
 
 // DeleteRole removes a user-managed native role.
 func (p *Provider) DeleteRole(ctx context.Context, rc *engine.Context, name string) error {
+	if ProtectedRoleName(name) {
+		return protectedAccess("elasticsearchRole", name)
+	}
 	if err := ValidateRoleName(name); err != nil {
-		return invalidAccess(err)
+		return engine.InvalidField("name", domain.ReasonInvalid, "name: %s", err)
 	}
 	c, err := p.accessClient(ctx, rc)
 	if err != nil {
@@ -354,7 +438,7 @@ func (p *Provider) DeleteRole(ctx context.Context, rc *engine.Context, name stri
 		return engine.ErrNotFound
 	}
 	if r.Metadata["_reserved"] == true {
-		return engine.ErrInvalid
+		return protectedAccess("elasticsearchRole", name)
 	}
 	return accessError(c.DeleteRole(ctx, name))
 }
@@ -418,8 +502,13 @@ func (p *Provider) InvalidateAPIKey(ctx context.Context, rc *engine.Context, id 
 	if err != nil {
 		return accessError(err)
 	}
-	if !slices.ContainsFunc(keys, func(k esapi.APIKeyInfo) bool { return k.ID == id && managedKey(k) }) {
-		return engine.ErrNotFound
+	for _, key := range keys {
+		if key.ID == id && managedKey(key) {
+			if key.Invalidated {
+				return nil
+			}
+			return accessError(c.InvalidateAPIKeys(ctx, []string{id}))
+		}
 	}
-	return accessError(c.InvalidateAPIKeys(ctx, []string{id}))
+	return engine.ErrNotFound
 }
