@@ -9,10 +9,17 @@ import { OptionsSection, ResourcesSection, TopologySection } from './WizardSecti
 import { PUBLIC_PORT, specSummary, validateComponents, validateSpec } from './spec';
 
 const CLUSTER_STATUS = ['green', 'yellow', 'red'];
+const KIBANA_STATUS = ['available', 'degraded', 'unavailable'];
+const STATUS_AVERAGES = 'Downsampled historical values can be fractional averages of categorical samples, not additional health states.';
+
+export function formatHealth(value: number, labels: string[]): string {
+  return Number.isInteger(value) ? labels[value] ?? String(value) : `${Number(value.toFixed(2))} (average)`;
+}
 
 /** Series names come from the provider's metrics catalog (internal/engine/elastic/metrics_catalog.go). */
 export const elasticsearchMonitoringPanels: MonitoringPanel[] = [
-  { title: 'Cluster status', names: ['elasticsearch.cluster.status'], yMax: 2, format: (v) => CLUSTER_STATUS[Math.round(v)] ?? String(v) },
+  { title: 'Elasticsearch cluster health', names: ['elasticsearch.cluster.status'], yMax: 2, format: (v) => formatHealth(v, CLUSTER_STATUS), description: `0 = green (all shards assigned); 1 = yellow (primaries available, replicas missing); 2 = red (a primary unavailable). ${STATUS_AVERAGES}` },
+  { title: 'Kibana status', names: ['kibana.status.level'], yMax: 2, format: (v) => formatHealth(v, KIBANA_STATUS), description: `0 = available; 1 = degraded; 2 = unavailable. ${STATUS_AVERAGES}` },
   { title: 'JVM heap', names: ['elasticsearch.jvm.heap.usedBytes', 'elasticsearch.jvm.heap.maxBytes'], unit: 'bytes' },
   { title: 'Documents', names: ['elasticsearch.docs'], unit: 'count' },
   { title: 'Store size', names: ['elasticsearch.store.bytes'], unit: 'bytes' },
@@ -30,7 +37,6 @@ export const elasticsearchUI: EngineUI = {
   description: 'Elasticsearch clusters with optional Kibana, Logstash and APM Server.',
   publicPort: PUBLIC_PORT,
   publicPortLabel: 'HTTPS',
-  engineConfigLabel: 'Engine configuration overrides (not used by Elasticsearch — leave empty)',
   validateSpec,
   wizardSection: OptionsSection,
   topologySection: TopologySection,

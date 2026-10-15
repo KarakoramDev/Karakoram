@@ -14,6 +14,9 @@ import { memberHealthCounts } from '../member-status';
 import { certificateDownload, colocatedGroups, credentialDatabaseLabel, elasticHealthNotices, elasticMemberSummary, generationState, knownHost, psmdbConnect } from './detail-state';
 import { hasCapability, hasReplicaSetDetails } from '@/engines';
 import { QuorumCallout } from '@/engines/rabbitmq/QuorumCallout';
+import { kibanaReady } from '@/engines/elasticsearch/spec';
+import { ConnectionHelp } from '@/engines/elasticsearch/ConnectionHelp';
+import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 
 
 
@@ -199,7 +202,7 @@ export function OverviewTab() {
         <Card title="Connection">
           {conn?.endpoints?.map((endpoint) => <div key={`${endpoint.name}:${endpoint.url}`} className="stack" style={{ marginBottom: 12 }}>
             <strong className="small">{endpoint.name} <Badge plain>{endpoint.public ? 'Public' : 'Private'}</Badge></strong>
-            <CodeLine value={endpoint.url} />
+            {spec.provider === 'elasticsearch' && endpoint.name === 'kibana' && !kibanaReady(list) ? <span className="small muted">Kibana is starting — retry shortly.</span> : <CodeLine value={endpoint.url} />}
           </div>)}
           {conn?.hosts?.length ? (
             <div className="stack">
@@ -218,12 +221,13 @@ export function OverviewTab() {
           ) : (
             conn?.endpoints?.length ? null : <p className="small muted">Connection details appear once the cluster is initialized.</p>
           )}
+          {spec.provider === 'elasticsearch' ? <ConnectionHelp connection={conn} /> : null}
         </Card>
         <Card title="Specification">
           <KV
             items={[
               ['Engine', `${spec.provider} ${spec.version}`],
-              ['Members', resourcesSummary(spec.components.engine.resources)],
+              ...(spec.provider === 'elasticsearch' ? elasticResourceRows(spec) : [['Members', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
               spec.components.configServer && ['Config servers', `${spec.components.configServer.replicas} × ${resourcesSummary(spec.components.configServer.resources)}`],
               spec.components.router && ['Routers', `${spec.components.router.replicas} × ${resourcesSummary(spec.components.router.resources, true)}`],
               ['Backup storage', spec.backup?.storage ?? 'none'],
@@ -326,7 +330,7 @@ function CredentialsReveal({ namespace, name, base, provider, allowed }: { names
           Hide
         </Button>
       </div>
-      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/users`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
+      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
       <div className="table-wrap">
         <table className="table">
           <thead>

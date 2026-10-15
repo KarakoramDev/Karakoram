@@ -123,6 +123,37 @@ export function writeOptions(spec: ClusterSpec, o: ElasticOptions): ClusterSpec 
   return { ...spec, engineOptions };
 }
 
+/** Remove options whose component has been disabled, including inherited clone settings. */
+export function normalizeOptions(spec: ClusterSpec): ClusterSpec {
+  if (spec.provider !== PROVIDER) return spec;
+  const options = readOptions(spec);
+  let changed = false;
+  if (replicasOf(spec, 'kibana') === 0 && options.kibana.public) {
+    options.kibana.public = false;
+    changed = true;
+  }
+  if (replicasOf(spec, 'apm') === 0 && options.apm.public) {
+    options.apm.public = false;
+    changed = true;
+  }
+  if (replicasOf(spec, 'logstash') === 0 && (options.logstash.pipelines.length || options.logstash.persistentQueue)) {
+    options.logstash = { pipelines: [], persistentQueue: false };
+    changed = true;
+  }
+  return changed ? writeOptions(spec, options) : spec;
+}
+
+/** A provisioned public route is not evidence that Kibana has finished starting. */
+export function kibanaReady(members: Pick<Schemas['Member'], 'role' | 'state' | 'health'>[]): boolean {
+  let found = false;
+  for (const member of members) {
+    if (member.role !== 'kibana') continue;
+    found = true;
+    if (!member.health || member.state !== 'joined') return false;
+  }
+  return found;
+}
+
 export function componentOf(spec: ClusterSpec, name: ComponentName): Component | undefined {
   return name === 'engine' ? spec.components.engine : spec.components.extra?.[name];
 }
@@ -146,7 +177,7 @@ export function defaultComponent(topology: Topology | undefined, name: Component
 /** Set replicas, materializing the component from catalog defaults when it is absent. */
 export function withReplicas(spec: ClusterSpec, topology: Topology | undefined, name: ComponentName, replicas: number): ClusterSpec {
   const current = componentOf(spec, name) ?? defaultComponent(topology, name);
-  return withComponent(spec, name, { ...current, replicas });
+  return normalizeOptions(withComponent(spec, name, { ...current, replicas }));
 }
 
 /** Components to show editors for: `master` only with dedicated masters, stack components only when enabled. */
@@ -185,7 +216,7 @@ export function validatePipelines(pipelines: Pipeline[]): string[] {
 export function validateSpec(spec: ClusterSpec): string[] {
   const errors: string[] = [];
   const o = readOptions(spec);
-  if (spec.engineConfig?.trim()) errors.push('Elasticsearch does not use engine configuration overrides; leave the field under Topology empty.');
+  if (spec.engineConfig?.trim()) errors.push('Elasticsearch settings belong in Elastic Stack options, not engine configuration overrides. Clear inherited overrides before creating the cluster.');
   if (spec.tls && spec.tls.mode !== 'requireTLS') errors.push('Elasticsearch always requires TLS; choose the requireTLS mode.');
   if (o.kibana.public && replicasOf(spec, 'kibana') === 0) errors.push('Public Kibana access needs at least one Kibana instance.');
   if (o.apm.public && replicasOf(spec, 'apm') === 0) errors.push('Public APM access needs at least one APM Server instance.');

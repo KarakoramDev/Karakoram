@@ -156,7 +156,7 @@ export function ResourcesSection({ provider, spec, onChange, persisted }: Wizard
         return (
           <Card key={name} title={`${COMPONENT_LABEL[name]} · ${component.replicas} × resources`}>
             <div className="stack" style={{ gap: 12 }}>
-              <ResourcesEditor idPrefix={`es-${name}`} minimums={resourceMinimums(spec.provider, topology, name)} noDisk={stateless} value={component.resources} persisted={persisted ? componentOf(persisted, name)?.resources : undefined} onChange={(resources) => onChange(withComponent(spec, name, { ...component, resources }))} />
+              <ResourcesEditor idPrefix={`es-${name}`} minimums={resourceMinimums(spec.provider, topology, name)} showErrors noDisk={stateless} value={component.resources} persisted={persisted ? componentOf(persisted, name)?.resources : undefined} onChange={(resources) => onChange(withComponent(spec, name, { ...component, resources }))} />
               <p className="xs faint" style={{ margin: 0 }}>
                 {resourceHint(name, heap)}
               </p>
@@ -195,6 +195,7 @@ export function OptionsSection({ spec, onChange }: WizardSectionProps) {
         Elastic Stack options
       </legend>
       <div className="stack" style={{ gap: 14 }}>
+        {spec.engineConfig?.trim() ? <Callout tone="danger" title="Unsupported inherited configuration">Elasticsearch uses Elastic Stack options instead of engine configuration overrides. <Button size="sm" onClick={() => onChange({ ...spec, engineConfig: undefined })}>Clear inherited overrides</Button></Callout> : null}
         <Switch
           label={
             <span>
@@ -239,6 +240,7 @@ export function OptionsSection({ spec, onChange }: WizardSectionProps) {
           onChange={(e) => set((o) => ({ ...o, logstash: { ...o.logstash, persistentQueue: e.target.checked } }))}
         />
         {logstash ? <PipelinesEditor value={options.logstash.pipelines} onChange={(pipelines) => set((o) => ({ ...o, logstash: { ...o.logstash, pipelines } }))} /> : null}
+        <a className="small" href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/elasticsearch.md#create" target="_blank" rel="noreferrer">Elastic Stack options guide</a>
       </div>
     </fieldset>
   );

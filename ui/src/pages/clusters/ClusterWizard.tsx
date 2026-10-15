@@ -33,6 +33,7 @@ import { cleanTLS, wireExposure } from './wizard/access';
 import { WizardNavigation } from './wizard/Navigation';
 import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable } from '@/engines';
 import { managementIsPublic } from '@/engines/rabbitmq/helpers';
+import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -209,18 +210,15 @@ export function ClusterWizardPage() {
   };
 
   const submit = (button: HTMLButtonElement) => {
-    if (submissionLocked.current) return;
-    const invalid = firstInvalidStep(validation);
-    if (invalid) {
+    submitWizard(validation, submissionLocked, (invalid) => {
       setTouched({ basics: true, topology: true, resources: true, backups: true, access: true, review: true });
       setStep(invalid);
-      return;
-    }
-    if (!claimSubmission(submissionLocked)) return;
-    submitted.current = true;
-    button.disabled = true;
-    const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed) };
-    create.mutate(body);
+    }, () => {
+      submitted.current = true;
+      button.disabled = true;
+      const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed) };
+      create.mutate(body);
+    });
   };
 
   return (
@@ -349,6 +347,7 @@ export function ClusterWizardPage() {
                     description: rules.topology[t.type]?.description ?? 'Configure the provider components on the Topology step.',
                   }))}
                 />
+                {provider.name === 'elasticsearch' ? <a className="small" href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/elasticsearch.md#topologies-and-presets" target="_blank" rel="noreferrer">Topology guide: combined nodes or dedicated masters</a> : null}
                 {provider.presets.length ? (
                   <SelectField label="Preset (optional)" value={presetName} onChange={(e) => applyPreset(e.target.value)} hint="Applies the preset's topology, resources and backup defaults; you can still edit every field.">
                     <option value="">Custom</option>
@@ -361,6 +360,7 @@ export function ClusterWizardPage() {
                   </SelectField>
                 ) : null}
                 {WizardSection ? <WizardSection provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : null}
+                {touched.basics && engineUI?.validateSpec?.(spec).length ? <Callout tone="danger" title="Check engine options"><ul style={{ margin: 0, paddingLeft: 18 }}>{engineUI.validateSpec(spec).map((message) => <li key={message}>{message}</li>)}</ul></Callout> : null}
                 {spec.dataSource ? (
                   <Callout tone="info" title="Seeding from existing data">
                     This cluster will be restored from <strong className="mono">{dataSourceLabel(spec.dataSource, targetNamespace)}</strong>{' '}
@@ -444,7 +444,7 @@ export function ClusterWizardPage() {
                     hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                   />
                 )}
-                <TextAreaField
+                {provider.name !== 'elasticsearch' ? <TextAreaField
                   label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML, optional)' : 'Engine configuration overrides (optional)')}
                   mono
                   rows={5}
@@ -452,7 +452,7 @@ export function ClusterWizardPage() {
                   value={spec.engineConfig ?? ''}
                   onChange={(e) => update((s) => ({ ...s, engineConfig: e.target.value || undefined }))}
                   hint={rules.configHint}
-                />
+                /> : null}
               </div>
             </Card>
           ) : null}
@@ -575,14 +575,14 @@ export function ClusterWizardPage() {
                     ['Name', <span className="mono">{name}</span>],
                     ['Engine', `${provider.displayName} ${spec.version}`],
                     ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${topology.displayName}, ${engineSummary}`],
-                    ['Member resources', resourcesSummary(spec.components.engine.resources)],
+                    ...(provider.name === 'elasticsearch' ? elasticResourceRows(spec) : [['Member resources', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
                     spec.components.configServer && ['Config server resources', resourcesSummary(spec.components.configServer.resources)],
                     spec.components.router && ['Router resources', resourcesSummary(spec.components.router.resources, true)],
                     ['Total runtime footprint', `${footprint.members} instances · ${footprint.minCpu}–${footprint.maxCpu} CPU cores · ${footprint.minRam}–${footprint.maxRam} GiB RAM`],
                     ['Total data volumes', `${footprint.volumes} volumes · ${footprint.minDisk}–${footprint.maxDisk} GiB data disk`],
                     footprint.runtimeMaxDisk > 0 && ['Runtime disks (additional)', `${footprint.runtimeMinDisk}–${footprint.runtimeMaxDisk} GiB across ${footprint.members} runtime instances`],
                     ['Placement', 'Selected namespace/project; physical hosts are unknown until allocation. Zerops does not guarantee host anti-affinity.'],
-                    ...configurationReviewRows(spec),
+                    ...(provider.name === 'elasticsearch' ? [] : configurationReviewRows(spec)),
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     pitr && ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],

@@ -15,6 +15,16 @@ export function engineRules(provider: string) {
     exposureLabel: 'Expose MongoDB publicly on port 27017',
     configHint: 'Merged into mongod/mongos configuration and validated by the server.',
   };
+  if (provider === 'elasticsearch') return {
+    resourceMinimums: { cpu: 1, ram: 1.5, disk: 0 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      cluster: { title: 'Combined master and data nodes', description: 'Every Elasticsearch node is master-eligible and stores data. A compact topology for development and smaller production clusters.' },
+      dedicatedMasters: { title: 'Dedicated masters + data nodes', description: 'Three or five master-only nodes manage cluster state separately from the data nodes that store and search your indices.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Elasticsearch HTTPS publicly on port 9200',
+    configHint: 'Configure supported settings under Elastic Stack options.',
+  };
   return {
     resourceMinimums: { cpu: 1, ram: 0, disk: 0 },
     topology: {} as Record<string, { title: string; description: string }>,

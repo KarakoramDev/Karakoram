@@ -15,6 +15,12 @@ export function observedVersion(status: { version?: string; members: { version?:
 }
 
 export function maintenanceCopy(provider: string, replicas: number): string {
+  if (provider === 'elasticsearch') {
+    const availability = replicas === 1
+      ? 'Downtime: restarting or upgrading the only Elasticsearch data node interrupts service until it returns.'
+      : 'Elasticsearch nodes restart one at a time; availability depends on master quorum and redundant shard copies.';
+    return `${availability} Elasticsearch nodes restart first, with the elected master last, followed by Kibana, Logstash and APM Server. Kibana restarts separately and its web UI is temporarily unavailable.`;
+  }
   if (replicas === 1) return 'Downtime: the only member becomes unavailable during upgrade or restart. Applications cannot use the database until it returns.';
   const neutral = 'Members restart one at a time; the cluster stays available if a majority/quorum remains.';
   return provider === 'psmdb' ? `${neutral} Secondaries restart first; a primary failover can briefly pause writes.` : neutral;

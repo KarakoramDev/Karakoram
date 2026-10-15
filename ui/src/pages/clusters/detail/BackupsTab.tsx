@@ -11,7 +11,7 @@ import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { ChoiceGroup, SelectField, Switch, TextField } from '@/components/ui/Field';
-import { Badge, Callout, Card, ErrorBlock, Loading, Menu, MenuItem, Time, formatBytes, formatTime } from '@/components/ui/Primitives';
+import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Time, formatBytes, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { OperationNotice } from '@/components/OperationNotice';
 import { RabbitMQBackupNotice, SchedulesEditor } from '../editors/SchedulesEditor';
@@ -158,6 +158,7 @@ export function BackupsTab() {
                         <summary>Backup details</summary>
                         <div>Storage: <span className="mono">{b.storage}</span></div>
                         {b.pbmName ? <div>Native backup identifier: <span className="mono">{b.pbmName}</span></div> : null}
+                        {cluster.spec.provider === 'elasticsearch' && b.location ? <div>Repository/snapshot reference: <CodeLine value={b.location} /><p className="xs faint">This native snapshot reference is not a deletable object prefix. Manage snapshots through backup actions.</p></div> : null}
                         <div>Completed: <Time iso={b.completedAt} /></div>
                       </details>
                     </td>

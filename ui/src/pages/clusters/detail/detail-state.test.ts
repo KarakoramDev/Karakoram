@@ -51,6 +51,16 @@ test('singleton maintenance warns about downtime and neutral engines omit MongoD
   assert.doesNotMatch(maintenanceCopy('other', 3), /primary|secondaries/i);
   assert.match(FCV_GUIDANCE, /downgrades are not supported/);
 });
+test('Elasticsearch maintenance explains database downtime and separate ordered stack restarts', () => {
+  const singleton = maintenanceCopy('elasticsearch', 1);
+  assert.match(singleton, /only Elasticsearch data node interrupts service/);
+  assert.match(singleton, /elected master last.*followed by Kibana, Logstash and APM Server/);
+  assert.match(singleton, /Kibana restarts separately/);
+  const multiple = maintenanceCopy('elasticsearch', 3);
+  assert.match(multiple, /master quorum and redundant shard copies/);
+  assert.match(multiple, /Kibana restarts separately/);
+  assert.doesNotMatch(multiple, /only Elasticsearch data node|Secondaries/);
+});
 test('newest successful backup ignores failed and pending records', () => {
   const backups = [{ phase: 'Succeeded', completedAt: '2026-01-01T00:00:00Z' }, { phase: 'Succeeded', completedAt: '2026-01-02T00:00:00Z' }, { phase: 'Failed', completedAt: '2026-01-03T00:00:00Z' }];
   assert.equal(latestSuccessfulBackup(backups), backups[1]);

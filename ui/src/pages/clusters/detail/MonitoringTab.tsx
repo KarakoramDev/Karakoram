@@ -84,6 +84,7 @@ export function MonitoringTab() {
             {panels.map((p) => (
               <Card key={p.title}>
                 <LineChart title={p.title} unit={p.unit} yMax={p.yMax} timeRange={timeRange} series={toSeries(metrics.data.series, p.names, p.names.length > 1)} formatValue={p.format ?? (p.unit === 'bytes' ? formatBytes : formatNum)} />
+                {p.description ? <p className="xs muted">{p.description}</p> : null}
               </Card>
             ))}
             {extra.map((n) => {

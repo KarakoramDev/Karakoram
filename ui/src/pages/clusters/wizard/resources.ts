@@ -3,6 +3,7 @@
 
 import type { Schemas } from '@/api/client';
 import { engineRules } from './engine.ts';
+import { MIN_RAM, type ComponentName } from '../../../engines/elasticsearch/spec.ts';
 
 type Resources = Schemas['Resources'];
 export interface ResourceMinimums { cpu: number; ram: number; disk: number }
@@ -13,7 +14,8 @@ function object(value: unknown): Record<string, unknown> {
 
 /** Read the component's JSON Schema; defaults/presets are recommendations, not minimums. */
 export function resourceMinimums(provider: string, topology: Schemas['ProviderTopology'] | undefined, component: string): ResourceMinimums {
-  const fallback = engineRules(provider).resourceMinimums;
+  const fallback = { ...engineRules(provider).resourceMinimums };
+  if (provider === 'elasticsearch' && component in MIN_RAM) fallback.ram = MIN_RAM[component as ComponentName];
   const schema = object(topology?.componentSchemas[component]);
   const resources = object(object(schema.properties).resources);
   const properties = object(resources.properties);
