@@ -356,3 +356,23 @@ func TestQuorumBlockersBoundStoredStateAndKeepTotalCount(t *testing.T) {
 		t.Fatal("recovered blocker count was retained", quorumMessage(m))
 	}
 }
+
+func TestQuorumFailedWaitDoesNotAnnounceRecoveryWithoutBlockers(t *testing.T) {
+	p, rc, _, a := setup(t)
+	ready(t, p, rc)
+	events := &definitionsTestEvents{}
+	rc.Events = events
+	s := state(t, rc)
+	m := s.find("demom0")
+	beginChange(rc, s, m, "restart")
+	m.QuorumBlockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "orders", Type: "quorum"}}
+	m.QuorumBlockerCount = 1
+	a.failures[m.Name+":await-quorum"] = 503
+	done, err := p.changeStep(t.Context(), rc, s, m)
+	if done || err == nil || m.ChangeStep != "quorum" {
+		t.Fatal(done, err, m.ChangeStep)
+	}
+	if len(events.events) != 0 || len(m.QuorumBlockers) != 0 || m.QuorumBlockerCount != 0 {
+		t.Fatal("failed wait announced recovery or retained stale blockers", events.events, m)
+	}
+}

@@ -285,6 +285,8 @@ warning event is `RollingRestartBlocked`. Membership-inventory changes alone do
 not repeat that warning. The operation and cluster message name the same blockers.
 When quorum recovers, the condition clears and a Normal `RollingRestartRecovered`
 event records that the rolling change can continue.
+An empty diagnosis after a failed quorum wait clears stale blocker details
+silently; a recovery event is emitted only once the pre-drain safety check passes.
 Blocker identities are validated before storage; the cluster retains at most fifty
 blocker details while messages preserve the full remaining count.
 Stream or metadata-component blockers require their own majority recovery, not

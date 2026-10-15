@@ -56,7 +56,9 @@ func warningEvent(ctx context.Context, rc *engine.Context, reason, message strin
 }
 
 func clearQuorumBlockers(ctx context.Context, rc *engine.Context, m *member) error {
-	if len(m.QuorumBlockers) > 0 && rc.Events != nil {
+	// An empty diagnosis after a failed wait does not mean the rolling change
+	// can continue. Announce recovery only at the final pre-drain safety gate.
+	if len(m.QuorumBlockers) > 0 && rc.Events != nil && m.ChangeStep == "critical" {
 		if err := rc.Events.Record(ctx, domain.Event{
 			Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Normal",
 			Reason: "RollingRestartRecovered", Message: fmt.Sprintf("Queue quorum recovered on %s; continuing the rolling change.", m.Name), CreatedAt: now(rc),
