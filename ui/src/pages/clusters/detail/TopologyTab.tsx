@@ -22,12 +22,14 @@ import { memberChoices } from '../wizard/validation';
 import { validateExposure, validateTLS } from '../wizard/access';
 import { useSubmissionKey } from './use-submission-key';
 import { buildPatch, draftFrom, type Draft } from './topology';
+import { MemberHealthBadge, MemberRole, useMemberRoles } from '../cluster-utils';
 
 const RS_SIZES = [1, 3, 5, 7];
 
 
 export function TopologyTab() {
-  const { cluster, namespace, name, can } = useClusterContext();
+  const { cluster, namespace, name, base, can } = useClusterContext();
+  const roles = useMemberRoles(cluster.status.members, base);
   const toast = useToast();
   const queryClient = useQueryClient();
   const clusters = useClusters(namespace);
@@ -104,7 +106,7 @@ export function TopologyTab() {
 
   const disruptive = scalingReview(cluster.spec, patch);
 
-  const members = cluster.status.members.filter((m) => m.role !== 'router');
+  const members = cluster.status.members.filter((m) => (roles.get(m.name) ?? m.role) !== 'router');
 
   return (
     <div className="stack" style={{ gap: 16 }}>
@@ -215,8 +217,8 @@ export function TopologyTab() {
                 <tr key={m.name}>
                   <td className="mono">{m.name}</td>
                   <td className="mono">{m.set}</td>
-                  <td>{m.role}</td>
-                  <td>{m.health ? 'healthy' : 'unhealthy'}</td>
+                  <td><MemberRole member={m} roles={roles} /></td>
+                  <td><MemberHealthBadge member={m} suspended={cluster.status.phase === 'Suspended'} /></td>
                   <td className="actions">
                     {editable ? (
                       <Menu>

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
+import { useState } from 'react';
 import type { Schemas } from '@/api/client';
 import { Badge, type Tone } from '@/components/ui/Primitives';
+import { memberHealthCounts, rememberMemberRoles, type MemberRoles } from './member-status';
 
 type Phase = Schemas['ClusterStatus']['phase'];
 type Cluster = Schemas['Cluster'];
@@ -49,19 +51,43 @@ export function topologySummary(c: Cluster): string {
   return `Replica set · ${components.engine.replicas} members`;
 }
 
-export function memberHealth(c: Cluster): { healthy: number; total: number } {
-  const members = c.status.members ?? [];
-  return { healthy: members.filter((m) => m.health).length, total: members.length };
+/** Role history belongs to one cluster and is discarded when a member disappears. */
+export function useMemberRoles(members: Schemas['Member'][], clusterKey: string): MemberRoles {
+  const [history, setHistory] = useState(() => ({ members, clusterKey, roles: rememberMemberRoles(members) }));
+  if (history.members !== members || history.clusterKey !== clusterKey) {
+    const roles = rememberMemberRoles(members, history.clusterKey === clusterKey ? history.roles : undefined);
+    setHistory({ members, clusterKey, roles });
+    return roles;
+  }
+  return history.roles;
+}
+
+const ROLE_TONE: Record<Schemas['Member']['role'], Tone> = {
+  primary: 'accent', secondary: 'neutral', arbiter: 'neutral', 'config-primary': 'accent',
+  'config-secondary': 'neutral', router: 'info', unknown: 'warn',
+};
+
+export function MemberRole({ member, roles }: { member: Schemas['Member']; roles?: MemberRoles }) {
+  const role = member.role !== 'unknown' ? member.role : roles?.get(member.name) ?? 'unknown';
+  const leaving = member.state === 'LEAVING';
+  return <Badge tone={leaving ? 'neutral' : ROLE_TONE[role]} plain>{leaving && role === 'unknown' ? 'Leaving' : role}</Badge>;
+}
+
+export function MemberHealthBadge({ member, suspended = false }: { member: Schemas['Member']; suspended?: boolean }) {
+  if (suspended) return <Badge tone="neutral">historical</Badge>;
+  if (member.state === 'LEAVING') return <Badge tone="progress">Leaving</Badge>;
+  return <Badge tone={member.health ? 'ok' : 'danger'}>{member.health ? 'healthy' : 'unhealthy'}</Badge>;
 }
 
 export function HealthSummary({ cluster }: { cluster: Cluster }) {
-  const { healthy, total } = memberHealth(cluster);
-  if (total === 0) return <span className="faint">—</span>;
+  const { healthy, total, leaving } = memberHealthCounts(cluster.status.members ?? []);
+  if (total === 0 && leaving === 0) return <span className="faint">—</span>;
   const tone: Tone = healthy === total ? 'ok' : healthy === 0 ? 'danger' : 'warn';
   return (
-    <Badge tone={tone}>
-      {healthy}/{total} healthy
-    </Badge>
+    <span className="row wrap" style={{ gap: 4 }}>
+      {total > 0 ? <Badge tone={tone}>{healthy}/{total} healthy</Badge> : null}
+      {leaving > 0 ? <Badge tone="progress">{leaving} Leaving</Badge> : null}
+    </span>
   );
 }
 

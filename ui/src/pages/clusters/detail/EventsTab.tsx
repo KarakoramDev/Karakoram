@@ -176,7 +176,7 @@ export function EventsTab() {
             <SelectField label="Member" value={member} onChange={(e) => setMember(e.target.value)} className="grow" style={{ minWidth: 160 }}>
               {members.map((m) => (
                 <option key={m.name} value={m.name}>
-                  {m.name} ({m.role})
+                  {m.name} ({m.state === 'LEAVING' ? 'Leaving' : m.role})
                 </option>
               ))}
             </SelectField>

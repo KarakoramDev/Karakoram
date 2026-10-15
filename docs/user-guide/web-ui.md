@@ -97,6 +97,12 @@ and [sharding](sharding.md).
 
 Use operation and resource status together. Accepted mutations are not completed provisioning/upgrades/restores, and local TCP readiness does not prove replica-set health. Physical restore intentionally stops database processes; do not use UI restart buttons to undo a restore's maintenance holds.
 
+During membership removal, members reported as **Leaving** remain visible with
+in-progress health styling, not as unhealthy members. Overview and cluster-list
+health ratios count active members only and show the leaving count separately.
+Member tables retain a previously observed role while available in the current
+view; without one, the role cell also says **Leaving** rather than **unknown**.
+
 In **Topology → Review & apply**, **What will change** describes only the patch
 being submitted: membership addition/removal, resource changes or CPU-only
 updates, and any other changed settings. Expand **Merge patch to be sent** to
