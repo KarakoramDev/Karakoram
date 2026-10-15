@@ -20,9 +20,9 @@ export function applicationWarnings(drafts: ApplicationDraft[]): string[] {
   return drafts.flatMap((draft) => {
     const application = draft.application.trim();
     if (!application) return [];
-    const unknown = values(draft.privileges).filter((privilege) => !/^(?:all|read|feature_[A-Za-z0-9_-]+\.(?:all|read))$/.test(privilege));
+    const unknown = values(draft.privileges).filter((privilege) => !/^(?:all|read|space_all|space_read|feature_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.test(privilege));
     if (application === 'kibana-.kibana' && !unknown.length) return [];
-    return [`Application "${application}" or its privileges do not match Kibana's registered application kibana-.kibana and known privilege forms (all, read, feature_<name>.all/read). Elasticsearch accepts custom grants, but unregistered privileges do not grant Kibana access.`];
+    return [`Application "${application}" or its privileges do not match Kibana's registered application kibana-.kibana and known privilege forms (all, read, space_all, space_read, feature_<name>.<privilege>, including minimal_all/minimal_read and sub-feature privileges). Elasticsearch accepts custom grants, but unregistered privileges do not grant Kibana access.`];
   });
 }
 

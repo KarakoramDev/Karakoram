@@ -413,7 +413,7 @@ own role UI/API for general Kibana role management; see
 [Kibana application privilege mapping](https://www.elastic.co/docs/extend/kibana/key-concepts/security/rbac-and-saved-objects)
 and [Kibana privileges](https://www.elastic.co/docs/deploy-manage/users-roles/cluster-or-deployment-auth/kibana-privileges).
 
-Elasticsearch accepts arbitrary application names and privilege strings, even if no application has registered them. Acceptance does not prove Kibana authorization. The role editor gives a non-blocking warning for applications other than `kibana-.kibana` or privileges outside the known `all`, `read`, `feature_<name>.all` and `feature_<name>.read` forms; custom application grants remain valid native inputs. This is a form check, not a live inventory of privileges registered by Kibana.
+Elasticsearch accepts arbitrary application names and privilege strings, even if no application has registered them. Acceptance does not prove Kibana authorization. The role editor gives a non-blocking warning for applications other than `kibana-.kibana` or privileges outside the known `all`, `read`, `space_all`, `space_read` and `feature_<name>.<privilege>` forms. Feature privileges include `all`, `read`, `minimal_all`, `minimal_read` and sub-feature names such as `url_create`. Custom application grants remain valid native inputs. This is a form check, not a live inventory of privileges registered by Kibana.
 
 The Elasticsearch CLI uses these commands and flags:
 

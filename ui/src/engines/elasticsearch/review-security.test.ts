@@ -58,6 +58,11 @@ test('custom application privileges warn without blocking native role grants', (
   assert.ok(applicationGrants([grant]));
  }
  assert.deepEqual(applicationWarnings([{ application: 'kibana-.kibana', privileges: 'all,read,feature_dashboard.all,feature_discover.read', resources: '*' }]), []);
+ for (const privileges of ['feature_dashboard.minimal_all', 'feature_discover.minimal_read', 'feature_dashboard.url_create', 'feature_discover.store_search_session', 'space_all,space_read']) {
+  const grant = { application: 'kibana-.kibana', privileges, resources: '*' };
+  assert.deepEqual(applicationWarnings([grant]), [], privileges);
+  assert.ok(applicationGrants([grant]));
+ }
  const source = readFileSync(new URL('./ElasticAccessTab.tsx', import.meta.url), 'utf8');
  assert.match(source, /applicationWarnings\(applications\).*Callout/);
 });
