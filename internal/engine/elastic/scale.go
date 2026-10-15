@@ -5,9 +5,11 @@ package elastic
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
@@ -81,6 +83,20 @@ func (p *Provider) scale(ctx context.Context, rc *engine.Context, s *state) (boo
 	}
 	return false, nil
 }
+
+func blockDrain(ctx context.Context, rc *engine.Context, s *state, m *member, reason string) error {
+	message := fmt.Sprintf("Shard drain blocked for %s: %s. Add data-node capacity or lower index replicas to an intentional redundancy policy; restore unavailable primaries before retrying. Never force removal.", m.Name, reason)
+	if s.DrainBlocked == message {
+		return nil
+	}
+	if rc.Events != nil {
+		if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "ShardDrainBlocked", Message: message, CreatedAt: now(rc)}); err != nil {
+			return err
+		}
+	}
+	s.DrainBlocked = message
+	return nil
+}
 func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state, m *member) error {
 	c, err := p.es(ctx, rc, s)
 	if err != nil {
@@ -97,8 +113,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return err
 		}
 		if h.Status != "green" && h.Status != "yellow" {
-			s.DrainBlocked = "removal requires all primary shards to be allocated"
-			return nil
+			return blockDrain(ctx, rc, s, m, "unassigned primary shards prevent safe removal")
 		}
 		s.DrainBlocked = ""
 	}
@@ -126,8 +141,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 				return err
 			}
 			if remaining < replicas+1 {
-				s.DrainBlocked = "remaining data nodes cannot accommodate index replicas"
-				return nil
+				return blockDrain(ctx, rc, s, m, fmt.Sprintf("insufficient data nodes for index replicas (%d remaining, at least %d required)", remaining, replicas+1))
 			}
 		}
 		s.DrainBlocked = ""
@@ -154,8 +168,10 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return err
 		}
 		if h.Status != "green" && h.Status != "yellow" {
-			s.DrainBlocked = "removal requires all primary shards to be allocated"
-			return nil
+			return blockDrain(ctx, rc, s, m, "unassigned primary shards prevent safe removal")
+		}
+		if h.Status == "yellow" && counts[m.Name] != 0 && h.RelocatingShards == 0 && h.InitializingShards == 0 {
+			return blockDrain(ctx, rc, s, m, "unassigned replica shards prevent the remaining shards from draining")
 		}
 		s.DrainBlocked = ""
 		if counts[m.Name] != 0 || h.RelocatingShards != 0 || h.InitializingShards != 0 {

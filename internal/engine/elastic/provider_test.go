@@ -403,6 +403,8 @@ func coreSetup(t *testing.T, replicas int) (*Provider, *engine.Context, *coreInf
 		switch r.URL.Path {
 		case "/v1/status":
 			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: c.Spec.Version, ConfigVersion: 1 << 30, Processes: map[string]agentapi.ProcessStatus{"elasticsearch": {State: "running"}, "kibana": {State: "running"}, "logstash": {State: "running"}, "apm-server": {State: "running"}}})
+		case "/v1/elasticsearch/readiness":
+			_ = json.NewEncoder(w).Encode(agentspec.Readiness{Ready: true, ConfigVersion: 1 << 30})
 		case "/v1/reload":
 			_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 		default:

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
@@ -22,7 +23,56 @@ func (p *Provider) rollingStart(rc *engine.Context, s *state, reason, version, o
 	s.Rolling = &rolling{Reason: reason, Version: version, OperationID: operationID, StartedAt: now(rc)}
 	s.Phase = "rolling"
 }
-func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state) (bool, string, error) {
+
+func rollingProgress(s *state) (string, string) {
+	r := s.Rolling
+	if r == nil {
+		return "", ""
+	}
+	order := "Elasticsearch nodes (elected master last), then Kibana, Logstash and APM"
+	if len(r.Order) == 0 {
+		return "plan", "Planning rolling " + r.Reason + ": " + order
+	}
+	name, step := r.Current, r.Step
+	if name == "" {
+		for _, next := range r.Order {
+			if !slices.Contains(r.Done, next) && s.find(next) != nil {
+				name, step = next, "prepare"
+				break
+			}
+		}
+	}
+	if name == "" {
+		return "complete", "Rolling " + r.Reason + " complete: " + order
+	}
+	m := s.find(name)
+	if m == nil {
+		return name + "/" + step, "Rolling " + r.Reason + ": " + name + " — " + step
+	}
+	component := map[string]string{kindNode: "Elasticsearch node", kindMaster: "Elasticsearch master", kindKibana: "Kibana", kindLogstash: "Logstash", kindAPM: "APM"}[m.Kind]
+	action := map[string]string{"prepare": "checking readiness before restart", "flush": "flushing indices with replica allocation paused", "apply": "applying version or configuration", "rejoin": "waiting for readiness and rejoin", "allocation": "restoring shard allocation", "recover": "waiting for shard recovery"}[step]
+	if action == "" {
+		action = step
+	}
+	return m.Kind + "/" + name + "/" + step, fmt.Sprintf("Rolling %s: %s %s — %s (%s)", r.Reason, component, name, action, step)
+}
+func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state) (done bool, message string, err error) {
+	before, _ := rollingProgress(s)
+	defer func() {
+		after, progress := rollingProgress(s)
+		if progress != "" {
+			if message != "" && before == after {
+				progress += "; " + message
+			}
+			message = progress
+		}
+		if before != after && rc.Events != nil {
+			eventErr := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Normal", Reason: "RollingProgress", Message: message, CreatedAt: now(rc)})
+			if err == nil {
+				err = eventErr
+			}
+		}
+	}()
 	if busy, err := p.observePending(ctx, rc, s); busy || err != nil {
 		return false, "waiting for platform operation", err
 	}

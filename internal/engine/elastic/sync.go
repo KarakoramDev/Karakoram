@@ -13,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -224,7 +226,9 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *stat
 			return true, 5 * time.Second, err
 		}
 		if h.Status != "green" && h.Status != "yellow" {
-			s.DrainBlocked = "removal requires all primary shards to be allocated"
+			if err = blockDrain(ctx, rc, s, m, "unassigned primary shards prevent safe removal"); err != nil {
+				return true, 5 * time.Second, err
+			}
 			return true, 5 * time.Second, errWaiting
 		}
 		s.DrainBlocked = ""
@@ -307,12 +311,27 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *state, m *
 	s.Pending = v
 	return nil
 }
+func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (bool, string) {
+	var observation agentspec.Readiness
+	if err := a.Engine(ctx, "elasticsearch", "readiness", nil, &observation); err != nil {
+		return false, "Component application readiness unavailable"
+	}
+	if observation.ConfigVersion < m.ConfigVersion {
+		return false, "Component is waiting for its current configuration"
+	}
+	return observation.Ready, observation.Message
+}
+
 func (p *Provider) componentReady(ctx context.Context, rc *engine.Context, m *member) bool {
 	a, err := p.agentClient(ctx, rc, m.Name)
 	if err != nil {
 		return false
 	}
 	defer a.Close()
+	if !isES(m) {
+		ready, _ := componentReadiness(ctx, a, m)
+		return ready
+	}
 	status, err := a.Status(ctx)
 	return err == nil && strings.EqualFold(status.Processes[product(m)].State, "running") && status.ConfigVersion >= m.ConfigVersion
 }

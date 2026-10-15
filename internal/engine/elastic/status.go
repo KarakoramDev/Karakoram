@@ -116,7 +116,11 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		}
 		v.Conditions = append(v.Conditions, domain.Condition{Type: kind, Status: value, Reason: reason, Message: message, LastTransitionTime: now(rc)})
 	}
-	condition("Bootstrapped", s.ClusterUUID != "", "ClusterFormation", "")
+	condition("Bootstrapped", s.ClusterUUID != "", "ClusterFormation", "Elasticsearch cluster formation")
+	if step, message := rollingProgress(s); step != "" && !s.Suspended {
+		condition("RollingProgress", true, step, message)
+		v.Message = message
+	}
 	certificatesValid := true
 	checkCertificate := func(key string) {
 		cert, e := secret(ctx, rc, key)
@@ -142,12 +146,17 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	if rc.Cluster.Spec.Topology.Type == "cluster" && rc.Cluster.Spec.Components.Engine.Replicas%2 == 0 {
 		condition("QuorumWarning", true, "EvenVotingCount", "Even combined-node counts do not improve voting fault tolerance over the preceding odd count")
 	}
-	if s.DrainBlocked != "" {
+	if s.DrainBlocked != "" && !s.Suspended {
 		condition("ShardDrainBlocked", true, "InsufficientDataNodes", s.DrainBlocked)
+		v.Message = s.DrainBlocked
 	}
 	if s.Retry != nil {
 		condition("PlatformRetry", true, "Backoff", "A failed platform action is scheduled for retry")
-		v.Message = "Waiting for a scheduled platform retry"
+		if v.Message == "" {
+			v.Message = "Waiting for a scheduled platform retry"
+		} else {
+			v.Message += "; waiting for a scheduled platform retry"
+		}
 	}
 	if v.Connection, err = p.observedConnection(ctx, rc, s); err != nil {
 		return v, err
@@ -155,12 +164,25 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	nodes := map[string]esapi.Node{}
 	master := ""
 	healthy := false
-	if c, e := p.es(ctx, rc, s); e == nil {
+	if s.Suspended {
+		condition("ClusterHealth", false, "Suspended", "Elasticsearch is suspended; runtime health is not observed")
+		v.Message = "Runtime suspended; members and agents are not running"
+	} else if c, e := p.es(ctx, rc, s); e == nil {
 		defer c.Close()
 		h, e := c.Health(ctx, esapi.HealthOptions{})
 		if e == nil {
 			healthy, e = healthAcceptable(ctx, c, h, rc.Cluster.Spec.Components.Engine.Replicas)
-			condition("ClusterHealth", healthy && e == nil, h.Status, "Elasticsearch shard health: "+h.Status)
+			message := "Elasticsearch shard health: " + h.Status
+			switch h.Status {
+			case "yellow":
+				message += " — all primary shards are allocated, but replica shards are unassigned; data redundancy is reduced. Add capacity or review index replicas."
+			case "red":
+				message += " — primary shards are unavailable; some data cannot be served. Restore primary shard availability before maintenance."
+			}
+			condition("ClusterHealth", healthy && e == nil, h.Status, message)
+			if h.Status != "green" && v.Message == "" {
+				v.Message = message
+			}
 		} else {
 			condition("ClusterHealth", false, "Unreachable", "Elasticsearch is unreachable")
 		}
@@ -174,12 +196,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	} else {
 		condition("ClusterHealth", false, "Unreachable", "Elasticsearch is not yet reachable")
 	}
-	componentsReady := true
+	componentsReady := !s.Suspended
+	componentMessages := []string{}
 	allReady := healthy
 	for _, m := range s.Members {
-		if m.Removing {
-			continue
-		}
 		ms := domain.MemberStatus{Name: m.Name, Role: m.Kind, Version: m.Version, State: "absent"}
 		if isES(m) {
 			if m.Kind == kindMaster {
@@ -198,10 +218,12 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				}
 			}
 		}
-		a, e := p.agentClient(ctx, rc, m.Name)
-		if e == nil {
+		if s.Suspended {
+			ms.State = "suspended"
+			ms.Health = false
+			ms.Agent.Message = "Runtime suspended; member agent is not running"
+		} else if a, e := p.agentClient(ctx, rc, m.Name); e == nil {
 			status, e := a.Status(ctx)
-			a.Close()
 			if e == nil {
 				ms.Agent = domain.AgentStatus{Healthy: strings.EqualFold(status.Processes[product(m)].State, "running"), ConfigVersion: status.ConfigVersion, LastSeen: now(rc)}
 				ms.Uptime = status.UptimeSeconds
@@ -209,7 +231,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				ms.PlacementGroup = status.HostFingerprint
 				if !isES(m) {
 					ms.Version = status.EngineVersion
-					ms.Health = ms.Agent.Healthy
+					ms.Health, ms.Agent.Message = componentReadiness(ctx, a, m)
+					ms.Health = ms.Health && ms.Agent.Healthy
 					if ms.Health {
 						ms.State = "joined"
 					}
@@ -217,12 +240,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			} else {
 				ms.Agent.Message = "Member status unavailable"
 			}
+			a.Close()
 		} else {
 			ms.Agent.Message = "Member agent unreachable"
-		}
-		ms.Health = ms.Health && ms.Agent.Healthy
-		if !isES(m) {
-			componentsReady = componentsReady && ms.Health
 		}
 		if service, e := rc.Backend.GetService(ctx, m.Name); e == nil && service != nil {
 			resources := service.Resources
@@ -244,6 +264,20 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				}
 			}
 		}
+		ms.Health = ms.Health && ms.Agent.Healthy
+		if m.Removing && !s.Suspended {
+			ms.State = "draining"
+			if m.Stage == stageDeleting || m.Stage == "delete-volume" || m.Stage == "removed" {
+				ms.State = "removing"
+			}
+			ms.Health = false
+		}
+		if !isES(m) {
+			componentsReady = componentsReady && ms.Health
+			if !ms.Health && ms.Agent.Message != "" {
+				componentMessages = append(componentMessages, m.Name+": "+ms.Agent.Message)
+			}
+		}
 		if m.PublicPort > 0 {
 			for _, host := range v.Connection.PublicHosts {
 				_, port, _ := net.SplitHostPort(host)
@@ -256,7 +290,11 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		allReady = allReady && ms.Health
 		v.Members = append(v.Members, ms)
 	}
-	condition("ComponentsReady", componentsReady, "ComponentReadiness", "")
+	componentMessage := strings.Join(componentMessages, "; ")
+	condition("ComponentsReady", componentsReady, "ComponentReadiness", componentMessage)
+	if !componentsReady && v.Message == "" {
+		v.Message = componentMessage
+	}
 	if v.Phase == domain.PhaseReady && !allReady {
 		v.Phase = domain.PhaseDegraded
 	}

@@ -110,3 +110,23 @@ export function refreshSubmissionBody(attempt: { body: string }, body: string, r
   attempt.body = body;
   reset();
 }
+
+export function elasticMemberSummary(components: { engine: { replicas: number }; extra?: Record<string, { replicas: number }> }, members: { role: string; state?: string; health: boolean }[]) {
+  const nodes = members.filter((member) => ['master', 'data', 'master,data'].includes(member.role));
+  const draining = nodes.filter((member) => ['draining', 'removing'].includes(member.state ?? '')).length;
+  const healthy = nodes.filter((member) => member.health && !['draining', 'removing', 'suspended'].includes(member.state ?? '')).length;
+  const desired = components.engine.replicas + (components.extra?.master?.replicas ?? 0);
+  return { healthy, observed: nodes.length, desired, draining, detail: `${desired} desired · ${nodes.length} observed · ${draining} draining` };
+}
+
+export function elasticHealthNotices(conditions: { type: string; status: string; reason?: string; message?: string }[]) {
+  return conditions.flatMap((condition) => {
+    if (condition.type === 'ShardDrainBlocked' && condition.status === 'True') {
+      return [{ title: 'Shard drain blocked', message: condition.message || 'Add data-node capacity or lower index replicas to an intentional redundancy policy. Never force removal.' }];
+    }
+    if (condition.type === 'ClusterHealth' && ['yellow', 'red'].includes(condition.reason ?? '')) {
+      return [{ title: `Elasticsearch health: ${condition.reason}`, message: condition.message || (condition.reason === 'yellow' ? 'Primary shards are allocated, but replica shards are unassigned and data redundancy is reduced.' : 'Primary shards are unavailable; some data cannot be served.') }];
+    }
+    return [];
+  });
+}

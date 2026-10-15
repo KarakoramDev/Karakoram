@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assignedRoles, assignedUsers, certificateDownload, clusterEmptyCopy, colocatedGroups, credentialDatabaseLabel, FCV_GUIDANCE, fcvObservation, generationState, latestSuccessfulBackup, maintenanceCopy, observedVersion, passwordValid, psmdbConnect, refreshSubmissionBody, requireUpgradeBackup, scalingReview } from './detail-state.ts';
 import { fetchBackupInventory } from './backup-inventory.ts';
+import { elasticHealthNotices, elasticMemberSummary } from './detail-state.ts';
 
 const resources = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 5, maxDisk: 10 };
 const spec = { components: { engine: { replicas: 1, resources } } };
@@ -143,4 +144,26 @@ test('unchanged retries retain a key, but edited submissions reset it exactly on
   assert.equal(resets, 1);
   refreshSubmissionBody(attempt, 'edited', reset);
   assert.equal(resets, 1);
+});
+
+test('Elasticsearch scale-down retains the draining master in observed counts, not healthy counts', () => {
+  const members = [
+    { role: 'master,data', state: 'joined', health: true },
+    { role: 'master,data', state: 'draining', health: true },
+    { role: 'master,data', state: 'removing', health: false },
+    { role: 'kibana', state: 'joined', health: true },
+  ];
+  assert.deepEqual(elasticMemberSummary({ engine: { replicas: 1 } }, members), { desired: 1, observed: 3, draining: 2, healthy: 1, detail: '1 desired · 3 observed · 2 draining' });
+  assert.equal(elasticMemberSummary({ engine: { replicas: 1 }, extra: { master: { replicas: 3 } } }, members).desired, 4);
+});
+
+test('Elasticsearch drain and yellow-health notices are visible independently of the condition table', () => {
+  const message = 'Shard drain blocked for searchn2: insufficient replicas. Add capacity or lower index replicas; never force removal.';
+  const notices = elasticHealthNotices([
+    { type: 'ShardDrainBlocked', status: 'True', message },
+    { type: 'ClusterHealth', status: 'True', reason: 'yellow' },
+  ]);
+  assert.deepEqual(notices[0], { title: 'Shard drain blocked', message });
+  assert.match(notices[1]!.message, /Primary shards are allocated.*replica shards are unassigned.*redundancy is reduced/);
+  assert.deepEqual(elasticHealthNotices([{ type: 'ShardDrainBlocked', status: 'False', message }]), []);
 });
