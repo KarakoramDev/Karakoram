@@ -7,13 +7,17 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-type partialImportInfra struct{ *fakeInfra }
+type partialImportInfra struct {
+	*fakeInfra
+	processFailure bool
+}
 
 func (f *partialImportInfra) ImportServices(ctx context.Context, specs []infra.ServiceSpec) (infra.Op, error) {
 	op, err := f.fakeInfra.ImportServices(ctx, specs)
@@ -27,13 +31,16 @@ func (f *partialImportInfra) ImportServices(ctx context.Context, specs []infra.S
 			service.Ownership = nil
 		}
 	}
+	if f.processFailure {
+		return op, nil
+	}
 	return infra.Op{}, errors.New("import failed after creating services")
 }
 
 func failedMemberImport(t *testing.T) (*Provider, *engine.Context, *fakeInfra) {
 	t.Helper()
 	p, rc, f, _ := setup(t)
-	rc.Backend = &partialImportInfra{f}
+	rc.Backend = &partialImportInfra{fakeInfra: f}
 	if _, err := p.Sync(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +72,35 @@ func TestPartialImportRetryAdoptsUntaggedVolume(t *testing.T) {
 	}
 	if len(f.imports) != 1 {
 		t.Fatal("adopted services were reimported")
+	}
+}
+
+func TestPartialImportProcessRetryAdoptsUntaggedVolume(t *testing.T) {
+	p, rc, f, _ := setup(t)
+	rc.Backend = &partialImportInfra{fakeInfra: f, processFailure: true}
+	rc.Clock = &retryClock{at: time.Now()}
+	for range 2 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.failed = true
+	if _, err := p.Sync(t.Context(), rc); err == nil {
+		t.Fatal("failed import process was not reported")
+	}
+	s := retryState(t, rc)
+	if s.Retry == nil || s.Retry.Action != "import" || s.Members[0].Stage != "planned" {
+		t.Fatal("failed import process was not checkpointed", s)
+	}
+	f.failed = false
+	rc.Clock.(*retryClock).at = s.PlatformRetries[platformRetryKey(s.Retry)].RetryAfter
+	before := f.mutations
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	m := retryState(t, rc).Members[0]
+	if m.Stage != "imported" || m.ServiceID != f.services[m.Name].ID || m.VolumeID != f.services[m.Volume].ID || f.mutations != before || len(f.imports) != 1 {
+		t.Fatal("process retry did not preserve adopted services", m, f.imports)
 	}
 }
 
