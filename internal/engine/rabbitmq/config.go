@@ -75,7 +75,9 @@ func ownershipEnv(cluster, member, token string) map[string]string {
 	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
 }
 func serviceSpec(c *domain.Cluster, m *member, token string) infra.ServiceSpec {
-	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(c.Spec.Components.Engine.Resources), MinContainers: 1, MaxContainers: 1, Env: ownershipEnv(c.Name, m.Name, token), Volume: m.Volume}
+	env := ownershipEnv(c.Name, m.Name, token)
+	env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(c.Spec.Components.Engine.Resources), MinContainers: 1, MaxContainers: 1, Env: env, Volume: m.Volume}
 }
 func missing(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound)

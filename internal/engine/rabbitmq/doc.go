@@ -4,6 +4,10 @@
 // Package rabbitmq manages RabbitMQ 4.3 singleton brokers with one persistent
 // Local Storage volume per broker. Names use monotonically increasing member
 // indexes; hostname matches alone never establish infrastructure ownership.
+// An untagged volume can be adopted at any member stage only when a runtime
+// verified by its member token binds KARAKORAM_DATA_DIR to that exact volume.
+// Observed service IDs are checkpointed before retrying import or deleting the
+// runtime, so cleanup retains volume ownership after the runtime disappears.
 //
 // Sync checkpoints imports, deployments, joining and membership removal. Rolling
 // changes gate on online quorum and quorum-critical checks, then drain and stop
