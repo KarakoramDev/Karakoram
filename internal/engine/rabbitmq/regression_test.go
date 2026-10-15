@@ -237,8 +237,14 @@ func TestQuorumCriticalMemberBlocksRollingUpgrade(t *testing.T) {
 	blocked := false
 	for range 12 {
 		if _, err := p.Sync(context.Background(), rc); err != nil {
+			t.Fatal(err)
+		}
+		m := state(t, rc).find("demom0")
+		if len(m.QuorumBlockers) > 0 && m.ChangeStep == "critical" {
+			if m.Version != "4.3.5" {
+				t.Fatal("blocked upgrade advanced the version", m.Version)
+			}
 			blocked = true
-			break
 		}
 	}
 	if !blocked {
