@@ -308,14 +308,23 @@ Elasticsearch's built-in `apm-data` plugin installs APM index templates, ILM pol
 
 A manual intake example uses `APM_URL` from the HTTPS endpoint and `APM_SECRET_TOKEN` from protected credentials. It sends NDJSON metadata before a transaction and uses a current Unix-microsecond timestamp:
 
-```sh
-TIMESTAMP_US=$(date +%s%6N)
-printf '%s\n' \
-  '{"metadata":{"service":{"name":"intake-example","agent":{"name":"manual","version":"1.0.0"}}}}' \
-  "{\"transaction\":{\"id\":\"0123456789abcdef\",\"trace_id\":\"0123456789abcdef0123456789abcdef\",\"name\":\"GET /example\",\"type\":\"request\",\"timestamp\":$TIMESTAMP_US,\"duration\":1.2,\"span_count\":{\"started\":0},\"sampled\":true}}" \
-  | curl --fail-with-body -i "$APM_URL/intake/v2/events" \
-      -H 'Content-Type: application/x-ndjson' \
-      -H "Authorization: Bearer $APM_SECRET_TOKEN" --data-binary @-
+```bash
+(
+  set +x
+  set -euo pipefail
+  umask 077
+  work=$(mktemp -d)
+  trap 'rm -rf -- "$work"' EXIT
+  printf '%s' "$APM_SECRET_TOKEN" \
+    | jq -Rs '"header = " + ("Authorization: Bearer " + . | @json)' \
+    > "$work/curl.conf"
+  TIMESTAMP_US=$(date +%s%6N)
+  printf '%s\n' \
+    '{"metadata":{"service":{"name":"intake-example","agent":{"name":"manual","version":"1.0.0"}}}}' \
+    "{\"transaction\":{\"id\":\"0123456789abcdef\",\"trace_id\":\"0123456789abcdef0123456789abcdef\",\"name\":\"GET /example\",\"type\":\"request\",\"timestamp\":$TIMESTAMP_US,\"duration\":1.2,\"span_count\":{\"started\":0},\"sampled\":true}}" \
+    | curl --config "$work/curl.conf" --fail-with-body -i "$APM_URL/intake/v2/events" \
+        -H 'Content-Type: application/x-ndjson' --data-binary @-
+)
 ```
 
 The expected successful intake response is `202 Accepted`; inspect indexed data to establish delivery, not just listener health ([intake API](https://www.elastic.co/docs/solutions/observability/apm/elastic-apm-events-intake-api)). Use an APM-agent-authorized API key instead with `Authorization: ApiKey $APM_API_KEY` when configured. A general Elasticsearch index API key is not automatically an APM intake key: use Elastic's APM API-key workflow and ingestion application privileges. Karakoram's role and API-key descriptor APIs accept `applications` entries with `application`, `privileges` and `resources` ([APM authorization](https://www.elastic.co/docs/solutions/observability/apm/apm-server/apm-agent-authorization)).

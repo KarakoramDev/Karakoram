@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -75,5 +77,25 @@ func TestAccessRejectsUnscopedAPIKeyBeforeConnecting(t *testing.T) {
 		if _, err := New(ProviderOptions{}).CreateAPIKey(t.Context(), nil, APIKeyCreate{Name: "unscoped", RoleDescriptors: roles}); !errors.Is(err, engine.ErrInvalid) {
 			t.Fatal("expected invalid unscoped key", err)
 		}
+	}
+}
+
+func TestAPMIntakeRecipeKeepsTokenOutOfCurlArguments(t *testing.T) {
+	doc, err := os.ReadFile("../../../docs/user-guide/elasticsearch.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(doc), "## APM intake\n")
+	if !ok {
+		t.Fatal("APM intake instructions missing")
+	}
+	section, _, _ = strings.Cut(section, "\n## ")
+	for _, required := range []string{"set +x", "umask 077", `trap 'rm -rf -- "$work"' EXIT`, `> "$work/curl.conf"`, `curl --config "$work/curl.conf"`} {
+		if !strings.Contains(section, required) {
+			t.Fatalf("intake recipe is missing %q", required)
+		}
+	}
+	if strings.Contains(section, `-H "Authorization:`) || strings.Contains(section, `--header "Authorization:`) {
+		t.Fatal("intake authorization must be read from the owner-only curl config, not process arguments")
 	}
 }
