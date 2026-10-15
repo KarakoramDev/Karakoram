@@ -8,13 +8,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 )
+
+const maxStoredQuorumBlockers = 50
+
+var quorumMemberPattern = regexp.MustCompile(`^rabbit@[a-z][a-z0-9]{1,24}$`)
+
+func validateQuorumBlockers(blockers []rmqspec.QuorumBlocker) error {
+	for _, blocker := range blockers {
+		for _, identity := range []string{blocker.VHost, blocker.Queue} {
+			if identity == "" || len(identity) > 255 || !utf8.ValidString(identity) || strings.IndexFunc(identity, unicode.IsControl) >= 0 {
+				return fmt.Errorf("invalid quorum blocker identity")
+			}
+		}
+		switch blocker.Type {
+		case "quorum", "stream", "process":
+		default:
+			return fmt.Errorf("invalid quorum blocker type")
+		}
+		for _, node := range blocker.Members {
+			if !quorumMemberPattern.MatchString(node) {
+				return fmt.Errorf("invalid quorum blocker member")
+			}
+		}
+	}
+	return nil
+}
+
+func quorumBlockerCount(m *member) int {
+	return max(m.QuorumBlockerCount, len(m.QuorumBlockers))
+}
 
 func warningEvent(ctx context.Context, rc *engine.Context, reason, message string) error {
 	if rc.Events == nil {
@@ -33,6 +65,7 @@ func clearQuorumBlockers(ctx context.Context, rc *engine.Context, m *member) err
 		}
 	}
 	m.QuorumBlockers = nil
+	m.QuorumBlockerCount = 0
 	return nil
 }
 
@@ -44,6 +77,9 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 	if len(out.Blockers) == 0 {
 		return clearQuorumBlockers(ctx, rc, m)
 	}
+	if err := validateQuorumBlockers(out.Blockers); err != nil {
+		return err
+	}
 	// The native health check supplies identities but not membership in 4.3.
 	// A failed inventory must not hide the already-known restart blockers.
 	if client, err := p.adminClient(ctx, rc); err == nil {
@@ -53,6 +89,11 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 			for i := range out.Blockers {
 				for _, queue := range queues {
 					if queue.Vhost == out.Blockers[i].VHost && queue.Name == out.Blockers[i].Queue {
+						for _, node := range queue.Members {
+							if !quorumMemberPattern.MatchString(node) {
+								return fmt.Errorf("invalid quorum blocker member")
+							}
+						}
 						out.Blockers[i].Members = slices.Clone(queue.Members)
 						break
 					}
@@ -69,17 +110,20 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 		}
 		return strings.Compare(a.Type, b.Type)
 	})
-	for i := range out.Blockers {
-		slices.Sort(out.Blockers[i].Members)
-	}
 	previous := m.QuorumBlockers
-	m.QuorumBlockers = out.Blockers
+	previousCount := m.QuorumBlockerCount
+	m.QuorumBlockerCount = len(out.Blockers)
+	m.QuorumBlockers = slices.Clone(out.Blockers[:min(len(out.Blockers), maxStoredQuorumBlockers)])
+	for i := range m.QuorumBlockers {
+		slices.Sort(m.QuorumBlockers[i].Members)
+	}
 	message := quorumMessage(m)
-	if !slices.EqualFunc(previous, m.QuorumBlockers, func(a, b rmqspec.QuorumBlocker) bool {
+	if previousCount != m.QuorumBlockerCount || !slices.EqualFunc(previous, m.QuorumBlockers, func(a, b rmqspec.QuorumBlocker) bool {
 		return a.VHost == b.VHost && a.Queue == b.Queue && a.Type == b.Type
 	}) {
 		if err := warningEvent(ctx, rc, "RollingRestartBlocked", message); err != nil {
 			m.QuorumBlockers = previous
+			m.QuorumBlockerCount = previousCount
 			return err
 		}
 	}
@@ -91,7 +135,7 @@ func quorumMessage(m *member) string {
 	fmt.Fprintf(&message, "Rolling restart of %s is blocked by quorum-critical queues/components: ", m.Name)
 	for i, queue := range m.QuorumBlockers {
 		if i == 10 {
-			fmt.Fprintf(&message, "; and %d more", len(m.QuorumBlockers)-i)
+			fmt.Fprintf(&message, "; and %d more", quorumBlockerCount(m)-i)
 			break
 		}
 		if i > 0 {
@@ -146,7 +190,7 @@ func quorumRecovery(rc *engine.Context, s *internalState, m *member) string {
 	result.WriteString("Run inside this cluster's project. Reveal the admin password in Connection details; curl prompts for it (never put it in history). Export the cluster CA to ca.pem first. Inspect the queue type, members and online majority before adding a replica. Add one at a time; wait for the new replica to become a synchronized voting member before continuing. Never force membership after majority loss.\n")
 	for i, queue := range m.QuorumBlockers {
 		if i == 10 {
-			fmt.Fprintf(&result, "\n%d more blockers: inspect the Management UI queue inventory.\n", len(m.QuorumBlockers)-i)
+			fmt.Fprintf(&result, "\n%d more blockers: inspect the Management UI queue inventory.\n", quorumBlockerCount(m)-i)
 			break
 		}
 		fmt.Fprintf(&result, "\n%s in vhost %s (%s):\n", queue.Queue, queue.VHost, queue.Type)

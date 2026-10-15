@@ -68,6 +68,7 @@ type member struct {
 	RemovalBlocked          string                  `json:"removalBlocked,omitempty"`
 	ChangeAction            string                  `json:"changeAction,omitempty"`
 	QuorumBlockers          []rmqspec.QuorumBlocker `json:"quorumBlockers,omitempty"`
+	QuorumBlockerCount      int                     `json:"quorumBlockerCount,omitempty"`
 	ChangeStep              string                  `json:"changeStep,omitempty"`
 	TargetVersion           string                  `json:"targetVersion,omitempty"`
 	TargetResources         domain.Resources        `json:"targetResources"`

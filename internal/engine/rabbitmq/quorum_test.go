@@ -286,3 +286,73 @@ func TestQuorumBlockersDoNotReplaceCredentialRotationMessage(t *testing.T) {
 		t.Fatal(result, err)
 	}
 }
+
+func TestQuorumBlockersValidateAgentAndInventoryIdentities(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		blocker   rmqspec.QuorumBlocker
+		inventory []mgmt.Queue
+	}{
+		{"queue control", rmqspec.QuorumBlocker{VHost: "/", Queue: "queue\ncommand", Type: "quorum"}, nil},
+		{"vhost control", rmqspec.QuorumBlocker{VHost: "/\x7f", Queue: "queue", Type: "quorum"}, nil},
+		{"queue length", rmqspec.QuorumBlocker{VHost: "/", Queue: strings.Repeat("q", 256), Type: "quorum"}, nil},
+		{"vhost length", rmqspec.QuorumBlocker{VHost: strings.Repeat("v", 256), Queue: "queue", Type: "quorum"}, nil},
+		{"empty identity", rmqspec.QuorumBlocker{VHost: "", Queue: "queue", Type: "quorum"}, nil},
+		{"type", rmqspec.QuorumBlocker{VHost: "/", Queue: "queue", Type: "quorum\ncommand"}, nil},
+		{"agent member", rmqspec.QuorumBlocker{VHost: "/", Queue: "queue", Type: "quorum", Members: []string{"rabbit@node\ncommand"}}, nil},
+		{"inventory member", rmqspec.QuorumBlocker{VHost: "/", Queue: "queue", Type: "quorum"}, []mgmt.Queue{{Vhost: "/", Name: "queue", Members: []string{"rabbit@$(command)"}}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc, _, a := setup(t)
+			ready(t, p, rc)
+			events := &definitionsTestEvents{}
+			rc.Events = events
+			m := state(t, rc).find("demom0")
+			m.QuorumBlockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "previous", Type: "quorum"}}
+			a.broker(m.Name).blockers = []rmqspec.QuorumBlocker{tc.blocker}
+			a.queueSource = func() []mgmt.Queue { return tc.inventory }
+			err := p.checkQuorum(t.Context(), rc, m)
+			if err == nil || errors.Is(err, engine.ErrConflict) || strings.Contains(err.Error(), "command") {
+				t.Fatal("unsafe blocker accepted or exposed", err)
+			}
+			if len(m.QuorumBlockers) != 1 || m.QuorumBlockers[0].Queue != "previous" || len(events.events) != 0 {
+				t.Fatal(m.QuorumBlockers, events.events)
+			}
+		})
+	}
+}
+
+func TestQuorumBlockersBoundStoredStateAndKeepTotalCount(t *testing.T) {
+	p, rc, _, a := setup(t)
+	ready(t, p, rc)
+	s := state(t, rc)
+	m := s.find("demom0")
+	for i := range 60 {
+		a.broker(m.Name).blockers = append(a.broker(m.Name).blockers,
+			rmqspec.QuorumBlocker{VHost: "/", Queue: fmt.Sprintf("queue-%03d", i), Type: "quorum"})
+	}
+	if err := p.checkQuorum(t.Context(), rc, m); !errors.Is(err, engine.ErrConflict) {
+		t.Fatal(err)
+	}
+	if len(m.QuorumBlockers) != 50 {
+		t.Fatalf("stored %d blockers, want 50", len(m.QuorumBlockers))
+	}
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	s = state(t, rc)
+	m = s.find("demom0")
+	for _, message := range []string{quorumMessage(m), quorumRecovery(rc, s, m)} {
+		if !strings.Contains(message, "50 more") || strings.Contains(message, "queue-010") {
+			t.Fatal(message)
+		}
+	}
+	a.broker(m.Name).blockers = nil
+	if err := p.checkQuorum(t.Context(), rc, m); err != nil {
+		t.Fatal(err)
+	}
+	m.QuorumBlockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "single", Type: "quorum"}}
+	if strings.Contains(quorumMessage(m), "more") {
+		t.Fatal("recovered blocker count was retained", quorumMessage(m))
+	}
+}
