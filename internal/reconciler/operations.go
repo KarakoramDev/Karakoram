@@ -136,6 +136,14 @@ func (m *Manager) trackingOperations(ctx context.Context, c *domain.Cluster, cau
 			op.Phase, op.Message, op.CompletedAt = domain.PhaseCancelled, "Superseded by a newer cluster generation", &now
 		} else if !m.operationFailure(op, cause) {
 			op.Step = string(c.Status.Phase)
+			if op.Kind == domain.OperationUpgrade {
+				for _, condition := range c.Status.Conditions {
+					if condition.Type == "RollingProgress" && condition.Status == "True" {
+						op.Step = condition.Reason
+						break
+					}
+				}
+			}
 			if c.Status.Message != "" {
 				op.Message = c.Status.Message
 			} else {

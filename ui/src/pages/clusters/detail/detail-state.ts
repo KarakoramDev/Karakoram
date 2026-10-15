@@ -15,6 +15,12 @@ export function observedVersion(status: { version?: string; members: { version?:
 }
 
 export function maintenanceCopy(provider: string, replicas: number): string {
+  if (provider === 'elasticsearch') {
+    const availability = replicas === 1
+      ? 'Downtime: restarting or upgrading the only Elasticsearch data node interrupts service until it returns.'
+      : 'Elasticsearch nodes restart one at a time; availability depends on master quorum and redundant shard copies.';
+    return `${availability} Elasticsearch nodes restart first, with the elected master last, followed by Kibana, Logstash and APM Server. Kibana restarts separately and its web UI is temporarily unavailable.`;
+  }
   if (replicas === 1) return 'Downtime: the only member becomes unavailable during upgrade or restart. Applications cannot use the database until it returns.';
   const neutral = 'Members restart one at a time; the cluster stays available if a majority/quorum remains.';
   return provider === 'psmdb' ? `${neutral} Secondaries restart first; a primary failover can briefly pause writes.` : neutral;
@@ -109,4 +115,24 @@ export function refreshSubmissionBody(attempt: { body: string }, body: string, r
   if (attempt.body === body) return;
   attempt.body = body;
   reset();
+}
+
+export function elasticMemberSummary(components: { engine: { replicas: number }; extra?: Record<string, { replicas: number }> }, members: { role: string; state?: string; health: boolean }[]) {
+  const nodes = members.filter((member) => ['master', 'data', 'master,data'].includes(member.role));
+  const draining = nodes.filter((member) => ['draining', 'removing'].includes(member.state ?? '')).length;
+  const healthy = nodes.filter((member) => member.health && !['draining', 'removing', 'suspended'].includes(member.state ?? '')).length;
+  const desired = components.engine.replicas + (components.extra?.master?.replicas ?? 0);
+  return { healthy, observed: nodes.length, desired, draining, detail: `${desired} desired · ${nodes.length} observed · ${draining} draining` };
+}
+
+export function elasticHealthNotices(conditions: { type: string; status: string; reason?: string; message?: string }[]) {
+  return conditions.flatMap((condition) => {
+    if (condition.type === 'ShardDrainBlocked' && condition.status === 'True') {
+      return [{ title: 'Shard drain blocked', message: condition.message || 'Remove restrictive index allocation filters when they pin shards. Restore or raise the desired data-node count to cancel an unfinished drain, then raise it further for capacity; or lower index replicas to an intentional redundancy policy. Restore unavailable primaries. Never force removal.' }];
+    }
+    if (condition.type === 'ClusterHealth' && ['yellow', 'red'].includes(condition.reason ?? '')) {
+      return [{ title: `Elasticsearch health: ${condition.reason}`, message: condition.message || (condition.reason === 'yellow' ? 'Primary shards are allocated, but replica shards are unassigned and data redundancy is reduced.' : 'Primary shards are unavailable; some data cannot be served.') }];
+    }
+    return [];
+  });
 }

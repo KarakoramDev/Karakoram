@@ -2,6 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import type { Schemas } from '@/api/client';
+import { normalizeOptions } from '../../../engines/elasticsearch/spec.ts';
 
 export const STEPS = [
   { id: 'basics', label: 'Basics' },
@@ -38,6 +39,7 @@ export function clearDisabledFlags<T extends object>(settings: T, dependencies: 
 }
 
 export function normalizeWizardSpec(spec: Schemas['ClusterSpec']): Schemas['ClusterSpec'] {
+  spec = normalizeOptions(spec);
   const pitr = spec.backup?.pitr;
   if (!pitr) return spec;
   const normalized = clearDisabledFlags(pitr, { enabled: Boolean(spec.backup?.storage) });
@@ -49,6 +51,17 @@ export function claimSubmission(lock: { current: boolean }): boolean {
   if (lock.current) return false;
   lock.current = true;
   return true;
+}
+
+/** Creation has exactly two outcomes: reveal the owning invalid step, or claim one request. */
+export function submitWizard(validation: Validation, lock: { current: boolean }, onInvalid: (step: Exclude<StepId, 'review'>) => void, create: () => void): void {
+  if (lock.current) return;
+  const invalid = firstInvalidStep(validation);
+  if (invalid) {
+    onInvalid(invalid);
+    return;
+  }
+  if (claimSubmission(lock)) create();
 }
 
 /** An edited failed form is a new attempt; an unchanged retry keeps the original key. */

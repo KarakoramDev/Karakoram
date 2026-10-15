@@ -21,6 +21,8 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 	}
 	_ = q
 	switch op {
+	case "listElasticUsers", "getElasticUser", "createElasticUser", "updateElasticUser", "deleteElasticUser", "listElasticRoles", "getElasticRole", "createElasticRole", "updateElasticRole", "deleteElasticRole", "listElasticAPIKeys", "createElasticAPIKey", "invalidateElasticAPIKey":
+		return dispatchElastic(ctx, c, op, args, q, body)
 	case "listNamespaces":
 		var p client.ListNamespacesParams
 		if err = json.Unmarshal(q, &p); err != nil {

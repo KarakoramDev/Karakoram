@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
+	elasticagent "github.com/KarakoramDev/Karakoram/internal/agent/elastic"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -72,20 +73,14 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 			return errUsage
 		}
 		if len(args) > 1 {
-			// Readiness needs engine selection, but not control-plane credentials.
-			// Zerops runs readiness exec checks without the service environment,
-			// so a leading --engine=<name> argument takes precedence over the env.
-			engineName, rest := os.Getenv("KARAKORAM_ENGINE"), args[2:]
-			if len(rest) > 0 && strings.HasPrefix(rest[0], "--engine=") {
-				engineName, rest = strings.TrimPrefix(rest[0], "--engine="), rest[1:]
-			}
-			return agent.Readiness(ctx, agent.Options{Engine: engineName, DataDir: os.Getenv("KARAKORAM_DATA_DIR")}, rest, rabbitmqagent.New())
+			opts, rest := readinessOptions(args[2:])
+			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine())
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {
 			return err
 		}
-		return agent.Run(ctx, o, rabbitmqagent.New())
+		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine())
 	case "relay":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
 			return errUsage
@@ -107,6 +102,19 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	default:
 		return errUsage
 	}
+}
+
+// readinessOptions accepts explicit probe settings without member credentials.
+// Zerops readiness exec checks do not inherit the service environment.
+func readinessOptions(args []string) (agent.Options, []string) {
+	opts := agent.Options{Engine: os.Getenv("KARAKORAM_ENGINE")}
+	if len(args) > 0 && strings.HasPrefix(args[0], "--engine=") {
+		opts.Engine, args = strings.TrimPrefix(args[0], "--engine="), args[1:]
+	}
+	if len(args) > 0 && strings.HasPrefix(args[0], "--data-dir=") {
+		opts.DataDir, args = strings.TrimPrefix(args[0], "--data-dir="), args[1:]
+	}
+	return opts, args
 }
 func resetPassword(ctx context.Context, account string, out, errOut io.Writer) error {
 	dir := os.Getenv("KARAKORAM_DATA_DIR")

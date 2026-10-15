@@ -62,7 +62,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
-Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [RabbitMQ](rabbitmq.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
+Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [RabbitMQ](rabbitmq.md), [Elasticsearch and the Elastic Stack](elasticsearch.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md). For Elasticsearch URL/password/CA extraction and verified curl, use the [protected connection recipe](elasticsearch.md#connect-and-reveal-credentials).
 
 ## Safety and exit statuses
 
@@ -206,6 +206,23 @@ karactl
     get <cluster> <database> <username>
     list <cluster>
     set <cluster> <database> <username>
+  elasticsearch
+    api-keys
+      create <cluster>
+      invalidate <cluster> <id>
+      list <cluster>
+    roles
+      create <cluster> <name>
+      delete <cluster> <name>
+      get <cluster> <name>
+      list <cluster>
+      update <cluster> <name>
+    users
+      create <cluster> <name>
+      delete <cluster> <name>
+      get <cluster> <name>
+      list <cluster>
+      update <cluster> <name>
   events
     list
     watch
@@ -232,6 +249,43 @@ karactl
   providers
     get <provider>
     list
+  rabbitmq
+    operator-policies
+      create <cluster>
+      delete <cluster> <vhost> <name>
+      get <cluster> <vhost> <name>
+      list <cluster>
+      update <cluster> <vhost> <name>
+    permissions
+      create <cluster>
+      delete <cluster> <vhost> <user>
+      get <cluster> <vhost> <user>
+      list <cluster>
+      update <cluster> <vhost> <user>
+    policies
+      create <cluster>
+      delete <cluster> <vhost> <name>
+      get <cluster> <vhost> <name>
+      list <cluster>
+      update <cluster> <vhost> <name>
+    topic-permissions
+      create <cluster>
+      delete <cluster> <vhost> <user>
+      get <cluster> <vhost> <user>
+      list <cluster>
+      update <cluster> <vhost> <user>
+    users
+      create <cluster>
+      delete <cluster> <user>
+      get <cluster> <user>
+      list <cluster>
+      update <cluster> <user>
+    vhosts
+      create <cluster>
+      delete <cluster> <vhost>
+      get <cluster> <vhost>
+      list <cluster>
+      update <cluster> <vhost>
   rbac
     can
     policy
@@ -332,8 +386,19 @@ Commands absent below have no additional flags except confirmation: destructive 
 ```text
   -f, --file string      API request YAML/JSON file ('-' for stdin)
       --storage string   Backup storage (defaults to cluster configuration)
-      --type string      logical or physical (default "logical")
+      --type string      Provider backup type (default "logical")
 ```
+
+MongoDB supports `logical` and `physical`; Elasticsearch supports only
+`snapshot`. Inspect `karactl providers get elasticsearch -o json` for the running
+catalog and pass `--type snapshot` explicitly:
+
+```sh
+karactl backups create search beforechange --type snapshot --storage archive
+```
+
+See [Elasticsearch snapshots and restore](elasticsearch.md#snapshots-and-restore)
+for native repositories, retention and recovery.
 
 ### `karactl backups list`
 
@@ -409,6 +474,90 @@ defaults; the provider fills omitted settings. Use `--topology` and `--replicas`
 to supply generic overrides, and `--engine-options '{"option":true}'` or
 `--engine-options @options.json` for a provider-validated JSON object. Supported
 backup types and operations are advertised by `karactl providers get PROVIDER`.
+
+#### Elasticsearch create from a file
+
+There is no `--preset` flag. Inspect the catalog with
+`karactl providers get elasticsearch -o json` and copy a chosen `presets[].spec`
+into the request's `spec`, retaining `provider: elasticsearch`. For example,
+save this as `elasticsearch.yaml`; `9.5.5` is an advertised version in the initial
+catalog—use a version advertised by your installation:
+
+```yaml
+name: search
+spec:
+  provider: elasticsearch
+  version: 9.5.5
+  topology:
+    type: cluster
+  components:
+    engine:
+      replicas: 3
+      resources:
+        cpuMode: SHARED
+        minCpu: 1
+        maxCpu: 2
+        minRam: 2
+        maxRam: 2
+        minDisk: 5
+        maxDisk: 20
+    extra:
+      kibana:
+        replicas: 1
+      logstash:
+        replicas: 0
+      apm:
+        replicas: 0
+  engineOptions:
+    elasticsearch:
+      settings: {}
+    kibana:
+      public: false
+      settings: {}
+    logstash:
+      pipelines: []
+      persistentQueue: false
+    apm:
+      public: false
+      apiKeys: true
+  tls:
+    mode: requireTLS
+    ca: selfSigned
+  backup:
+    storage: archive
+    schedules:
+      - name: nightly
+        cron: "0 2 * * *"
+        type: snapshot
+        retainCount: 7
+        enabled: true
+```
+
+Register `archive` in the selected namespace first (or remove `backup` if no
+backups are wanted); omitted optional-component resource bounds use provider
+defaults. Then submit and observe:
+
+```sh
+karactl -n default clusters create -f elasticsearch.yaml --wait
+karactl -n default clusters status search
+karactl -n default clusters members search
+```
+
+The file, not convenience flags, supplies the provider and full request body.
+For dedicated masters, component sizing, supported settings and snapshot
+semantics, see the [Elasticsearch guide](elasticsearch.md).
+
+Public Kibana/APM HTTPS subdomains are internet reachable and do not use the
+database IP allowlist. Create/patch files that enable a route must include
+`spec.engineOptions.kibana.allowAllAddresses: true` or
+`spec.engineOptions.apm.allowAllAddresses: true`, respectively. This request-only
+acknowledgement is consumed rather than stored; re-enabling a private route
+requires fresh confirmation. See [public Stack access](elasticsearch.md#kibana).
+Confirmed Logstash configuration errors fail only the current generation's
+convergence operation, without discarding the cluster or blocking independent
+snapshot/restore work. Correct the pipeline and submit a new patch; changed
+configuration is republished even if deployment or rolling rejoin was blocked.
+
 
 ### `karactl clusters delete`
 
@@ -730,3 +879,44 @@ latest result. Storage reads include optional `verification` only after a check.
 ```text
   -f, --file string   API request YAML/JSON file ('-' for stdin)
 ```
+
+## Elasticsearch access
+
+Elasticsearch native users, roles and API keys have a separate command group and
+use the `database-users` RBAC resource with read/create/update/delete actions.
+Every command accepts the inherited namespace and output flags.
+
+```sh
+karactl elasticsearch users list search -n production -o json
+karactl elasticsearch users create search analyst --roles viewer --password-stdin < protected-password-file
+karactl elasticsearch users update search analyst --full-name 'Search analyst' --disabled=false
+karactl elasticsearch roles create search ingest -f role.json
+karactl elasticsearch api-keys create search --name apm-agent --expiration 30d -f descriptors.json
+karactl elasticsearch api-keys invalidate search KEY_ID --yes
+```
+
+Native user/role deletion and API-key invalidation use the shared destructive
+confirmation rule: non-interactive callers must pass `--yes` or pipe `y`.
+
+User creation requires `--password-stdin`; updates can retain the current password.
+`--roles` replaces the role list, `--full-name` and `--email` set profile fields,
+and `--disabled` disables an identity (`--disabled=false` re-enables it).
+User updates retain fields whose flags are omitted. Reserved/built-in and
+`karakoram*` users are hidden and cannot be mutated. Built-in roles are readable
+but immutable; `karakoram*` roles are hidden and protected.
+
+Role create/update requires `-f`: the file contains `cluster`, `indices` and
+`applications` privilege arrays. The command's name is authoritative; a file name
+must match it. Missing arrays become empty. Index entries use `names`,
+`privileges`, and `allowRestrictedIndices`; application entries use `application`,
+`privileges`, and `resources`. Updates replace all privileges.
+
+API-key creation requires `--name`. `--expiration` accepts an Elasticsearch
+duration; `-f` is an optional JSON map of role descriptors (roles without names),
+not a complete create request. APM agent descriptors use application `apm`,
+privileges `event:write` and `config_agent:read`, and resources `["*"]`.
+Omitting descriptors inherits the creator's privileges, so supply least-privilege
+descriptors for applications. Creation displays `apiKey` and `encoded` **once**;
+protect this output and do not send it to logs. Listing never reveals secrets.
+Only API keys marked as created through Karakoram are listed or invalidated.
+All list commands accept `--limit` and `--cursor`.

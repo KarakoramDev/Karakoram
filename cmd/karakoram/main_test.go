@@ -13,7 +13,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/KarakoramDev/Karakoram/internal/version"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -76,6 +80,60 @@ func TestAgentReadinessExplicitEngineOverridesEnvironment(t *testing.T) {
 	t.Setenv("KARAKORAM_ENGINE", "psmdb")
 	if err := run(ctx, []string{"agent", "readiness", "--engine=unknown"}, &out, &out); err == nil || !strings.Contains(err.Error(), "unknown KARAKORAM_ENGINE") {
 		t.Fatal(err)
+	}
+}
+
+func TestAgentReadinessExplicitDataDirWithoutEnvironment(t *testing.T) {
+	t.Setenv("KARAKORAM_ENGINE", "")
+	t.Setenv("KARAKORAM_DATA_DIR", "")
+	dir := t.TempDir()
+	opts, args := readinessOptions([]string{"--engine=elasticsearch", "--data-dir=" + dir, "logstash"})
+	if opts.Engine != "elasticsearch" || opts.DataDir != dir || len(args) != 1 || args[0] != "logstash" {
+		t.Fatalf("readiness options = %+v, args = %v", opts, args)
+	}
+	t.Setenv("KARAKORAM_ENGINE", "psmdb")
+	opts, args = readinessOptions([]string{"--data-dir=" + dir, "component", "1234"})
+	if opts.Engine != "psmdb" || opts.DataDir != dir || strings.Join(args, " ") != "component 1234" {
+		t.Fatalf("default-engine readiness options = %+v, args = %v", opts, args)
+	}
+}
+
+func TestLogstashReadinessCommandReadsExplicitDataDir(t *testing.T) {
+	for _, key := range []string{"KARAKORAM_ENGINE", "KARAKORAM_URL", "KARAKORAM_INTERNAL_CA", "KARAKORAM_AGENT_TOKEN", "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_DATA_DIR"} {
+		t.Setenv(key, "")
+	}
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "karakoram", "config")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	pipelines := filepath.Join(configDir, "pipelines.yml")
+	if err := os.WriteFile(pipelines, []byte("- pipeline.id: ingest\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/_node/pipelines":
+			w.Write([]byte(`{"pipelines":{"ingest":{}}}`))
+		case "/_node/stats/pipelines":
+			w.Write([]byte(`{"pipelines":{"ingest":{"events":{}}}}`))
+		default:
+			t.Errorf("unexpected readiness path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	args := []string{"agent", "readiness", "--engine=elasticsearch", "--data-dir=" + dir, "logstash", strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)}
+	var out bytes.Buffer
+	if err := run(t.Context(), args, &out, &out); err != nil {
+		t.Fatal("explicit directory did not reach the pipeline probe", err)
+	}
+	if err := os.WriteFile(pipelines, []byte("- pipeline.id: missing\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(t.Context(), args, &out, &out); err == nil || !strings.Contains(err.Error(), `pipeline "missing" is not loaded`) {
+		t.Fatal("readiness did not read the configured pipeline from the explicit directory", err)
 	}
 }
 

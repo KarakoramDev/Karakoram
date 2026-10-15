@@ -493,6 +493,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if p.Name() == "rabbitmq" && b.Source.PitrTime != nil {
 			return s.failure(engine.Invalid("RabbitMQ definitions restore does not support PITR"))
 		}
+		if b.Source.PitrTime != nil && !slices.Contains(p.Describe().Capabilities, "pitr") {
+			return s.failure(engine.Invalid("provider does not support point-in-time restore"))
+		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
 				return *failure

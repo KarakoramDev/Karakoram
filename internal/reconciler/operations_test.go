@@ -248,3 +248,37 @@ func TestRestorePhaseIsPersistedBeforeProviderCall(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUpgradeTrackingPersistsNativeMemberAndComponentProgress(t *testing.T) {
+	m, s := newTestManager(t, lifecycleProvider())
+	ctx := context.Background()
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "elasticsearch"}}
+	if err := s.CreateCluster(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationUpgrade, TargetGeneration: c.Generation}
+	if err := s.EnqueueOperation(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []string{"node/searchn0/flush", "node/searchn1/rejoin", "node/searchn2/recover", "kibana/searchkb/rejoin", "logstash/searchls/rejoin", "apm/searchapm/rejoin"} {
+		c.Status.Phase = domain.PhaseUpgrading
+		c.Status.Message = "Rolling upgrade: " + step
+		c.Status.Conditions = []domain.Condition{{Type: "RollingProgress", Status: "True", Reason: step, Message: c.Status.Message}}
+		if err := m.trackingOperations(ctx, c, nil, true); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.GetOperation(ctx, op.ID)
+		if err != nil || got.Phase != domain.PhaseRunning || got.Step != step || got.Message != c.Status.Message {
+			t.Fatalf("native progress not persisted: %+v %v", got, err)
+		}
+	}
+	c.Status.Phase, c.Status.ObservedGeneration = domain.PhaseReady, c.Generation
+	c.Status.Conditions = nil
+	if err := m.trackingOperations(ctx, c, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetOperation(ctx, op.ID)
+	if err != nil || got.Phase != domain.PhaseSucceeded || got.CompletedAt == nil {
+		t.Fatalf("upgrade did not complete after native steps: %+v %v", got, err)
+	}
+}

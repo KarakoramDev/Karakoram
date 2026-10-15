@@ -4136,6 +4136,388 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/elasticsearch/users:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listElasticUsers
+      tags: [Elasticsearch]
+      summary: List Elasticsearch users
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticUserList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createElasticUser
+      tags: [Elasticsearch]
+      summary: Create Elasticsearch users
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElasticUserCreate'
+  /clusters/{cluster}/elasticsearch/users/{username}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    get:
+      operationId: getElasticUser
+      tags: [Elasticsearch]
+      summary: Get Elasticsearch users
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: updateElasticUser
+      tags: [Elasticsearch]
+      summary: Update Elasticsearch users
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticUser'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElasticUserWrite'
+    delete:
+      operationId: deleteElasticUser
+      tags: [Elasticsearch]
+      summary: Delete Elasticsearch users
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/elasticsearch/roles:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listElasticRoles
+      tags: [Elasticsearch]
+      summary: List Elasticsearch roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticRoleList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createElasticRole
+      tags: [Elasticsearch]
+      summary: Create Elasticsearch roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElasticRoleInput'
+  /clusters/{cluster}/elasticsearch/roles/{role}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - name: role
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    get:
+      operationId: getElasticRole
+      tags: [Elasticsearch]
+      summary: Get Elasticsearch roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: updateElasticRole
+      tags: [Elasticsearch]
+      summary: Update Elasticsearch roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: update
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElasticRoleInput'
+    delete:
+      operationId: deleteElasticRole
+      tags: [Elasticsearch]
+      summary: Delete Elasticsearch roles
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/elasticsearch/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listElasticAPIKeys
+      tags: [Elasticsearch]
+      summary: List Elasticsearch api-keys
+      x-karakoram-rbac:
+        resource: database-users
+        action: read
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticAPIKeyList'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+    post:
+      operationId: createElasticAPIKey
+      tags: [Elasticsearch]
+      summary: Create Elasticsearch api-keys
+      x-karakoram-rbac:
+        resource: database-users
+        action: create
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '201':
+          description: Successful response.
+          headers:
+            Cache-Control:
+              description: API key secrets must not be cached.
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElasticAPIKeyCreated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElasticAPIKeyCreate'
+  /clusters/{cluster}/elasticsearch/api-keys/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+    delete:
+      operationId: invalidateElasticAPIKey
+      tags: [Elasticsearch]
+      summary: Invalidate Elasticsearch api-keys
+      x-karakoram-rbac:
+        resource: database-users
+        action: delete
+        object: cluster
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '204':
+          description: Successful response.
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
   /orphaned-volumes:
     parameters:
       - $ref: '#/components/parameters/NamespaceQuery'
@@ -6646,7 +7028,7 @@ components:
           type: string
         role:
           type: string
-          description: Member role; broker identifies a RabbitMQ broker.
+          description: Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
           enum:
             - primary
             - secondary
@@ -6656,6 +7038,12 @@ components:
             - router
             - broker
             - unknown
+            - master
+            - data
+            - master,data
+            - kibana
+            - logstash
+            - apm
         state:
           type: string
         health:
@@ -7020,6 +7408,267 @@ components:
       description: Sharded clusters only; replica-set requests fail with 409.
       required:
         - enabled
+    ElasticUser:
+      type: object
+      description: Native realm user. Reserved and Karakoram-managed identities are hidden.
+      required: [username, roles, enabled]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+        roles:
+          type: array
+          items:
+            type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        enabled:
+          type: boolean
+    ElasticUserWrite:
+      type: object
+      additionalProperties: false
+      required: [username, roles, enabled]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+        roles:
+          type: array
+          items:
+            type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        enabled:
+          type: boolean
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+    ElasticUserCreate:
+      type: object
+      additionalProperties: false
+      required: [username, roles, enabled, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+        roles:
+          type: array
+          items:
+            type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        enabled:
+          type: boolean
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+    ElasticIndexPrivileges:
+      type: object
+      additionalProperties: false
+      required: [names, privileges, allowRestrictedIndices]
+      properties:
+        names:
+          type: array
+          items:
+            type: string
+        privileges:
+          type: array
+          items:
+            type: string
+        allowRestrictedIndices:
+          type: boolean
+        query:
+          type: string
+          description: Opaque Elasticsearch document-level security query JSON.
+        fieldSecurity:
+          $ref: '#/components/schemas/ElasticFieldSecurity'
+    ElasticFieldSecurity:
+      type: object
+      additionalProperties: false
+      description: Field-level security; omitted lists and explicitly empty lists are distinct.
+      properties:
+        grant:
+          type: array
+          items:
+            type: string
+        except:
+          type: array
+          items:
+            type: string
+    ElasticApplicationPrivileges:
+      type: object
+      additionalProperties: false
+      required: [application, privileges, resources]
+      properties:
+        application:
+          type: string
+        privileges:
+          type: array
+          items:
+            type: string
+        resources:
+          type: array
+          items:
+            type: string
+    ElasticRoleDescriptor:
+      type: object
+      additionalProperties: false
+      required: [cluster, indices, applications]
+      properties:
+        cluster:
+          type: array
+          items:
+            type: string
+        indices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticIndexPrivileges'
+        applications:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticApplicationPrivileges'
+    ElasticRole:
+      type: object
+      additionalProperties: false
+      description: Built-in roles are readable but immutable; Karakoram-managed roles are hidden.
+      required: [name, cluster, indices, applications]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        cluster:
+          type: array
+          items:
+            type: string
+        indices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticIndexPrivileges'
+        applications:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticApplicationPrivileges'
+        reserved:
+          type: boolean
+          readOnly: true
+          description: Built-in roles cannot be changed or deleted.
+    ElasticRoleInput:
+      type: object
+      additionalProperties: false
+      required: [name, cluster, indices, applications]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        cluster:
+          type: array
+          items:
+            type: string
+        indices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticIndexPrivileges'
+        applications:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticApplicationPrivileges'
+    ElasticAPIKeyCreate:
+      type: object
+      additionalProperties: false
+      required: [name, roleDescriptors]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        expiration:
+          type: string
+          minLength: 1
+          description: Elasticsearch duration, for example 1d.
+        roleDescriptors:
+          type: object
+          minProperties: 1
+          description: Explicit scoped permissions are required; keys cannot inherit the control-plane identity's privileges.
+          additionalProperties:
+            $ref: '#/components/schemas/ElasticRoleDescriptor'
+    ElasticAPIKeyCreated:
+      type: object
+      description: Sensitive one-time API key secret; never cached. Store it securely.
+      required: [id, name, apiKey, encoded]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        apiKey:
+          type: string
+        encoded:
+          type: string
+        expiration:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+    ElasticAPIKey:
+      type: object
+      description: Only API keys created through Karakoram are visible.
+      required: [id, name, creation, invalidated, username]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        creation:
+          type: integer
+          format: int64
+        expiration:
+          type: integer
+          format: int64
+        invalidated:
+          type: boolean
+        username:
+          type: string
+    ElasticUserList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticUser'
+        nextCursor:
+          type: string
+    ElasticRoleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticRole'
+        nextCursor:
+          type: string
+    ElasticAPIKeyList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ElasticAPIKey'
+        nextCursor:
+          type: string
     SystemUser:
       type: object
       additionalProperties: false
@@ -7034,6 +7683,12 @@ components:
             - databaseAdmin
             - karakoram
             - admin
+            - karakoram-monitor
+            - elastic
+            - karakoram_logstash
+            - karakoram_apm
+            - kibana-token
+            - apm-secret-token
         username:
           type: string
         roles:
@@ -8253,7 +8908,7 @@ components:
           minimum: 0
           description: Zero disables an optional component when supported by the provider.
         resources:
-          $ref: '#/components/schemas/ResourcesInput'
+          $ref: '#/components/schemas/ExtraResourcesInput'
     ComponentsInput:
       type: object
       properties:
@@ -8436,7 +9091,7 @@ components:
           minimum: 0
           nullable: true
         resources:
-          $ref: '#/components/schemas/ResourcesPatch'
+          $ref: '#/components/schemas/ExtraResourcesPatch'
     ComponentsPatch:
       type: object
       properties:
@@ -8715,3 +9370,30 @@ components:
       additionalProperties: false
       nullable: true
       description: 'PSMDB config-server replica set: 1, 3, 5 or 7 members.'
+    ExtraResourcesInput:
+      type: object
+      additionalProperties: false
+      description: Resources for provider extension components, including stateless components with no data disk.
+      properties:
+        cpuMode: {type: string, enum: [SHARED, DEDICATED]}
+        minCpu: {type: number, minimum: 1}
+        maxCpu: {type: number, minimum: 1}
+        minRam: {type: number, minimum: 0.25}
+        maxRam: {type: number, minimum: 0.25}
+        minDisk: {type: number, minimum: 0}
+        maxDisk: {type: number, minimum: 0}
+        startCpu: {type: number, minimum: 1}
+    ExtraResourcesPatch:
+      type: object
+      additionalProperties: false
+      nullable: true
+      description: Partial resources for provider extension components, including stateless components with no data disk.
+      properties:
+        cpuMode: {type: string, enum: [SHARED, DEDICATED], nullable: true}
+        minCpu: {type: number, minimum: 1, nullable: true}
+        maxCpu: {type: number, minimum: 1, nullable: true}
+        minRam: {type: number, minimum: 0.25, nullable: true}
+        maxRam: {type: number, minimum: 0.25, nullable: true}
+        minDisk: {type: number, minimum: 0, nullable: true}
+        maxDisk: {type: number, minimum: 0, nullable: true}
+        startCpu: {type: number, minimum: 1, nullable: true}

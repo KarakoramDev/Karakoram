@@ -65,7 +65,13 @@ type OperationCanceller interface {
 }
 
 // Result requests a delay before the next level-triggered reconciliation.
-type Result struct{ RequeueAfter time.Duration }
+type Result struct {
+	RequeueAfter time.Duration
+	// ConvergenceError fails tracking operations for the current generation
+	// without blocking independent queued operations or retrying reconciliation
+	// as an error. Providers retain diagnostics in status and own warning deduplication.
+	ConvergenceError error
+}
 
 // OpResult reports operation completion and the next durable checkpoint.
 type OpResult struct {

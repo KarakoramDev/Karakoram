@@ -10,6 +10,13 @@ configuration; restores merge definitions rather than rewinding message data.
 Use the [RabbitMQ backup and restore guidance](rabbitmq.md#definitions-backups-and-cleanup),
 not the PBM logical/physical or PITR commands below.
 
+Elasticsearch uses native **`snapshot`** backups, not PBM `logical`/`physical`
+backups or PITR. Use the shared S3 registration steps below, then follow
+[Elasticsearch snapshots and restore](elasticsearch.md#snapshots-and-restore)
+for repository verification, snapshot scheduling/count retention, shared-object
+deletion rules and destructive native restore semantics. Always pass
+`--type snapshot` for Elasticsearch; the CLI's default is `logical`.
+
 Restore and clone require the backup's provider to match the target cluster's
 provider. A backup without provider metadata is a legacy PSMDB backup, not a
 provider-neutral artifact. Incompatible requests are rejected before enqueueing;
@@ -102,7 +109,7 @@ karactl backups get demo beforechange
 karactl operations cluster demo
 ```
 
-Both types execute on nodes via PBM; physical snapshots require PSMDB. A create request returns acceptance, not completion. Watch Backup phase (`Pending`, `Running`, `Succeeded`, `Failed`) and the matching Operation. The inventory carries PBM name, storage, type, timestamps, last-write time, size and error. Only a successful backup is a recovery base.
+The two MongoDB types above execute on nodes via PBM; physical backups require PSMDB. For Elasticsearch, use `karactl backups create search beforechange --type snapshot --storage archive` and follow the [native snapshot workflow](elasticsearch.md#snapshots-and-restore). A create request returns acceptance, not completion. Watch Backup phase (`Pending`, `Running`, `Succeeded`, `Failed`) and the matching Operation. Inventory includes storage, type, timestamps, size/error where available, and the provider's native location (PBM name or Elasticsearch repository/snapshot reference). Only a successful backup is a recovery base.
 
 Backup and restore responses always identify their operation as `operationId`, also returned in `Karakoram-Operation-Id`; use `karactl operations wait ID`. Inspect their own records as well as the operation and verify actual recovered data in a drill. Do not treat an HTTP 2xx or PBM command initiation as a successful recovery test.
 

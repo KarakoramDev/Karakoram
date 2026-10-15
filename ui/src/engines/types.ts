@@ -17,6 +17,7 @@ export interface MonitoringPanel {
   unit?: string;
   yMax?: number;
   format?: (value: number) => string;
+  description?: string;
 }
 
 export interface TopologyEditorProps {

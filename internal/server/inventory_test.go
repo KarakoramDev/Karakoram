@@ -16,6 +16,19 @@ import (
 func TestEveryOperationHasImplementedHandler(t *testing.T) {
 	s, token := namespaceTestServer(t)
 	routes := []struct{ name, method, path, body string }{
+		{"ListElasticUsers", "GET", "/api/v1/clusters/prod/elasticsearch/users", ``},
+		{"CreateElasticUser", "POST", "/api/v1/clusters/prod/elasticsearch/users", `{"username":"test","roles":[],"enabled":true,"password":"test-password"}`},
+		{"GetElasticUser", "GET", "/api/v1/clusters/prod/elasticsearch/users/test", ``},
+		{"UpdateElasticUser", "PUT", "/api/v1/clusters/prod/elasticsearch/users/test", `{"username":"test","roles":[],"enabled":true,"password":"test-password"}`},
+		{"DeleteElasticUser", "DELETE", "/api/v1/clusters/prod/elasticsearch/users/test", ``},
+		{"ListElasticRoles", "GET", "/api/v1/clusters/prod/elasticsearch/roles", ``},
+		{"CreateElasticRole", "POST", "/api/v1/clusters/prod/elasticsearch/roles", `{"name":"test","cluster":[],"indices":[],"applications":[]}`},
+		{"GetElasticRole", "GET", "/api/v1/clusters/prod/elasticsearch/roles/test", ``},
+		{"UpdateElasticRole", "PUT", "/api/v1/clusters/prod/elasticsearch/roles/test", `{"name":"test","cluster":[],"indices":[],"applications":[]}`},
+		{"DeleteElasticRole", "DELETE", "/api/v1/clusters/prod/elasticsearch/roles/test", ``},
+		{"ListElasticAPIKeys", "GET", "/api/v1/clusters/prod/elasticsearch/api-keys", ``},
+		{"CreateElasticAPIKey", "POST", "/api/v1/clusters/prod/elasticsearch/api-keys", `{"name":"test"}`},
+		{"InvalidateElasticAPIKey", "DELETE", "/api/v1/clusters/prod/elasticsearch/api-keys/test", ``},
 		{"ListAccounts", "GET", "/api/v1/accounts", ""},
 		{"CreateAccount", "POST", "/api/v1/accounts", "{\"name\":\"other\",\"password\":\"other-test-password\"}"},
 		{"DeleteAccount", "DELETE", "/api/v1/accounts/other", ""},

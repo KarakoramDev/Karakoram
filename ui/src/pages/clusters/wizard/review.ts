@@ -3,6 +3,7 @@
 
 import type { Schemas } from '@/api/client';
 import { managementIsPublic, PLUGIN_GROUPS, selectedPluginGroups } from '../../../engines/rabbitmq/helpers.ts';
+import { readOptions } from '../../../engines/elasticsearch/spec.ts';
 import { engineRules } from './engine.ts';
 import { componentEntries } from './validation.ts';
 
@@ -31,9 +32,13 @@ export function totalFootprint(spec: Schemas['ClusterSpec']) {
 /** Database exposure is independent from provider-specific management endpoints. */
 export function exposureSummary(spec: Schemas['ClusterSpec']): string {
   const exposure = spec.exposure;
-  return exposure?.public
+  const database = exposure?.public
     ? `Public database (${exposure.ipType}), allowlist: ${(exposure.allowlist ?? []).join(', ') || 'missing (required)'}`
     : 'Database private to the selected Zerops project';
+  if (spec.provider !== 'elasticsearch') return database;
+  const options = readOptions(spec);
+  const routes = (['kibana', 'apm'] as const).filter((name) => options[name].public);
+  return [database, ...routes.map((name) => `Public ${name === 'kibana' ? 'Kibana' : 'APM Server'} HTTPS: internet reachable, no IP allowlist, authentication only (${options[name].allowAllAddresses ? 'acknowledged' : 'acknowledgement required'})`)].join('; ');
 }
 
 export function exposureReviewRows(spec: Schemas['ClusterSpec']): [string, string][] {

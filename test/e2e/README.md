@@ -29,6 +29,7 @@ Install Karakoram using the [installation guide](../../docs/install.md), complet
 | `KARAKORAM_E2E_NAMESPACE` | Optional namespace name for `TestMultiNamespace`; default `<KARAKORAM_E2E_PREFIX>ns`. An existing namespace is reused only if its project ID matches. |
 | `KARAKORAM_E2E_PREFIX` | Optional 1–4-character lowercase alphanumeric prefix beginning with a letter; default `e2e`. Eight random hex characters keep cluster names within 12 characters. |
 | `KARAKORAM_E2E_KEEP` | `1` disables final cleanup of test-owned resources. Explicit scenario actions (including deletion, suspend/resume and user/role deletion) still execute. Global RBAC/settings are always restored. |
+| `KARAKORAM_E2E_ELASTIC_CLUSTER` | Optional: run `TestElasticLifecycle` phases against an existing Elasticsearch cluster that an earlier `KEEP=1` run created and seeded, instead of creating one. Select later phases with `-run`. The suite does not delete an adopted cluster except in explicit deletion phases. |
 | `KARAKORAM_E2E_KARACTL` | Already-built `karactl` executable; required by the CLI workflow and optional RabbitMQ `Access/CLI` subtest. Subprocess credentials use the environment and an isolated temporary HOME; other `KARAKORAM_` variables are removed. |
 | `KARAKORAM_E2E_OIDC_ISSUER` | Reachable auto-approving **test-only** issuer from `test/oidc-issuer`. When configured, OIDC follows the full authorization-code/PKCE callback. Never use this issuer for production authentication. |
 | `KARAKORAM_E2E_OIDC_CLIENT_ID` | Optional client ID; default `karakoram-e2e`, matching the bundled issuer. Register callback `<KARAKORAM_E2E_URL>/api/v1/auth/oidc/callback`. |
@@ -169,3 +170,84 @@ Replica-set data clients connect directly to the observed primary's public endpo
 Operations have a 35-minute wait bound and independent scenarios have four-hour contexts, with longer waits where CPU-mode rate limits require them. Backups/restores must reach `Succeeded`; cluster waits require `Ready` and observed-generation convergence. Ordinary failures still invoke cleanup unless `KEEP`. Cleanup deletes owned clusters with `keepVolumes=false, keepBackups=false`, waits for removal and removes test-created storage configurations. Existing storage objects and buckets are never deleted. Deletion-choice tests clean retained S3 objects only after preservation checks unless `KEEP`. Global policy/settings are restored even with `KEEP`.
 
 A hard timeout, process kill or host failure can interrupt cleanup. Use the exact logged random names to delete only test-owned clusters/accounts/storage objects, inspect [orphaned volumes](../../docs/operations.md#orphaned-platform-volumes), and restore saved policy/settings if interruption occurred during RBAC tests. Never perform broad prefix deletion against pre-existing infrastructure. Retained resources and backup objects can continue incurring costs.
+
+## Elasticsearch lifecycle (private-network runner)
+
+`TestElasticLifecycle` must run **inside a Zerops runtime in the same project as
+the control plane**, with private-network DNS/reachability to its test-created
+Elastic Stack services. Unlike the MongoDB suites above, it does not require
+`KARAKORAM_E2E_ALLOW_CIDR`, public database TCP exposure, the MongoDB driver, or
+`karactl`. The Elasticsearch provider must be deployed with its security routes,
+monitoring collector, and matching Stack artifacts available.
+
+Required inputs are `KARAKORAM_E2E_URL`, `KARAKORAM_E2E_TOKEN`, and either
+`KARAKORAM_E2E_STORAGE_NAME` or all five
+`KARAKORAM_E2E_STORAGE_{ENDPOINT,BUCKET,ACCESS_KEY,SECRET,REGION}` variables.
+Storage must satisfy the HTTPS/path-style/TLS-verification requirements above
+and support Elasticsearch's S3 snapshot repository operations. Optional inputs
+are `KARAKORAM_E2E_PREFIX`, `KARAKORAM_E2E_KEEP`, and
+`KARAKORAM_E2E_EVIDENCE_DIR`. Set the evidence directory for private JSON timing,
+health, data-preservation, operation, backup, restore, and monitoring records.
+Failed phases also capture available cluster status, events, and operations;
+credentials, API-key values, session cookies, and intake tokens are not saved.
+
+The suite provisions Elasticsearch **9.5.4** (then upgrades it to 9.5.5), three combined nodes with fixed
+2 GB RAM each, and one replica each of Kibana (2 GB), Logstash (1.5 GB), and APM
+Server (0.5 GB). Kibana and APM receive public HTTPS subdomains. Allow capacity
+for a temporary fourth Elasticsearch node (replacement/scaling) and a separate
+single-node backup clone with its own volume. Provisioning, reconciliation, and
+operation waits allow 60 minutes each; ingestion allows 15 minutes. The parent
+context allows 24 hours. Increase the Go process timeout if necessary.
+
+```sh
+# Compile/vet without creating any live resources:
+go vet -tags e2e ./test/e2e/
+
+# Complete sequential lifecycle, from the same-project runtime:
+go test -tags e2e -count=1 -v -timeout 24h ./test/e2e/ \
+  -run '^TestElasticLifecycle$'
+
+# An independently runnable phase, including prerequisite provisioning:
+go test -tags e2e -count=1 -v -timeout 8h ./test/e2e/ \
+  -run '^TestElasticLifecycle$/Restore$'
+```
+
+Every phase below is independently selectable with
+`-run '^TestElasticLifecycle$/<Phase>$'`. Missing prerequisites are created
+automatically: all phases provision a ready three-node Stack cluster and seed
+twelve proof documents into a one-replica index; Restore and Clone also create
+a successful snapshot. Selecting several phases in one invocation reuses that
+fixture in the listed order. The first failed phase stops later mutations.
+
+| Phase | Checks |
+| --- | --- |
+| `Create` | Elasticsearch 9.5.4 with combined-node topology, fixed 2 GB RAM, one Kibana/Logstash/APM replica each, green health with exactly three Elasticsearch nodes, indexed documents and exact search contents. |
+| `TLSData` | Connection-details CA and elastic password, HTTPS certificate chain and node-hostname verification, exact document count and search contents. |
+| `Access` | Native users/roles CRUD and lists, real allowed/denied index reads, password change, role revocation, scoped API-key authentication/list/invalidation (401), user/role deletion. |
+| `Kibana` | Private `/api/status` reports 9.5.4; public HTTPS basic login with `kbn-xsrf`. |
+| `Logstash` | Three HTTP-input JSON documents indexed under `logs-*`, with a logs data stream present. |
+| `APM` | Secret-token NDJSON transaction intake through both private and public endpoints (202), both unique traces searchable under `traces-apm*`. |
+| `Monitoring` | Elasticsearch-prefixed monitoring series with samples for every Elasticsearch member. |
+| `Restart` | Durable restart succeeds, cluster returns green, exact proof data survives. |
+| `ReplaceMember` | Replace the second member, observe a newly allocated member name and old-member removal, green health and exact proof data. |
+| `Backup` | Native snapshot backup reaches Succeeded. |
+| `Restore` | Delete the proof index, in-place restore reaches Succeeded, index returns with all twelve exact documents and green health. |
+| `Clone` | Single-node cluster from `spec.dataSource`, without optional components, contains exact restored documents; delete clone and verify 404/list absence. A one-replica index may correctly make the singleton yellow. |
+| `Upgrade` | Rolling patch upgrade 9.5.4→9.5.5 via merge PATCH; desired spec, all Elasticsearch nodes and Stack members report 9.5.5, Kibana reports 9.5.5, green health and exact proof data. |
+| `Scale` | Engine replicas 3→4→3; each step returns green and preserves exact proof data. After scale-down, voting configuration exclusions are empty and neither persistent nor transient allocation exclusions name the removed node. |
+| `DeleteKeep` | Delete with `keepVolumes=true, keepBackups=true`, reach Suspended, preserve the complete paginated backup inventory and individual backup records; resume to Ready with three green Elasticsearch nodes, six Stack members, healthy matching-version Kibana and exact proof data; backup inventory remains unchanged. |
+| `Delete` | Ensure a successful snapshot exists, delete with `keepVolumes=false, keepBackups=false`, verify cluster 404/list absence, every prior backup record returns 404 and the backup-list endpoint returns 404 once no retained records remain. This checks API records, not direct S3 object removal. |
+| `TestElasticDedicatedMasters` (standalone test) | Elasticsearch 9.5.4, three master-only plus two data nodes with fixed 2 GB RAM and no Stack components; Ready and green five-node health, `_cat/nodes` role counts, twelve indexed documents and exact search contents; delete with both keep flags false and verify cluster 404/list absence. No backup storage is required. |
+
+Generic lifecycle calls use the generated API client. Elasticsearch
+users/roles/API-key routes use authenticated raw HTTP with that client's base
+URL and transport. Data-plane requests verify TLS against the returned cluster
+CA, including the node hostname; public component HTTPS uses normal certificate
+verification. Private component HTTP is reachable only through the project
+network. Deletion assertions are control-plane 404/inventory evidence, not an
+independent Zerops resource inventory.
+
+Cleanup removes test-owned clusters, snapshots, and newly created storage
+objects unless `KARAKORAM_E2E_KEEP=1`. As with other suites, **explicit scenario
+deletions still execute with KEEP**: Clone deletes its clone and Delete deletes
+its source cluster. Existing storage objects and buckets are never deleted.

@@ -11,10 +11,12 @@ import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Me
 import { useClusterContext } from './ClusterDetail';
 import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from '../cluster-utils';
 import { memberHealthCounts } from '../member-status';
-import { certificateDownload, colocatedGroups, credentialDatabaseLabel, generationState, knownHost, psmdbConnect } from './detail-state';
+import { certificateDownload, colocatedGroups, credentialDatabaseLabel, elasticHealthNotices, elasticMemberSummary, generationState, knownHost, psmdbConnect } from './detail-state';
 import { hasCapability, hasReplicaSetDetails } from '@/engines';
 import { QuorumCallout } from '@/engines/rabbitmq/QuorumCallout';
-
+import { kibanaReady } from '@/engines/elasticsearch/spec';
+import { ConnectionHelp } from '@/engines/elasticsearch/ConnectionHelp';
+import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -45,22 +47,28 @@ export function OverviewTab() {
   const colocated = colocatedGroups(pl?.groups);
   const placementUnknown = !pl?.groups.length || pl.groups.some((g) => !knownHost(g.name));
   const suspended = cluster.status.phase === 'Suspended';
+  const elasticMembers = spec.provider === 'elasticsearch' ? elasticMemberSummary(spec.components, list) : undefined;
+  const healthNotices = spec.provider === 'elasticsearch' && !suspended ? elasticHealthNotices(cluster.status.conditions) : [];
 
   return (
     <div className="stack" style={{ gap: 20 }}>
       {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
       {spec.provider === 'rabbitmq' ? <QuorumCallout cluster={cluster} base={base} /> : null}
+      {healthNotices.map((notice) => <Callout key={notice.title} tone="warn" title={notice.title}>
+        {notice.message} See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/elasticsearch.md#scale-upgrade-restart-and-replace" target="_blank" rel="noreferrer">Elasticsearch scaling guide</a>.
+      </Callout>)}
       <div className={replicaSetDetails ? 'grid-4' : 'grid-3'}>
         <Card flush>
           <div className="stat">
-            <span className="stat-label">{suspended ? 'Historical members (runtime suspended)' : 'Members healthy'}</span>
+            <span className="stat-label">{suspended ? 'Historical members (runtime suspended)' : elasticMembers ? 'Elasticsearch nodes healthy' : 'Members healthy'}</span>
             <span className="stat-value">
-              {suspended ? '—' : health.healthy}
+              {suspended ? '—' : elasticMembers ? elasticMembers.healthy : health.healthy}
               <span className="faint" style={{ fontSize: 'var(--fs-md)' }}>
                 {' '}
-                / {suspended ? list.length : health.total}
+                / {suspended ? list.length : elasticMembers ? elasticMembers.observed : health.total}
               </span>
             </span>
+            {elasticMembers ? <span className="stat-sub">{elasticMembers.detail}</span> : null}
             {!suspended && health.leaving > 0 ? <span className="stat-sub"><Badge tone="progress">{health.leaving} Leaving</Badge></span> : null}
           </div>
         </Card>
@@ -192,7 +200,7 @@ export function OverviewTab() {
         <Card title="Connection">
           {conn?.endpoints?.map((endpoint) => <div key={`${endpoint.name}:${endpoint.url}`} className="stack" style={{ marginBottom: 12 }}>
             <strong className="small">{endpoint.name} <Badge plain>{endpoint.public ? 'Public' : 'Private'}</Badge></strong>
-            <CodeLine value={endpoint.url} />
+            {spec.provider === 'elasticsearch' && endpoint.name === 'kibana' && (suspended || !kibanaReady(list)) ? <span className="small muted">{suspended ? 'Kibana is suspended. Resume the cluster to make it available.' : 'Kibana is starting — retry shortly.'}</span> : <CodeLine value={endpoint.url} />}
           </div>)}
           {conn?.hosts?.length ? (
             <div className="stack">
@@ -211,12 +219,13 @@ export function OverviewTab() {
           ) : (
             conn?.endpoints?.length ? null : <p className="small muted">Connection details appear once the cluster is initialized.</p>
           )}
+          {spec.provider === 'elasticsearch' ? <ConnectionHelp connection={conn} /> : null}
         </Card>
         <Card title="Specification">
           <KV
             items={[
               ['Engine', `${spec.provider} ${spec.version}`],
-              ['Members', resourcesSummary(spec.components.engine.resources)],
+              ...(spec.provider === 'elasticsearch' ? elasticResourceRows(spec) : [['Members', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
               spec.components.configServer && ['Config servers', `${spec.components.configServer.replicas} × ${resourcesSummary(spec.components.configServer.resources)}`],
               spec.components.router && ['Routers', `${spec.components.router.replicas} × ${resourcesSummary(spec.components.router.resources, true)}`],
               ['Backup storage', spec.backup?.storage ?? 'none'],
@@ -319,7 +328,7 @@ function CredentialsReveal({ namespace, name, base, provider, allowed }: { names
           Hide
         </Button>
       </div>
-      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/users`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
+      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
       <div className="table-wrap">
         <table className="table">
           <thead>

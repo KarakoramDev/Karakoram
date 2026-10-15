@@ -88,6 +88,11 @@ export function tabAvailable(provider: Metadata | undefined, tab: string): boole
   return true;
 }
 
+/** A pending or failed catalog is not evidence that a requested tab is unsupported. */
+export function shouldRedirectTab(provider: Metadata | undefined, tab: string, catalogResolved: boolean): boolean {
+  return catalogResolved && !tabAvailable(provider, tab);
+}
+
 export function monitoringPanels(provider: string): MonitoringPanel[] {
   return [...(engines[provider]?.monitoringPanels ?? []), ...genericMonitoringPanels];
 }

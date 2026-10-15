@@ -286,6 +286,8 @@ Send an optional `Idempotency-Key` header on these operations:
 * Create or replace backup storages, database users and database roles (POST/PUT).
 * Create or replace RabbitMQ virtual hosts, users, vhost permissions, topic
   permissions, policies and operator policies (POST/PUT).
+* Create Elasticsearch API keys, and create or update native Elasticsearch users
+  and roles (POST/PUT).
 
 Other operations do not provide keyed retry protection. Use a random, unique key
 for each intended mutation (for example a UUID); reuse that same key and body for

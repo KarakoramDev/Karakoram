@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { register } from 'node:module';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { applicationDrafts, applicationGrants, failedInvalidation, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation } from './access-state.ts';
+
+register('../../../test/tsx-loader.mjs', import.meta.url);
+// Static imports run before the JSX/alias loader is registered.
+const { ElasticEndpoints } = await import('./ElasticAccessTab.tsx');
+
+class MemoryStorage {
+  private items = new Map<string, string>();
+  get length() { return this.items.size; }
+  key(index: number) { return [...this.items.keys()][index] ?? null; }
+  getItem(key: string) { return this.items.get(key) ?? null; }
+  setItem(key: string, value: string) { this.items.set(key, value); }
+  removeItem(key: string) { this.items.delete(key); }
+}
+
+test('application grants preserve existing roles and support adding, editing and removing grants', () => {
+  const original = [{ application: 'kibana-.kibana', privileges: ['feature_discover.read', 'feature_dashboard.read'], resources: ['space:default', 'space:team'] }];
+  const drafts = applicationDrafts(original);
+  assert.deepEqual(applicationGrants(drafts), original);
+  drafts.push({ application: ' custom-app ', privileges: 'read, write\nmonitor', resources: '*\nspace:other' });
+  assert.deepEqual(applicationGrants(drafts)?.[1], { application: 'custom-app', privileges: ['read', 'write', 'monitor'], resources: ['*', 'space:other'] });
+  drafts[0] = { ...drafts[0]!, privileges: 'feature_discover.all', resources: 'space:other' };
+  assert.deepEqual(applicationGrants(drafts)?.[0], { application: 'kibana-.kibana', privileges: ['feature_discover.all'], resources: ['space:other'] });
+  assert.deepEqual(applicationGrants(drafts.filter((_, i) => i !== 0))?.length, 1);
+  assert.deepEqual(applicationGrants([]), []);
+  assert.equal(original[0]!.privileges[0], 'feature_discover.read');
+});
+
+test('incomplete application grants cannot be submitted', () => {
+  for (const draft of [
+    { application: '', privileges: 'read', resources: '*' },
+    { application: 'kibana-.kibana', privileges: ' ,\n ', resources: '*' },
+    { application: 'kibana-.kibana', privileges: 'read', resources: '' },
+  ]) assert.equal(applicationGrants([draft]), null);
+});
+
+test('invalidation intent survives reload scoped to namespace, cluster and key id', () => {
+  const storage = new MemoryStorage();
+  const marker = { id: 'id:/one', startedAt: 1000 };
+  rememberInvalidation(storage, 'team', 'search', marker);
+  rememberInvalidation(storage, 'other', 'search', { id: 'other', startedAt: 1000 });
+  rememberInvalidation(storage, 'team', 'other', { id: 'elsewhere', startedAt: 1000 });
+  const reloaded = pendingInvalidations(storage, 'team', 'search');
+  assert.deepEqual(reloaded, [marker]);
+  assert.equal(invalidationState(reloaded[0], { invalidated: false }, 2000), 'checking');
+  assert.equal(invalidationState(reloaded[0], { invalidated: true }, 2000), 'invalidated');
+  forgetInvalidation(storage, 'team', 'search', marker.id);
+  assert.deepEqual(pendingInvalidations(storage, 'team', 'search'), []);
+  assert.equal(storage.length, 2);
+});
+
+test('unconfirmed invalidation offers retry after the bounded wait, and retry renews intent', () => {
+  const storage = new MemoryStorage();
+  const marker = { id: 'key', startedAt: 1000 };
+  assert.equal(invalidationState(marker, { invalidated: false }, marker.startedAt + INVALIDATION_WAIT_MS), 'retry');
+  assert.equal(invalidationState(marker, undefined, marker.startedAt + INVALIDATION_WAIT_MS), 'invalidated');
+  rememberInvalidation(storage, 'team', 'search', marker);
+  rememberInvalidation(storage, 'team', 'search', { ...marker, startedAt: 100_000 });
+  const retried = pendingInvalidations(storage, 'team', 'search');
+  assert.equal(retried.length, 1);
+  assert.equal(invalidationState(retried[0], { invalidated: false }, 100_001), 'checking');
+  assert.equal(invalidationState(undefined, { invalidated: false }, 100_001), 'active');
+});
+
+test('not-found invalidation clears intent instead of reporting an absent key as invalidated', () => {
+  const storage = new MemoryStorage();
+  const marker = { id: 'missing', startedAt: 1000 };
+  rememberInvalidation(storage, 'team', 'search', marker);
+  rememberInvalidation(storage, 'other', 'search', marker);
+  const pending = failedInvalidation(storage, 'team', 'search', [marker], marker.id, 404);
+  assert.deepEqual(pending, []);
+  assert.deepEqual(pendingInvalidations(storage, 'team', 'search'), []);
+  assert.equal(pendingInvalidations(storage, 'other', 'search').length, 1);
+  assert.equal(invalidationState(pending[0], undefined, 2000), 'active');
+  const source = readFileSync(new URL('./ElasticAccessTab.tsx', import.meta.url), 'utf8');
+  assert.match(source, /setPendingKeys\(\(items\) => failedInvalidation\(sessionStorage, namespace, name, items, key.id, e instanceof ApiError \? e.status : undefined\)\)/);
+});
+
+test('ambiguous invalidation failures retain a retry marker', () => {
+  const storage = new MemoryStorage();
+  const pending = failedInvalidation(storage, 'team', 'search', [{ id: 'key', startedAt: 1000 }], 'key', 503);
+  assert.deepEqual(pendingInvalidations(storage, 'team', 'search'), [{ id: 'key', startedAt: 0 }]);
+  assert.equal(invalidationState(pending[0], { invalidated: false }, INVALIDATION_WAIT_MS), 'retry');
+});
+
+test('access panel renders Kibana startup instead of an actionable link until every Kibana member is ready', () => {
+  const connection = { hosts: [], uri: '', endpoints: [{ name: 'Kibana', url: 'https://dashboards.example', public: true }] };
+  const ready = { role: 'kibana' as const, state: 'joined', health: true };
+  const starting = { ...ready, state: 'starting', health: false };
+  for (const members of [[], [starting], [ready, starting]]) {
+    const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members, phase: 'Ready' }));
+    assert.match(markup, /Kibana is starting—retry shortly/);
+    assert.doesNotMatch(markup, /href="https:\/\/dashboards\.example"/);
+  }
+  const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members: [ready], phase: 'Ready' }));
+  assert.match(markup, /href="https:\/\/dashboards\.example"/);
+  assert.doesNotMatch(markup, /Kibana is starting/);
+});
+
+test('suspended access endpoints do not promise Kibana startup or expose its route', () => {
+  const connection = { hosts: [], uri: '', endpoints: [{ name: 'Kibana', url: 'https://dashboards.example', public: true }] };
+  for (const state of ['suspended', 'joined']) {
+    const members = [{ role: 'kibana' as const, state, health: state === 'joined' }];
+    const markup = renderToStaticMarkup(createElement(ElasticEndpoints, { connection, members, phase: 'Suspended' }));
+    assert.match(markup, /Kibana is suspended\. Resume the cluster/);
+    assert.doesNotMatch(markup, /Kibana is starting|href="https:\/\/dashboards\.example"/);
+  }
+});
+
+test('role and user dialogs keep native errors visible, and submit edited application grants', () => {
+  const source = readFileSync(new URL('./ElasticAccessTab.tsx', import.meta.url), 'utf8');
+  assert.match(source, /save\.error \? <Callout tone="danger">\{errorMessage\(save\.error\)\}/);
+  assert.match(source, /error \? <Callout tone="danger">\{error\}/);
+  assert.match(source, /applications: grants \?\? \[\]/);
+  assert.match(source, /DLS\/FLS requires an Elasticsearch licence tier/);
+});
+
+test('native access submissions key every create and update and reset the key when fields change', () => {
+  const source = readFileSync(new URL('./ElasticAccessTab.tsx', import.meta.url), 'utf8');
+  for (const [method, path] of [
+    ['POST', 'users'], ['PUT', 'users/{username}'],
+    ['POST', 'roles'], ['PUT', 'roles/{role}'], ['POST', 'api-keys'],
+  ]) {
+    const mutation = `api.${method}('/clusters/{cluster}/elasticsearch/${path}', { headers: idempotencyHeaders(submission.key)`;
+    assert.ok(source.includes(mutation), `${method} ${path} must send its submission key`);
+  }
+  for (const fields of [
+    'username, password, fullName, email, roles, enabled',
+    'name, clusterPrivileges, indicesText, applications',
+    'name, expiration, descriptors',
+  ]) assert.ok(source.includes(`useSubmissionKey(JSON.stringify({ ${fields} }))`), `edits must reset the key for ${fields}`);
+  assert.equal(source.match(/submission\.reset\(\)/g)?.length, 3);
+});

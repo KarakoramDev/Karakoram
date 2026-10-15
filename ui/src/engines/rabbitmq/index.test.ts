@@ -8,14 +8,22 @@ import type { Schemas } from '../../api/client';
 import { rabbitmqUI } from './index.ts';
 
 register('../../../test/tsx-loader.mjs', import.meta.url);
-// Load the registry after installing the loader for its extensionless UI imports.
-const { engines } = await import('../register.ts');
+// Static imports run before register; registry/TSX imports must wait for the loader.
+await import('../register.ts');
+const { engines } = await import('../index.ts');
+const { elasticsearchUI } = await import('../elasticsearch/index.tsx');
 
 const cluster: Schemas['Cluster'] = {
   name: 'orders', namespace: 'default', generation: 1, createdAt: '', updatedAt: '',
   spec: { provider: 'rabbitmq', version: '4.3.6', topology: { type: 'cluster' }, components: { engine: { replicas: 3, resources: { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 0.5, maxRam: 2, minDisk: 5, maxDisk: 20 } } } },
   status: { phase: 'Ready', observedGeneration: 1, members: [], conditions: [] },
 };
+
+test('registration attaches all built-in engines to the shared registry', () => {
+  assert.deepEqual(Object.keys(engines).sort(), ['elasticsearch', 'psmdb', 'rabbitmq']);
+  assert.equal(engines.rabbitmq, rabbitmqUI);
+  assert.equal(engines.elasticsearch, elasticsearchUI);
+});
 
 test('RabbitMQ extension exposes its wizard, access tab and topology summary', () => {
   assert.equal(engines.rabbitmq, rabbitmqUI);

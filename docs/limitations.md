@@ -98,3 +98,14 @@ See [operations](operations.md), [security](security.md), the [verification guid
 - **Monitoring is aggregate and bounded.** Broker `up` means loopback Prometheus answered, not queue quorum or successful delivery. Default 30-second scrapes/24-hour history and best-effort peer/placement observations are not independent alerting or a failure-domain guarantee.
 
 See the [RabbitMQ guide](user-guide/rabbitmq.md), [lifecycle ADR](adr/0021-rabbitmq-cluster-lifecycle.md), [access/backup ADR](adr/0022-rabbitmq-access-tls-backups.md) and [operational notes](operations.md#rabbitmq-operations).
+
+## Elasticsearch and Elastic Stack
+
+- **Host map-count recommendation gap.** The measured Zerops runtime had `vm.max_map_count=262144`: Elasticsearch 9.5.5 passed production bootstrap checks, but Elastic recommends `1048576`; Karakoram cannot change the shared-host setting.
+- **No host anti-affinity or shard awareness.** Independent node volumes do not guarantee separate hosts, and no Elasticsearch shard-awareness policy maps replicas to physical failure domains.
+- **Public subdomains have platform limits.** Kibana/APM subdomain routes share Zerops' balancer, have a 50-MB upload cap and are not a production-ingress guarantee.
+- **Logstash queues are ephemeral.** Even with `persistentQueue: true`, queues live on container disk and are lost on redeploy, upgrade or replacement.
+- **New S3 storage requires rolling maintenance.** Elasticsearch has one named S3 client per referenced storage; adding a new storage requires a rolling restart before repository use.
+- **ELv2 restricts managed-service resale.** Default distributions are Elastic-licensed; operators exposing substantial Elasticsearch/Kibana functionality to third parties must obtain appropriate rights. Karakoram's Apache-2.0 license does not remove that restriction.
+
+See the [Elasticsearch guide](user-guide/elasticsearch.md) for snapshot cleanup/retained-backup recovery constraints and the limited live verification status.

@@ -596,6 +596,8 @@ func (s *Server) handle(ctx context.Context, name string, in input) response {
 
 func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 	switch name {
+	case "ListElasticUsers", "GetElasticUser", "CreateElasticUser", "UpdateElasticUser", "DeleteElasticUser", "ListElasticRoles", "GetElasticRole", "CreateElasticRole", "UpdateElasticRole", "DeleteElasticRole", "ListElasticAPIKeys", "CreateElasticAPIKey", "InvalidateElasticAPIKey":
+		return s.elasticAccess(ctx, name, in)
 	case "GetHealth":
 		_, err := s.Store.ListClusters(ctx, "")
 		if err != nil {
