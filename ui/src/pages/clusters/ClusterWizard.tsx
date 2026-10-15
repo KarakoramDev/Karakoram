@@ -22,7 +22,7 @@ import { resourcesSummary } from './cluster-utils';
 import { clusterPath } from './cluster-path';
 import { OperationNotice } from '@/components/OperationNotice';
 import { dataSourceFor, dataSourceLabel, wireDataSource } from './data-source';
-import { STEPS, claimSubmission, firstInvalidStep, navigateStep, normalizeWizardSpec, resetEditedAttempt, type StepId } from './wizard/state';
+import { STEPS, navigateStep, normalizeWizardSpec, resetEditedAttempt, submitWizard, type StepId } from './wizard/state';
 import { componentEntries, memberChoices, nameError, topologyErrors, validateWizard } from './wizard/validation';
 import { resourceMinimums } from './wizard/resources';
 import { engineConsequences, engineRules } from './wizard/engine';
