@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -24,14 +23,26 @@ func warningEvent(ctx context.Context, rc *engine.Context, reason, message strin
 	return rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: reason, Message: message, CreatedAt: now(rc)})
 }
 
+func clearQuorumBlockers(ctx context.Context, rc *engine.Context, m *member) error {
+	if len(m.QuorumBlockers) > 0 && rc.Events != nil {
+		if err := rc.Events.Record(ctx, domain.Event{
+			Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Normal",
+			Reason: "RollingRestartRecovered", Message: fmt.Sprintf("Queue quorum recovered on %s; continuing the rolling change.", m.Name), CreatedAt: now(rc),
+		}); err != nil {
+			return err
+		}
+	}
+	m.QuorumBlockers = nil
+	return nil
+}
+
 func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *member) error {
 	var out rmqspec.QuorumCriticalResponse
 	if err := p.call(ctx, rc, m.Name, "quorum-critical", rmqspec.EmptyRequest{}, &out); err != nil {
 		return err
 	}
 	if len(out.Blockers) == 0 {
-		m.QuorumBlockers = nil
-		return nil
+		return clearQuorumBlockers(ctx, rc, m)
 	}
 	// The native health check supplies identities but not membership in 4.3.
 	// A failed inventory must not hide the already-known restart blockers.
@@ -53,7 +64,10 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 		if order := strings.Compare(a.VHost, b.VHost); order != 0 {
 			return order
 		}
-		return strings.Compare(a.Queue, b.Queue)
+		if order := strings.Compare(a.Queue, b.Queue); order != 0 {
+			return order
+		}
+		return strings.Compare(a.Type, b.Type)
 	})
 	for i := range out.Blockers {
 		slices.Sort(out.Blockers[i].Members)
@@ -61,7 +75,9 @@ func (p *Provider) checkQuorum(ctx context.Context, rc *engine.Context, m *membe
 	previous := m.QuorumBlockers
 	m.QuorumBlockers = out.Blockers
 	message := quorumMessage(m)
-	if !reflect.DeepEqual(previous, m.QuorumBlockers) {
+	if !slices.EqualFunc(previous, m.QuorumBlockers, func(a, b rmqspec.QuorumBlocker) bool {
+		return a.VHost == b.VHost && a.Queue == b.Queue && a.Type == b.Type
+	}) {
 		if err := warningEvent(ctx, rc, "RollingRestartBlocked", message); err != nil {
 			m.QuorumBlockers = previous
 			return err

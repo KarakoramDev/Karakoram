@@ -275,10 +275,14 @@ Replacement provisions and joins a fresh identity before growing/migrating repli
 Adding brokers does **not** enlarge existing quorum queues. A queue originally
 created on one broker can still have just one replica after scale-up. Restarting
 that broker would make the queue unavailable, even when the other brokers are
-healthy. Karakoram checks quorum-critical resources **before** waiting for quorum
-and checks again if that wait fails. `QuorumCriticalQueues` names up to ten affected
-queues/vhosts and their known members (plus the remaining count); the warning event
-is `RollingRestartBlocked`. The operation and cluster message name the same blockers.
+healthy. Karakoram first waits for online quorum so recovering replicas can catch
+up, then checks quorum-critical resources before draining the broker. A failed
+wait also diagnoses the remaining blockers. `QuorumCriticalQueues` names up to ten
+affected queues/vhosts and their known members (plus the remaining count); the
+warning event is `RollingRestartBlocked`. Membership-inventory changes alone do
+not repeat that warning. The operation and cluster message name the same blockers.
+When quorum recovers, the condition clears and a Normal `RollingRestartRecovered`
+event records that the rolling change can continue.
 Stream or metadata-component blockers require their own majority recovery, not
 quorum queue additions.
 

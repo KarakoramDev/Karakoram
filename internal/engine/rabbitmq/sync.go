@@ -477,9 +477,6 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 	switch m.ChangeStep {
 	case "quorum":
 		if len(s.runningMembers()) > 1 {
-			if err := p.checkQuorum(ctx, rc, m); err != nil {
-				return false, err
-			}
 			if err := p.action(ctx, rc, m.Name, "await-quorum", rmqspec.AwaitQuorumRequest{TimeoutSeconds: 30}); err != nil {
 				if checkErr := p.checkQuorum(ctx, rc, m); checkErr != nil {
 					return false, checkErr
@@ -493,6 +490,8 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 			if err := p.checkQuorum(ctx, rc, m); err != nil {
 				return false, err
 			}
+		} else if err := clearQuorumBlockers(ctx, rc, m); err != nil {
+			return false, err
 		}
 		m.ChangeStep = "drain"
 	case "drain":

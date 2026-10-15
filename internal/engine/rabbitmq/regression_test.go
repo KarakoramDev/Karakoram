@@ -196,7 +196,7 @@ func TestRollingUpgradeSafetyOrder(t *testing.T) {
 				assertBefore(t, calls, drain, stop)
 				assertBefore(t, calls, stop, deploy)
 				if replicas > 1 {
-					assertBefore(t, calls, "agent:"+name+":quorum-critical", "agent:"+name+":await-quorum")
+					assertBefore(t, calls, "agent:"+name+":await-quorum", "agent:"+name+":quorum-critical")
 					assertBefore(t, calls, "agent:"+name+":quorum-critical", drain)
 				}
 				if i > 0 {

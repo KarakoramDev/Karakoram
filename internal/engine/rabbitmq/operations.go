@@ -45,10 +45,12 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result, e
 	}
 	defer func() {
-		for _, m := range s.Members {
-			if len(m.QuorumBlockers) > 0 {
-				result.Message = quorumMessage(m)
-				break
+		if op.Kind == domain.OperationRestart || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationUpdate {
+			for _, m := range s.Members {
+				if len(m.QuorumBlockers) > 0 {
+					result.Message = quorumMessage(m)
+					break
+				}
 			}
 		}
 		if e := s.save(rc.Cluster); err == nil {

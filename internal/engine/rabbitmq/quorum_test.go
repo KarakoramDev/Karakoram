@@ -22,6 +22,7 @@ func TestRollingQuorumBlockHasQueuesConditionOperationMessageAndSingleEvent(t *t
 	events := &definitionsTestEvents{}
 	rc.Events = events
 	a.broker("demom0").critical = true
+	a.failures["demom0:await-quorum"] = 503
 	a.queueSource = func() []mgmt.Queue {
 		return []mgmt.Queue{{Name: "orders", Vhost: "/", Type: "quorum", Members: []string{"rabbit@demom0"}}}
 	}
@@ -44,8 +45,8 @@ func TestRollingQuorumBlockHasQueuesConditionOperationMessageAndSingleEvent(t *t
 	if len(events.events) != 1 || events.events[0].Reason != "RollingRestartBlocked" || events.events[0].Type != "Warning" {
 		t.Fatal(events.events)
 	}
-	if f.mutations != before || slices.Contains(a.log.snapshot(), "agent:demom0:await-quorum") || slices.Contains(a.log.snapshot(), "agent:demom0:drain") {
-		t.Fatal("disruption or wait preceded diagnosis", a.log.snapshot())
+	if f.mutations != before || !slices.Contains(a.log.snapshot(), "agent:demom0:await-quorum") || slices.Contains(a.log.snapshot(), "agent:demom0:drain") {
+		t.Fatal("missing wait or unsafe disruption", a.log.snapshot())
 	}
 	// Running operations isolate ordinary Status; the provider must project the
 	// condition directly into the atomically persisted operation/cluster state.
@@ -73,16 +74,23 @@ func TestRollingQuorumBlockHasQueuesConditionOperationMessageAndSingleEvent(t *t
 		}
 	}
 	a.broker("demom0").critical = false
-	result, err = p.RunOperation(t.Context(), rc, op)
-	if err != nil {
-		t.Fatal(err)
+	delete(a.failures, "demom0:await-quorum")
+	for range 2 {
+		result, err = p.RunOperation(t.Context(), rc, op)
+		if err != nil {
+			t.Fatal(err)
+		}
+		op.Checkpoint = result.Checkpoint
 	}
 	if slices.ContainsFunc(rc.Cluster.Status.Conditions, func(c domain.Condition) bool { return c.Type == "QuorumCriticalQueues" }) {
 		t.Fatal(rc.Cluster.Status)
 	}
+	if len(events.events) != 2 || events.events[1].Type != "Normal" || events.events[1].Reason != "RollingRestartRecovered" {
+		t.Fatal(events.events)
+	}
 }
 
-func TestQuorumWaitFailureRunsDiagnosisAgain(t *testing.T) {
+func TestQuorumWaitFailureRunsDiagnosis(t *testing.T) {
 	p, rc, _, a := setup(t)
 	ready(t, p, rc)
 	s := state(t, rc)
@@ -99,7 +107,7 @@ func TestQuorumWaitFailureRunsDiagnosisAgain(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "orders") || strings.Contains(err.Error(), "HTTP 503") {
 		t.Fatal(err)
 	}
-	if countCall(a.log.snapshot(), "agent:demom0:quorum-critical") != 2 || len(m.QuorumBlockers) != 1 {
+	if countCall(a.log.snapshot(), "agent:demom0:quorum-critical") != 1 || len(m.QuorumBlockers) != 1 {
 		t.Fatal(a.log.snapshot(), m)
 	}
 }
@@ -213,5 +221,68 @@ func TestNativeMemberProvisioningStagesAreProjected(t *testing.T) {
 				t.Fatal(status.Members[0])
 			}
 		})
+	}
+}
+
+func TestRollingQuorumWaitAllowsRecoveringReplicas(t *testing.T) {
+	p, rc, _, a := setup(t)
+	ready(t, p, rc)
+	events := &definitionsTestEvents{}
+	rc.Events = events
+	s := state(t, rc)
+	m := s.find("demom0")
+	beginChange(rc, s, m, "restart")
+	a.broker(m.Name).critical = true
+	a.requestHook = func(action string) {
+		if action == "await-quorum" {
+			a.broker(m.Name).critical = false
+		}
+	}
+	a.log.clear()
+	for range 2 {
+		if _, err := p.changeStep(t.Context(), rc, s, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertBefore(t, a.log.snapshot(), "agent:demom0:await-quorum", "agent:demom0:quorum-critical")
+	if len(m.QuorumBlockers) != 0 || len(events.events) != 0 || m.ChangeStep != "drain" {
+		t.Fatal(m, events.events)
+	}
+}
+
+func TestQuorumWarningIgnoresMembershipInventoryChanges(t *testing.T) {
+	p, rc, _, a := setup(t)
+	ready(t, p, rc)
+	events := &definitionsTestEvents{}
+	rc.Events = events
+	s := state(t, rc)
+	m := s.find("demom0")
+	a.broker(m.Name).blockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "orders", Type: "quorum"}}
+	for _, members := range [][]string{nil, {"rabbit@demom0"}, nil} {
+		a.queueSource = func() []mgmt.Queue {
+			return []mgmt.Queue{{Name: "orders", Vhost: "/", Members: members}}
+		}
+		if err := p.checkQuorum(t.Context(), rc, m); !errors.Is(err, engine.ErrConflict) {
+			t.Fatal(err)
+		}
+	}
+	if len(events.events) != 1 {
+		t.Fatal(events.events)
+	}
+}
+
+func TestQuorumBlockersDoNotReplaceCredentialRotationMessage(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	ready(t, p, rc)
+	s := state(t, rc)
+	s.find("demom0").QuorumBlockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "orders", Type: "quorum"}}
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	result, err := p.RunOperation(t.Context(), rc, &domain.Operation{
+		ID: "rotation", Kind: domain.OperationRotateSystemUser, Payload: []byte(`{"user":"admin"}`),
+	})
+	if err != nil || result.Step != "password-staged" || result.Message != "" {
+		t.Fatal(result, err)
 	}
 }
