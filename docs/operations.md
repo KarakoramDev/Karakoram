@@ -162,6 +162,33 @@ This is intentional safety, not a retry suggestion. Inspect PBM operation metada
 - Preserve control-plane state/master key and monitor expiry of user-supplied TLS/OIDC/API credentials.
 - Drain disruptive work before [Karakoram upgrades](upgrade.md). Existing member agents receive the current binary on a later provider-driven member deployment, not on control-plane restart alone.
 
+## Deleting MongoDB backup data
+
+Deleting a cluster without `--keep-backups` removes its backup artifacts before
+removing persistent resources and credentials. When member runtimes exist, PBM
+disables PITR, resynchronizes storage inventory, then removes PITR chunks and
+snapshots. An unreachable agent alone never authorizes direct storage deletion:
+PBM could still be writing data.
+
+For a suspended cluster, or another cluster whose database runtimes are all
+absent, the control plane deletes objects directly from S3 under the exact
+recorded cluster-incarnation namespace. This includes snapshots not present in
+the backup inventory, their metadata, PITR chunks and namespace markers. It does
+not resume database runtimes or delete adjacent cluster namespaces. Backup
+records and protected recovery credentials are removed only after artifact
+deletion succeeds; interrupted object or inventory deletion can be retried.
+Snapshots retained from an earlier incarnation are deleted only through their
+individual recorded snapshot identities, not by deleting an enclosing prefix.
+
+Keep the backup storage and its credentials available until deletion finishes.
+Storage access failures are reported in the cluster status and delete operation
+with instructions to repair access and retry, or deliberately use
+`--keep-backups`. If a legacy cluster lacks a verified PBM namespace, resume it
+to use PBM cleanup or retain backups; the control plane will not guess an object
+prefix. Deleting an individual retained backup after its cluster is gone uses
+its recorded snapshot directory and metadata file directly; it does not require
+a PBM node and does not remove other snapshots or PITR chunks.
+
 ## Orphaned platform volumes
 
 If the platform refuses to delete a Local Storage volume, Karakoram first confirms that its member runtime was deleted and verifies volume ownership. Repeated mount-related deletion refusals are handed off to the orphan inventory after the retry threshold. Karakoram emits the Warning event **`VolumeOrphaned`** for the original cluster, allowing member removal or cluster deletion to finish while background deletion retries continue. This does not mean the volume is gone: it continues consuming disk and may incur charges until deletion succeeds.

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
@@ -161,12 +162,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		}
 		if !started {
 			for _, b := range backups {
-				if b.RecoveryIdentity != "" {
-					if e = rc.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); e != nil && !missing(e) {
-						return false, e
-					}
-				}
-				if e = rc.Store.DeleteBackup(ctx, rc.Cluster.Ref(), b.Name); e != nil && !missing(e) {
+				if e = deleteBackupRecord(ctx, rc, b); e != nil {
 					return false, e
 				}
 			}
@@ -174,27 +170,79 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, nil
 		}
 		for _, b := range backups {
+			if b.Storage == "" && (b.PBMName != "" || b.StartedAt != nil) {
+				return false, fmt.Errorf("cannot delete backup %q: recorded backup storage is missing; repair its storage identity and retry, or delete with --keep-backups", b.Name)
+			}
 			if b.Storage != "" && !slices.Contains(storages, b.Storage) {
 				storages = append(storages, b.Storage)
 			}
 		}
+		withoutRuntimes, e := backupRuntimesAbsent(ctx, rc, s)
+		if e != nil {
+			return false, e
+		}
 		for _, storage := range storages {
-			if slices.Contains(s.CleanedStorages, storage) {
-				continue
+			cleaned := slices.Contains(s.CleanedStorages, storage)
+			if cleaned {
+				remaining := false
+				for _, b := range backups {
+					remaining = remaining || b.Storage == storage
+				}
+				if !remaining {
+					continue
+				}
+				// Older checkpoints may have completed storage cleanup while
+				// failed or interrupted inventory records still remained.
 			}
 			env, e := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, storage)
 			if e != nil {
-				return false, e
+				return false, backupCleanupError(storage, e)
 			}
-			r, e := pbm.DeleteAll(ctx, env)
-			if e != nil {
-				return false, e
+			if withoutRuntimes {
+				// A suspended cluster has no command node. Its private storage
+				// namespace is still authoritative, including unlisted snapshots
+				// and PITR chunks left by interrupted operations.
+				if s.UID == "" || s.PBMPrefix != "karakoram/"+rc.Cluster.Name+"-"+s.UID {
+					return false, fmt.Errorf("cannot delete backup artifacts without runtimes: cluster lacks a verified PBM namespace; resume the cluster or delete with --keep-backups")
+				}
+				if e = p.deleteClusterObjects(ctx, env.Storage, rc.Cluster.Name, s.UID); e != nil {
+					return false, backupCleanupError(storage, e)
+				}
+			} else {
+				r, e := pbm.DeleteAll(ctx, env)
+				if e != nil {
+					return false, fmt.Errorf("cannot delete backup artifacts through PBM: %w; restore member availability and retry, or delete with --keep-backups", e)
+				}
+				if !r.Done {
+					return false, nil
+				}
 			}
-			if !r.Done {
-				return false, nil
+			for _, b := range backups {
+				if b.Storage != storage {
+					continue
+				}
+				// Backups retained from an earlier incarnation have immutable
+				// snapshot identities outside the current cluster's namespace.
+				if b.PBMPrefix != "" && b.PBMPrefix != env.Prefix && b.PBMName != "" {
+					if e = backupstorage.DeleteSnapshot(ctx, env.Storage, b); e != nil {
+						return false, backupCleanupError(storage, e)
+					}
+				}
+				if e = deleteBackupRecord(ctx, rc, b); e != nil {
+					return false, e
+				}
 			}
-			s.CleanedStorages = append(s.CleanedStorages, storage)
+			if !cleaned {
+				s.CleanedStorages = append(s.CleanedStorages, storage)
+			}
 			return false, nil
+		}
+		for _, b := range backups {
+			if b.Storage == "" {
+				if e = deleteBackupRecord(ctx, rc, b); e != nil {
+					return false, e
+				}
+			}
 		}
 		s.CleanupBackups = true
 		return false, nil
