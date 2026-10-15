@@ -17,6 +17,7 @@ register('../../../test/tsx-loader.mjs', import.meta.url);
 // Static imports run before register; source imports must wait for the TSX/alias loader.
 const { OptionsSection, ResourcesSection } = await import('./WizardSections.tsx');
 const { ConnectionHelp } = await import('./ConnectionHelp.tsx');
+const { TopologyEditor } = await import('./TopologyEditor.tsx');
 const { elasticsearchUI, elasticsearchMonitoringPanels } = await import('./index.tsx');
 const { kibanaReady, DEFAULT_RESOURCES, MIN_RAM, readOptions, withReplicas, writeOptions } = await import('./spec.ts');
 const { elasticResourceRows } = await import('./resource-summary.ts');
@@ -163,6 +164,19 @@ test('Elasticsearch detail uses native options without an unused generic overrid
   assert.match(wizard, /provider\.name !== 'elasticsearch' \? <TextAreaField/);
   const inherited = renderToStaticMarkup(createElement(OptionsSection, { provider, spec: { ...spec, engineConfig: 'inherited: true' }, onChange: () => {} }));
   assert.match(inherited, /Clear inherited overrides/);
+});
+
+test('detail topology headings use wizard labels even with raw catalog names or no catalog access', () => {
+  for (const type of ['cluster', 'dedicatedMasters'] as const) {
+    const value = { ...cluster, spec: { ...spec, topology: { type } } };
+    const rawCatalog = { ...provider, topologies: [{ ...topology, type, displayName: type, defaults: value.spec }] };
+    for (const catalog of [rawCatalog, undefined]) {
+      const markup = renderToStaticMarkup(createElement(TopologyEditor, { cluster: value, provider: catalog, editable: true, can: () => true, busy: false, submit: async () => value }));
+      const heading = markup.match(/<h3 class="card-title">([^<]+)<\/h3>/)?.[1];
+      assert.equal(heading, engineRules('elasticsearch').topology[type]!.title);
+      assert.notEqual(heading, type);
+    }
+  }
 });
 
 test('connection walkthrough selects HTTPS, directs CA download and explains private project access', () => {

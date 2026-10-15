@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/Field';
 import { Callout, Card } from '@/components/ui/Primitives';
 import { ExposureEditor, TLSEditor } from '@/pages/clusters/editors/AccessEditor';
 import { validateExposure, validateTLS, wireExposure } from '@/pages/clusters/wizard/access';
+import { engineRules } from '@/pages/clusters/wizard/engine';
 import { resourceMinimums, validateResources } from '@/pages/clusters/wizard/resources';
 import { useSubmissionKey } from '@/pages/clusters/detail/use-submission-key';
 import { detailProvider, reviewChanges } from '../index';
@@ -71,7 +72,7 @@ export function TopologyEditor({ cluster, provider: catalog, editable, busy, sub
   return (
     <>
       <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
-        <Card title={topology?.displayName ?? (draft.topology.type === 'dedicatedMasters' ? 'Dedicated masters' : 'Cluster')}>
+        <Card title={engineRules(draft.provider).topology[draft.topology.type]?.title ?? topology?.displayName ?? 'Elasticsearch topology'}>
           <div className="stack" style={{ gap: 16 }}>
             <p className="small muted" style={{ margin: 0 }}>
               The topology type is fixed after creation. Nodes join as soon as they are provisioned; removals drain shards one node at a time and are blocked while the remaining data nodes cannot hold every replica.
