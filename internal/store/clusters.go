@@ -309,8 +309,8 @@ func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error 
 	return tx.Commit()
 }
 
-// DeleteCluster removes cluster and atomically fails unfinished operations so
-// recreating its name cannot resume work belonging to the removed cluster.
+// DeleteCluster removes cluster-owned restore records and atomically fails unfinished
+// operations so recreating its name cannot resume work belonging to the removed cluster.
 func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error {
 	if err := ref.Validate(); err != nil {
 		return err
@@ -330,7 +330,7 @@ func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error 
 	if err = affected(r, err); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "DELETE FROM records WHERE scope=? AND kind IN ('secret','agent-token','volume')", ref.Key())
+	_, err = tx.ExecContext(ctx, "DELETE FROM records WHERE scope=? AND kind IN ('secret','agent-token','volume','restore')", ref.Key())
 	if err != nil {
 		return err
 	}
