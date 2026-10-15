@@ -96,6 +96,10 @@ func protectedUser(name string) bool {
 }
 
 func protectedUserError(name string) error {
+	if name == "guest" || name == "monitor" {
+		return domain.Conflict("rabbitmq-user", name, domain.ReasonProtected, engine.ErrConflict,
+			"RabbitMQ user %q is a reserved identity; cannot be created or modified", name)
+	}
 	return domain.Conflict("rabbitmq-user", name, domain.ReasonProtected, engine.ErrConflict,
 		"RabbitMQ user %q is managed by Karakoram; rotate with system-users rotate", name)
 }

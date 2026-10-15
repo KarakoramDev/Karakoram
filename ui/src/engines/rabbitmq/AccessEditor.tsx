@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/Toast';
 import { parseDefinition, parseOptionalLimit, parsePriority, parseUserTags } from './helpers';
 
 export const SYSTEM_USERS: readonly string[] = ['karakoram', 'admin', 'monitor', 'guest'];
-export const SYSTEM_USER_EXPLANATION = 'Managed by Karakoram; rotate with system-users rotate. Ordinary user and grant changes are protected.';
+export const SYSTEM_USER_EXPLANATION = 'Only karakoram and admin are managed system users; rotate them with system-users rotate. guest and monitor are reserved names that cannot be created or modified. Ordinary user and grant changes are protected.';
 type AccessItems = {
   vhost: Schemas['RabbitMQVhost'];
   user: Schemas['RabbitMQUser'];

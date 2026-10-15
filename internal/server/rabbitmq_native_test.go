@@ -102,6 +102,10 @@ func TestRabbitMQProtectedUserHTTPDetails(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	for _, user := range []string{"karakoram", "admin", "guest", "monitor"} {
+		explanation := "managed by Karakoram; rotate with system-users rotate"
+		if user == "guest" || user == "monitor" {
+			explanation = "reserved identity; cannot be created or modified"
+		}
 		for _, resource := range []string{"users", "permissions", "topic-permissions"} {
 			for _, method := range []string{"POST", "PUT", "DELETE"} {
 				path := "/api/v1/clusters/brokers/rabbitmq/" + resource
@@ -129,8 +133,11 @@ func TestRabbitMQProtectedUserHTTPDetails(t *testing.T) {
 				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 					t.Fatal(err)
 				}
-				if w.Code != 409 || response.Details.Name != user || response.Details.Resource != "rabbitmq-user" || response.Details.Reason != "protected" || !strings.Contains(response.Message, "managed by Karakoram; rotate with system-users rotate") || strings.Contains(w.Body.String(), "submitted-secret") {
+				if w.Code != 409 || response.Details.Name != user || response.Details.Resource != "rabbitmq-user" || response.Details.Reason != "protected" || !strings.Contains(response.Message, explanation) || strings.Contains(w.Body.String(), "submitted-secret") {
 					t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body.String())
+				}
+				if (user == "guest" || user == "monitor") && strings.Contains(response.Message, "rotate") {
+					t.Fatal("reserved name incorrectly offered rotation", response.Message)
 				}
 			}
 		}

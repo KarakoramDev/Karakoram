@@ -14,9 +14,10 @@ register('../../../test/tsx-loader.mjs', import.meta.url);
 // intentionally crosses the loader boundary after registration.
 const { SYSTEM_USERS, SYSTEM_USER_EXPLANATION } = await import('./AccessEditor.tsx');
 
-test('system user copy names the supported rotation action and protects grants', () => {
+test('system user copy limits rotation to karakoram and admin and distinguishes reserved names', () => {
   assert.deepEqual([...SYSTEM_USERS].sort(), ['admin', 'guest', 'karakoram', 'monitor']);
-  assert.match(SYSTEM_USER_EXPLANATION, /Managed by Karakoram; rotate with system-users rotate/);
+  assert.match(SYSTEM_USER_EXPLANATION, /Only karakoram and admin.*rotate them with system-users rotate/);
+  assert.match(SYSTEM_USER_EXPLANATION, /guest and monitor are reserved names that cannot be created or modified/);
   assert.match(SYSTEM_USER_EXPLANATION, /user and grant changes are protected/);
 });
 
