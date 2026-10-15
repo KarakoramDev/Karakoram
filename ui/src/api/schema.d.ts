@@ -834,7 +834,7 @@ export type paths = {
         put?: never;
         /**
          * Queue in-place backup or point-in-time restore
-         * @description Requires a compatible succeeded source backup or an available PITR window. In-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched; it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
+         * @description Requires a compatible succeeded source backup or an available PITR window. In-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched (on sharded clusters PBM drops every database present in the backup, so only databases absent from it are preserved); it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
          */
         post: operations["createRestore"];
         delete?: never;
@@ -1925,7 +1925,7 @@ export type components = {
             public: boolean;
         };
         ExposureInput: {
-            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. When public is true, creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean;
             allowlist?: string[];
             /**
@@ -1937,7 +1937,7 @@ export type components = {
             public: boolean;
         };
         ExposurePatch: {
-            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure. */
+            /** @description Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. When public is true, changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure. */
             allowAllAddresses?: boolean | null;
             allowlist?: string[] | null;
             /**

@@ -1038,7 +1038,7 @@ type ExposureIpType string
 
 // ExposureInput defines model for ExposureInput.
 type ExposureInput struct {
-	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
+	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. When public is true, creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
 	AllowAllAddresses *bool                `json:"allowAllAddresses,omitempty"`
 	Allowlist         *[]string            `json:"allowlist,omitempty"`
 	IpType            *ExposureInputIpType `json:"ipType,omitempty"`
@@ -1050,7 +1050,7 @@ type ExposureInputIpType string
 
 // ExposurePatch defines model for ExposurePatch.
 type ExposurePatch struct {
-	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. Changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
+	// AllowAllAddresses Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. When public is true, changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
 	AllowAllAddresses *bool                `json:"allowAllAddresses"`
 	Allowlist         *[]string            `json:"allowlist"`
 	IpType            *ExposurePatchIpType `json:"ipType"`

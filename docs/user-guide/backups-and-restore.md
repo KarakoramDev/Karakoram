@@ -185,7 +185,10 @@ The timestamp is illustrative; replace it with a real point in your reported win
 
 An in-place **logical restore is not a full rollback**: PBM drops/replaces the
 namespaces contained in the backup, but leaves databases and collections that
-did not exist in that backup untouched, including their documents. To obtain an
+did not exist in that backup untouched, including their documents. On sharded
+clusters PBM drops every database present in the backup before restoring it, so
+collections added later to those databases are removed as well; only databases
+absent from the backup are preserved there. To obtain an
 exact copy of the backed-up data, stop writes and drop those extra databases or
 collections before restoring, or use a physical backup/restore (which replaces
 the data directory) or restore into a new cluster. See
