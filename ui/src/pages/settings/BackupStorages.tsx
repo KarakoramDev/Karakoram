@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import { storageTransport } from '@/components/ui/presentation';
 import { deleteWithReconciliation } from './storage-outcome';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
-import { replaceStorageInList, storageFailureLabel } from './storage-verification';
+import { finishStorageVerification, replaceStorageInList, storageFailureLabel } from './storage-verification';
 type Storage = Schemas['BackupStorage'];
 
 export function BackupStoragesPage() {
@@ -39,9 +39,11 @@ export function BackupStoragesPage() {
   const verify = useMutation({
     mutationFn: (s: Storage) => unwrap(api.POST('/backup-storages/{storage}/verify', { params: { path: { storage: s.name }, query: { namespace: s.namespace || DEFAULT_NAMESPACE } } })),
     onMutate: (s) => setChecking((v) => ({ ...v, [storageKey(s)]: true })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.backupStorages }),
     onError: (e) => toast.error(errorMessage(e)),
-    onSettled: (_res, _error, s) => setChecking((v) => ({ ...v, [storageKey(s)]: false })),
+    onSettled: (_res, _error, s) => finishStorageVerification(
+      () => queryClient.invalidateQueries({ queryKey: keys.backupStorages }),
+      () => setChecking((v) => ({ ...v, [storageKey(s)]: false })),
+    ),
   });
   const remove = useMutation({
     mutationFn: (s: Storage) => {

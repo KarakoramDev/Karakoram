@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { replaceStorageInList, storageFailureLabel } from './storage-verification.ts';
+import { finishStorageVerification, replaceStorageInList, storageFailureLabel } from './storage-verification.ts';
 import type { Schemas } from '@/api/client';
 
 test('every storage verification failure reason has a human-readable label', () => {
@@ -41,4 +41,28 @@ test('description-only saves preserve the server verification result', () => {
   const saved = { ...storage, description: 'Updated', verification: { verified: true, checkedAt: '2026-01-01T00:00:00Z', message: 'Access verified' } };
   assert.equal(replaceStorageInList({ items: [storage] }, saved)!.items[0], saved);
   assert.equal(replaceStorageInList(undefined, saved), undefined);
+});
+
+test('verification stays checking until the persisted result is refreshed', async () => {
+  let finishRefresh!: () => void;
+  const refresh = new Promise<void>((resolve) => { finishRefresh = resolve; });
+  let checking = true;
+  const settled = finishStorageVerification(() => refresh, () => { checking = false; });
+  await Promise.resolve();
+  assert.equal(checking, true);
+  finishRefresh();
+  await settled;
+  assert.equal(checking, false);
+});
+
+test('a failed result refresh still clears checking after it settles', async () => {
+  let failRefresh!: (error: Error) => void;
+  const refresh = new Promise<void>((_resolve, reject) => { failRefresh = reject; });
+  let checking = true;
+  const settled = finishStorageVerification(() => refresh, () => { checking = false; });
+  assert.equal(checking, true);
+  const error = new Error('Refresh failed');
+  failRefresh(error);
+  await assert.rejects(settled, error);
+  assert.equal(checking, false);
 });

@@ -28,3 +28,11 @@ export function replaceStorageInList(current: Schemas['BackupStorageList'] | und
     items: current.items.map((storage) => (storage.namespace || 'default') === (saved.namespace || 'default') && storage.name === saved.name ? saved : storage),
   };
 }
+
+export async function finishStorageVerification(refresh: () => Promise<unknown>, finish: () => void): Promise<void> {
+  try {
+    await refresh();
+  } finally {
+    finish();
+  }
+}
