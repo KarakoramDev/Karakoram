@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/legacy"
@@ -125,4 +126,77 @@ func (w *conformanceWriter) Flush() {
 		w.WriteHeader(http.StatusOK)
 	}
 	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
+
+func TestConformanceObservedMemberResourcesAndScheduleStorage(t *testing.T) {
+	s, _, token := testServer(t)
+	ctx := t.Context()
+	c, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The runtime root disk is independent of the desired persistent data volume.
+	c.Status.Members[0].Autoscaling = &domain.Resources{
+		CPUMode: "SHARED", MinCPU: 1, MaxCPU: 2, MinRAM: 0.25, MaxRAM: 1,
+		MinDisk: 1, MaxDisk: 3,
+	}
+	c.Status.Members[0].Resources = &domain.ObservedResources{CPUCores: 1, MemoryGB: 0.25, DiskGB: 1}
+	if err := s.Store.UpdateClusterState(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	c.Spec.Backup = domain.BackupConfig{
+		Storage: "archive",
+		Schedules: []domain.BackupSchedule{
+			{Name: "daily", Cron: "0 0 * * *", Type: "logical", Storage: "archive", RetainCount: 2, Enabled: true},
+			{Name: "weekly", Cron: "0 0 * * 0", Type: "logical", RetainCount: 2, Enabled: true},
+		},
+	}
+	if err := s.Store.UpdateClusterSpec(ctx, c.Ref(), c.Spec); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/clusters/prod", "/api/v1/clusters", "/api/v1/clusters/prod/members"} {
+		// call uses the shared OpenAPI response-conformance middleware.
+		w := call(s, "GET", path, "", token)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+		if !bytes.Contains(w.Body.Bytes(), []byte(`"minDisk":1`)) || !bytes.Contains(w.Body.Bytes(), []byte(`"maxDisk":3`)) {
+			t.Fatalf("%s: observed runtime disk bounds were not preserved: %s", path, w.Body.String())
+		}
+	}
+	doc, err := apispec.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A primitive wrapped in allOf is valid OpenAPI but some generators model
+	// it as an object. Keep optional schedule storage a plain string.
+	storage := doc.Components.Schemas["BackupSchedule"].Value.Properties["storage"].Value
+	if !storage.Type.Is("string") || len(storage.AllOf) != 0 || storage.Nullable {
+		t.Fatal("schedule storage must be an optional, non-nullable plain string")
+	}
+	for _, schema := range []string{"ResourcesInput", "ResourcesPatch"} {
+		for _, field := range []string{"minDisk", "maxDisk"} {
+			bound := doc.Components.Schemas[schema].Value.Properties[field].Value.Min
+			if bound == nil || *bound != 5 {
+				t.Fatalf("%s.%s lost its persistent-volume request minimum", schema, field)
+			}
+		}
+	}
+}
+
+func TestConformancePostRestoreBackupTrigger(t *testing.T) {
+	s, _, token := testServer(t)
+	backup := &domain.Backup{
+		Name: "restore-base", Cluster: "prod", Storage: "archive",
+		Type: "logical", Trigger: "restore", Phase: domain.PhaseSucceeded,
+	}
+	if err := s.Store.CreateBackup(t.Context(), backup); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/clusters/prod/backups", "/api/v1/clusters/prod/backups/restore-base"} {
+		w := call(s, "GET", path, "", token)
+		if w.Code != http.StatusOK || !bytes.Contains(w.Body.Bytes(), []byte(`"trigger":"restore"`)) {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+	}
 }

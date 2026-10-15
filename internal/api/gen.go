@@ -36,8 +36,9 @@ const (
 
 // Defines values for BackupTrigger.
 const (
-	Manual   BackupTrigger = "manual"
-	Schedule BackupTrigger = "schedule"
+	BackupTriggerManual   BackupTrigger = "manual"
+	BackupTriggerRestore  BackupTrigger = "restore"
+	BackupTriggerSchedule BackupTrigger = "schedule"
 )
 
 // Defines values for BackupType.
@@ -65,12 +66,12 @@ const (
 
 // Defines values for CanRequestAction.
 const (
-	CanRequestActionAsterisk CanRequestAction = "*"
-	CanRequestActionCreate   CanRequestAction = "create"
-	CanRequestActionDelete   CanRequestAction = "delete"
-	CanRequestActionExport   CanRequestAction = "export"
-	CanRequestActionRead     CanRequestAction = "read"
-	CanRequestActionUpdate   CanRequestAction = "update"
+	Asterisk CanRequestAction = "*"
+	Create   CanRequestAction = "create"
+	Delete   CanRequestAction = "delete"
+	Export   CanRequestAction = "export"
+	Read     CanRequestAction = "read"
+	Update   CanRequestAction = "update"
 )
 
 // Defines values for ClusterStatusPhase.
@@ -451,21 +452,23 @@ type Backup struct {
 	Namespace     *NamespaceName `json:"namespace,omitempty"`
 
 	// OperationId Durable operation that created this backup.
-	OperationId *string       `json:"operationId,omitempty"`
-	PbmName     *string       `json:"pbmName,omitempty"`
-	Phase       BackupPhase   `json:"phase"`
-	Schedule    *string       `json:"schedule,omitempty"`
-	Size        *int64        `json:"size,omitempty"`
-	StartedAt   *time.Time    `json:"startedAt,omitempty"`
-	Storage     string        `json:"storage"`
-	Trigger     BackupTrigger `json:"trigger"`
-	Type        BackupType    `json:"type"`
+	OperationId *string     `json:"operationId,omitempty"`
+	PbmName     *string     `json:"pbmName,omitempty"`
+	Phase       BackupPhase `json:"phase"`
+	Schedule    *string     `json:"schedule,omitempty"`
+	Size        *int64      `json:"size,omitempty"`
+	StartedAt   *time.Time  `json:"startedAt,omitempty"`
+	Storage     string      `json:"storage"`
+
+	// Trigger What initiated the snapshot; restore identifies an automatic post-restore base backup.
+	Trigger BackupTrigger `json:"trigger"`
+	Type    BackupType    `json:"type"`
 }
 
 // BackupPhase defines model for Backup.Phase.
 type BackupPhase string
 
-// BackupTrigger defines model for Backup.Trigger.
+// BackupTrigger What initiated the snapshot; restore identifies an automatic post-restore base backup.
 type BackupTrigger string
 
 // BackupType defines model for Backup.Type.
@@ -612,7 +615,7 @@ type Cluster struct {
 type ClusterBackupStatus struct {
 	LastBackup *string `json:"lastBackup,omitempty"`
 
-	// PitrWindow Only a continuous PBM-verified restorable interval is reported.
+	// PitrWindow Only a continuous engine-verified restorable interval is reported.
 	PitrWindow *PITRWindow `json:"pitrWindow,omitempty"`
 }
 
@@ -726,7 +729,9 @@ type ClusterStatusPhase string
 
 // Component defines model for Component.
 type Component struct {
-	Replicas  int       `json:"replicas"`
+	Replicas int `json:"replicas"`
+
+	// Resources Resource configuration returned by the control plane. Observed member autoscaling describes runtime root disks, not persistent data volumes; request-only resource bounds do not apply.
 	Resources Resources `json:"resources"`
 }
 
@@ -1325,7 +1330,7 @@ type PITRSpecPatch struct {
 	OplogSpanMinutes *int  `json:"oplogSpanMinutes"`
 }
 
-// PITRWindow Only a continuous PBM-verified restorable interval is reported.
+// PITRWindow Only a continuous engine-verified restorable interval is reported.
 type PITRWindow struct {
 	Available bool       `json:"available"`
 	End       *time.Time `json:"end,omitempty"`
@@ -1491,7 +1496,7 @@ type ResetPasswordRequest struct {
 	Password *AccountPassword `json:"password,omitempty"`
 }
 
-// Resources defines model for Resources.
+// Resources Resource configuration returned by the control plane. Observed member autoscaling describes runtime root disks, not persistent data volumes; request-only resource bounds do not apply.
 type Resources struct {
 	CpuMode ResourcesCpuMode `json:"cpuMode"`
 	MaxCpu  float32          `json:"maxCpu"`
@@ -3177,10 +3182,10 @@ type ServerInterface interface {
 	// List backup inventory
 	// (GET /clusters/{cluster}/backups)
 	ListBackups(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListBackupsParams)
-	// Queue an on-demand PBM backup
+	// Queue an on-demand backup
 	// (POST /clusters/{cluster}/backups)
 	CreateBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateBackupParams)
-	// Delete PBM backup data and metadata
+	// Delete backup data and metadata
 	// (DELETE /clusters/{cluster}/backups/{backup})
 	DeleteBackup(w http.ResponseWriter, r *http.Request, cluster ClusterPath, backup string, params DeleteBackupParams)
 	// Read backup metadata and status
@@ -19617,10 +19622,10 @@ type StrictServerInterface interface {
 	// List backup inventory
 	// (GET /clusters/{cluster}/backups)
 	ListBackups(ctx context.Context, request ListBackupsRequestObject) (ListBackupsResponseObject, error)
-	// Queue an on-demand PBM backup
+	// Queue an on-demand backup
 	// (POST /clusters/{cluster}/backups)
 	CreateBackup(ctx context.Context, request CreateBackupRequestObject) (CreateBackupResponseObject, error)
-	// Delete PBM backup data and metadata
+	// Delete backup data and metadata
 	// (DELETE /clusters/{cluster}/backups/{backup})
 	DeleteBackup(ctx context.Context, request DeleteBackupRequestObject) (DeleteBackupResponseObject, error)
 	// Read backup metadata and status

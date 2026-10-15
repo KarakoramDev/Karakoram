@@ -79,6 +79,9 @@ Loopback, link-local/metadata-style addresses, unspecified/non-global addresses 
 
 ## On-demand backups and inventory
 
+Inventory `trigger` distinguishes `manual`, `schedule` and `restore` snapshots.
+`restore` identifies the automatic post-restore base backup used to resume PITR.
+
 ```sh
 karactl backups create demo beforechange --type logical --storage archive
 karactl backups create demo physicalbase --type physical --storage archive
