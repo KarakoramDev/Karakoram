@@ -8,6 +8,7 @@
 
 import type { Schemas } from '../../api/client';
 import { replicaLimits, validateReplicas, type ReplicaLimits } from '../index.ts';
+import type { EngineChangeReview } from '../types';
 
 type ClusterSpec = Schemas['ClusterSpec'];
 type Component = Schemas['Component'];
@@ -334,6 +335,8 @@ export function disruptions(current: ClusterSpec, draft: ClusterSpec): string[] 
   if (patch.monitoring) out.push(`Per-member metrics collection ${draft.monitoring?.enabled === false ? 'disabled' : 'enabled'}.`);
   return out;
 }
+
+export const elasticsearchChangeReview: EngineChangeReview = { buildPatch: specPatch, disruptions };
 
 export const PUBLIC_STACK_WARNING = 'Public Kibana and APM routes are reachable from the internet. The Elasticsearch IP allowlist does not apply: Kibana relies on Elasticsearch/Kibana authentication; APM relies on its secret token or API keys.';
 

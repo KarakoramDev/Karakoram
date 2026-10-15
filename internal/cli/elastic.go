@@ -60,6 +60,9 @@ func (a *app) addElastic(root *cobra.Command) {
 		}
 		c := &cobra.Command{Use: use, Short: s.operation, Args: cobra.ExactArgs(argc)}
 		annotate(c, s.operation)
+		if destructive(s.operation) {
+			c.Flags().BoolP("yes", "y", false, "Confirm without reading stdin (otherwise pipe y/yes)")
+		}
 		if s.verb == "list" {
 			c.Flags().Int("limit", 100, "Maximum items")
 			c.Flags().String("cursor", "", "Continuation cursor")
@@ -88,6 +91,9 @@ func (a *app) addElastic(root *cobra.Command) {
 	}
 }
 func (a *app) runElastic(cmd *cobra.Command, s elasticCommand, args []string) error {
+	if err := a.confirm(cmd, s.operation, args); err != nil {
+		return err
+	}
 	q := map[string]any{}
 	if cmd.Flags().Changed("limit") {
 		q["limit"], _ = cmd.Flags().GetInt("limit")

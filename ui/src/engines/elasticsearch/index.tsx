@@ -6,7 +6,7 @@ import type { EngineUI, MonitoringPanel } from '../types';
 import { ElasticAccessTab } from './ElasticAccessTab';
 import { TopologyEditor } from './TopologyEditor';
 import { OptionsSection, ResourcesSection, TopologySection } from './WizardSections';
-import { PUBLIC_PORT, specSummary, validateComponents, validateSpec } from './spec';
+import { PUBLIC_PORT, elasticsearchChangeReview, specSummary, validateComponents, validateSpec } from './spec';
 
 const CLUSTER_STATUS = ['green', 'yellow', 'red'];
 const KIBANA_STATUS = ['available', 'degraded', 'unavailable'];
@@ -43,6 +43,7 @@ export const elasticsearchUI: EngineUI = {
   resourcesSection: ResourcesSection,
   validateComponents: (spec, topology) => validateComponents(spec, topology, (resources, stateless, name) => validateResources(resources, undefined, stateless, resourceMinimums(spec.provider, topology, name))),
   specSummary,
+  changeReview: elasticsearchChangeReview,
   topologyEditor: TopologyEditor,
   detailTabs: [{ id: 'elastic', label: 'Elastic access', element: <ElasticAccessTab />, capability: 'elasticAccess' }],
   monitoringPanels: elasticsearchMonitoringPanels,

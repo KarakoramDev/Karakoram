@@ -423,9 +423,13 @@ karactl elasticsearch users list search
 karactl elasticsearch users get search ordersreader
 karactl elasticsearch roles update search orders-reader -f role.json
 karactl elasticsearch users update search ordersreader --roles orders-reader
-karactl elasticsearch users delete search ordersreader
-karactl elasticsearch roles delete search orders-reader
+karactl elasticsearch users delete search ordersreader --yes
+karactl elasticsearch roles delete search orders-reader --yes
 ```
+
+Native user/role deletion and API-key invalidation require confirmation. In a
+script or other non-TTY session, pass `--yes` after reviewing the target or pipe
+`y`; empty stdin never submits the destructive request.
 
 Supply `APP_PASSWORD` securely and keep shell tracing disabled; use `--password-stdin` for password changes rather than an argument containing the secret. For API creation, submit protected JSON with the user body above. `elastic`, `kibana_system`, other built-in users, reserved roles and `karakoram*` identities are protected: ordinary native-access CRUD cannot modify them. The provider owns control, monitor, Kibana and writer credentials; use the supported managed rotation operation instead. Existing built-in roles may still be assigned to regular users.
 
@@ -451,7 +455,7 @@ For CLI creation, `descriptors.json` contains only the `roleDescriptors` map fro
 karactl elasticsearch api-keys create search --name orders-query --expiration 30d \
   -f descriptors.json
 karactl elasticsearch api-keys list search
-karactl elasticsearch api-keys invalidate search KEY_ID
+karactl elasticsearch api-keys invalidate search KEY_ID --yes
 ```
 
 Creation returns `id`, `apiKey` and `encoded`; store them immediately and securely. Lists do not reveal key secrets. API-key creation and native user/role POST/PUT operations accept `Idempotency-Key`: retry an unchanged request with the same key to replay the original successful response, including the one-time API-key secret, for 24 hours without creating another object. The UI sends a submission key and changes it when the request is edited. Without that header, an uncertain key-creation outcome requires listing and invalidating any unwanted key before creating another. See [safe API retries](api.md#safe-retries-with-idempotency-key). Prefer explicit expiry and narrow role descriptors. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
@@ -465,7 +469,7 @@ control-plane operation or a guarantee across server restarts. A not-found (404)
 invalidation response clears the pending marker and remains an error; an absent
 key after that rejection is not reported as a successful invalidation.
 
-Managed rotation uses the existing system-user operation with identity `elastic`, `karakoram-monitor`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; these are exactly the identities the system-user list shows. Affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
+Managed rotation uses the existing system-user operation with identity `elastic`, `karakoram-monitor`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; these are exactly the identities the system-user list shows. Affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait --yes` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
 
 ## Snapshots and restore
 
@@ -507,7 +511,7 @@ Schedules use five-field UTC cron; retainCount counts successful snapshots for t
 **Quiesce external writers and plan downtime. Restore overwrites the destination.** Take a recovery snapshot of current state if needed.
 
 ```sh
-karactl restores create search recovery --backup beforechange
+karactl restores create search recovery --backup beforechange --yes
 karactl restores get search recovery
 karactl operations cluster search
 ```
@@ -538,7 +542,7 @@ To recover a retained backup of a **deleted** source cluster, create a destinati
 
 ```sh
 karactl clusters create searchcopy -f destination.json --wait
-karactl restores create searchcopy recovery --source-cluster search --backup beforechange
+karactl restores create searchcopy recovery --source-cluster search --backup beforechange --yes
 karactl restores get searchcopy recovery
 ```
 
@@ -547,6 +551,10 @@ karactl restores get searchcopy recovery
 ## Scale, upgrade, restart and replace
 
 Change node/component counts or resource bounds through the UI or a spec merge patch. Example scale-up file:
+
+The UI's Apply review derives consequences from the exact outgoing merge patch,
+not normalized form defaults. A replicas-only edit therefore reviews scaling
+without claiming unrelated TLS, exposure or monitoring changes.
 
 ```yaml
 spec:
@@ -583,7 +591,7 @@ Take a successful fresh snapshot and resolve Upgrade Assistant/deprecation/index
 
 ```sh
 karactl clusters restart search --wait
-karactl clusters replace-member search MEMBER_NAME --wait
+karactl clusters replace-member search MEMBER_NAME --wait --yes
 karactl operations cluster search
 ```
 

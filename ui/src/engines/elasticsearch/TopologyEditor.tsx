@@ -11,10 +11,10 @@ import { ExposureEditor, TLSEditor } from '@/pages/clusters/editors/AccessEditor
 import { validateExposure, validateTLS, wireExposure } from '@/pages/clusters/wizard/access';
 import { resourceMinimums, validateResources } from '@/pages/clusters/wizard/resources';
 import { useSubmissionKey } from '@/pages/clusters/detail/use-submission-key';
-import { detailProvider } from '../index';
+import { detailProvider, reviewChanges } from '../index';
 import type { TopologyEditorProps } from '../types';
 import { OptionsSection, ResourcesSection, TopologySection } from './WizardSections';
-import { PUBLIC_PORT, componentOf, disruptions, specPatch, validateComponents, validateSpec } from './spec';
+import { PUBLIC_PORT, componentOf, elasticsearchChangeReview, validateComponents, validateSpec } from './spec';
 
 type ClusterSpec = Schemas['ClusterSpec'];
 
@@ -37,11 +37,14 @@ export function TopologyEditor({ cluster, provider: catalog, editable, busy, sub
   // Re-seed when the persisted spec changes under us and the user has no edits.
   const persistedKey = JSON.stringify(cluster.spec);
   const [seedKey, setSeedKey] = useState(persistedKey);
-  const patch = useMemo(() => {
-    const result = specPatch(cluster.spec, draft);
-    if (result.exposure && draft.exposure) result.exposure = wireExposure(draft.exposure, allAddressesConfirmed);
-    return result;
-  }, [cluster.spec, draft, allAddressesConfirmed]);
+  const { patch, consequences } = useMemo(() => reviewChanges(cluster.spec, draft, {
+    ...elasticsearchChangeReview,
+    buildPatch: (current, proposed) => {
+      const result = elasticsearchChangeReview.buildPatch(current, proposed);
+      if (result.exposure && proposed.exposure) result.exposure = wireExposure(proposed.exposure, allAddressesConfirmed);
+      return result;
+    },
+  }), [cluster.spec, draft, allAddressesConfirmed]);
   const dirty = Object.keys(patch).length > 0;
   useEffect(() => {
     if (persistedKey !== seedKey && !dirty) {
@@ -59,7 +62,6 @@ export function TopologyEditor({ cluster, provider: catalog, editable, busy, sub
     ...validateTLS(draft.tls, cluster.spec.tls?.ca),
     ...validateExposure(draft.exposure, !patch.exposure || allAddressesConfirmed),
   ];
-  const consequences = disruptions(cluster.spec, draft);
   const discard = () => {
     setDraft(draftFrom(cluster.spec));
     setSeedKey(persistedKey);

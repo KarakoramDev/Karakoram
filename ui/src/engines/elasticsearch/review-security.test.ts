@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { Schemas } from '../../api/client.ts';
 import { applicationGrants, applicationWarnings } from './access-state.ts';
-import { DEFAULT_RESOURCES, disruptions, readOptions, specPatch, validateSpec, writeOptions } from './spec.ts';
+import { DEFAULT_RESOURCES, disruptions, elasticsearchChangeReview, readOptions, specPatch, validateSpec, writeOptions } from './spec.ts';
 import { exposureSummary } from '../../pages/clusters/wizard/review.ts';
+import { reviewChanges } from '../changes.ts';
 
 const current: Schemas['ClusterSpec'] = {
  provider: 'elasticsearch', version: '9.5.5', topology: { type: 'cluster' },
@@ -21,6 +22,9 @@ test('replicas-only patch consequences ignore normalized security defaults', () 
  assert.equal(disruptions(current, draft).length, 1);
  assert.match(disruptions(current, draft)[0]!, /1 → 3/);
  assert.doesNotMatch(disruptions(current, draft).join(' '), /TLS|Exposure|restarts|metrics/);
+ const review = reviewChanges(current, draft, elasticsearchChangeReview);
+ assert.deepEqual(review.patch, { components: { engine: { replicas: 3 } } });
+ assert.deepEqual(review.consequences, disruptions(current, draft));
  const tls = { ...draft, tls: { mode: 'requireTLS' as const, ca: 'userProvided' as const, caCertificate: 'CERT', caPrivateKey: 'KEY' } };
  assert.match(disruptions(draft, tls).join(' '), /TLS change/);
  assert.deepEqual(disruptions(tls, structuredClone(tls)), []);

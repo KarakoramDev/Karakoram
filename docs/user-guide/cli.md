@@ -853,8 +853,11 @@ karactl elasticsearch users create search analyst --roles viewer --password-stdi
 karactl elasticsearch users update search analyst --full-name 'Search analyst' --disabled=false
 karactl elasticsearch roles create search ingest -f role.json
 karactl elasticsearch api-keys create search --name apm-agent --expiration 30d -f descriptors.json
-karactl elasticsearch api-keys invalidate search KEY_ID
+karactl elasticsearch api-keys invalidate search KEY_ID --yes
 ```
+
+Native user/role deletion and API-key invalidation use the shared destructive
+confirmation rule: non-interactive callers must pass `--yes` or pipe `y`.
 
 User creation requires `--password-stdin`; updates can retain the current password.
 `--roles` replaces the role list, `--full-name` and `--email` set profile fields,

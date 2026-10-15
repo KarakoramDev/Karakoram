@@ -18,8 +18,6 @@ import { kibanaReady } from '@/engines/elasticsearch/spec';
 import { ConnectionHelp } from '@/engines/elasticsearch/ConnectionHelp';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 
-
-
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
   const members = useQuery({

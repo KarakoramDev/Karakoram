@@ -40,7 +40,7 @@ func TestElasticCLIRequests(t *testing.T) {
 				t.Fatal(b)
 			}
 		}},
-		{args: []string{"users", "delete", "search", "app"}, method: "DELETE", path: "users/app?namespace=project"},
+		{args: []string{"users", "delete", "search", "app", "--yes"}, method: "DELETE", path: "users/app?namespace=project"},
 		{args: []string{"roles", "list", "search"}, method: "GET", path: "roles?namespace=project"},
 		{args: []string{"roles", "get", "search", "ingest"}, method: "GET", path: "roles/ingest?namespace=project"},
 		{args: []string{"roles", "create", "search", "ingest", "-f", roleFile}, method: "POST", path: "roles?namespace=project", check: func(t *testing.T, b map[string]any) {
@@ -50,7 +50,7 @@ func TestElasticCLIRequests(t *testing.T) {
 			assertElasticCLIRestrictions(t, b)
 		}},
 		{args: []string{"roles", "update", "search", "ingest", "-f", roleFile}, method: "PUT", path: "roles/ingest?namespace=project", check: assertElasticCLIRestrictions},
-		{args: []string{"roles", "delete", "search", "ingest"}, method: "DELETE", path: "roles/ingest?namespace=project"},
+		{args: []string{"roles", "delete", "search", "ingest", "--yes"}, method: "DELETE", path: "roles/ingest?namespace=project"},
 		{args: []string{"api-keys", "list", "search"}, method: "GET", path: "api-keys?namespace=project"},
 		{args: []string{"api-keys", "create", "search", "--name", "agent", "--expiration", "1d", "-f", descriptors}, method: "POST", path: "api-keys?namespace=project", check: func(t *testing.T, b map[string]any) {
 			if b["name"] != "agent" || b["expiration"] != "1d" || b["roleDescriptors"].(map[string]any)["apm"] == nil {
@@ -58,7 +58,7 @@ func TestElasticCLIRequests(t *testing.T) {
 			}
 			assertElasticCLIRestrictions(t, b["roleDescriptors"].(map[string]any)["apm"].(map[string]any))
 		}},
-		{args: []string{"api-keys", "invalidate", "search", "key"}, method: "DELETE", path: "api-keys/key?namespace=project"},
+		{args: []string{"api-keys", "invalidate", "search", "key", "--yes"}, method: "DELETE", path: "api-keys/key?namespace=project"},
 	}
 	for _, tc := range cases {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
@@ -110,6 +110,36 @@ func TestElasticCLIRequests(t *testing.T) {
 			}
 			if strings.Contains(errs.String(), "private-password") {
 				t.Fatal("password leaked")
+			}
+		})
+	}
+}
+
+func TestElasticCLIConfirmation(t *testing.T) {
+	for _, args := range [][]string{
+		{"users", "delete", "search", "app"},
+		{"roles", "delete", "search", "ingest"},
+		{"api-keys", "invalidate", "search", "key"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+			for _, input := range []string{"", "no\n", "y\n"} {
+				var output bytes.Buffer
+				command := NewCommand(Options{ConfigPath: filepath.Join(t.TempDir(), "config.yaml"), In: strings.NewReader(input), Out: &output, Err: &output})
+				command.SetArgs(append([]string{"--server", server.URL, "--token", "test-token", "elasticsearch"}, args...))
+				err := command.ExecuteContext(t.Context())
+				if input == "y\n" {
+					if err != nil || requests != 1 {
+						t.Fatalf("piped confirmation: requests=%d err=%v", requests, err)
+					}
+				} else if err == nil || requests != 0 || !strings.Contains(err.Error(), "no request submitted") {
+					t.Fatalf("missing or declined confirmation: requests=%d err=%v", requests, err)
+				}
 			}
 		})
 	}
