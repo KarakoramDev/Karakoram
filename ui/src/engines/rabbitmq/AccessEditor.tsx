@@ -4,6 +4,8 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
+import { idempotencyHeaders } from '@/api/idempotency';
+import { useSubmissionKey } from '@/pages/clusters/detail/use-submission-key';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
@@ -49,26 +51,28 @@ export function AccessEditor({ namespace, cluster, edit, vhosts, users, onClose,
   const [priority, setPriority] = useState(isPolicy ? String(edit.existing?.priority ?? 0) : '0');
   const [definition, setDefinition] = useState(isPolicy ? JSON.stringify(edit.existing?.definition ?? {}, null, 2) : '{}');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const submission = useSubmissionKey(JSON.stringify({ namespace, cluster, edit, name, vhost, user, tags, password, queueType, description, maxConnections, maxQueues, configure, write, read, exchange, pattern, applyTo, priority, definition }));
 
   const save = useMutation({
     mutationFn: async () => {
+      const headers = idempotencyHeaders(submission.key);
       const params = { path: { cluster }, query: { namespace } };
       const parsedTags = tags.split(/[\n,]+/).map((tag) => tag.trim()).filter(Boolean);
       switch (edit.kind) {
         case 'vhost': {
           if (!name) throw new Error('A virtual host name is required.');
           const body = { name, defaultQueueType: queueType, description, tags: parsedTags, limits: { maxConnections: parseOptionalLimit(maxConnections, 'Connection limit') ?? -1, maxQueues: parseOptionalLimit(maxQueues, 'Queue limit') ?? -1 } };
-          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/vhosts/{vhost}', { params: { path: { cluster, vhost: edit.existing.name }, query: { namespace } }, body }));
-          else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/vhosts', { params, body }));
+          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/vhosts/{vhost}', { headers, params: { path: { cluster, vhost: edit.existing.name }, query: { namespace } }, body }));
+          else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/vhosts', { headers, params, body }));
           break;
         }
         case 'user': {
           if (!name.trim()) throw new Error('A username is required.');
           if (SYSTEM_USERS.includes(name)) throw new Error(SYSTEM_USER_EXPLANATION);
           const body = { name, tags: parseUserTags(tags), ...(password ? { password } : {}) };
-          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/users/{user}', { params: { path: { cluster, user: edit.existing.name }, query: { namespace } }, body }));
+          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/users/{user}', { headers, params: { path: { cluster, user: edit.existing.name }, query: { namespace } }, body }));
           else {
-            const created = await unwrap(api.POST('/clusters/{cluster}/rabbitmq/users', { params, body }));
+            const created = await unwrap(api.POST('/clusters/{cluster}/rabbitmq/users', { headers, params, body }));
             return created.generatedPassword;
           }
           break;
@@ -76,15 +80,15 @@ export function AccessEditor({ namespace, cluster, edit, vhosts, users, onClose,
         case 'permission': {
           if (!vhost || !user || SYSTEM_USERS.includes(user)) throw new Error('Choose a virtual host and application user.');
           const body = { vhost, user, configure, write, read };
-          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/permissions/{vhost}/{user}', { params: { path: { cluster, vhost: edit.existing.vhost, user: edit.existing.user }, query: { namespace } }, body }));
-          else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/permissions', { params, body }));
+          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/permissions/{vhost}/{user}', { headers, params: { path: { cluster, vhost: edit.existing.vhost, user: edit.existing.user }, query: { namespace } }, body }));
+          else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/permissions', { headers, params, body }));
           break;
         }
         case 'topic': {
           if (!vhost || !user || !exchange.trim() || SYSTEM_USERS.includes(user)) throw new Error('Choose a virtual host, application user and topic exchange.');
           const body = { vhost, user, exchange, write, read };
-          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user}', { params: { path: { cluster, vhost: edit.existing.vhost, user: edit.existing.user }, query: { namespace } }, body }));
-          else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/topic-permissions', { params, body }));
+          if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/topic-permissions/{vhost}/{user}', { headers, params: { path: { cluster, vhost: edit.existing.vhost, user: edit.existing.user }, query: { namespace } }, body }));
+          else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/topic-permissions', { headers, params, body }));
           break;
         }
         case 'policy':
@@ -92,11 +96,11 @@ export function AccessEditor({ namespace, cluster, edit, vhosts, users, onClose,
           if (!vhost || !name.trim() || !pattern) throw new Error('A virtual host, name and pattern are required.');
           const body = { vhost, name, pattern, applyTo, priority: parsePriority(priority), definition: parseDefinition(definition) };
           if (edit.kind === 'policy') {
-            if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/policies/{vhost}/{name}', { params: { path: { cluster, vhost: edit.existing.vhost, name: edit.existing.name }, query: { namespace } }, body }));
-            else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/policies', { params, body }));
+            if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/policies/{vhost}/{name}', { headers, params: { path: { cluster, vhost: edit.existing.vhost, name: edit.existing.name }, query: { namespace } }, body }));
+            else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/policies', { headers, params, body }));
           } else {
-            if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}', { params: { path: { cluster, vhost: edit.existing.vhost, name: edit.existing.name }, query: { namespace } }, body }));
-            else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/operator-policies', { params, body }));
+            if (edit.existing) await unwrap(api.PUT('/clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}', { headers, params: { path: { cluster, vhost: edit.existing.vhost, name: edit.existing.name }, query: { namespace } }, body }));
+            else await unwrap(api.POST('/clusters/{cluster}/rabbitmq/operator-policies', { headers, params, body }));
           }
           break;
         }
@@ -104,6 +108,7 @@ export function AccessEditor({ namespace, cluster, edit, vhosts, users, onClose,
       return undefined;
     },
     onSuccess: (generated) => {
+      submission.reset();
       toast.success(`${LABELS[edit.kind][0]!.toUpperCase()}${LABELS[edit.kind].slice(1)} ${existing ? 'updated' : 'created'}.`);
       onSaved();
       setPassword('');
