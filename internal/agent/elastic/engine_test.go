@@ -29,6 +29,7 @@ type adapterResult struct {
 	changes []string
 	states  map[string]agentapi.ProcessStatus
 	err     error
+	node    *agent.Node
 }
 
 type observedEngine struct {
@@ -39,7 +40,7 @@ type observedEngine struct {
 func (e *observedEngine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
 	changes, err := e.Engine.Apply(ctx, n, c)
 	states, _ := n.Snapshot()
-	e.results <- adapterResult{changes: changes, states: states, err: err}
+	e.results <- adapterResult{changes: changes, states: states, err: err, node: n}
 	return changes, err
 }
 
@@ -295,15 +296,25 @@ func TestAdapterProtectedFilesRejectSymlinkEscape(t *testing.T) {
 
 func TestAdapterReadinessDispatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/status" {
+		switch r.URL.Path {
+		case "/api/status":
+			w.WriteHeader(http.StatusOK)
+		case "/_node/pipelines":
+			_, _ = io.WriteString(w, `{"pipelines":{"main":{}}}`)
+		case "/_node/stats/pipelines":
+			_, _ = io.WriteString(w, `{"pipelines":{"main":{"events":{}}}}`)
+		default:
 			t.Errorf("unexpected readiness path %s", r.URL.Path)
 		}
-		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 	port := strconv.Itoa(server.Listener.Addr().(*net.TCPAddr).Port)
+	dir := t.TempDir()
+	if _, err := atomicWrite(filepath.Join(dir, "karakoram", "config", "pipelines.yml"), []byte("- pipeline.id: main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for _, component := range NewEngine().Processes() {
-		if err := agent.Readiness(context.Background(), agent.Options{Engine: agentspec.Engine}, []string{component, port}, NewEngine()); err != nil {
+		if err := agent.Readiness(context.Background(), agent.Options{Engine: agentspec.Engine, DataDir: dir}, []string{component, port}, NewEngine()); err != nil {
 			t.Fatal(component, err)
 		}
 	}
@@ -311,5 +322,36 @@ func TestAdapterReadinessDispatch(t *testing.T) {
 		if err := agent.Readiness(context.Background(), agent.Options{Engine: agentspec.Engine}, args, NewEngine()); err == nil {
 			t.Fatal("accepted readiness args", args)
 		}
+	}
+}
+
+func TestReadinessRouteDoesNotTreatStoppedProcessAsReady(t *testing.T) {
+	r, _ := fixture(t)
+	e := NewEngine()
+	e.runner = r
+	spec := esSpec()
+	spec.Component = agentspec.ComponentLogstash
+	spec.Logstash = &agentspec.LogstashSpec{ESHosts: []string{"https://testn0:9200"}}
+	binary := filepath.Join(r.home(spec), "bin", spec.Component)
+	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexec sleep 30\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	result := runAdapter(t, e, t.TempDir(), spec, []string{})
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	mux := http.NewServeMux()
+	e.Routes(mux, result.node)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/elasticsearch/readiness", nil))
+	var observation agentspec.Readiness
+	if err := json.Unmarshal(w.Body.Bytes(), &observation); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || observation.Ready || observation.Component != spec.Component || observation.Message != "Component process is not running" {
+		t.Fatalf("unexpected readiness: %d %+v", w.Code, observation)
 	}
 }

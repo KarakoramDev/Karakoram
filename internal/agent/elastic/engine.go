@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sync"
@@ -15,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -25,10 +28,11 @@ var (
 
 // Engine adapts the Elastic Stack runner to the shared node toolkit.
 type Engine struct {
-	runner  *Runner
-	mu      sync.RWMutex
-	spec    agentspec.Spec
-	applied bool
+	runner        *Runner
+	mu            sync.RWMutex
+	spec          agentspec.Spec
+	applied       bool
+	configVersion int64
 }
 
 // NewEngine returns an Elastic Stack engine for agent registration.
@@ -88,14 +92,30 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		}
 	}
 	e.mu.Lock()
-	e.spec, e.applied = spec, true
+	e.spec, e.applied, e.configVersion = spec, true, c.ConfigVersion
 	e.mu.Unlock()
 	return changes, nil
 }
 
 // Readiness dispatches the component and optional port to the local runner.
-func (e *Engine) Readiness(ctx context.Context, _ agent.Options, args []string) error {
-	return e.runner.Readiness(ctx, args)
+func (e *Engine) Readiness(ctx context.Context, opts agent.Options, args []string) error {
+	var pipelines []agentspec.Pipeline
+	if len(args) > 0 && args[0] == agentspec.ComponentLogstash {
+		data, err := os.ReadFile(filepath.Join(opts.DataDir, "karakoram", "config", "pipelines.yml"))
+		if err != nil {
+			return errors.New("Logstash configured pipelines unavailable")
+		}
+		var entries []struct {
+			ID string `yaml:"pipeline.id"`
+		}
+		if yaml.Unmarshal(data, &entries) != nil || len(entries) == 0 {
+			return errors.New("Logstash configured pipelines invalid")
+		}
+		for _, entry := range entries {
+			pipelines = append(pipelines, agentspec.Pipeline{ID: entry.ID})
+		}
+	}
+	return e.runner.Readiness(ctx, args, pipelines...)
 }
 
 // Version reports the last successfully applied installed product version.
@@ -125,8 +145,34 @@ func (e *Engine) Metrics(ctx context.Context, n *agent.Node) []agent.Metric {
 	return result
 }
 
-// Routes adds no product-specific routes; shared process controls are sufficient.
-func (*Engine) Routes(*http.ServeMux, *agent.Node) {}
+// Routes exposes live application readiness over the authenticated agent transport.
+func (e *Engine) Routes(mux *http.ServeMux, n *agent.Node) {
+	mux.HandleFunc("POST /v1/elasticsearch/readiness", func(w http.ResponseWriter, r *http.Request) {
+		e.mu.RLock()
+		spec, applied, configVersion := e.spec, e.applied, e.configVersion
+		e.mu.RUnlock()
+		observation := agentspec.Readiness{Component: spec.Component, ConfigVersion: configVersion}
+		states, maintenance := n.Snapshot()
+		switch {
+		case !applied:
+			observation.Message = "Component configuration has not been applied"
+		case maintenance || states[spec.Component].State != "running":
+			observation.Message = "Component process is not running"
+		default:
+			var pipelines []agentspec.Pipeline
+			if spec.Logstash != nil {
+				pipelines = spec.Logstash.Pipelines
+			}
+			if err := e.runner.Readiness(r.Context(), []string{spec.Component}, pipelines...); err != nil {
+				observation.Message = err.Error()
+			} else {
+				observation.Ready = true
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(observation)
+	})
+}
 
 type nodeHost struct{ *agent.Node }
 

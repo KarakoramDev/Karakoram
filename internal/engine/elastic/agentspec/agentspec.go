@@ -96,6 +96,14 @@ type Spec struct {
 	APM           *APMSpec           `json:"apm,omitempty"`
 }
 
+// Readiness is a live local application observation, not just process liveness.
+type Readiness struct {
+	Component     string `json:"component"`
+	Ready         bool   `json:"ready"`
+	Message       string `json:"message,omitempty"`
+	ConfigVersion int64  `json:"configVersion"`
+}
+
 // ElasticsearchSpec configures one Elasticsearch node.
 type ElasticsearchSpec struct {
 	ClusterName string   `json:"clusterName"`

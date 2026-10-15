@@ -313,8 +313,8 @@ func keystoreCommand(ctx context.Context, binary string, args, env []string, std
 	return cmd.Run()
 }
 
-// Readiness probes the local listener; Kibana must finish HTTP initialization.
-func (*Runner) Readiness(ctx context.Context, args []string) error {
+// Readiness probes local application health, including every configured Logstash pipeline.
+func (*Runner) Readiness(ctx context.Context, args []string, pipelines ...agentspec.Pipeline) error {
 	if len(args) < 1 || len(args) > 2 {
 		return errors.New("readiness requires component and optional port")
 	}
@@ -332,7 +332,19 @@ func (*Runner) Readiness(ctx context.Context, args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var err error
+	var readinessErr error
 	for _, host := range []string{"127.0.0.1", "::1"} {
+		if args[0] == agentspec.ComponentLogstash {
+			client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+			err = logstashReadiness(ctx, &client, "http://"+net.JoinHostPort(host, strconv.Itoa(port)), pipelines)
+			if err == nil {
+				return nil
+			}
+			if readinessErr == nil {
+				readinessErr = err
+			}
+			continue
+		}
 		if args[0] == agentspec.ComponentKibana {
 			request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort(host, strconv.Itoa(port))+"/api/status", nil)
 			if requestErr != nil {
@@ -357,7 +369,39 @@ func (*Runner) Readiness(ctx context.Context, args []string) error {
 			return nil
 		}
 	}
+	if readinessErr != nil {
+		return readinessErr
+	}
 	return fmt.Errorf("%s listener unavailable: %w", args[0], err)
+}
+
+func logstashReadiness(ctx context.Context, client *http.Client, base string, pipelines []agentspec.Pipeline) error {
+	var loaded struct {
+		Pipelines map[string]json.RawMessage `json:"pipelines"`
+	}
+	if err := getJSON(ctx, client, base+"/_node/pipelines", agentspec.Credentials{}, false, &loaded); err != nil {
+		return fmt.Errorf("Logstash pipeline inventory unavailable: %w", err)
+	}
+	var stats struct {
+		Pipelines map[string]*struct {
+			Events *json.RawMessage `json:"events"`
+		} `json:"pipelines"`
+	}
+	if err := getJSON(ctx, client, base+"/_node/stats/pipelines", agentspec.Credentials{}, false, &stats); err != nil {
+		return fmt.Errorf("Logstash pipeline stats unavailable: %w", err)
+	}
+	if len(pipelines) == 0 {
+		pipelines = []agentspec.Pipeline{{ID: "main"}}
+	}
+	for _, pipeline := range pipelines {
+		if info, ok := loaded.Pipelines[pipeline.ID]; !ok || string(info) == "null" {
+			return fmt.Errorf("Logstash pipeline %q is not loaded; check its configuration and startup logs", pipeline.ID)
+		}
+		if running := stats.Pipelines[pipeline.ID]; running == nil || running.Events == nil {
+			return fmt.Errorf("Logstash pipeline %q is not running; check its configuration and startup logs", pipeline.ID)
+		}
+	}
+	return nil
 }
 
 // Version returns the payload version only when its installed home exists.

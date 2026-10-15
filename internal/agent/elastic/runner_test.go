@@ -518,8 +518,8 @@ func TestReadiness(t *testing.T) {
 	defer listener.Close()
 	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
 	for _, component := range New().Processes() {
-		if component == "kibana" {
-			continue // Kibana readiness requires its HTTP status, not just TCP.
+		if component == "kibana" || component == "logstash" {
+			continue // Application readiness requires HTTP health, not just TCP.
 		}
 		if err := New().Readiness(context.Background(), []string{component, port}); err != nil {
 			t.Fatal(err)
