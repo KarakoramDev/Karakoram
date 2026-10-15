@@ -219,7 +219,7 @@ func (p *Provider) reconcileStorages(ctx context.Context, rc *engine.Context, s 
 	return false, nil
 }
 func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state, m *member, version string) (agentspec.Spec, error) {
-	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	o, err := parseStoredOptions(rc.Cluster.Spec.EngineOptions)
 	if err != nil {
 		return agentspec.Spec{}, err
 	}

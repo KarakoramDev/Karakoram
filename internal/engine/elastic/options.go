@@ -40,6 +40,16 @@ type Options struct {
 // ParseOptions decodes exactly one JSON object, rejects unknown fields, defaults
 // APM API-key authentication to true, and validates user-controlled content.
 func ParseOptions(raw []byte) (Options, error) {
+	return parseOptions(raw, false)
+}
+
+// parseStoredOptions tolerates the formerly user-settable base-path rewrite
+// setting. Runtime rendering now owns it and always disables rewriting.
+func parseStoredOptions(raw []byte) (Options, error) {
+	return parseOptions(raw, true)
+}
+
+func parseOptions(raw []byte, stored bool) (Options, error) {
 	var o Options
 	if len(bytes.TrimSpace(raw)) != 0 {
 		if bytes.TrimSpace(raw)[0] != '{' {
@@ -57,6 +67,15 @@ func ParseOptions(raw []byte) (Options, error) {
 	if o.APM.APIKeys == nil {
 		enabled := true
 		o.APM.APIKeys = &enabled
+	}
+	if stored {
+		delete(o.Kibana.Settings, "server.rewriteBasePath")
+		if server, ok := o.Kibana.Settings["server"].(map[string]any); ok {
+			delete(server, "rewriteBasePath")
+			if len(server) == 0 {
+				delete(o.Kibana.Settings, "server")
+			}
+		}
 	}
 	if err := o.Validate(); err != nil {
 		return Options{}, err

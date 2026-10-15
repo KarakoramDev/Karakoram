@@ -67,7 +67,7 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	return 0, invalid("no project TCP ports remain")
 }
 func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
-	options, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	options, err := parseStoredOptions(rc.Cluster.Spec.EngineOptions)
 	if err != nil {
 		return false, err
 	}

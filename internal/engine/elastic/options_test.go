@@ -34,6 +34,45 @@ func TestParseOptions(t *testing.T) {
 	}
 }
 
+func TestStoredKibanaRewriteBasePathDoesNotBlockReconcile(t *testing.T) {
+	for _, raw := range []string{
+		`{"kibana":{"settings":{"server.rewriteBasePath":false,"server.basePath":"/dashboards"}}}`,
+		`{"kibana":{"settings":{"server.rewriteBasePath":true,"server.basePath":"/dashboards"}}}`,
+		`{"kibana":{"settings":{"server":{"rewriteBasePath":true,"basePath":"/dashboards"}}}}`,
+		`{"kibana":{"settings":{"server":{"rewriteBasePath":false},"server.basePath":"/dashboards"}}}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := ParseOptions([]byte(raw)); err == nil || !strings.Contains(err.Error(), "managed") {
+				t.Fatal("new input accepted a managed setting", err)
+			}
+			p, rc, f, _ := coreSetup(t, 1)
+			kibana := rc.Cluster.Spec.Components.Extra[kindKibana]
+			kibana.Replicas = 1
+			rc.Cluster.Spec.Components.Extra[kindKibana] = kibana
+			rc.Cluster.Spec.EngineOptions = json.RawMessage(raw)
+			if err := p.Validate(t.Context(), rc, rc.Cluster); err == nil || !strings.Contains(err.Error(), "managed") {
+				t.Fatal("write admission accepted the managed rewrite setting", err)
+			}
+			coreConverge(t, p, rc, f)
+			config, err := p.MemberConfig(t.Context(), rc, "demokb")
+			if err != nil {
+				t.Fatal("stored settings blocked member config", err)
+			}
+			var spec agentspec.Spec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			settings, err := FlattenSettings(spec.Kibana.Settings)
+			if err != nil || settings["server.basePath"] != "/dashboards" {
+				t.Fatal("base path was not preserved", settings, err)
+			}
+			if _, present := settings["server.rewriteBasePath"]; present {
+				t.Fatal("stored rewrite flag reached runtime settings", settings)
+			}
+		})
+	}
+}
+
 func TestPipelineOptions(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
