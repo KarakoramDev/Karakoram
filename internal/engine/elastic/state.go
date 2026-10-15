@@ -126,6 +126,12 @@ type member struct {
 	Removing bool `json:"removing,omitempty"`
 	// AllocationExcluded records an exclusion added by this removal, not an operator.
 	AllocationExcluded bool `json:"allocationExcluded,omitempty"`
+	// DrainIdleObservations counts consecutive yellow, idle observations with
+	// the same remaining shard count; transient relocation gaps are not blocks.
+	DrainIdleObservations int `json:"drainIdleObservations,omitempty"`
+	DrainShardCount       int `json:"drainShardCount,omitempty"`
+	// DrainWarning survives condition recovery to suppress repeat flap warnings.
+	DrainWarning string `json:"drainWarning,omitempty"`
 	// Replaces names the member this one replaces (replace-member operation).
 	Replaces string `json:"replaces,omitempty"`
 	// PublicPort/Subdomain record applied public exposure.

@@ -124,6 +124,7 @@ func (p *Provider) cancelRemoval(ctx context.Context, rc *engine.Context, s *sta
 		}
 	}
 	m.Removing, m.AllocationExcluded = false, false
+	m.DrainIdleObservations, m.DrainShardCount, m.DrainWarning = 0, 0, ""
 	if m.Stage == stageDraining {
 		m.Stage = stageJoined
 	}
@@ -137,11 +138,12 @@ func blockDrain(ctx context.Context, rc *engine.Context, s *state, m *member, re
 	if s.DrainBlocked == message {
 		return nil
 	}
-	if rc.Events != nil {
+	if rc.Events != nil && m.DrainWarning != message {
 		if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "ShardDrainBlocked", Message: message, CreatedAt: now(rc)}); err != nil {
 			return err
 		}
 	}
+	m.DrainWarning = message
 	s.DrainBlocked = message
 	return nil
 }
@@ -216,9 +218,22 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return err
 		}
 		if h.Status != "green" && h.Status != "yellow" {
+			m.DrainIdleObservations = 0
 			return blockDrain(ctx, rc, s, m, "unassigned primary shards prevent safe removal")
 		}
-		if h.Status == "yellow" && counts[m.Name] != 0 && h.RelocatingShards == 0 && h.InitializingShards == 0 {
+		shards := counts[m.Name]
+		if h.Status == "yellow" && shards != 0 && h.RelocatingShards == 0 && h.InitializingShards == 0 {
+			if shards != m.DrainShardCount {
+				m.DrainIdleObservations = 0
+			}
+			if m.DrainIdleObservations < 3 {
+				m.DrainIdleObservations++
+			}
+		} else {
+			m.DrainIdleObservations = 0
+		}
+		m.DrainShardCount = shards
+		if m.DrainIdleObservations >= 3 {
 			return blockDrain(ctx, rc, s, m, "unassigned replica shards prevent the remaining shards from draining")
 		}
 		s.DrainBlocked = ""

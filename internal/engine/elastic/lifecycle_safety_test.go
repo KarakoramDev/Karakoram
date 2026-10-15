@@ -72,6 +72,66 @@ func TestScaleUpDoesNotCancelCompletedDrainOrReplacement(t *testing.T) {
 	}
 }
 
+func TestYellowDrainRequiresPersistentStallAndDoesNotRepeatFlapWarnings(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 3)
+	s := coreConverge(t, p, rc, f)
+	m := s.find("demon2")
+	m.Removing, m.Stage = true, stageDraining
+	es.health, es.shards[m.Name] = "yellow", 4
+	events := rc.Events.(*coreEvents)
+	events.events = nil
+	observe := func() {
+		t.Helper()
+		if err := p.removeStep(t.Context(), rc, s, m); err != nil {
+			t.Fatal(err)
+		}
+		if err := save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+		s, _ = load(rc.Cluster)
+		m = s.find("demon2")
+	}
+	// Unrelated yellow health plus single idle gaps must not report a block.
+	for range 3 {
+		es.relocating = 0
+		observe()
+		if s.DrainBlocked != "" {
+			t.Fatal("transient idle observation blocked drain")
+		}
+		es.relocating = 1
+		observe()
+	}
+	es.relocating = 0
+	observe()
+	observe()
+	if s.DrainBlocked != "" || len(events.events) != 0 {
+		t.Fatal("stall reported before three observations", events.events)
+	}
+	observe()
+	if s.DrainBlocked == "" || len(events.events) != 1 || events.events[0].Reason != "ShardDrainBlocked" {
+		t.Fatal("persistent stall was not reported", s.DrainBlocked, events.events)
+	}
+	es.relocating = 1
+	observe()
+	es.relocating = 0
+	for range 3 {
+		observe()
+	}
+	if s.DrainBlocked == "" || len(events.events) != 1 {
+		t.Fatal("relocation flap repeated the same warning", events.events)
+	}
+	es.shards[m.Name] = 3
+	observe()
+	if s.DrainBlocked != "" || m.DrainIdleObservations != 1 {
+		t.Fatal("actual shard progress did not reset the observation window", m)
+	}
+	es.shards[m.Name] = 0
+	observe()
+	if s.DrainBlocked != "" || m.Stage != stageExcluded {
+		t.Fatal("empty node did not finish draining", m)
+	}
+}
+
 func TestRollingRequiresCommittedVotingQuorum(t *testing.T) {
 	p, rc, f, es := coreSetup(t, 3)
 	s := coreConverge(t, p, rc, f)

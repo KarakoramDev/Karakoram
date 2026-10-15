@@ -42,6 +42,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 				s.ResumeVotingReset = true
 			}
 			m.Removing = false
+			m.DrainIdleObservations, m.DrainShardCount, m.DrainWarning = 0, 0, ""
 			m.Replaces = ""
 		}
 	}
