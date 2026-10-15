@@ -145,7 +145,7 @@ API tokens have prefix `kk_`, are returned only once and are stored as SHA-256 h
 
 Token `name` is required, trimmed, non-blank and limited to **1–128 characters**. Duplicate names are intentionally allowed; use the unique token ID (shown in the UI table) to select a revoke target. Long names wrap instead of expanding the table. On both creation and update, `expiresAt` must be a valid RFC 3339 timestamp **strictly in the future**; errors identify `expiresAt` with `invalid` for malformed timestamps or `out_of_range` for past/current times. Updating with null removes expiry.
 
-The token-creation dialog sends an `Idempotency-Key` for each submission and reuses it when retrying the same body, while synchronously preventing a double click from submitting twice. After creation, its one-time-secret panel provides working `KARAKORAM_SERVER`/`KARAKORAM_TOKEN` CLI commands and links to [the running API reference](/api/v1/openapi.yaml). Avoid pasting secret-bearing commands into shared logs or shell history; prefer injecting the token from a secret manager.
+The token-creation dialog sends an `Idempotency-Key` for each submission and reuses it when retrying the same body, while synchronously preventing a double click from submitting twice. After creation, its one-time-secret panel provides working `KARAKORAM_SERVER`/`KARAKORAM_TOKEN` CLI commands and links to the running server's API reference (`GET /api/v1/openapi.yaml`, see [REST API](api.md)). Avoid pasting secret-bearing commands into shared logs or shell history; prefer injecting the token from a secret manager.
 
 ```yaml
 name: nightly-automation
