@@ -22,7 +22,7 @@ import { resourcesSummary } from './cluster-utils';
 import { clusterPath } from './cluster-path';
 import { OperationNotice } from '@/components/OperationNotice';
 import { dataSourceFor, dataSourceLabel, wireDataSource } from './data-source';
-import { STEPS, claimSubmission, firstInvalidStep, nextStep, normalizeWizardSpec, resetEditedAttempt, type StepId } from './wizard/state';
+import { STEPS, claimSubmission, firstInvalidStep, navigateStep, normalizeWizardSpec, resetEditedAttempt, type StepId } from './wizard/state';
 import { memberChoices, nameError, topologyErrors, validateWizard } from './wizard/validation';
 import { resourceMinimums } from './wizard/resources';
 import { engineConsequences, engineRules } from './wizard/engine';
@@ -30,6 +30,7 @@ import { exposureSummary, totalFootprint } from './wizard/review';
 import { validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
 import { cleanTLS, wireExposure } from './wizard/access';
+import { WizardNavigation } from './wizard/Navigation';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -165,10 +166,11 @@ export function ClusterWizardPage() {
   const counts = topologyErrors(spec, topology);
   const footprint = totalFootprint(spec);
 
-  const goto = (id: StepId) => {
+  const goto = (id: StepId, clickCount: number) => {
+    if (clickCount > 1) return;
     setTouched((t) => ({ ...t, [step]: true }));
     const movingForward = STEPS.findIndex((s) => s.id === id) > stepIndex;
-    if (!movingForward || errorsFor(step).length === 0) setStep(id);
+    if (!movingForward || errorsFor(step).length === 0) setStep((current) => navigateStep(current, step, id, clickCount));
   };
 
   const applyPreset = (pName: string) => {
@@ -224,7 +226,7 @@ export function ClusterWizardPage() {
               const errs = errorsFor(s.id);
               const cls = ['step', s.id === step ? 'active' : '', touched[s.id] && errs.length ? 'invalid' : touched[s.id] && i < stepIndex ? 'done' : ''].join(' ');
               return (
-                <button key={s.id} type="button" className={cls} onClick={() => goto(s.id)} disabled={create.isPending} aria-current={s.id === step ? 'step' : undefined}>
+                <button key={s.id} type="button" className={cls} onClick={(e) => goto(s.id, e.detail)} disabled={create.isPending} aria-current={s.id === step ? 'step' : undefined}>
                   <span className="step-index" aria-hidden>
                     {touched[s.id] && errs.length ? '!' : i + 1}
                   </span>
@@ -578,24 +580,13 @@ export function ClusterWizardPage() {
             </Card>
           ) : null}
 
-          <div className="wizard-foot">
-            <Button disabled={create.isPending} onClick={() => {
-              if (stepIndex === 0) { idempotency.reset(); navigate('/clusters'); }
-              else goto(STEPS[stepIndex - 1]!.id);
-            }}>{stepIndex === 0 ? 'Cancel' : 'Back'}</Button>
-            {step === 'review' ? (
-              <Button variant="primary" onClick={(e) => submit(e.currentTarget)} loading={create.isPending}>
-                Create cluster
-              </Button>
-            ) : (
-              <Button variant="primary" onClick={() => {
-                setTouched((t) => ({ ...t, [step]: true }));
-                setStep(nextStep(step, validation));
-              }}>
-                Continue
-              </Button>
-            )}
-          </div>
+          <WizardNavigation
+            step={step} validation={validation} setStep={setStep}
+            touchStep={(id) => setTouched((t) => ({ ...t, [id]: true }))}
+            pending={create.isPending}
+            onCancel={() => { idempotency.reset(); navigate('/clusters'); }}
+            onSubmit={submit}
+          />
         </div>
       </div>
     </div>

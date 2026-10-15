@@ -37,9 +37,10 @@ Percona member resources require at least **0.5 GiB RAM** and **5 GiB data disk*
 ### Creation wizard walkthrough
 
 The wizard has six screens, in this order. Choose **Continue** after completing
-each screen, or **Back** to revise a previous screen. Invalid input keeps you
-on the affected step with field errors; review errors must be resolved before
-creation.
+each screen, or **Back** to revise a previous screen. A double-click advances
+or returns only one screen; double-clicking Continue cannot also submit Review.
+Invalid input keeps you on the affected step with field errors; review errors
+must be resolved before creation.
 
 Cluster names must be 2–12 lowercase letters/digits beginning with a letter and
 unique in the target namespace; invalid names are rejected rather than silently
