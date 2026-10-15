@@ -4,6 +4,11 @@
 
 The React SPA is embedded in the Karakoram server when production assets are built. Open the installation's HTTPS origin; no separate frontend deployment or browser Zerops token is needed. The UI calls the same REST API as `karactl` and listens to durable event SSE for live view invalidation.
 
+The UI supports both MongoDB and [Elasticsearch with optional Kibana, Logstash
+and APM Server](elasticsearch.md). Engine-specific topology, component settings,
+native access and backup types come from the selected provider; MongoDB's FCV,
+PBM/PITR and authentication-database procedures do not apply to Elasticsearch.
+
 ## Sign in
 
 Use local username/password or the configured SSO button. First bootstrap and reset-password users are directed to **Change password** before ordinary pages. After a local password change, sign in again. To change your own password later, choose **Change password** at the foot of the sidebar. Browser credentials are HttpOnly cookies, not local-storage bearer tokens; refresh and CSRF handling are built into the client. [Authentication](rbac-and-auth.md) explains local/OIDC setup and authorization.
@@ -51,7 +56,7 @@ it to one.
 | Screen | Fields and choices |
 | --- | --- |
 | **Basics** | Target namespace (selected automatically when only one is available), cluster name, engine, exact version, topology and optional preset. Unavailable catalog versions cannot be selected. |
-| **Topology** | Replica-set member count; for sharding, shard count, members per shard, config-server members and routers. MongoDB replica-set/config-server choices are 1/3/5/7. Optional engine configuration overrides are YAML and remain subject to provider-owned-setting restrictions. |
+| **Topology** | Replica-set member count; for sharding, shard count, members per shard, config-server members and routers. MongoDB replica-set/config-server choices are 1/3/5/7. MongoDB configuration overrides are YAML and remain subject to provider-owned-setting restrictions. Elasticsearch uses its native component/settings controls, not the generic `engineConfig` editor. |
 | **Resources** | CPU mode, minimum/maximum CPU cores, optional start CPU and minimum/maximum RAM in GiB for each component. Data-bearing components also have minimum/maximum disk in GiB. Sharded clusters have separate shard-member, config-server and router resource editors; routers have no durable data-disk editor. |
 | **Backups** | Primary namespace-local storage or None; provider-supported backup schedules (name, five-field UTC cron, type, storage, positive retain count, enabled); PITR and oplog slice interval where supported; optional seed data from a backup or recovery time, including source namespace/cluster. |
 | **Access & TLS** | TLS mode, managed or supplied CA, certificate inputs, private/public exposure, IP family and client CIDR allowlist, plus per-member monitoring. A supplied CA needs its certificate and signing private key; supplied server certificate/key are an optional matching pair. |
@@ -70,6 +75,16 @@ servers and one router). A preset replaces topology/resource/backup defaults,
 but you can edit them afterward; it is not a capacity or production-readiness
 certification. The catalog served by your installation is authoritative.
 
+Elasticsearch offers combined master/data nodes or dedicated masters plus data
+nodes, explained on Basics, with **dev**, **prod**, **observability** and **large**
+presets. Its Resources step covers enabled Kibana/Logstash/APM components and
+shows per-component RAM minima. Review and Overview show dedicated-master
+counts and per-node resources separately from data nodes and aggregate totals.
+Its backup type is **snapshot**, without PITR. Disabling an optional component
+clears dependent public flags (and disabled Logstash pipelines) when preparing
+the request, including for clones. See [topologies and presets](elasticsearch.md#topologies-and-presets)
+and [component sizing](elasticsearch.md#sizing-and-heap) before selecting counts.
+
 For a first replica set, choose **dev** for disposable development or **prod**
 for three voting members, keep private access and `requireTLS`, choose an existing
 S3 storage if you need backups, then inspect Review before **Create cluster**.
@@ -86,10 +101,10 @@ and [sharding](sharding.md).
 | --- | --- |
 | Overview | Phase/conditions, password-free connection summary and explicit credential reveal |
 | Topology | Member roles/health/lag/agent status, resource/membership controls, replacement/placement, member logs |
-| Upgrades | Catalog-based binary changes, FCV promotion and rolling restart |
+| Upgrades | Catalog-based binary changes and rolling restart; MongoDB-only FCV promotion |
 | Backups | Backup inventory, on-demand backup, storage/schedule/PITR configuration and observed window |
 | Restores | In-place recovery and restore into a new cluster, restore status/errors |
-| Users | Application users/custom roles and managed system-user rotation |
+| Users / Elastic Access | Engine-native application users/roles, managed system-user rotation; Elasticsearch API keys and application privileges |
 | Monitoring | Per-member time series and status context |
 | Events | Cluster activity and diagnostic messages, including the actor |
 | Operations | Durable asynchronous operation progress/failure and initiating actor |
@@ -132,6 +147,34 @@ copyable `mongosh` command with `--tlsCAFile ca.pem` and a driver URI with
 the database project network, and replace the administrative credentials with
 your application's scoped identity. URI-encode its credentials; the CA path is
 relative to the client process. Do not disable certificate verification.
+
+For Elasticsearch, expand **How to connect** for the returned `elasticsearch`
+endpoint, revealed `elastic` password and CA-verified curl guidance; the
+[protected CLI curl walkthrough](elasticsearch.md#connect-and-reveal-credentials)
+also shows JSON extraction and CA export.
+Private commands must run from a workload in the namespace's Zerops project;
+your workstation and the management relay do not resolve those private
+hostnames. Use a scoped native user/API key for applications, not `elastic`.
+Kibana uses a separate browser login and may still be initializing after its
+route is allocated; see [Kibana](elasticsearch.md#kibana).
+
+**Elastic Access** supports native users, roles and API keys, including editable
+Kibana application grants. Create/select an existing role before assigning a
+user; Basic licences do not include document/field-level security. See
+[native access prerequisites and examples](elasticsearch.md#users-roles-and-api-keys).
+
+The Elasticsearch Backups details show the native `location`: a repository/
+snapshot reference, not a safe per-snapshot object prefix to delete directly.
+See [snapshot sharing and deletion](elasticsearch.md#snapshots-and-restore).
+
+Elasticsearch Overview distinguishes desired, observed and draining members.
+A drain blocked by insufficient shard capacity keeps the member visible and
+shows a `ShardDrainBlocked` warning with recovery guidance. Yellow health means
+all primaries are assigned but some replica copies are missing, not full
+redundancy. Logstash pipeline compile/start errors keep the component not ready.
+Upgrade progress follows Elasticsearch nodes (elected master last), then
+Kibana, Logstash and APM; Kibana restarts separately and a single data node has
+service interruptions. See [maintenance and drain recovery](elasticsearch.md#scale-upgrade-restart-and-replace).
 
 For **MongoDB application users** under **Users → Add user**, an empty password is intentionally omitted from the create request: the server generates a password and the success dialog displays it exactly once. Copy it into a secret manager before closing, or supply your own password of at least eight characters. In **Edit roles / password**, an empty password instead retains the existing password; it does not generate a replacement. Application authentication databases and role references are separate from Karakoram accounts. See the [scoped application-user and TLS recipe](users-tls-access.md#connect-an-application-user-with-tls).
 

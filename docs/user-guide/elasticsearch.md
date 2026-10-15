@@ -6,7 +6,7 @@ Karakoram runs Elasticsearch on Zerops Ubuntu runtimes with one persistent Local
 
 Before creating a cluster, [install and authenticate](../install.md), select its [namespace](namespaces.md), and review [platform limitations](../limitations.md). A namespace selects an existing Zerops project; a management relay does not make private database endpoints reachable from another project's applications. Multiple nodes/volumes do not guarantee independent physical hosts.
 
-**Licensing:** downloaded default distributions are Elastic-licensed, not Apache-licensed because Karakoram is Apache-2.0. Basic-tier features are used. Operators reselling hosted Elasticsearch/Kibana must review ELv2's managed-service restriction and obtain appropriate rights from Elastic. See [licensing](#licensing) before offering clusters to third parties.
+**Licensing:** downloaded default distributions are Elastic-licensed, not Apache-licensed because Karakoram is Apache-2.0. The default workflows use Basic-tier features; document/field-level security needs a licence tier that includes those features and is not available on Basic. Operators reselling hosted Elasticsearch/Kibana must review ELv2's managed-service restriction and obtain appropriate rights from Elastic. See [licensing](#licensing) before offering clusters to third parties.
 
 ## Verification status
 
@@ -59,7 +59,7 @@ Heap is not total process RAM. Leave room for filesystem cache, native/direct me
 
 A 2026-10-13 probe at fixed 2-GB RAM found automatic Elasticsearch 9.5.5 heap sizing was OOM-killed; explicit 768-MB heap passed production bootstrap checks. The measured runtime had `vm.max_map_count=262144`, below Elastic's recommended `1048576`, and could not change the shared-host setting. File limits were raised from soft 1024 to hard 65535; 8-MiB memlock precludes memory locking. Do not assume all deployments have those limits or suppress bootstrap failures. See [runtime rationale](../adr/0025-elasticsearch-engine-runtime-model.md).
 
-The agent renders product configuration below `DATA_DIR/karakoram/config` and runtime data/logs below `DATA_DIR/karakoram`, not `DATA_DIR/config`. `ES_PATH_CONF`, `KBN_PATH_CONF` and Logstash `--path.settings` point to that rendered configuration directory. Deployment readiness explicitly invokes `karakoram agent readiness --engine=elasticsearch <component>` (`elasticsearch`, `kibana`, `logstash` or `apm-server`): Zerops readiness exec was measured to run without the service environment, so it cannot rely on `KARAKORAM_ENGINE`. This listener check is not cluster formation or delivery verification.
+The agent renders product configuration below `DATA_DIR/karakoram/config` and runtime data/logs below `DATA_DIR/karakoram`, not `DATA_DIR/config`. `ES_PATH_CONF`, `KBN_PATH_CONF` and Logstash `--path.settings` point to that rendered configuration directory. Deployment readiness explicitly invokes `karakoram agent readiness --engine=elasticsearch <component>` (`elasticsearch`, `kibana`, `logstash` or `apm-server`): Zerops readiness exec was measured to run without the service environment, so it cannot rely on `KARAKORAM_ENGINE`. Component readiness does not by itself verify cluster formation or end-to-end delivery.
 
 Kibana deployment readiness requires local `/api/status` to return HTTP 200,
 not merely an open port. Startup HTTP 503 responses keep the deployment pending
@@ -72,12 +72,17 @@ In **Clusters → Create cluster**, select **Elasticsearch**, its advertised ver
 Use the current catalog rather than an arbitrary archive version:
 
 ```sh
-karactl providers get elasticsearch
+karactl providers get elasticsearch -o json
 ```
 
 The initial catalog offers `9.5.5` (default), `9.5.4`, `9.4.8` and `8.19.23`. Enabled Stack products always follow the selected exact version.
 
-For CLI or API creation, save this API-shaped request as `elasticsearch.json`. It creates three combined nodes and private Kibana; Logstash/APM are disabled:
+There is no `--preset` CLI flag. Copy a catalog `presets[].spec` into a create
+body's `spec`, keep `provider: elasticsearch`, then customize the components and
+`engineOptions`. The [CLI file example](cli.md#elasticsearch-create-from-a-file)
+includes a native `snapshot` schedule and its required namespace-local storage.
+
+For CLI or API creation, save this API-shaped request as `elasticsearch.json`. It creates three combined nodes and private Kibana with nightly snapshots; Logstash/APM are disabled. [Register `archive`](backups-and-restore.md#register-s3-storage) in the selected namespace first, or remove the `backup` block if no backups are wanted:
 
 ```json
 {
@@ -107,6 +112,13 @@ For CLI or API creation, save this API-shaped request as `elasticsearch.json`. I
       }
     },
     "tls": {"mode": "requireTLS", "ca": "selfSigned"},
+    "backup": {
+      "storage": "archive",
+      "schedules": [{
+        "name": "nightly", "cron": "0 2 * * *", "type": "snapshot",
+        "retainCount": 7, "enabled": true
+      }]
+    },
     "engineOptions": {
       "kibana": {"public": false, "settings": {}},
       "apm": {"public": false, "apiKeys": true},
@@ -157,12 +169,68 @@ karactl clusters connection search --reveal
 
 Public endpoints retain these names and carry `public: true`; there are no `kibana-public` or `apm-public` names. Select the public entry explicitly when accessing a subdomain or public Elasticsearch route.
 
-Save the public CA as `cluster-ca.crt`, select a returned Elasticsearch URL as `ES_URL`, and obtain `ES_PASSWORD` securely. For an administrative health request:
+Run **private-endpoint commands from an application or diagnostic workload in
+the same Zerops project as the selected namespace**. A local workstation or
+management relay does not resolve those private hostnames or provide an
+application-network tunnel. Install/authenticate `karactl`, `jq` and `curl` on
+that workload first.
 
-```sh
-curl --fail-with-body --cacert cluster-ca.crt \
-  --user "elastic:$ES_PASSWORD" "$ES_URL/_cluster/health?pretty"
+The following Bash function fetches the structured connection response and
+extracts an Elasticsearch URL, the `elastic` password and the multiline CA PEM
+into protected temporary files. `false` selects a private URL; `true` selects a
+public URL. It fails if the selected endpoint or credentials are absent:
+
+```bash
+es_health() (
+  set +x                         # Never trace secrets, even in a parent shell.
+  set -euo pipefail
+  umask 077
+  work=$(mktemp -d)
+  trap 'rm -rf -- "$work"' EXIT
+
+  karactl -n default clusters connection search --reveal -o json \
+    | jq -e --argjson public "$1" '
+        {
+          url: ([.connection.endpoints[]
+                 | select(.name == "elasticsearch" and .public == $public)
+                 | .url][0]),
+          password: ([.credentials[]
+                      | select(.username == "elastic") | .password][0]),
+          caCertificate: .caCertificate
+        }
+        | if (.url // "") != "" and (.password // "") != ""
+             and (.caCertificate // "") != ""
+          then . else error("Endpoint, password or CA unavailable") end
+      ' > "$work/connection.json"
+
+  ES_URL=$(jq -er '.url' "$work/connection.json")
+  jq -er '.caCertificate' "$work/connection.json" > "$work/cluster-ca.pem"
+  jq -r '"user = " + ("elastic:" + .password | @json)' \
+    "$work/connection.json" > "$work/curl.conf"
+  curl --config "$work/curl.conf" --fail-with-body \
+    --cacert "$work/cluster-ca.pem" "$ES_URL/_cluster/health?pretty"
+)
+
+# Private variant: execute on a workload in the namespace's Zerops project.
+es_health false
 ```
+
+For the **public variant**, run the same function from an allowed client after
+configuring [public TCP exposure](../adr/0017-public-tcp-exposure.md), then select
+the explicitly public Elasticsearch endpoint:
+
+```bash
+es_health true
+```
+
+Keep shell tracing disabled, and do not run reveal commands in CI/shared
+terminal recordings or log their JSON. The function does not put the password
+in curl's process arguments or export it to child environments; its files are
+owner-only and removed on exit. Protect the host and temporary storage too.
+`jq -r` decodes the CA's JSON escapes into real PEM newlines; do not flatten it.
+As an alternative CA export, inside the protected function use
+`karactl -n default clusters ca search > "$work/cluster-ca.pem"` in place of the
+CA extraction line; see [CLI connection and CA export](cli.md#requests-output-and-waits).
 
 Never use `-k` or disable certificate verification. Password clients do not need the transport certificate or a client private key. Use a narrowly scoped application user/API key for workloads; `elastic` is an administrative superuser, not a default ingestion identity. Give clients multiple returned data-node endpoints for failover. Public clients should use provisioned public addresses, and should not enable sniffing that discovers unreachable private hosts.
 
@@ -173,6 +241,10 @@ Never use `-k` or disable certificate verification. Password clients do not need
 Open the returned Kibana endpoint and initially log in as **`elastic`** with the revealed password, or use a regular native user with appropriate roles. Karakoram's own UI login is not a Kibana identity. The generated Kibana service-account token authenticates the server to Elasticsearch; it is not a browser login and need not be copied manually.
 
 Set `spec.engineOptions.kibana.public: true` for the Zerops subdomain HTTPS route. Karakoram supplies the public base URL, secure cookies and stable encryption keys shared across replicas. The balancer terminates TLS and forwards HTTP on the private project network. Zerops documents a **50-MB upload cap** and says the shared subdomain balancer is **not recommended for production**; custom-domain management is not supplied by this feature ([Zerops public access](https://docs.zerops.io/references/networking/public-access)). The same limits apply to optional public APM intake.
+
+A provisioned Kibana route can exist while the application is still starting.
+Wait for component readiness and retry after initialization; a route alone is
+not proof Kibana is usable.
 
 ## Logstash pipelines and queues
 
@@ -213,6 +285,13 @@ karactl clusters patch search -f logstash.json --wait
 
 The default writer covers `logstash-*`, `ecs-logstash-*`, `logs-*` and `metrics-*`. A pipeline targeting other names needs a separately authorized writer/role; do not put the `elastic` password in pipeline source. Keep real secrets out of settings and committed files. The existing declared inputs are 5044/8080; a pipeline listener on another port does not by itself provision routing for that port. See [Elastic's output options](https://www.elastic.co/docs/reference/logstash/plugins/plugins-outputs-elasticsearch).
 
+Logstash readiness requires **every configured pipeline** to be loaded and
+running, not just a live JVM or an open monitoring port. A pipeline compile/start
+failure appears as a component that is not ready and an unsuccessful rollout,
+with the failing/missing pipeline identified. Inspect the component logs,
+correct the pipeline and apply the configuration again. Readiness still does
+not prove events reached their destination.
+
 `persistentQueue: true` writes queues to **container disk**, not a Local Storage volume. Events survive a Logstash process restart, but queues are lost on redeployment, version upgrade, container replacement or service deletion. Each replica has its own queue, without replication or snapshot protection. Size runtime disk for every pipeline's queue and retain upstream replay where loss is unacceptable ([queue semantics](https://www.elastic.co/docs/reference/logstash/persistent-queues)).
 
 ## APM intake
@@ -247,7 +326,7 @@ Karakoram accounts/RBAC authorize the control plane; native Elasticsearch identi
 | Roles | `GET/POST /api/v1/clusters/{cluster}/elasticsearch/roles`; `GET/PUT/DELETE .../roles/{role}` |
 | API keys | `GET/POST /api/v1/clusters/{cluster}/elasticsearch/api-keys`; `DELETE .../api-keys/{id}` invalidates |
 
-Create a role before the user referencing it. Example `role.json`:
+Create a custom role before the user referencing it, or select an existing built-in role. Every assigned role must already exist in Elasticsearch; unknown role names are rejected before the user is written. Example `role.json`:
 
 ```json
 {
@@ -264,7 +343,39 @@ Create a role before the user referencing it. Example `role.json`:
 
 A user create body is `{username, password, roles, fullName, email, enabled}`; supply a password of at least eight characters securely on create. Passwords are write-only. Reads cannot recover application passwords. User roles are string names, not MongoDB role/database tuples. Role bodies include `cluster`, `indices` and `applications` privilege arrays; use an empty array where no grant is needed.
 
-Index privileges can also include a document-level `query` (an opaque Elasticsearch query JSON string) and `fieldSecurity` with optional `grant` and `except` field-pattern arrays. Reads and role edits preserve these restrictions, including explicitly empty grant arrays. The UI accepts a JSON array for index privileges when these restrictions are needed, in addition to the simple one-entry-per-line format. API-key descriptors support the same fields.
+Index privileges can also include a document-level `query` (an opaque Elasticsearch query JSON string) and `fieldSecurity` with optional `grant` and `except` field-pattern arrays. **Both require a licence tier that includes document/field-level security; Basic does not.** Requests that require unavailable licensed features return an actionable 4xx response explaining the licensing prerequisite, rather than creating an unrestricted role. Reads and role edits preserve these restrictions, including explicitly empty grant arrays. The UI accepts a JSON array for index privileges when these restrictions are needed, in addition to the simple one-entry-per-line format. API-key descriptors support the same fields.
+
+Kibana browser access needs application privileges as well as privileges on the
+underlying data indices. For example, this complete role body grants read-only
+Kibana access across all spaces plus read access to `orders-*`:
+
+```json
+{
+  "name": "orders-kibana-reader",
+  "cluster": [],
+  "indices": [{
+    "names": ["orders-*"],
+    "privileges": ["read", "view_index_metadata"]
+  }],
+  "applications": [{
+    "application": "kibana-.kibana",
+    "privileges": ["read"],
+    "resources": ["*"]
+  }]
+}
+```
+
+For the default Kibana application in the supported Elasticsearch/Kibana 8/9
+Stack, `kibana-.kibana` is the application name; `read` is a Kibana base
+privilege, not an Elasticsearch index privilege in this array. Kibana registers
+its application privileges at startup. `resources: ["*"]` covers every space;
+use `["space:default"]` to restrict the grant to the Default space, or explicitly
+select other spaces. Use the **Elastic Access** application-grant editor or a
+role file to author/edit these fields; the grant does not authorize reading
+data without the separate `indices` privileges. Elastic recommends Kibana's
+own role UI/API for general Kibana role management; see
+[Kibana application privilege mapping](https://www.elastic.co/docs/extend/kibana/key-concepts/security/rbac-and-saved-objects)
+and [Kibana privileges](https://www.elastic.co/docs/deploy-manage/users-roles/cluster-or-deployment-auth/kibana-privileges).
 
 The Elasticsearch CLI uses these commands and flags:
 
@@ -282,7 +393,7 @@ karactl elasticsearch users delete search ordersreader
 karactl elasticsearch roles delete search orders-reader
 ```
 
-Supply `APP_PASSWORD` securely and keep shell tracing disabled; use `--password-stdin` for password changes rather than an argument containing the secret. For API creation, submit protected JSON with the user body above. Protect `elastic`, built-in users/roles and `karakoram*` identities: the provider owns control, monitor, Kibana and writer credentials and rejects their ordinary CRUD modification.
+Supply `APP_PASSWORD` securely and keep shell tracing disabled; use `--password-stdin` for password changes rather than an argument containing the secret. For API creation, submit protected JSON with the user body above. `elastic`, `kibana_system`, other built-in users, reserved roles and `karakoram*` identities are protected: ordinary native-access CRUD cannot modify them. The provider owns control, monitor, Kibana and writer credentials; use the supported managed rotation operation instead. Existing built-in roles may still be assigned to regular users.
 
 API-key create bodies use `name`, optional `expiration` and a required, nonempty `roleDescriptors` map. Missing or empty descriptors are rejected: keys must never inherit the control-plane superuser identity's permissions. Example for a read-only workload:
 
@@ -310,6 +421,13 @@ karactl elasticsearch api-keys invalidate search KEY_ID
 ```
 
 Creation returns `id`, `apiKey` and `encoded` **once**; store them immediately and securely. Lists do not reveal key secrets. Prefer explicit expiry and narrow role descriptors. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
+
+API-key invalidation is safe to retry, including when a reload or interrupted
+client leaves its outcome uncertain; invalidating an already invalidated key
+succeeds. Refresh the key inventory to confirm the final state. The UI retains
+its pending marker across reload in the same browser tab and offers a retry if
+the key remains active after the request window. This is not a durable
+control-plane operation or a guarantee across server restarts.
 
 Managed rotation uses the existing system-user operation with identity `elastic`, `karakoram-monitor`, `kibana-token`, `logstash`, `apm` or `apm-secret-token`; these are exactly the identities the system-user list shows. Affected component configuration is republished/restarted. TLS leaf rotation uses `karactl clusters rotate-tls search --wait` and Elasticsearch's watched PEM reload under the same CA. Neither operation rotates the CA or Kibana's saved-object encryption keys.
 
@@ -404,7 +522,7 @@ karactl clusters patch search -f scale.yaml --wait
 karactl clusters members search
 ```
 
-Added nodes receive new, never-reused indices and join through hot-reloaded discovery seeds. Scale-down drains nodes serially via allocation exclusions and voting exclusions where needed. Remaining data nodes must support the maximum index replica count plus a primary; `ShardDrainBlocked` means adjust capacity or intentional index replica policy, not force deletion. Dedicated masters change only 3↔5, one master at a time. Names can have gaps after removal/replacement.
+Added nodes receive new, never-reused indices and join through hot-reloaded discovery seeds. Scale-down drains nodes serially via allocation exclusions and voting exclusions where needed. Removing members remain visible as **draining**, not healthy, until Elasticsearch confirms their absence; Overview distinguishes desired, observed and draining counts. Remaining data nodes must support the maximum index replica count plus a primary. A blocked drain shows a `ShardDrainBlocked` condition/callout and emits a Warning event on transition into the blocked reason, not on every reconciliation. Restore capacity or deliberately reduce the affected index replica policy only if the resulting loss of redundancy is acceptable, then let reconciliation retry; do not force runtime/volume deletion. Dedicated masters change only 3↔5, one master at a time. Names can have gaps after removal/replacement.
 
 Removal never advances to voting exclusion or runtime/volume deletion while any primary shard is unassigned (red health), including for a node that disappeared mid-drain and for retried platform deletions. Auto-expanded replica settings are evaluated for the topology after removal. Restarts, replacements, backups, restores and credential/TLS rotations submitted before the cluster first forms fail immediately instead of waiting behind provisioning.
 
@@ -415,7 +533,7 @@ Supported upgrade paths in the advertised catalog are:
 - Same major: any newer advertised version, never a downgrade.
 - `8.19.x` → `9.1+`: currently the offered `9.4.8`, `9.5.4` or `9.5.5`, with a backup requirement. `9.0` is not offered as an 8.19 target.
 
-Take a successful fresh snapshot and resolve Upgrade Assistant/deprecation/index-compatibility issues before a major change. Apply a version-only spec patch with `karactl clusters patch search -f upgrade.json --wait`. Elasticsearch upgrades one node at a time, then Kibana upgrades with all instances stopped, followed by Logstash and APM. Mixed Kibana versions are not supported. An in-place downgrade is not rollback; use a compatible pre-upgrade snapshot in a newly rebuilt earlier-version cluster ([Elastic upgrade guidance](https://www.elastic.co/docs/deploy-manage/upgrade)).
+Take a successful fresh snapshot and resolve Upgrade Assistant/deprecation/index-compatibility issues before a major change. Apply a version-only spec patch with `karactl clusters patch search -f upgrade.json --wait`. Status and the upgrade Operation report the current component/member/step. Maintenance orders Elasticsearch nodes first (elected master last among Elasticsearch nodes), then Kibana, Logstash and APM. Kibana upgrades with all its instances stopped and has a separate interruption even when Elasticsearch remains available; mixed Kibana versions are not supported. An in-place downgrade is not rollback; use a compatible pre-upgrade snapshot in a newly rebuilt earlier-version cluster ([Elastic upgrade guidance](https://www.elastic.co/docs/deploy-manage/upgrade)).
 
 ```sh
 karactl clusters restart search --wait
@@ -432,7 +550,16 @@ while the failed target is absent.
 
 Replacement adds/joins a new node before draining/deleting the old one and needs temporary capacity. Single-node replacement is rejected; recover through snapshot restore. One-node restarts/upgrades have downtime, and two combined nodes cannot maintain quorum with one stopped. Persistent volumes are separate from runtime disks; deleting a cluster with `keepVolumes` and/or `keepBackups` is an explicit retention choice, not a backup guarantee.
 
+With only one data node, restarts/upgrades of that node interrupt Elasticsearch
+service even if dedicated masters preserve quorum; there is no replica copy on
+another data node to serve requests. Kibana restarts separately from the
+Elasticsearch nodes, so plan its own browser-access interruption too.
+
 Deleting with `keepVolumes: true` during a snapshot restore abandons that restore rather than resuming its destructive steps. On resume, Karakoram records a `RestoreAbandoned` warning, clears the restore-owned destructive setting after Elasticsearch rejoins, restores component process intent and skips an interrupted initial-restore checkpoint. **Retained data may be partially restored**; inspect it before allowing workloads and request a fresh explicit snapshot restore if needed. Automatic initial restore is not retried.
+
+Suspended member/agent observations are historical: the API marks members
+`suspended`, reports agents offline and does not present cached live health.
+Retained allocations or past green samples do not mean services are running.
 
 With `keepBackups: false`, cleanup first deletes native snapshots in **owned writable** repositories while Elasticsearch remains reachable, before removing infrastructure. Corresponding Backup inventory records are removed only after native snapshot absence is confirmed. It never deletes snapshots from read-only source repositories. If Elasticsearch is unreachable, cleanup records a `SnapshotsRetained` warning, continues infrastructure deletion and leaves snapshots and their inventory records retained; this choice is not a promise that object storage was emptied. `keepBackups: true` preserves backups and their records explicitly.
 
@@ -456,6 +583,11 @@ Elasticsearch metrics use the `karakoram_elasticsearch_` prefix:
 | `fs_available_bytes` | Available data-filesystem space |
 
 Component metrics are `karakoram_kibana_up`, `karakoram_kibana_status_level`; `karakoram_logstash_up`, `karakoram_logstash_events_in_total`, `karakoram_logstash_events_out_total`, `karakoram_logstash_jvm_heap_used_bytes`; and `karakoram_apm_up`, `karakoram_apm_requests_total`, `karakoram_apm_events_accepted_total`. Generic process CPU/RSS/disk metrics remain available. Use external alerting/history for independent availability monitoring; the control plane's own collector is not an HA monitoring service.
+
+`karakoram_kibana_status_level` uses 0 available, 1 degraded and 2 unavailable.
+Monitoring query steps may average categorical samples: fractional historical
+cluster/Kibana values describe mixed sampled states, not an additional native
+health state.
 
 ## Limitations
 

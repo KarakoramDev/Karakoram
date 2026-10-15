@@ -62,7 +62,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
-Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [RabbitMQ](rabbitmq.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
+Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [RabbitMQ](rabbitmq.md), [Elasticsearch and the Elastic Stack](elasticsearch.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md). For Elasticsearch URL/password/CA extraction and verified curl, use the [protected connection recipe](elasticsearch.md#connect-and-reveal-credentials).
 
 ## Safety and exit statuses
 
@@ -349,8 +349,19 @@ Commands absent below have no additional flags except confirmation: destructive 
 ```text
   -f, --file string      API request YAML/JSON file ('-' for stdin)
       --storage string   Backup storage (defaults to cluster configuration)
-      --type string      logical or physical (default "logical")
+      --type string      Provider backup type (default "logical")
 ```
+
+MongoDB supports `logical` and `physical`; Elasticsearch supports only
+`snapshot`. Inspect `karactl providers get elasticsearch -o json` for the running
+catalog and pass `--type snapshot` explicitly:
+
+```sh
+karactl backups create search beforechange --type snapshot --storage archive
+```
+
+See [Elasticsearch snapshots and restore](elasticsearch.md#snapshots-and-restore)
+for native repositories, retention and recovery.
 
 ### `karactl backups list`
 
@@ -426,6 +437,79 @@ defaults; the provider fills omitted settings. Use `--topology` and `--replicas`
 to supply generic overrides, and `--engine-options '{"option":true}'` or
 `--engine-options @options.json` for a provider-validated JSON object. Supported
 backup types and operations are advertised by `karactl providers get PROVIDER`.
+
+#### Elasticsearch create from a file
+
+There is no `--preset` flag. Inspect the catalog with
+`karactl providers get elasticsearch -o json` and copy a chosen `presets[].spec`
+into the request's `spec`, retaining `provider: elasticsearch`. For example,
+save this as `elasticsearch.yaml`; `9.5.5` is an advertised version in the initial
+catalog—use a version advertised by your installation:
+
+```yaml
+name: search
+spec:
+  provider: elasticsearch
+  version: 9.5.5
+  topology:
+    type: cluster
+  components:
+    engine:
+      replicas: 3
+      resources:
+        cpuMode: SHARED
+        minCpu: 1
+        maxCpu: 2
+        minRam: 2
+        maxRam: 2
+        minDisk: 5
+        maxDisk: 20
+    extra:
+      kibana:
+        replicas: 1
+      logstash:
+        replicas: 0
+      apm:
+        replicas: 0
+  engineOptions:
+    elasticsearch:
+      settings: {}
+    kibana:
+      public: false
+      settings: {}
+    logstash:
+      pipelines: []
+      persistentQueue: false
+    apm:
+      public: false
+      apiKeys: true
+  tls:
+    mode: requireTLS
+    ca: selfSigned
+  backup:
+    storage: archive
+    schedules:
+      - name: nightly
+        cron: "0 2 * * *"
+        type: snapshot
+        retainCount: 7
+        enabled: true
+```
+
+Register `archive` in the selected namespace first (or remove `backup` if no
+backups are wanted); omitted optional-component resource bounds use provider
+defaults. Then submit and observe:
+
+```sh
+karactl -n default clusters create -f elasticsearch.yaml --wait
+karactl -n default clusters status search
+karactl -n default clusters members search
+```
+
+The file, not convenience flags, supplies the provider and full request body.
+For dedicated masters, component sizing, supported settings and snapshot
+semantics, see the [Elasticsearch guide](elasticsearch.md).
+
 
 ### `karactl clusters delete`
 

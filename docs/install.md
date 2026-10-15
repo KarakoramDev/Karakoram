@@ -3,13 +3,16 @@
 # Install Karakoram on Zerops
 
 Karakoram is self-hosted inside **your existing Zerops project**, its `default`
-namespace. It operates Percona Server for MongoDB and RabbitMQ there using direct
-private networking, and can manage additional existing projects through namespaces
-and outbound relays. Zerops provides infrastructure; you operate the databases,
-brokers and the Karakoram installation. Installation is shared across providers;
-choose an engine when creating a cluster. See the [RabbitMQ guide](user-guide/rabbitmq.md)
-for broker creation, TLS, access and definitions-only backups, and read its
-[limitations](limitations.md#rabbitmq) before production use.
+namespace. It operates Percona Server for MongoDB, RabbitMQ and Elasticsearch there
+using direct private networking, and can manage additional existing projects
+through namespaces and outbound relays. Zerops provides infrastructure; you
+operate the databases, brokers and the Karakoram installation. Installation is
+shared across providers; choose an engine when creating a cluster. See the
+[RabbitMQ guide](user-guide/rabbitmq.md) for broker creation, TLS, access and
+definitions-only backups, and read its [limitations](limitations.md#rabbitmq)
+before production use. Follow the [Elasticsearch and Elastic Stack guide](user-guide/elasticsearch.md)
+for its runtime sizing, licensing, project-network connections and native snapshots;
+MongoDB/PBM procedures do not apply to either engine.
 
 ## Prerequisites
 

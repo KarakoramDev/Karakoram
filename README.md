@@ -9,9 +9,9 @@
   </a>
 </h1>
 
-<p align="center"><a href="https://karakoram.dev">karakoram.dev</a> · <a href="https://karakoram.dev/docs/">Documentation</a> · <a href="https://github.com/KarakoramDev/Karakoram/blob/main/CONTRIBUTING.md">Contributing</a></p>
+<p align="center"><a href="https://karakoram.dev">karakoram.dev</a> · <a href="#documentation-index">Documentation</a> · <a href="https://github.com/KarakoramDev/Karakoram/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
-**Self-hosted database and messaging orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB), Percona Backup for MongoDB (PBM) and RabbitMQ across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
+**Self-hosted database and messaging orchestration for Zerops.** Karakoram provisions and operates Percona Server for MongoDB (PSMDB) with Percona Backup for MongoDB (PBM), RabbitMQ, and [Elasticsearch with optional Kibana, Logstash and APM Server](docs/user-guide/elasticsearch.md), across your own Zerops projects. It provides a Go control plane, REST API, `karactl` CLI and React web UI—without Kubernetes or a hosted coordinator.
 
 You own the infrastructure, credentials, data and recovery procedures. Zerops is the infrastructure backend, not the operator of your databases. Project site: [karakoram.dev](https://karakoram.dev) · Source: [github.com/KarakoramDev/Karakoram](https://github.com/KarakoramDev/Karakoram).
 
@@ -22,6 +22,7 @@ You own the infrastructure, credentials, data and recovery procedures. Zerops is
 - S3-compatible PBM logical/physical backups, UTC schedules and count retention, PITR, in-place restore and clone.
 - CPU/RAM configuration, persistent disk growth, rolling binary upgrades/restarts and explicit FCV promotion.
 - Database users/roles, independently rotatable system accounts, keyfile authentication, generated or supplied TLS certificates and opt-in public TCP access.
+- Elasticsearch combined-node or dedicated-master topologies, native users/roles/API keys, CA-verified HTTPS, S3 snapshots/restore and optional same-version Elastic Stack components. See the [Elasticsearch guide](docs/user-guide/elasticsearch.md) for licensing and operating constraints.
 - Per-member monitoring, authenticated Prometheus output, actor-attributed events/audit activity and operations, logs, local accounts, OIDC, namespace-aware RBAC and owner-scoped API tokens.
 - Multi-project [namespaces](docs/user-guide/namespaces.md), project-scoped tokens, outbound authenticated relays and permission-gated cross-namespace restore/clone.
 - [RabbitMQ 4.3 clusters](docs/user-guide/rabbitmq.md) with persistent per-node storage, quorum-gated rolling changes, vhost/user/permission/policy administration, AMQPS, optional public management and definitions backups (**no messages or PITR**).
@@ -73,6 +74,7 @@ are repository paths, not a standalone documentation-bundle layout.
 - [Namespaces and relay lifecycle](docs/user-guide/namespaces.md)
 - [Replica sets](docs/user-guide/replica-sets.md) and [sharding](docs/user-guide/sharding.md)
 - [RabbitMQ clusters, access, TLS and definitions backups](docs/user-guide/rabbitmq.md)
+- [Elasticsearch and the Elastic Stack](docs/user-guide/elasticsearch.md): topologies, connections, native access, snapshots and maintenance
 - [Backups, PITR, restore and clone](docs/user-guide/backups-and-restore.md)
 - [Scaling and upgrades](docs/user-guide/scaling-and-upgrades.md), [database users, TLS and access](docs/user-guide/users-tls-access.md), [monitoring](docs/user-guide/monitoring.md)
 - [Web UI](docs/user-guide/web-ui.md), [RBAC and authentication](docs/user-guide/rbac-and-auth.md), [REST API](docs/user-guide/api.md), [CLI reference](docs/user-guide/cli.md)
