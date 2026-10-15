@@ -4,6 +4,12 @@
 
 Backup types and recovery capabilities come from the cluster's provider catalog (`backupTypes`). The MongoDB provider uses PBM for consistent replica-set and sharded recovery; the MongoDB/PBM workflows below apply to that provider. Zerops Local Storage live archives are **not** consistent database backups. Engine backup objects are independent of [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
 
+RabbitMQ supports only **definitions backups**, which exclude queued messages and
+provide **no PITR**. Its exports preserve broker topology and application access
+configuration; restores merge definitions rather than rewinding message data.
+Use the [RabbitMQ backup and restore guidance](rabbitmq.md#definitions-backups-and-cleanup),
+not the PBM logical/physical or PITR commands below.
+
 Restore and clone require the backup's provider to match the target cluster's
 provider. A backup without provider metadata is a legacy PSMDB backup, not a
 provider-neutral artifact. Incompatible requests are rejected before enqueueing;

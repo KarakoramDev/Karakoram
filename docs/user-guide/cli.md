@@ -2,7 +2,18 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # karactl CLI
 
-`karactl` uses Karakoram's generated REST client; it does not call Zerops directly. Build from the checkout root with `go build -o /tmp/karactl ./cmd/karactl`, or use `make build` for `bin/karactl`.
+`karactl` uses Karakoram's generated REST client; it does not call Zerops directly.
+
+## Build and install
+
+From a release checkout, build and install the CLI with Go 1.24 or newer:
+
+```sh
+go build -o /tmp/karactl ./cmd/karactl
+install -Dm755 /tmp/karactl "$HOME/.local/bin/karactl"
+```
+
+Put `$HOME/.local/bin` on `PATH`, then run `karactl --help`. Alternatively, `make build` produces `bin/karactl`. The `rabbitmq` command group requires a binary built from a release containing RabbitMQ support; connecting an older binary to a newer server does not add commands. See the [RabbitMQ walkthrough](rabbitmq.md) for first-cluster, TLS and least-privilege examples.
 
 ## Login and contexts
 
@@ -51,7 +62,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `--cookie`/`--csrf-token` and the `auth` commands support advanced cookie/OIDC API flows; normal automation should use bearer tokens. `auth oidc-login` reports a redirect, not an interactive browser/device login workflow.
 - `--insecure-skip-tls-verify` is unsafe and unnecessary with a properly trusted HTTPS certificate.
 
-Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
+Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](replica-sets.md), [sharding](sharding.md), [RabbitMQ](rabbitmq.md), [backup/restore](backups-and-restore.md), [scaling/upgrades](scaling-and-upgrades.md), [users/TLS](users-tls-access.md), [RBAC](rbac-and-auth.md), [API](api.md).
 
 ## Safety and exit statuses
 
@@ -103,13 +114,17 @@ karactl rabbitmq policies get brokers / retention
 karactl rabbitmq operator-policies delete brokers / safety
 ```
 
+Pass vhost `/` literally in CLI arguments and UI fields. A raw HTTP API client must encode the name exactly once as `%2F` in a path segment, never `%252F`; generated clients accept the raw name. See the [API path example](rabbitmq.md#access-api-cli-and-ui).
+
 A vhost body contains `name`, `tags`, optional `defaultQueueType` (`classic`, `quorum`, or `stream`), `description`, and `limits: {maxConnections: 100, maxQueues: 1000}`. A limit of `-1` means unlimited. A user body contains `name`, `tags`, and optionally `password` or `passwordHash` (mutually exclusive). Valid user tags are `management`, `policymaker`, `monitoring`, `administrator`, and `impersonator`; an empty tags array creates a non-management application user.
 
-When a user creation omits its password, `generatedPassword` is returned **once**. Store it securely; subsequent reads never return passwords or password hashes. Updates that omit both password fields preserve the existing password. The managed `karakoram`, `admin`, and `monitor` users and the reserved `guest` user cannot be modified or deleted through access commands.
+When a user creation omits its password, `generatedPassword` is returned **once**. Store it securely; subsequent reads never return passwords or password hashes. Updates that omit both password fields preserve the existing password. The protected identities `karakoram`, `admin`, `monitor` and `guest` cannot be created, modified or deleted through access commands, nor can their permission/topic-permission grants be changed there. Rotate supported system credentials with `karactl -n NS system-users rotate brokers admin` (or `karakoram`).
 
 Permission bodies contain `vhost`, `user`, and the `configure`, `write`, and `read` regular expressions. Topic permission bodies instead contain `exchange`, `write`, and `read`. Topic `get` and `delete` identify a `vhost`/`user` pair: **delete removes all topic permissions for that pair**, not only one exchange. Policy bodies contain `vhost`, `name`, `pattern`, `applyTo`, a nonnegative `priority`, and a JSON-object `definition`. Both regular and operator policy commands use this shape.
 
-Patterns use RabbitMQ's PCRE syntax, including lookarounds and backreferences. Karakoram permits patterns of at most 4096 bytes and forwards them unchanged; RabbitMQ validates their syntax. Empty vhost/topic permission patterns deny access. Regular and operator policy patterns must remain nonempty.
+Patterns use RabbitMQ's PCRE syntax, including lookarounds and backreferences. Karakoram permits patterns of at most 4096 bytes and forwards them unchanged; RabbitMQ validates their syntax. Empty vhost/topic permission patterns deny access. Regular and operator policy patterns must remain nonempty. Invalid permission regexes and rejected policy-definition keys return field errors; correct the reported regex field or `definition` rather than retrying the unchanged payload.
+
+User tags do not grant messaging permissions. See the [complete least-privilege vhost/user/grant payloads](rabbitmq.md#least-privilege-application-access), including the `amq.default` write permission required when publishing to the default exchange. Vhost audit events name the vhost under resource `rabbitmq-vhosts`; filter them with `karactl -n NS events list --cluster brokers --resource rabbitmq-vhosts`.
 
 ## Generated command tree
 
