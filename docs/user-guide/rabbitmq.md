@@ -11,6 +11,20 @@ Karakoram manages RabbitMQ on your own Zerops runtimes; Zerops does not provide 
 - Each node costs **one singleton runtime plus one Local Storage volume, at least 5 GB**. Runtime disk is separate from broker storage. Defaults per node are shared CPU, 1 core, 1 GB RAM and a 5 GB volume; validation permits RAM from 0.5 GB. Replacement temporarily adds another runtime/volume. Retained and orphaned volumes continue consuming storage and may incur charges.
 - Nodes keep stable `rabbit@<service hostname>` identities and persistent data across redeployment/restart. Member indexes are monotonic and not reused. Separate services/volumes do not guarantee separate hosts ([ADR 0016](../adr/0016-placement-anti-affinity.md)).
 
+Runtime preparation installs the repository key and Team RabbitMQ sources,
+disables package-triggered broker startup with `policy-rc.d`, then writes
+`/etc/apt/preferences.d/erlang` before the final package-index refresh and install:
+
+```text
+Package: erlang*
+Pin: version 1:27.3.4.17-1
+Pin-Priority: 1001
+```
+
+The preference covers transitive Erlang dependencies as well as the explicitly
+version-pinned packages, so newer upstream packages cannot create a mixed-version
+dependency set. Its version comes from the same broker catalog.
+
 RabbitMQ 4.3 uses **Khepri-only metadata**. Metadata replication does not replicate classic-queue messages. Karakoram defaults new queues to `quorum`, with a stable initial replica target of **3**; RabbitMQ caps it to the available cluster size when each queue is declared. This default does not depend on the seed broker's initial discovery list. Clients can explicitly select another queue type. Five/seven brokers do not automatically give each queue five/seven replicas. Use durable quorum queues, publisher confirms, acknowledgements and reconnect-capable clients for replicated messaging. One broker has no HA.
 
 ## Create and configure

@@ -43,7 +43,11 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 			sources = append(sources, "deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://"+mirror+".rabbitmq.com/"+repo+"/ubuntu/noble noble main")
 		}
 	}
-	prepare = append(prepare, "printf '%s\\n' '"+strings.Join(sources, "' '")+"' | sudo tee /etc/apt/sources.list.d/rabbitmq.list", "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d && sudo chmod 755 /usr/sbin/policy-rc.d", "sudo apt-get update")
+	prepare = append(prepare,
+		"printf '%s\\n' '"+strings.Join(sources, "' '")+"' | sudo tee /etc/apt/sources.list.d/rabbitmq.list",
+		"printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d && sudo chmod 755 /usr/sbin/policy-rc.d",
+		"printf '%s\\n' 'Package: erlang*' 'Pin: version "+catalog.ErlangVersion+"' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang",
+		"sudo apt-get update")
 	packages := []string{"rabbitmq-server=" + version + "-1"}
 	for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
 		packages = append(packages, "erlang-"+pkg+"="+catalog.ErlangVersion)
