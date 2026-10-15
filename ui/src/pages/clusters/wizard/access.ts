@@ -25,7 +25,41 @@ function cidrFamily(entry: string): 'IPV4' | 'IPV6' | undefined {
 }
 
 export function coversAllAddresses(exposure: Schemas['Exposure'] | undefined): boolean {
-  return Boolean(exposure?.public && exposure.allowlist?.some((entry) => cidrFamily(entry) && Number(entry.split('/')[1]) === 0));
+  if (!exposure?.public) return false;
+  const ranges = (exposure.allowlist ?? []).flatMap((entry) => {
+    const family = cidrFamily(entry);
+    if (!family) return [];
+    const [address, prefix] = entry.split('/');
+    const ipv4Value = (ip: string) => ip.split('.').reduce((value, octet) => (value << 8n) | BigInt(octet), 0n);
+    let value: bigint;
+    if (family === 'IPV4') {
+      value = ipv4Value(address!);
+    } else {
+      // Expand compressed and IPv4-embedded IPv6 before masking host bits.
+      const expanded = address!.replace(/\d+\.\d+\.\d+\.\d+$/, (ip) => {
+        const v = ipv4Value(ip);
+        return `${(v >> 16n).toString(16)}:${(v & 0xffffn).toString(16)}`;
+      });
+      const halves = expanded.split('::');
+      const left = halves[0] ? halves[0].split(':') : [];
+      const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+      const groups = halves.length === 2 ? [...left, ...Array<string>(8 - left.length - right.length).fill('0'), ...right] : left;
+      value = groups.reduce((v, group) => (v << 16n) | BigInt(`0x${group}`), 0n);
+    }
+    const hostBits = BigInt((family === 'IPV4' ? 32 : 128) - Number(prefix));
+    const start = (value >> hostBits) << hostBits;
+    return [{ family, start, end: start + (1n << hostBits) - 1n }];
+  });
+  for (const family of ['IPV4', 'IPV6'] as const) {
+    const sorted = ranges.filter((range) => range.family === family).sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+    let end = -1n;
+    for (const range of sorted) {
+      if (range.start > end + 1n) break;
+      if (range.end > end) end = range.end;
+    }
+    if (end === (1n << BigInt(family === 'IPV4' ? 32 : 128)) - 1n) return true;
+  }
+  return false;
 }
 
 /** Serialize acknowledgement only for the currently confirmed all-address exposure. */
@@ -46,10 +80,10 @@ export function validateExposure(exposure: Schemas['Exposure'] | undefined, allA
   return errors;
 }
 
-export function tlsErrors(tls: Schemas['TLS'] | undefined, editing = false): Partial<Record<keyof Schemas['TLS'], string>> {
+export function tlsErrors(tls: Schemas['TLS'] | undefined, storedCA?: Schemas['TLS']['ca']): Partial<Record<keyof Schemas['TLS'], string>> {
   if (!tls || tls.mode === 'disabled' || tls.ca !== 'userProvided') return {};
   const errors: Partial<Record<keyof Schemas['TLS'], string>> = {};
-  if (!editing || tls.caCertificate?.trim() || tls.caPrivateKey?.trim()) {
+  if (tls.ca !== storedCA || tls.caCertificate?.trim() || tls.caPrivateKey?.trim()) {
     if (!tls.caCertificate?.trim()) errors.caCertificate = 'CA certificate PEM is required.';
     if (!tls.caPrivateKey?.trim()) errors.caPrivateKey = 'CA signing private key PEM is required to issue member and agent certificates.';
   }
@@ -58,8 +92,8 @@ export function tlsErrors(tls: Schemas['TLS'] | undefined, editing = false): Par
   return errors;
 }
 
-export function validateTLS(tls: Schemas['TLS'] | undefined, editing = false): string[] {
-  return Object.values(tlsErrors(tls, editing));
+export function validateTLS(tls: Schemas['TLS'] | undefined, storedCA?: Schemas['TLS']['ca']): string[] {
+  return Object.values(tlsErrors(tls, storedCA));
 }
 
 /** Empty optional PEM inputs mean omission, not an invalid empty certificate pair. */

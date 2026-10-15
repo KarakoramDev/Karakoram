@@ -141,7 +141,7 @@ func TestCancellationRejectsDataMutationAndSupportsWaitingCheckpoints(t *testing
 		{domain.OperationRaiseFCV, `{"stage":"apply-fcv"}`, false},
 		{domain.OperationDelete, `{}`, false},
 	} {
-		err := p.CanCancelOperation(&domain.Operation{ID: "task", Kind: tc.kind, Checkpoint: json.RawMessage(tc.checkpoint)})
+		err := p.CanCancelOperation(context.Background(), &domain.Operation{ID: "task", Kind: tc.kind, Checkpoint: json.RawMessage(tc.checkpoint)})
 		if (err == nil) != tc.allowed {
 			t.Fatalf("%s %s: %v", tc.kind, tc.checkpoint, err)
 		}

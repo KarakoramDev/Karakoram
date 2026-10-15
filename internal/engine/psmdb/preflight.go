@@ -5,6 +5,7 @@ package psmdb
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -34,7 +35,9 @@ func (p *Provider) ValidatePITRRestore(ctx context.Context, rc *engine.Context, 
 func (p *Provider) ValidateFCV(ctx context.Context, rc *engine.Context, version string) error {
 	accepted := major(rc.Cluster.Spec.Version)
 	if version != accepted {
-		return engine.InvalidField("version", domain.ReasonInvalid, "version must equal the deployed engine major in major form (%q), not a package version", accepted)
+		err := domain.InvalidField("version", domain.ReasonInvalid, "version must equal the deployed engine major in major form (%q), not a package version", accepted)
+		err.Err = engine.ErrInvalid
+		return err
 	}
 	s, err := load(rc.Cluster)
 	if err != nil {
@@ -53,7 +56,7 @@ func (p *Provider) ValidateFCV(ctx context.Context, rc *engine.Context, version 
 		}
 		st, err := agentStatus(ctx, rc, m.Name)
 		if err != nil {
-			return blocked()
+			return fmt.Errorf("observe member %s before FCV promotion: %w: %w", m.Name, engine.ErrUnavailable, err)
 		}
 		if st.EngineVersion != rc.Cluster.Spec.Version {
 			return blocked()

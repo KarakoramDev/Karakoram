@@ -74,3 +74,42 @@ func TestProviderOmittedDefaults(t *testing.T) {
 		t.Fatal(s)
 	}
 }
+
+func TestLegacyExposureValidationOnUpdate(t *testing.T) {
+	p := New(Options{})
+	for _, exposure := range []domain.Exposure{
+		{Public: true, IPType: "IPV4", Allowlist: []string{"0.0.0.0/0"}},
+		{Public: true, IPType: "IPV6", Allowlist: []string{"::/0"}},
+		{Public: true, IPType: "IPV6", Allowlist: []string{"192.0.2.0/24"}},
+	} {
+		t.Run(exposure.IPType+exposure.Allowlist[0], func(t *testing.T) {
+			old := domain.Cluster{Name: "sample"}
+			p.ApplyDefaults(&old.Spec)
+			old.Spec.Exposure = exposure
+			next := old
+			next.Spec.Components.Engine.Replicas = 5
+			if err := p.Validate(t.Context(), &old, &next); err != nil {
+				t.Fatalf("unchanged legacy exposure: %v", err)
+			}
+			if err := p.Validate(t.Context(), nil, &next); err == nil {
+				t.Fatal("creation accepted invalid exposure")
+			}
+			next.Spec.Exposure.Allowlist = append([]string{exposure.Allowlist[0]}, "192.0.2.0/24")
+			if err := p.Validate(t.Context(), &old, &next); err == nil {
+				t.Fatal("changed legacy exposure accepted")
+			}
+		})
+	}
+}
+
+func TestCASourceSwitchRejectsMissingMaterial(t *testing.T) {
+	p := New(Options{})
+	old := domain.Cluster{Name: "sample"}
+	p.ApplyDefaults(&old.Spec)
+	next := old
+	next.Spec.TLS.CA = "userProvided"
+	err := p.Validate(t.Context(), &old, &next)
+	if err == nil || !strings.Contains(err.Error(), "CA source is immutable") {
+		t.Fatalf("source change must be rejected before secret handling: %v", err)
+	}
+}

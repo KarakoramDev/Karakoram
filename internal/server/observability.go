@@ -86,7 +86,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 			if !ok || domain.IsConvergenceOperation(op.Kind) {
 				return failDetails(409, "conflict", "Operation "+op.ID+" ("+op.Kind+") cannot be cancelled safely once Running; accepted desired state and deletion are not rolled back", map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
 			}
-			if err = canceller.CanCancelOperation(op); err != nil {
+			if err = canceller.CanCancelOperation(ctx, op); err != nil {
 				return failDetails(409, "conflict", err.Error(), map[string]any{"resource": "operation", "name": op.ID, "reason": domain.ReasonInvalidState})
 			}
 		}

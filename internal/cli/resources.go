@@ -40,7 +40,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		if strings.HasPrefix(s.path, "clusters create") {
 			c.Long = "Create a cluster. Convenience flags use PSMDB defaults; --provider defaults to psmdb.\nFor other providers, presets or optional components, submit the complete JSON/YAML body with -f.\nRun karactl providers get <provider> -o json to inspect versions, presets and components,\nthen copy a preset spec into a body containing name and spec. There is no --preset flag."
 			c.Flags().String("provider", "psmdb", "Engine provider")
-			c.Flags().String("version", "", "Exact engine version (see providers get <provider>)")
+			c.Flags().String("version", "", "Exact engine version (defaults to provider catalog default; see providers get <provider>)")
 			c.Flags().String("topology", "replicaSet", "replicaSet or sharded")
 			c.Flags().String("backup-storage", "", "Default backup storage")
 			c.Flags().StringArray("schedule", nil, "Schedule: NAME=CRON,type=logical|physical,retain=COUNT[,storage=NAME]")
@@ -110,7 +110,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	switch {
 	case strings.HasPrefix(s.path, "clusters create"):
 		if len(args) != 1 {
-			return nil, fmt.Errorf("cluster name is required without -f")
+			return nil, usageError("cluster name is required without -f")
 		}
 		return a.clusterCreate(cmd, args[0])
 	case strings.HasPrefix(s.path, "clusters scale"):
@@ -118,7 +118,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		components := map[string]any{}
 		component, _ := cmd.Flags().GetString("component")
 		if component != "engine" && component != "configServer" && component != "router" {
-			return nil, fmt.Errorf("invalid --component")
+			return nil, usageError("invalid --component")
 		}
 		c := map[string]any{}
 		if cmd.Flags().Changed("members") {
@@ -149,24 +149,24 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		if cmd.Flags().Changed("shards") {
 			n, _ := cmd.Flags().GetInt("shards")
 			if n < 1 || n > 128 {
-				return nil, fmt.Errorf("--shards must be from 1 to 128")
+				return nil, usageError("--shards must be from 1 to 128")
 			}
 			spec["topology"] = map[string]any{"shards": n}
 		}
 		if len(spec) == 0 {
-			return nil, fmt.Errorf("set a replica, shard or resource flag to scale")
+			return nil, usageError("set a replica, shard or resource flag to scale")
 		}
 		return map[string]any{"spec": spec}, nil
 	case strings.HasPrefix(s.path, "clusters upgrade"):
 		version, _ := cmd.Flags().GetString("version")
 		if version == "" {
-			return nil, fmt.Errorf("--version is required")
+			return nil, usageError("--version is required")
 		}
 		return map[string]any{"spec": map[string]any{"version": version}}, nil
 	case s.operation == "raiseClusterFCV":
 		version, _ := cmd.Flags().GetString("version")
 		if version == "" {
-			return nil, fmt.Errorf("--version is required")
+			return nil, usageError("--version is required")
 		}
 		return map[string]any{"version": version}, nil
 	case s.operation == "replaceCluster":
@@ -181,7 +181,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		}
 		typ, _ := cmd.Flags().GetString("type")
 		if typ != "logical" && typ != "physical" {
-			return nil, fmt.Errorf("backup type must be logical or physical")
+			return nil, usageError("backup type must be logical or physical")
 		}
 		storage, _ := cmd.Flags().GetString("storage")
 		if storage == "" {
@@ -192,7 +192,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			storage, _ = nested(cluster, "spec", "backup", "storage").(string)
 		}
 		if storage == "" {
-			return nil, fmt.Errorf("--storage or cluster backup.storage is required")
+			return nil, usageError("--storage or cluster backup.storage is required")
 		}
 		return map[string]any{"name": name, "type": typ, "storage": storage}, nil
 	case s.operation == "createRestore":
@@ -218,7 +218,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	case s.operation == "checkPermission":
 		resource, _ := cmd.Flags().GetString("resource")
 		if resource == "" {
-			return nil, fmt.Errorf("--resource is required")
+			return nil, usageError("--resource is required")
 		}
 		action, _ := cmd.Flags().GetString("action")
 		object, _ := cmd.Flags().GetString("object")
@@ -229,7 +229,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		}
 		return body, nil
 	default:
-		return nil, fmt.Errorf("--file is required")
+		return nil, usageError("--file is required")
 	}
 }
 
@@ -249,28 +249,32 @@ func resourceFlags(cmd *cobra.Command, defaults bool) map[string]any {
 }
 func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	version, _ := cmd.Flags().GetString("version")
-	if version == "" {
-		return nil, fmt.Errorf("--version is required without -f")
-	}
 	provider, _ := cmd.Flags().GetString("provider")
 	topology, _ := cmd.Flags().GetString("topology")
 	if topology != "replicaSet" && topology != "sharded" {
-		return nil, fmt.Errorf("topology must be replicaSet or sharded")
+		return nil, usageError("topology must be replicaSet or sharded")
 	}
 	mode, _ := cmd.Flags().GetString("cpu-mode")
 	if mode != "SHARED" && mode != "DEDICATED" {
-		return nil, fmt.Errorf("CPU mode must be SHARED or DEDICATED")
+		return nil, usageError("CPU mode must be SHARED or DEDICATED")
 	}
 	members, _ := cmd.Flags().GetInt("members")
 	if members < 1 {
-		return nil, fmt.Errorf("members must be positive")
+		return nil, usageError("members must be positive")
 	}
 	components := map[string]any{"engine": map[string]any{"replicas": members, "resources": resourceFlags(cmd, true)}}
 	t := map[string]any{"type": topology}
+	if topology != "sharded" {
+		for _, flag := range []string{"shards", "config-servers", "routers"} {
+			if cmd.Flags().Changed(flag) {
+				return nil, usageError("--%s requires --topology sharded", flag)
+			}
+		}
+	}
 	if topology == "sharded" {
 		shards, _ := cmd.Flags().GetInt("shards")
 		if shards < 1 || shards > 128 {
-			return nil, fmt.Errorf("--shards must be from 1 to 128")
+			return nil, usageError("--shards must be from 1 to 128")
 		}
 		t["shards"] = shards
 		for flag, key := range map[string]string{"config-servers": "configServer", "routers": "router"} {
@@ -280,19 +284,25 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	}
 	tlsMode, _ := cmd.Flags().GetString("tls-mode")
 	if tlsMode != "requireTLS" && tlsMode != "preferTLS" && tlsMode != "disabled" {
-		return nil, fmt.Errorf("invalid TLS mode")
+		return nil, usageError("invalid TLS mode")
 	}
 	public, _ := cmd.Flags().GetBool("public")
 	allow, _ := cmd.Flags().GetStringSlice("allow")
 	ipType, _ := cmd.Flags().GetString("ip-type")
 	monitoring, _ := cmd.Flags().GetBool("monitoring")
-	spec := map[string]any{"provider": provider, "version": version, "topology": t, "components": components, "tls": map[string]any{"mode": tlsMode, "ca": "selfSigned"}, "exposure": map[string]any{"public": public, "allowlist": allow, "ipType": ipType}, "monitoring": map[string]any{"enabled": monitoring}}
+	spec := map[string]any{"provider": provider, "topology": t, "components": components, "tls": map[string]any{"mode": tlsMode, "ca": "selfSigned"}, "exposure": map[string]any{"public": public, "allowlist": allow, "ipType": ipType}, "monitoring": map[string]any{"enabled": monitoring}}
+	if version != "" {
+		spec["version"] = version
+	}
 	storage, _ := cmd.Flags().GetString("backup-storage")
 	pitr, _ := cmd.Flags().GetBool("pitr")
 	schedules, _ := cmd.Flags().GetStringArray("schedule")
 	span, _ := cmd.Flags().GetInt("oplog-span-minutes")
 	if storage != "" || pitr || len(schedules) > 0 {
-		b := map[string]any{"storage": storage, "pitr": map[string]any{"enabled": pitr, "oplogSpanMinutes": span}}
+		b := map[string]any{"pitr": map[string]any{"enabled": pitr, "oplogSpanMinutes": span}}
+		if storage != "" {
+			b["storage"] = storage
+		}
 		parsed := []any{}
 		for _, schedule := range schedules {
 			v, err := parseSchedule(schedule, storage)
@@ -309,7 +319,7 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	if backup != "" || point != "" {
 		sourceCluster, _ := cmd.Flags().GetString("source-cluster")
 		if sourceCluster == "" {
-			return nil, fmt.Errorf("--source-cluster is required")
+			return nil, usageError("--source-cluster is required")
 		}
 		source, err := restoreSource(sourceCluster, backup, point)
 		if err != nil {
@@ -336,21 +346,21 @@ func parseSchedule(input, storage string) (map[string]any, error) {
 	parts := strings.Split(input, ",")
 	name, expression, ok := strings.Cut(parts[0], "=")
 	if !ok || name == "" {
-		return nil, fmt.Errorf("schedule must begin NAME=CRON")
+		return nil, usageError("schedule must begin NAME=CRON")
 	}
 	if _, err := cron.ParseStandard(expression); err != nil {
-		return nil, fmt.Errorf("schedule %s: %w", name, err)
+		return nil, usageError("schedule %s: %s", name, err)
 	}
 	result := map[string]any{"name": name, "cron": expression, "type": "logical", "retainCount": 7, "enabled": true, "storage": storage}
 	for _, part := range parts[1:] {
 		key, value, ok := strings.Cut(part, "=")
 		if !ok {
-			return nil, fmt.Errorf("invalid schedule option %q", part)
+			return nil, usageError("invalid schedule option %q", part)
 		}
 		switch key {
 		case "type":
 			if value != "logical" && value != "physical" {
-				return nil, fmt.Errorf("invalid schedule type %q", value)
+				return nil, usageError("invalid schedule type %q", value)
 			}
 			result[key] = value
 		case "storage":
@@ -358,21 +368,21 @@ func parseSchedule(input, storage string) (map[string]any, error) {
 		case "retain":
 			n, err := strconv.Atoi(value)
 			if err != nil || n < 1 {
-				return nil, fmt.Errorf("schedule retention must be positive")
+				return nil, usageError("schedule retention must be positive")
 			}
 			result["retainCount"] = n
 		default:
-			return nil, fmt.Errorf("unknown schedule option %q", key)
+			return nil, usageError("unknown schedule option %q", key)
 		}
 	}
 	if result["storage"] == "" {
-		return nil, fmt.Errorf("schedule requires a backup storage")
+		return nil, usageError("schedule requires a backup storage")
 	}
 	return result, nil
 }
 func restoreSource(cluster, backup, point string) (map[string]any, error) {
 	if (backup == "") == (point == "") {
-		return nil, fmt.Errorf("exactly one backup or point-in-time source is required")
+		return nil, usageError("exactly one backup or point-in-time source is required")
 	}
 	s := map[string]any{"sourceCluster": cluster}
 	if backup != "" {
@@ -380,7 +390,7 @@ func restoreSource(cluster, backup, point string) (map[string]any, error) {
 	} else {
 		t, err := time.Parse(time.RFC3339, point)
 		if err != nil {
-			return nil, fmt.Errorf("restore time: %w", err)
+			return nil, usageError("restore time: %s", err)
 		}
 		s["pitrTime"] = t.UTC().Format(time.RFC3339)
 	}

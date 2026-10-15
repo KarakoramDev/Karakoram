@@ -130,7 +130,13 @@ karactl clusters raise-fcv demo --version 8.0 --wait
 karactl clusters status demo
 ```
 
-FCV uses the major form (`8.0`), not the package version (`8.0.32-14`). The API rejects package-form or non-deployed-major `version` values with HTTP **400** and a field-specific message naming the accepted form, before enqueueing an operation. Promotion during an unfinished binary rollout returns **409** with reason `invalid_state`; wait until every member reports the exact desired package version and convergence finishes. The operation rechecks deployment and uses confirmation for 7.0+; a failed run-time prerequisite ends the operation as **Failed** with a reason, not an eternal retry. Retained FCV is for compatibility observation, not a promise of supported binary rollback. Karakoram rejects downgrades regardless of retained FCV; follow the target engine's supported recovery process and use tested backups when necessary.
+FCV uses the major form (`8.0`), not the package version (`8.0.32-14`). The API rejects package-form or non-deployed-major `version` values with HTTP **400** and a field-specific message naming the accepted form, before enqueueing an operation. Promotion during an unfinished binary rollout returns **409** with reason `invalid_state`; wait until every member reports the exact desired package version and convergence finishes. The operation rechecks deployment and uses confirmation for 7.0+; a genuine run-time validation failure ends the operation as **Failed** with a reason. Transient agent or relay errors retain their diagnostic cause and retry within the operation's bounded consecutive-failure budget instead of being reported as a binary-rollout mismatch. Retained FCV is for compatibility observation, not a promise of supported binary rollback. Karakoram rejects downgrades regardless of retained FCV; follow the target engine's supported recovery process and use tested backups when necessary.
+
+Before acceptance, a temporary agent/relay observation failure returns HTTP
+**503** with code `unavailable` and a retry hint; no FCV operation is enqueued.
+Restore connectivity and retry the same request. This differs from a **409**
+rollout-state conflict and from transient failures after a **202** acceptance,
+which are retried by the already-created operation.
 
 ### Cancel and recover a stuck FCV request
 
@@ -197,3 +203,10 @@ Restarts checkpoint per-member progress, check health/quorum and process seconda
 **A one-member replica set is unavailable while its only member restarts or upgrades.** There is no secondary or primary failover to preserve availability; plan an application maintenance window for singleton binary upgrades, explicit restarts and resource changes that require member replacement/restart.
 
 `engineConfig` accepts validated YAML overrides, but provider-owned networking/authentication/TLS/replication/sharding/process/logging/dbpath/cache settings cannot be replaced. Do not use overrides to bypass orchestration safety. Use API-shaped patch files for supported advanced settings and inspect validation errors; see [API](api.md) and [operations](../operations.md).
+
+If a member replacement reaches its operation limit during old-member removal,
+the operation fails but ordinary convergence finishes old-member removal before
+promoting the caught-up replacement on a later pass. This preserves the
+seven-voter limit even after failure cleanup. Inspect replica-set membership and
+voting state before raising FCV; a failed replacement operation does not roll
+back its desired member changes.

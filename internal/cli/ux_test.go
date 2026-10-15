@@ -45,6 +45,106 @@ func TestUsageExitCodesAndOfflineCompletion(t *testing.T) {
 	}
 }
 
+func TestFlagValidationExitCodes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/clusters/demo" {
+			t.Errorf("invalid flags submitted a request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"name":"demo","spec":{}}`)
+	}))
+	defer server.Close()
+	cases := [][]string{
+		{"health", "--output", "bogus"},
+		{"health", "--server", "not-a-url"},
+		{"health", "--context", "missing"},
+		{"health", "--cookie", "invalid"},
+		{"clusters", "create"},
+		{"clusters", "scale", "demo", "--component", "invalid"},
+		{"clusters", "scale", "demo"},
+		{"clusters", "upgrade", "demo"},
+		{"clusters", "raise-fcv", "demo"},
+		{"backups", "create", "demo", "--type", "invalid"},
+		{"backups", "create", "demo"},
+		{"restores", "create", "demo"},
+		{"restores", "create", "demo", "--backup", "base", "--time", "2026-01-01T00:00:00Z"},
+		{"restores", "create", "demo", "--time", "invalid"},
+		{"rbac", "can"},
+		{"storages", "create"},
+		{"namespaces", "create"},
+		{"namespaces", "create", "--token-file", "-"},
+		{"namespaces", "rotate-token", "demo"},
+		{"namespaces", "update", "demo"},
+		{"events", "list", "--order", "invalid"},
+	}
+	for _, flags := range [][]string{
+		{"--topology", "invalid"},
+		{"--cpu-mode", "invalid"},
+		{"--members", "0"},
+		{"--tls-mode", "invalid"},
+		{"--from-backup", "base"},
+		{"--source-cluster", "source", "--from-pitr", "invalid"},
+		{"--schedule", "invalid"},
+		{"--schedule", "daily=invalid"},
+		{"--schedule", "daily=0 1 * * *,invalid"},
+		{"--schedule", "daily=0 1 * * *,type=invalid"},
+		{"--schedule", "daily=0 1 * * *,retain=0"},
+		{"--schedule", "daily=0 1 * * *,other=value"},
+		{"--schedule", "daily=0 1 * * *"},
+	} {
+		cases = append(cases, append([]string{"clusters", "create", "demo", "--version", "8.0"}, flags...))
+	}
+	for _, shards := range []string{"0", "129"} {
+		cases = append(cases,
+			[]string{"clusters", "create", "demo", "--version", "8.0", "--topology", "sharded", "--shards", shards},
+			[]string{"clusters", "scale", "demo", "--shards", shards},
+		)
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			code, out, stderr := runCLI(t, server.URL, "test-token\n", false, args...)
+			if code != 2 || out != "" || !strings.Contains(stderr, "Usage:") {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, out, stderr)
+			}
+		})
+	}
+}
+
+func TestTableNumbersUseDecimalNotation(t *testing.T) {
+	for _, tt := range []struct {
+		value any
+		want  string
+	}{
+		{float64(1234567890), "1234567890"},
+		{float64(0.00000001), "0.00000001"},
+		{float64(-1234567890.25), "-1234567890.25"},
+		{float64(0), "0"},
+		{map[string]any{"bytes": float64(1234567890)}, "bytes=1234567890"},
+		{[]any{float64(1234567890), float64(0.00000001)}, "1234567890, 0.00000001"},
+	} {
+		if got := cell(tt.value); got != tt.want {
+			t.Errorf("cell(%v)=%q want=%q", tt.value, got, tt.want)
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[{"id":1234567890,"size":1234567890.25,"fraction":0.00000001}]}`)
+	}))
+	defer server.Close()
+	code, out, stderr := runCLI(t, server.URL, "", false, "events", "list")
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	for _, want := range []string{"1234567890", "1234567890.25", "0.00000001"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table output %q missing %q", out, want)
+		}
+	}
+	if strings.Contains(out, "e+") || strings.Contains(out, "e-") {
+		t.Errorf("scientific notation in table output: %q", out)
+	}
+}
+
 func TestServerErrorExitCodesAndDetails(t *testing.T) {
 	for status, want := range map[int]int{400: 6, 401: 5, 403: 5, 404: 3, 409: 4, 422: 6, 500: 1, 504: 7} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
@@ -311,7 +411,9 @@ func TestReplacementFailureMessageAndRepeatedDelete(t *testing.T) {
 		case strings.Contains(r.URL.Path, "operations"):
 			fmt.Fprint(w, `{"id":"op-one","phase":"Failed","message":"Single-member clusters cannot replace members; use restore"}`)
 		case r.Method == "DELETE":
+			w.Header().Set("Karakoram-Operation-Id", "delete-existing")
 			w.WriteHeader(202)
+			fmt.Fprint(w, `{"id":"delete-existing","type":"delete","phase":"Running","message":"Deleting resources"}`)
 		default:
 			fmt.Fprint(w, `{"name":"demo","status":{"phase":"Deleting"}}`)
 		}
@@ -321,9 +423,40 @@ func TestReplacementFailureMessageAndRepeatedDelete(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "Single-member clusters cannot replace members") {
 		t.Fatalf("failure code=%d stderr=%q", code, stderr)
 	}
-	code, _, stderr = runCLI(t, server.URL, "", false, "clusters", "delete", "demo")
-	if code != 0 || !strings.Contains(stderr, "already being deleted") {
-		t.Fatalf("delete code=%d stderr=%q", code, stderr)
+	code, out, stderr := runCLI(t, server.URL, "", false, "clusters", "delete", "demo", "--yes")
+	if code != 0 || !strings.Contains(stderr, "already being deleted") || !strings.Contains(out, "delete-existing") || !strings.Contains(out, "Running") {
+		t.Fatalf("delete code=%d stdout=%q stderr=%q", code, out, stderr)
+	}
+}
+
+func TestRepeatedDeleteWaitsForReturnedOperation(t *testing.T) {
+	waited := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v1/operations/delete-existing":
+			waited = true
+			fmt.Fprint(w, `{"id":"delete-existing","type":"delete","phase":"Succeeded","message":"Deletion complete"}`)
+		case r.Method == "DELETE":
+			w.Header().Set("Karakoram-Operation-Id", "delete-existing")
+			w.WriteHeader(202)
+			fmt.Fprint(w, `{"id":"delete-existing","type":"delete","phase":"Running","message":"Deleting resources"}`)
+		case waited:
+			w.WriteHeader(404)
+			fmt.Fprint(w, `{"code":"not_found","message":"Cluster deleted"}`)
+		default:
+			fmt.Fprint(w, `{"name":"demo","status":{"phase":"Deleting"}}`)
+		}
+	}))
+	defer server.Close()
+	code, out, stderr := runCLI(t, server.URL, "", false, "clusters", "delete", "demo", "--yes", "--wait", "--timeout", "1s")
+	if code != 0 || !waited || !strings.Contains(out, "deleted") {
+		t.Fatalf("code=%d waited=%t stdout=%q stderr=%q", code, waited, out, stderr)
+	}
+	for _, message := range []string{"already being deleted", "operation delete-existing", "Deletion complete"} {
+		if !strings.Contains(stderr, message) {
+			t.Errorf("stderr %q missing %q", stderr, message)
+		}
 	}
 }
 

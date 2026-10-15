@@ -29,11 +29,12 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 
 ## Requests, output and waits
 
-- `-o table` is default; nested values are summarized rather than embedded JSON. Provider tables summarize versions and preset names; status conditions appear as rows and member resources as named values. Use `-o json`/`-o yaml` for the unchanged full structured response.
+- `-o table` is default; nested values are summarized rather than embedded JSON, and numbers use decimal rather than scientific notation. Provider tables summarize versions and preset names; status conditions appear as rows and member resources as named values. Use `-o json`/`-o yaml` for the unchanged full structured response.
 - `karactl openapi > openapi.yaml` downloads the running server's authoritative OpenAPI document as raw YAML. This public endpoint does not require login.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. Use protected input for secret fields. When supplied, the file defines the request body instead of convenience body flags.
 - Cluster **create** files contain `name` and `spec`; **edit** replaces the full `spec` and can open the configured editor when no file is supplied; **patch/scale/upgrade** files have `{spec: {...}}` merge-patch shape. Arrays such as schedules are replaced, not appended.
-- Convenience create flags default to the `psmdb` provider and its topology/resource defaults. For another provider, presets or optional components, run `karactl providers get <provider> -o json`, copy a preset's `spec` into a JSON/YAML body with `name` and `spec`, customize components, then submit with `clusters create -f FILE`. There is no `--preset` flag.
+- Convenience create flags default to the `psmdb` provider and its topology/resource defaults. `--version` is optional: when omitted or empty, the CLI omits `spec.version` so the server applies the selected provider's catalog default. Supply `--version VERSION` to pin an exact version. For another provider, presets or optional components, run `karactl providers get <provider> -o json`, copy a preset's `spec` into a JSON/YAML body with `name` and `spec`, customize components, then submit with `clusters create -f FILE`. There is no `--preset` flag.
+- `clusters create --backup-storage NAME` sets the default backup destination. A `--schedule` can instead supply its own `storage=NAME`; without `--backup-storage`, the CLI omits the optional default storage field, including for `--pitr` alone. Each schedule still needs either its own storage or the default, and the server validates PITR prerequisites.
 - `rbac policy set -f FILE` is the exception: the file contains raw policy CSV.
 - `clusters connection NAME` prints a password-free endpoint/TLS summary without requiring credentials-read permission. CA availability is not checked on this path; TLS-disabled clusters report that no CA is configured. Add `--reveal` to display sensitive engine credentials, copyable URIs and the CA as a multiline PEM block. Do not capture revealed output in logs.
 - `karactl clusters ca NAME > ca.pem` exports only the PEM to stdout, regardless of output format. It uses the existing connection API and requires its separate `cluster-credentials:read` permission. Use `-n NAMESPACE` as with other cluster commands; an unavailable CA is an error.
@@ -55,7 +56,12 @@ Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](r
 
 Deleting clusters, backups, storages, API tokens, accounts, namespaces, database users or roles prompts **Type the name to confirm** when stdin is a terminal. The same safeguard applies to in-place restores, member replacement, compatibility-version raises, system-user/TLS/namespace-token rotation and account password resets. For compound identities, type the final argument (the backup/member/user/role); in-place restore asks for the target cluster. `--yes` / `-y` skips confirmation. Non-terminal stdin does not prompt, preserving automation behavior. Declining or reaching EOF without confirmation exits non-zero without submitting the mutation. Repeated deletion of a cluster already Deleting reports that deletion is already underway; it does not imply that cleanup has finished.
 
-Every failure exits non-zero, including a successful HTTP storage-verification response with `verified: false`. Output retains the verification message. Server errors print their human message plus available field, reason and resource details on stderr; command-line mistakes also print usage on stderr.
+With unchanged `--keep-volumes` and `--keep-backups` options, a repeated cluster
+delete returns the existing in-flight Operation; output and `--wait` use that
+same operation ID. Changing either option supersedes the previous tracking
+record with a new Operation.
+
+Every failure exits non-zero, including a successful HTTP storage-verification response with `verified: false`. Output retains the verification message. Server errors print their human message plus available field, reason and resource details on stderr; command-line mistakes also print usage on stderr. Locally rejected flag values (including `--output` and `--shards` bounds, and `--shards`, `--config-servers` or `--routers` on `clusters create` without `--topology sharded`) and missing required convenience flags exit with status 2; request bodies rejected by the server exit with status 6.
 
 | Exit status | Meaning |
 | --- | --- |
@@ -341,7 +347,7 @@ Commands absent below have no additional flags except confirmation: destructive 
       --timeout duration         Maximum wait duration (default 30m0s)
       --tls-mode string          disabled, preferTLS or requireTLS (default "requireTLS")
       --topology string          replicaSet or sharded (default "replicaSet")
-      --version string           Exact engine version (see providers get <provider>)
+      --version string           Exact engine version (defaults to provider catalog default; see providers get <provider>)
       --wait                     Wait for operation completion and observed cluster generation
 ```
 

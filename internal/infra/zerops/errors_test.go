@@ -69,8 +69,8 @@ func TestRecordedProcessDiagnostics(t *testing.T) {
 		if err != nil || !state.Failed || state.Message == "" || strings.Contains(state.Message, "See metadata") {
 			t.Fatalf("process diagnostic: %+v %v", state, err)
 		}
-		if !strings.Contains(state.Message, "containerName") && !strings.Contains(state.Message, "minDisk") {
-			t.Fatalf("metadata omitted: %s", state.Message)
+		if !strings.Contains(state.Message, "containerAction") && !strings.Contains(state.Message, "minDisk") {
+			t.Fatalf("safe diagnostic omitted: %s", state.Message)
 		}
 	}
 }
@@ -91,6 +91,43 @@ func TestDiagnosticRedactionAndBounds(t *testing.T) {
 	e.Meta = json.RawMessage(`{"reason":"` + strings.Repeat("a short reason ", 300) + `"}`)
 	if detail := e.Error(); len(detail) > diagnosticLimit || !strings.HasSuffix(detail, "...") {
 		t.Fatalf("unbounded detail (%d): %s", len(detail), detail)
+	}
+}
+
+func TestDiagnosticMetadataExportsOnlySafeKeys(t *testing.T) {
+	for _, key := range []string{"pwd", "pass", "jwt", "key", "hash", "host", "email", "containerName", "unexpected"} {
+		t.Run(key, func(t *testing.T) {
+			meta, err := json.Marshal(map[string]any{
+				"field": "minDisk", "reason": "Value must be at least 5",
+				key: "private-value-123",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := &APIError{StatusCode: 400, Code: "deployFailed", Message: "See metadata", Meta: meta}
+			process, err := json.Marshal(map[string]any{"code": "deployFailed", "metadata": json.RawMessage(meta)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, detail := range []string{e.Error(), processErrorSummary(process, "")} {
+				if strings.Contains(detail, "private-value-123") || strings.Contains(detail, key+":") {
+					t.Fatalf("unapproved metadata escaped: %s", detail)
+				}
+				if !strings.Contains(detail, "field: minDisk") || !strings.Contains(detail, "reason: Value must be at least 5") {
+					t.Fatalf("safe diagnostic disappeared: %s", detail)
+				}
+			}
+		})
+	}
+	meta := json.RawMessage(`{"minDisk":5,"maxDisk":100,"min":1,"max":10,"minFreeResource.memoryGBytes":["Value must have no more than 3 decimal places"],"unexpected":{"reason":"private-nested-value"}}`)
+	detail := errorSummary("invalidResource", "", meta, "")
+	for _, want := range []string{"minDisk: 5", "maxDisk: 100", "min: 1", "max: 10", "minFreeResource.memoryGBytes: Value must have no more than 3 decimal places"} {
+		if !strings.Contains(detail, want) {
+			t.Fatalf("validation limit disappeared: %s", detail)
+		}
+	}
+	if strings.Contains(detail, "private-nested-value") {
+		t.Fatalf("unapproved nested metadata escaped: %s", detail)
 	}
 }
 

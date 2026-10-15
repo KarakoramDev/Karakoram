@@ -31,15 +31,16 @@ func (e *attributedError) Unwrap() error { return e.error }
 
 // Options configures serialized reconciliation and retry delays.
 type Options struct {
-	Store               *store.Store
-	Registry            *engine.Registry
-	Namespaces          engine.Namespaces
-	Context             engine.Context
-	ResyncInterval      time.Duration
-	BackoffMin          time.Duration
-	BackoffMax          time.Duration
-	OperationRetryLimit int
-	OperationTimeouts   map[string]time.Duration
+	Store                 *store.Store
+	Registry              *engine.Registry
+	Namespaces            engine.Namespaces
+	Context               engine.Context
+	ResyncInterval        time.Duration
+	BackoffMin            time.Duration
+	BackoffMax            time.Duration
+	OperationRetryLimit   int
+	OperationTimeouts     map[string]time.Duration
+	FailureCleanupTimeout time.Duration
 }
 type worker struct {
 	trigger chan struct{}
@@ -71,6 +72,9 @@ func New(opts Options) (*Manager, error) {
 	}
 	if opts.OperationRetryLimit <= 0 {
 		opts.OperationRetryLimit = DefaultOperationRetryLimit
+	}
+	if opts.FailureCleanupTimeout <= 0 {
+		opts.FailureCleanupTimeout = DefaultFailureCleanupTimeout
 	}
 	if opts.BackoffMin > opts.BackoffMax {
 		opts.BackoffMin = opts.BackoffMax
@@ -267,7 +271,6 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
 	actor := "reconciler"
 	operation := ""
-	var trackingDeadline time.Time
 	defer func() {
 		if err != nil && !errors.Is(err, errClusterGone) {
 			err = &attributedError{error: err, actor: actor, operation: operation}
@@ -295,7 +298,6 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			}
 			continue
 		}
-		trackingDeadline = op.CreatedAt.Add(m.operationTimeout(op))
 		operation = op.ID
 		if op.Phase == domain.PhasePending {
 			now := m.opts.Context.Clock.Now()
@@ -305,9 +307,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			}
 		}
 	}
+	var convergenceErr error
+	convergenceAttempted := false
 	defer func() {
 		if !errors.Is(err, errClusterGone) {
-			err = errors.Join(err, m.trackingOperations(ctx, c, err))
+			err = errors.Join(err, m.trackingOperations(ctx, c, convergenceErr, convergenceAttempted))
 		}
 	}()
 	// Capture attribution before synchronization advances ObservedGeneration.
@@ -329,12 +333,8 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	rc.Cluster = c
 	rc.Events = m
 	previous := c.Status.Phase
-	providerCtx := ctx
-	if !trackingDeadline.IsZero() {
-		var cancel context.CancelFunc
-		providerCtx, cancel = context.WithTimeout(ctx, trackingDeadline.Sub(rc.Clock.Now()))
-		defer cancel()
-	}
+	// Convergence records bound observation, not the platform calls needed to
+	// finish applying desired state or cleaning up after a failed record.
 	if c.Deleting {
 		c.Status.Phase = domain.PhaseDeleting
 		if c.Status.Message == "" {
@@ -343,10 +343,13 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		if err = m.state(ctx, c, previous); err != nil {
 			return 0, err
 		}
-		if err = m.resolve(providerCtx, &rc); err != nil {
+		convergenceAttempted = true
+		if err = m.resolve(ctx, &rc); err != nil {
+			convergenceErr = err
 			return 0, err
 		}
-		done, cleanupErr := p.Cleanup(providerCtx, &rc, c.DeleteOptions)
+		done, cleanupErr := p.Cleanup(ctx, &rc, c.DeleteOptions)
+		convergenceErr = cleanupErr
 		if err = m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 			return 0, err
 		}
@@ -388,7 +391,8 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if !errors.Is(err, store.ErrNotFound) {
 		return 0, err
 	}
-	result, syncErr := m.synchronize(providerCtx, p, &rc)
+	result, syncErr := m.synchronize(ctx, p, &rc)
+	convergenceErr, convergenceAttempted = syncErr, true
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}
@@ -504,9 +508,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	ctx = context.WithValue(ctx, operationEventKey{}, op.ID)
 	c := rc.Cluster
 	previous := c.Status.Phase
-	deadline := op.CreatedAt.Add(m.operationTimeout(op))
-	callCtx, cancel := context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
-	defer cancel()
+	callCtx := ctx
 	var opResult engine.OpResult
 	var opErr error
 	if op.Kind == domain.OperationRestore {
@@ -518,15 +520,45 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			previous = domain.PhaseRestoring
 		}
 	}
-	if m.operationFailure(op, nil) {
+	terminal := false
+	if op.Step != failureCleanupStep {
+		terminal = m.failQueueOperation(p, op, nil)
+	}
+	failing := op.Step == failureCleanupStep
+	cleanupExpired := false
+	if failing {
+		// Legacy cleanup records receive a fresh, durable recovery window.
+		if op.FailureCleanupStartedAt == nil {
+			stamp := rc.Clock.Now()
+			op.FailureCleanupStartedAt = &stamp
+		}
+		deadline := op.FailureCleanupStartedAt.Add(m.opts.FailureCleanupTimeout)
+		cleanupExpired = !rc.Clock.Now().Before(deadline)
+		if cleanupExpired {
+			terminal = true
+			op.Message = fmt.Sprintf("%s; recovery exceeded its %s cleanup deadline at compensation step %q; manual recovery is required", op.LastError, m.opts.FailureCleanupTimeout, compensationStep(op))
+		} else {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
+			defer cancel()
+		}
+	}
+	// Compensation has its own window, not the exhausted work deadline.
+	if !terminal && !failing {
+		deadline := op.CreatedAt.Add(m.operationTimeout(op))
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
+		defer cancel()
+	}
+	if terminal {
 		opResult.Done = true
 		opErr = errors.New(op.Message)
 	} else if err := m.resolve(callCtx, rc); err != nil {
 		opErr = err
-	} else if op.CancelRequested {
+	} else if failing || op.CancelRequested {
 		if canceller, ok := p.(engine.OperationCanceller); ok {
 			opResult, opErr = canceller.CancelOperation(callCtx, rc, op)
-			if opResult.Done && opErr == nil {
+			if opResult.Done && opErr == nil && !failing {
 				op.Phase = domain.PhaseCancelled
 			}
 		} else {
@@ -559,9 +591,24 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 			c.Status.Message = "Restoring: " + opErr.Error()
 		}
 	}
-	if !opResult.Done && m.operationFailure(op, opErr) {
-		opResult.Done = true
-		opErr = errors.New(op.Message)
+	if opErr == nil && !terminal {
+		op.Failures = 0
+	}
+	if failing && !cleanupExpired {
+		// Cleanup errors retain the checkpoint and retry with worker backoff,
+		// including errors that would be permanent during ordinary work.
+		opResult.Done = opResult.Done && opErr == nil
+		if opResult.Done {
+			opErr = errors.New(op.LastError)
+			op.Message = op.LastError
+		} else {
+			op.Step = failureCleanupStep
+		}
+	} else if !opResult.Done {
+		if m.failQueueOperation(p, op, opErr) {
+			opResult.Done = true
+			opErr = errors.New(op.Message)
+		}
 	}
 	if opResult.Done {
 		if op.Phase != domain.PhaseCancelled {
@@ -590,7 +637,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	// using its new checkpoint rather than unrelated ordinary convergence.
 	var result engine.Result
 	var syncErr error
-	if policy, ok := p.(engine.OperationSyncPolicy); ok && !opResult.Done && opErr == nil && policy.SyncDuringOperation(op) {
+	if policy, ok := p.(engine.OperationSyncPolicy); ok && op.Step != failureCleanupStep && !opResult.Done && opErr == nil && policy.SyncDuringOperation(op) {
 		result, syncErr = m.synchronize(ctx, p, rc)
 	}
 	// Persist even on provider error, atomically with the state referenced by

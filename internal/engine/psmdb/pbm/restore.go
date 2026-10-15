@@ -203,6 +203,13 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		cp.Step, cp.Index = "routers-off", 0
 	case "routers-off":
+		if cp.Cancelling {
+			if cp.RouterOp != nil {
+				return routerService(ctx, env, &cp, "stop")
+			}
+			cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
+			return result(cp, false), nil
+		}
 		if cp.Index < len(env.Routers) {
 			changed, e := desiredStopped(env, env.Routers[cp.Index], "mongos", true)
 			if e != nil {
@@ -280,6 +287,7 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		switch desc.Status {
 		case "done":
+			cp.Failure = ""
 		case "error", "partlyDone", "partly-done", "cancelled", "canceled":
 			cp.Failure = desc.Error
 			if cp.Failure == "" {

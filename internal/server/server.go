@@ -149,6 +149,8 @@ func (s *Server) failure(err error) response {
 		return failDetails(409, "conflict", resErr.Message, details)
 	}
 	switch {
+	case errors.Is(err, engine.ErrUnavailable):
+		return fail(503, "unavailable", "Database agent or relay is temporarily unavailable; retry the request after connectivity recovers")
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
 	case errors.Is(err, store.ErrConflict), errors.Is(err, engine.ErrConflict), errors.Is(err, engine.ErrNotSupported):
@@ -191,6 +193,33 @@ func request(ctx context.Context) *http.Request {
 func (s *Server) allowed(ctx context.Context, res, act, obj string) bool {
 	p := principal(ctx)
 	return p != nil && s.RBAC.Can(p.Subjects, res, act, obj)
+}
+
+// namespaceAllowed checks grants without looking up namespace registration.
+// Namespace metadata and object-scoped grants both count; matching denies still win.
+func (s *Server) namespaceAllowed(ctx context.Context, namespace string) bool {
+	p := principal(ctx)
+	if p == nil {
+		return false
+	}
+	for _, rule := range s.RBAC.Permissions(p.Subjects) {
+		v := rule.Values
+		if len(v) < 5 || v[4] != "allow" {
+			continue
+		}
+		object := namespace
+		if v[1] != "namespaces" {
+			_, name, scoped := strings.Cut(v[3], "/")
+			if !scoped {
+				name = "**"
+			}
+			object += "/" + name
+		}
+		if s.RBAC.Can(p.Subjects, v[1], v[2], object) {
+			return true
+		}
+	}
+	return false
 }
 func operationID(name string) string { return strings.ToLower(name[:1]) + name[1:] }
 func selfService(id string) bool {
@@ -284,8 +313,9 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 				}
 			}
 		}
+		// Public and deferred-authentication routes must not reveal registration.
 		// Cluster creation checks name syntax before resolving its namespace.
-		if namespace := r.URL.Query().Get("namespace"); namespace != "" && id != "createCluster" {
+		if namespace := r.URL.Query().Get("namespace"); !rule.Public && namespace != "" && id != "createCluster" && s.namespaceAllowed(ctx, namespace) {
 			if failure := s.requireNamespace(ctx, namespace); failure != nil {
 				return *failure, nil
 			}

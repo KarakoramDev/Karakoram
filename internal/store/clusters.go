@@ -181,7 +181,8 @@ func updateClusterState(ctx context.Context, db executor, c *domain.Cluster) err
 	return affected(r, err)
 }
 
-// MarkClusterDeleting sets deletion intent and retires work before cleanup starts.
+// MarkClusterDeleting sets deletion intent, reusing matching in-flight tracking,
+// and retires work before cleanup starts.
 func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, opts domain.DeleteOptions) error {
 	if err := ref.Validate(); err != nil {
 		return err
@@ -192,8 +193,27 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, 
 	}
 	defer tx.Rollback()
 	var previous domain.Phase
-	if err = tx.QueryRowContext(ctx, "SELECT json_extract(status,'$.phase') FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&previous); err != nil {
+	var deleting bool
+	var currentOptions []byte
+	var generation int64
+	if err = tx.QueryRowContext(ctx, "SELECT json_extract(status,'$.phase'),deleting,delete_options,generation FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&previous, &deleting, &currentOptions, &generation); err != nil {
 		return typed(err)
+	}
+	if op, ok := ctx.Value(operationContextKey{}).(*domain.Operation); ok && op != nil && op.Kind == domain.OperationDelete && deleting {
+		var current domain.DeleteOptions
+		if err = json.Unmarshal(currentOptions, &current); err != nil {
+			return err
+		}
+		if current == opts {
+			var existing []byte
+			err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind')=? AND json_extract(data,'$.targetGeneration')=? ORDER BY created DESC,key DESC LIMIT 1", ref.Key(), domain.OperationDelete, generation).Scan(&existing)
+			if err == nil {
+				return json.Unmarshal(existing, op)
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
 	}
 	data, _ := json.Marshal(opts)
 	r, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN deleting=0 OR delete_options<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN deleting=0 OR delete_options<>? THEN ? ELSE requested_by END,deleting=1,delete_options=?,status=json_set(status,'$.phase','Deleting','$.message','Deleting: queued resource cleanup'),updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)

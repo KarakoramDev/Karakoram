@@ -1995,6 +1995,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/restart:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2042,6 +2043,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/raise-fcv:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2087,8 +2089,11 @@ paths:
                 $ref: '#/components/schemas/Operation'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2149,6 +2154,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/rotate-tls:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2197,6 +2203,7 @@ paths:
       description: For user-provided TLS, supply replacement PEM inputs in the cluster spec before invoking rotation; no certificate private keys are returned.
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/system-users:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2294,6 +2301,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/members:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2806,6 +2814,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3044,6 +3053,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3338,7 +3348,7 @@ paths:
         - Backups
       summary: Read the continuous restorable PITR window
       description: >-
-        Returns the latest continuous backed interval; an initializing cluster returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+        Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured PBM storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
       x-karakoram-rbac:
         resource: backups
         action: read
@@ -3462,7 +3472,7 @@ paths:
                 $ref: '#/components/schemas/Restore'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Requires a compatible succeeded source backup or an available PITR window. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
+      description: Requires a compatible succeeded source backup or an available PITR window. In-place logical restore drops/replaces namespaces contained in the backup but leaves databases and collections absent from that backup, including their documents, untouched (on sharded clusters PBM drops every database present in the backup, so only databases absent from it are preserved); it is not a full rollback of namespaces created after the backup. For an exact copy of the backed-up data, stop writes and drop those extra namespaces before restoring, or use a physical backup/restore, which replaces the data directory, or restore into a new cluster. Creating a new cluster from a source uses cluster spec.dataSource instead. Requires backups/read on the source namespace/cluster. Cross-namespace restores additionally require backups/export on that source object, checked by the handler rather than route metadata. PITR targets are checked before acceptance. Outside continuous coverage or in the future returns 400 with field source.pitrTime, reason out_of_range and earliest/latest UTC bounds; an initializing source or no coverage returns 409 invalid_state. Coverage is checked again during execution.
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -3709,6 +3719,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -4387,14 +4398,19 @@ components:
       in: header
       required: false
       description: |
-        Optional retry key scoped to the authenticated account or token identity,
-        method, route, namespace and path parameters. Retained for 24 hours after
+        Optional retry key scoped to the authenticated account's name and creation
+        identity (including OIDC issuer), or the specific bearer token identity,
+        plus method, route, namespace and path parameters. Deleting and recreating
+        an account never shares its replays. Retained for 24 hours after
         a successful response. The same key and canonical JSON body replay the
         original status, body and relevant headers, including one-time secrets
         and Karakoram-Operation-Id when present. Different bodies conflict with
         HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
-        in-flight duplicates return 409 with reason invalid_state. Only 2xx
-        responses are retained. Use a fresh key for each new intended mutation.
+        in-flight duplicates return 409 with reason invalid_state. Reservations
+        use a five-minute lease renewed every minute while the handler runs;
+        after a crash, an expired reservation can be reclaimed. Only successful
+        2xx responses are retained for 24 hours. Lease expiry does not prove that
+        the original mutation failed. Use a fresh key for each intended mutation.
       schema:
         type: string
         minLength: 1
@@ -4404,7 +4420,7 @@ components:
       name: namespace
       in: query
       required: false
-      description: Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name, including on list and sub-resource routes.
+      description: Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
       schema:
         $ref: '#/components/schemas/NamespaceName'
     NamespacePath:
@@ -4545,7 +4561,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Unavailable:
-      description: Authentication or namespace runtime is temporarily unavailable.
+      description: Authentication, namespace runtime or database agent/relay is temporarily unavailable; retry after connectivity recovers.
       content:
         application/json:
           schema:
@@ -5005,7 +5021,7 @@ components:
       writeOnly: true
       minLength: 12
       maxLength: 1024
-      description: At least 12 Unicode characters and at most 1024 UTF-8 bytes. Password changes and resets must differ from the current password; rejected changes retain the mandatory-change flag.
+      description: At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
     APITokenName:
       type: string
       minLength: 1
@@ -5447,7 +5463,7 @@ components:
             description: IPv4 or IPv6 CIDR.
         allowAllAddresses:
           type: boolean
-          description: Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+          description: Reports full-family coverage for public exposure after a save. Private or restricted exposure clears this flag. Entries must still match ipType. Unrelated updates preserve unchanged legacy routing.
       required:
         - public
     MonitoringSpec:
@@ -7029,7 +7045,7 @@ components:
             description: IPv4 or IPv6 CIDR.
         allowAllAddresses:
           type: boolean
-          description: Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. When public is true, creation and changes to public, ipType or allowlist require acknowledgement in this request; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
       additionalProperties: false
     ClusterInputSpec:
       type: object
@@ -7206,7 +7222,7 @@ components:
           nullable: true
         allowAllAddresses:
           type: boolean
-          description: Explicitly acknowledge allowlist CIDRs covering every address. Entries must still match ipType.
+          description: Explicitly acknowledge when the union of allowlist CIDRs covers every address of an IP family, including split ranges. Entries must still match ipType. When public is true, changes to public, ipType or allowlist require acknowledgement in this request, never inherited from the existing cluster; private or restricted exposure clears the stored flag. Unrelated updates preserve unchanged legacy exposure.
           nullable: true
       additionalProperties: false
       nullable: true

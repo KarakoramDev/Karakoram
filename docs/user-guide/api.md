@@ -24,7 +24,7 @@ For cookie-authenticated unsafe methods (anything except GET/HEAD/OPTIONS), send
 
 `POST /auth/refresh` rotates the refresh secret; reusing an older refresh token revokes that family. Forced password-change sessions permit current-user discovery, password change and logout, not normal operations or token creation. After password change reauthenticate. OIDC uses `/auth/oidc/login` and `/auth/oidc/callback` under `/api/v1`, with browser redirect/state/PKCE rather than an invented device-code API.
 
-Local account creation/reset and `newPassword` require at least **12 Unicode characters**, at most **1024 UTF-8 bytes**, and changes/resets must differ from the current password. A rejected change returns 400 `invalid_request` with `details.field` and `details.reason`: `currentPassword`/`invalid`, `newPassword`/`reused` or `newPassword`/`out_of_range`. Rejection preserves the mandatory-change restriction. Account names start with a letter, contain only letters/digits/`_ . @ -`, and are 1–64 characters; duplicates return 409 `already_exists` naming the account. Account `updatedAt` advances on metadata updates as well as password changes.
+Local account creation/reset and `newPassword` require at least **12 Unicode characters** and at most **1024 UTF-8 bytes**. Self-service changes must differ from the current password. Administrative resets accept the current password without comparing it, invalidate previous authentication and require a password change. A rejected self-service change returns 400 `invalid_request` with `details.field` and `details.reason`: `currentPassword`/`invalid`, `newPassword`/`reused` or `newPassword`/`out_of_range`. Rejection preserves the mandatory-change restriction. Account names start with a letter, contain only letters/digits/`_ . @ -`, and are 1–64 characters; duplicates return 409 `already_exists` naming the account. Account `updatedAt` advances on metadata updates as well as password changes.
 
 API-token names are trimmed, non-blank and 1–128 characters; duplicate names are allowed and IDs distinguish them. Creation and update both require future RFC 3339 `expiresAt`, with 400 field-specific `invalid` or `out_of_range` errors. Null on update removes expiry. The UI prevents concurrent duplicate submissions and reuses an `Idempotency-Key` when retrying an unchanged token-creation request.
 
@@ -133,8 +133,11 @@ authorized namespaces when omitted; a value filters to that namespace.
 Responses identify their namespace. A bare cluster name is not an
 installation-wide identity; keep namespace in caches and links.
 An explicit nonexistent namespace returns **404** `not_found` with
-`details.resource: namespace` and `details.name` on lists, details and sub-resources;
-omit the parameter rather than passing an empty value for all namespaces.
+`details.resource: namespace` and `details.name` only when the caller has a permission
+in that namespace. Without such permission, collections remain empty and object
+requests retain their normal 403 response, whether the namespace exists or not.
+Public and unauthenticated authentication routes do not resolve this parameter.
+Omit the parameter rather than passing an empty value for all namespaces.
 
 `spec.dataSource.namespace` selects a cluster-create recovery source;
 in-place restore uses `sourceNamespace`. Both default to the target namespace.
@@ -171,7 +174,38 @@ Every accepted create, PUT/PATCH (including scale/resources/exposure/TLS/version
 
 Desired-state operations observe their `targetGeneration`; they succeed when that generation is observed and the cluster is Ready, or Degraded with an explanatory message. A newer mutation cancels superseded tracking records with the newer operation ID in the message. Deletion succeeds only when removal (or requested suspension) completes. Tracking records do not block the imperative queue or roll back desired state. `spec.version` is the requested version; `status.version` is observed from runtime members (the oldest observed member during a mixed-version rollout), and is absent when observation is unavailable. Inspect member versions and FCV before declaring an upgrade complete.
 
-Operations have bounded ownership: **20 retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. Validation/unsupported errors fail immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
+Repeating cluster DELETE while deletion is in flight with the same `keepVolumes`
+and `keepBackups` options returns **202 with the existing Operation**, including
+the same `Karakoram-Operation-Id`; it does not cancel that operation. Omitted
+options mean `false`. Changing either option creates a new Operation and
+supersedes the previous tracking record, including when changing between full
+deletion and suspension (`keepVolumes=true`).
+
+Operations limit ordinary work to **20 consecutive retryable failures** or a **two-hour deadline from acceptance**, whichever occurs first; restore has a **six-hour deadline**. A successful provider step resets the failure count. Validation/unsupported errors stop ordinary work immediately. Scheduled platform waits count toward the deadline, not the failure count. These defaults are the reconciler constants `DefaultOperationRetryLimit`, `DefaultOperationTimeout`, `DefaultRestoreTimeout`; deployments embedding the manager can configure `Options.OperationRetryLimit` and per-kind `Options.OperationTimeouts`. Expired Pending operations also fail, even behind an unavailable cluster or stuck predecessor. For provider-supported recovery (PSMDB backup, restore and member replacement), exhausted or expired Running work remains Running at `failure-cleanup` until compensation completes, then becomes **Failed with its original failure reason**, not Cancelled. Cleanup retries with backoff beyond the original budget/deadline: restore releases process/maintenance/router holds and restores target PBM configuration; replacement releases its convergence gate. Terminal work releases queue ownership; desired-state convergence and deletion cleanup continue independently after their tracking operation fails. Failure includes the last error and may require repairing the named dependency before submitting new work. Deadlines do not promise rollback of a database operation already started externally.
+
+Failure compensation has a separate **six-hour recovery window**, measured from
+entry into `failure-cleanup` and persisted across control-plane restarts.
+`DefaultFailureCleanupTimeout` supplies the default; embedded deployments can
+set `Options.FailureCleanupTimeout`. If recovery cannot complete in that window,
+the operation becomes Failed and releases the queue with a Warning event naming
+the unfinished compensation checkpoint and stating that **manual recovery is
+required**. Inspect and repair processes, maintenance holds, routers and PBM
+state before submitting dependent work. An unresolved PBM restore is not assumed
+finished, and database processes are not started merely because recovery expires.
+
+Desired-state tracking deadlines govern the operation record only. They do not
+shorten the context used for cluster synchronization or deletion cleanup, so a
+platform call near the deadline can finish while convergence continues.
+Only errors from the cluster's own synchronization or deletion cleanup consume
+its tracking retry budget. A running queue operation, such as initial restore,
+has an independent failure count; its errors do not fail the create/update
+tracking record. Successful convergence resets its own consecutive-failure count.
+
+Zerops failure messages expose diagnostic codes/messages, field/reason metadata
+and known validation limits (`minDisk`, `maxDisk`, `min`, `max` and
+`minFreeResource.memoryGBytes`). Arbitrary metadata is omitted; sensitive
+details, URLs and opaque values are redacted. Inspect the platform's own process
+logs when the safe summary is insufficient.
 
 Request bodies are validated before decoding or accepting work. Unknown fields (including nested spelling mistakes), wrong types, unsupported enum values, invalid bounds and trailing JSON data return **400** `invalid_request` with `details.field` (a dotted JSON path or parameter name) and `details.reason`. Explicit zero counts/resources are errors, not requests for defaults. `spec.provider` is required: list offered engines with `GET /api/v1/providers`. Omitted version, topology, components and resource fields use that provider's catalog defaults. For PSMDB these are the catalog default version, `replicaSet`, three engine/config-server members, one router, one shard, SHARED CPU with min/max 1 core, min/max 1 GiB RAM and min/max 5 GiB disk. PUT may round-trip recognized server-owned fields from GET, which are ignored; PATCH accepts only the spec envelope.
 
@@ -223,30 +257,55 @@ karactl operations wait "$OPERATION_ID"
 ```
 
 `operations wait` reports Cancelled as a non-successful terminal result. There
-is no universal cancel/rollback or exactly-once mutation guarantee; operation
-retry/deadline budgets above still bound ownership while cleanup is pending.
+is no universal cancel/rollback or exactly-once mutation guarantee. Cooperative
+cleanup keeps queue ownership and retries beyond the ordinary retry/deadline
+budget. Failed-operation recovery is bounded by the separate recovery window
+above; exceeding it requires manual recovery, not automatic rollback.
+
+For legacy backup operations without a recorded trigger, safe cancellation
+checks backup inventory using the request context. Missing or unreadable
+inventory returns a clean **409** asking you to retry after the record is
+available: the server cannot establish that this is not a required post-restore
+base backup. Store/transport diagnostics are not included in that response.
 
 ## Safe retries with Idempotency-Key
 
-Send an optional `Idempotency-Key` header for API-token creation, cluster creation,
-cluster PUT/PATCH, backup and restore creation. Account, namespace, backup-storage,
-database-user and database-role creation also support it. Use a random, unique key
-for each intended mutation (for example a UUID); reuse that same key and body for
-network retries or double submissions. A key must contain **1–255 visible ASCII
-characters without spaces**. Requests without the header retain their usual behavior.
+Send an optional `Idempotency-Key` header on these operations:
 
-Keys are scoped to the authenticated account (including its OIDC issuer), or the
-specific bearer token identity, plus method, route, namespace and path parameters.
+* Create API tokens, accounts and namespaces.
+* Create clusters or update them with PUT/PATCH.
+* Restart or resume clusters, rotate cluster TLS, raise FCV, replace a member,
+  or rotate a system-user password.
+* Create backups and restores.
+* Create or replace backup storages, database users and database roles (POST/PUT).
+
+Other operations do not provide keyed retry protection. Use a random, unique key
+for each intended mutation (for example a UUID); reuse that same key and body for
+network retries or double submissions, including the same empty body for bodyless
+actions. A key must contain **1–255 visible ASCII characters without spaces**.
+Requests without the header retain their usual behavior.
+
+Keys are scoped to the authenticated account's name and creation identity
+(including its OIDC issuer), or the specific bearer token identity, plus method,
+route, namespace and path parameters. Deleting and recreating an account with the
+same name cannot replay the deleted account's responses or one-time secrets.
 Omitting `namespace` and sending `namespace=default` have the same scope. Another
 account/token or another route cannot retrieve your stored response. Authentication,
 CSRF and route authorization are checked again before every replay.
+
+When upgrading from an account-name-only replay scope, previously stored keys
+do not match the new creation-scoped identity. Inspect any pre-upgrade ambiguous
+resource or operation before retrying it; its old response will not be replayed.
+
+Upgrading from unkeyed request digests clears all existing retry reservations and stored responses once, during database migration. New request-body and scoped-key digests use HMAC-SHA256 with separate master-key-derived subkeys, preventing a database reader from guessing passwords from request-body hashes. A pre-upgrade key starts a new request rather than causing a digest-mismatch conflict; inspect any ambiguous mutation before retrying because its old response cannot be replayed.
 
 After a successful **2xx** response, the server retains its exact status and body,
 plus relevant headers such as `Content-Type`, `Cache-Control`, `Location`, `ETag`
 and `Karakoram-Operation-Id` when supplied, for **24 hours**. A matching retry
 returns that response with `Idempotent-Replayed: true`, without creating another
-resource or queuing another operation. JSON whitespace and object-key order do
-not affect matching; array order, values, omitted fields and explicit `null` do.
+resource or queuing another operation. Empty bodies are supported on bodyless
+actions. JSON whitespace and object-key order do not affect matching; array order,
+values, omitted fields and explicit `null` do.
 Numeric spellings are retained, so reuse the same numeric representations.
 The response is the original snapshot, not the resource's latest state; poll the
 resource or its returned operation to observe asynchronous completion.
@@ -256,7 +315,10 @@ resource or its returned operation to observe asynchronous completion.
   when a genuinely different mutation is intended.
 * A concurrent request with the same key returns **409** with reason
   `invalid_state` while the first request is in flight. Retry the same key/body
-  after that request finishes.
+  after that request finishes. Reservations have a **five-minute lease**, renewed
+  every minute while the handler runs, even after caller disconnection. Transient renewal failures are logged and retried while the last confirmed lease remains valid; only ownership loss or actual expiry cancels the in-flight handler. After a
+  process crash, the same key can be reclaimed when the last lease expires,
+  rather than waiting for the 24-hour successful-response retention period.
 * **4xx/5xx are not cached**. Once a failed request finishes, its key can be retried
   with corrected input. Do not interpret a network timeout as a server rejection.
 
@@ -269,9 +331,11 @@ After expiry the key is a new request; existing resource names may then conflict
 
 This is bounded retry protection, not an atomic, universal exactly-once guarantee:
 an interrupted server between committing a mutation and saving its response leaves
-an in-flight reservation until expiry. A response-persistence failure likewise
-keeps the reservation instead of executing a duplicate. Inspect the resource and
-operation before deciding what to do; changing keys is not a recovery shortcut.
+an in-flight reservation until its five-minute lease expires. A response-persistence
+failure likewise keeps the remaining lease instead of immediately allowing a
+duplicate. Lease expiry permits another execution; it does not prove that the
+first mutation failed. Inspect the resource and operation before deciding what
+to do; changing keys is not a recovery shortcut.
 
 ## Pagination and events
 

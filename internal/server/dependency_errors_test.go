@@ -73,6 +73,82 @@ func TestUnknownNamespaceAcrossCollectionsAndSubresources(t *testing.T) {
 	}
 }
 
+func TestPublicRoutesIgnoreUnknownNamespace(t *testing.T) {
+	s, _, _ := testServer(t)
+	for _, path := range []string{"/healthz", "/api/v1/version", "/api/v1/openapi.yaml"} {
+		t.Run(path, func(t *testing.T) {
+			if w := call(s, "GET", path+"?namespace=missing", "", ""); w.Code != 200 {
+				t.Fatalf("public route returned %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+	for _, tc := range []struct {
+		path, body string
+		status     int
+	}{
+		{"/api/v1/auth/login", `{"username":"admin","password":"admin-test-password"}`, 200},
+		{"/api/v1/auth/refresh", "", 401},
+		{"/api/v1/auth/logout", "", 204},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			w := call(s, "POST", tc.path+"?namespace=missing", tc.body, "")
+			if w.Code != tc.status {
+				t.Fatalf("authentication route returned %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestNamespaceExistenceRequiresScopedPermission(t *testing.T) {
+	s, admin := namespaceTestServer(t)
+	ctx := t.Context()
+	if w := call(s, "POST", "/api/v1/namespaces", `{"name":"other","projectId":"proj-other","token":"synthetic-token"}`, admin); w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, tc := range []struct {
+		name, rules string
+		status      int
+	}{
+		{"unrelated", "p, user:unrelated, clusters, read, dev/*, allow\n", 200},
+		{"exact", "p, user:exact, clusters, read, missing/orders, allow\n", 404},
+		{"namespace", "p, user:namespace, namespaces, read, missing, allow\n", 404},
+		{"wildcard", "p, user:wildcard, clusters, read, **, allow\n", 404},
+		{"denied", "p, user:denied, clusters, read, **, allow\np, user:denied, clusters, read, missing/**, deny\n", 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: tc.name}, "scoped-test-password"); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\n"+tc.rules); err != nil {
+				t.Fatal(err)
+			}
+			token, _, err := s.Auth.CreateToken(ctx, tc.name, "test", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "GET", "/api/v1/clusters?namespace=missing", "", token)
+			if w.Code != tc.status {
+				t.Fatalf("unknown namespace returned %d: %s", w.Code, w.Body.String())
+			}
+			if tc.name != "unrelated" {
+				return
+			}
+			for _, path := range []string{"/api/v1/clusters", "/api/v1/events", "/api/v1/operations", "/api/v1/backup-storages", "/api/v1/orphaned-volumes"} {
+				existing := call(s, "GET", path+"?namespace=other", "", token)
+				missing := call(s, "GET", path+"?namespace=missing", "", token)
+				if existing.Code != 200 || missing.Code != existing.Code || existing.Body.String() != missing.Body.String() {
+					t.Fatalf("%s reveals namespace existence: existing=%d %s missing=%d %s", path, existing.Code, existing.Body.String(), missing.Code, missing.Body.String())
+				}
+			}
+			for _, namespace := range []string{"other", "missing"} {
+				if w := call(s, "GET", "/api/v1/clusters/orders?namespace="+namespace, "", token); w.Code != 403 {
+					t.Fatalf("inaccessible object returned %d: %s", w.Code, w.Body.String())
+				}
+			}
+		})
+	}
+}
+
 func TestBackupRestoreAndCloneDependencyDiagnostics(t *testing.T) {
 	s, _, token := testServer(t)
 	requireDependencyError(t, call(s, "POST", "/api/v1/clusters/prod/backups", `{"name":"baseline","storage":"absent","type":"logical"}`, token), 404, "not_found", map[string]string{"resource": "backupStorage", "name": "absent"})

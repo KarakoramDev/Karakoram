@@ -110,6 +110,30 @@ test('all-address CIDRs require explicit acknowledgement including noncanonical 
   assert.equal(coversAllAddresses({ public: false, ipType: 'IPV6', allowlist: ['::/0'] }), false);
 });
 
+test('union coverage merges split, overlapping and duplicate ranges per family', () => {
+  const cases: [string[], boolean][] = [
+    [['0.0.0.0/1', '128.0.0.0/1'], true],
+    [['::/1', '8000::/1'], true],
+    [['192.0.0.0/2', '64.0.0.0/2', '0.0.0.0/2', '128.0.0.0/2'], true],
+    [['c000::/2', '4000::/2', '::/2', '8000::/2'], true],
+    [['128.0.0.0/1', '64.0.0.0/2', '0.0.0.0/1', '0.0.0.0/1'], true],
+    [['8000::/1', '4000::/2', '::/1', '::/1'], true],
+    [['0.0.0.0/1', '0.0.0.0/1', '64.0.0.0/2'], false],
+    [['::/1', '::/1', '4000::/2'], false],
+    [['0.0.0.0/1', '192.0.0.0/2'], false],
+    [['::/1', 'c000::/2'], false],
+    [['1.2.3.4/1', '192.0.2.1/1'], true],
+    [['::192.0.2.1/1', '8000::192.0.2.1/1'], true],
+    [['0.0.0.0/1', '8000::/1'], false],
+  ];
+  for (const [allowlist, all] of cases) {
+    const exposure: Schemas['Exposure'] = { public: true, ipType: allowlist[0]!.includes(':') ? 'IPV6' : 'IPV4', allowlist };
+    assert.equal(coversAllAddresses(exposure), all, allowlist.join(', '));
+    assert.equal(wireExposure(exposure, true).allowAllAddresses, all);
+    assert.equal(validateExposure(exposure).some((error) => error.includes('Confirm')), all);
+  }
+});
+
 test('exposure payload acknowledges only confirmed public all-address CIDRs', () => {
   for (const entry of ['0.0.0.0/0', '1.2.3.4/0', '::/0', '2001:db8::/0']) {
     const exposure: Schemas['Exposure'] = { public: true, ipType: entry.includes(':') ? 'IPV6' : 'IPV4', allowlist: [entry], allowAllAddresses: true };
@@ -137,8 +161,17 @@ test('user-provided PKI requires CA signing pair and permits optional paired lea
   assert.ok(validateTLS({ ...tls, certificate: 'LEAF' }).length);
   assert.ok(validateTLS({ ...tls, privateKey: 'LEAF KEY' }).length);
   assert.deepEqual(validateTLS({ ...tls, certificate: 'LEAF', privateKey: 'LEAF KEY' }), []);
-  assert.deepEqual(validateTLS({ ca: 'userProvided', mode: 'requireTLS' }, true), []);
+  assert.deepEqual(validateTLS({ ca: 'userProvided', mode: 'requireTLS' }, 'userProvided'), []);
   assert.deepEqual(validateTLS({ ca: 'userProvided', mode: 'disabled' }), []);
+});
+
+test('switching CA source cannot reuse the empty-PEM editing exemption', () => {
+  const tls: Schemas['TLS'] = { ca: 'userProvided', mode: 'requireTLS' };
+  assert.match(validateTLS(tls, 'selfSigned').join(' '), /CA certificate PEM is required/);
+  assert.match(validateTLS(tls, 'selfSigned').join(' '), /CA signing private key PEM is required/);
+  assert.deepEqual(validateTLS(tls, 'userProvided'), []);
+  assert.deepEqual(validateTLS({ ...tls, caCertificate: 'CA', caPrivateKey: 'KEY' }, 'selfSigned'), []);
+  assert.match(validateTLS({ ...tls, caCertificate: 'CA' }, 'userProvided').join(' '), /signing private key/);
 });
 
 test('Review totals include every shard, config server, router and data volume', () => {

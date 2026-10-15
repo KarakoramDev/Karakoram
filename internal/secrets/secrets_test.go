@@ -77,3 +77,36 @@ func TestGenerators(t *testing.T) {
 		t.Fatal("hash")
 	}
 }
+
+func TestIdempotencyHashesUseSeparatedMasterKeySubkeys(t *testing.T) {
+	first, err := New(strings.Repeat("x", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, err := New(strings.Repeat("x", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := New(strings.Repeat("y", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(`{"password":"chosen-test-password"}`)
+	digest := first.IdempotencyBodyHash(body)
+	if !strings.HasPrefix(digest, "hmac-sha256:v1:") || digest == "hmac-sha256:v1:"+Hash(string(body)) {
+		t.Fatal("body digest is not a versioned keyed hash")
+	}
+	if digest != same.IdempotencyBodyHash(body) {
+		t.Fatal("same master key cannot match a retry")
+	}
+	if digest == other.IdempotencyBodyHash(body) || digest == first.IdempotencyIdentityHash(body) {
+		t.Fatal("master key or purpose did not separate digests")
+	}
+	if digest == first.IdempotencyBodyHash([]byte(`{"password":"different-test-password"}`)) {
+		t.Fatal("different bodies matched")
+	}
+	if first.IdempotencyIdentityHash(body) != same.IdempotencyIdentityHash(body) ||
+		first.IdempotencyIdentityHash(body) == other.IdempotencyIdentityHash(body) {
+		t.Fatal("identity digest does not use the installation key")
+	}
+}

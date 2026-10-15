@@ -73,12 +73,14 @@ resyncs are nonblocking and observed using status plus an available inventory. T
 PBM errors still traverse database/router/maintenance/config cleanup before the Restore
 record is marked Failed and the error is returned.
 
-The provider must enqueue exactly one fresh base backup after a successful
+The provider enqueues an initial fresh base backup after a successful
 restore when freshBaseBackupRequired is true, derived from the target cluster's
 desired PITR state rather than a temporarily disabled restore environment.
-Keep Env.PITR.Enabled false for normal config reconciliation and that backup
-until it succeeds; only then clear
-the pending requirement and apply desired enabled PITR. EnsureConfig independently
+Keep Env.PITR.Enabled false for normal config reconciliation until that backup
+or a later snapshot on primary storage succeeds. The provider retries failed,
+cancelled or missing bases within a bounded budget, without blocking Sync,
+and permits a later manual snapshot to clear the gate after exhaustion.
+EnsureConfig independently
 gates initial PITR activation on a successful base after first configuring PBM
 with PITR disabled. It cannot tell
 whether an old snapshot predates a restore, so the provider's pending requirement

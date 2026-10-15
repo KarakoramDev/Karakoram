@@ -191,6 +191,189 @@ func TestDefaultsRoundTripAndExposureAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestLegacyExposureUnrelatedUpdates(t *testing.T) {
+	for _, exposure := range []domain.Exposure{
+		{Public: true, IPType: "IPV4", Allowlist: []string{"0.0.0.0/0"}},
+		{Public: true, IPType: "IPV6", Allowlist: []string{"::/0"}},
+		{Public: true, IPType: "IPV6", Allowlist: []string{"192.0.2.0/24"}},
+	} {
+		t.Run(exposure.IPType+exposure.Allowlist[0], func(t *testing.T) {
+			s, _, token := testServer(t)
+			ref := domain.ClusterRef{Namespace: "default", Name: "prod"}
+			c, err := s.Store.GetCluster(t.Context(), ref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Spec.Exposure = exposure
+			if err := s.Store.UpdateClusterSpec(t.Context(), ref, c.Spec); err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "PATCH", "/api/v1/clusters/prod", `{"spec":{"version":"8.0.1"}}`, token)
+			if w.Code != 200 {
+				t.Fatalf("version-only update: %d %s", w.Code, w.Body.String())
+			}
+			c, err = s.Store.GetCluster(t.Context(), ref)
+			if err != nil || c.Spec.Version != "8.0.1" || c.Spec.Exposure.Allowlist[0] != exposure.Allowlist[0] {
+				t.Fatal(c, err)
+			}
+			c.Spec.Components.Engine.Replicas = 5
+			body, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w = call(s, "PUT", "/api/v1/clusters/prod", string(body), token)
+			if w.Code != 200 {
+				t.Fatalf("scaling replacement: %d %s", w.Code, w.Body.String())
+			}
+			w = call(s, "PATCH", "/api/v1/clusters/prod", `{"spec":{"exposure":{"public":true,"ipType":"IPV4","allowlist":["0.0.0.0/0","192.0.2.0/24"]}}}`, token)
+			if w.Code != 400 || !strings.Contains(w.Body.String(), "allowAllAddresses") {
+				t.Fatalf("changed allowlist needs acknowledgement: %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestSplitAllowlistRequiresAcknowledgement(t *testing.T) {
+	for _, allowlist := range []string{`["0.0.0.0/1","128.0.0.0/1"]`, `["::/1","8000::/1"]`} {
+		s, _, token := testServer(t)
+		ipType := "IPV4"
+		if strings.Contains(allowlist, ":") {
+			ipType = "IPV6"
+		}
+		body := `{"spec":{"exposure":{"public":true,"ipType":"` + ipType + `","allowlist":` + allowlist + `}}}`
+		w := call(s, "PATCH", "/api/v1/clusters/prod", body, token)
+		if w.Code != 400 || !strings.Contains(w.Body.String(), "allowAllAddresses") {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		body = `{"spec":{"exposure":{"public":true,"ipType":"` + ipType + `","allowlist":` + allowlist + `,"allowAllAddresses":true}}}`
+		w = call(s, "PATCH", "/api/v1/clusters/prod", body, token)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestExposureAcknowledgementDoesNotSurviveNarrowing(t *testing.T) {
+	s, _, token := testServer(t)
+	for _, step := range []struct {
+		body   string
+		status int
+		ack    bool
+	}{
+		{`{"spec":{"exposure":{"public":true,"ipType":"IPV4","allowlist":["0.0.0.0/0"],"allowAllAddresses":true}}}`, 200, true},
+		{`{"spec":{"exposure":{"allowlist":["203.0.113.0/24"]}}}`, 200, false},
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/0"]}}}`, 400, false},
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/1","128.0.0.0/1"]}}}`, 400, false},
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/1","128.0.0.0/1"],"allowAllAddresses":true}}}`, 200, true},
+		// Even an already acknowledged all-address list needs a fresh
+		// acknowledgement when the request changes its routing.
+		{`{"spec":{"exposure":{"allowlist":["0.0.0.0/0"]}}}`, 400, true},
+		{`{"spec":{"components":{"engine":{"replicas":5}}}}`, 200, true},
+		{`{"spec":{"exposure":{"public":false,"allowAllAddresses":true}}}`, 200, false},
+		{`{"spec":{"exposure":{"public":true}}}`, 400, false},
+	} {
+		w := call(s, "PATCH", "/api/v1/clusters/prod", step.body, token)
+		if w.Code != step.status {
+			t.Fatalf("%s: %d %s", step.body, w.Code, w.Body.String())
+		}
+		c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Namespace: "default", Name: "prod"})
+		if err != nil || c.Spec.Exposure.AllowAllAddresses != step.ack {
+			t.Fatalf("%s: stored acknowledgement = %v, error = %v", step.body, c, err)
+		}
+	}
+}
+
+func TestPSMDBPrivateExposureDoesNotRequireAcknowledgement(t *testing.T) {
+	for _, tc := range []struct {
+		name, ip, allowlist string
+	}{
+		{"all IPv4", "IPV4", `["0.0.0.0/0"]`},
+		{"all IPv6", "IPV6", `["::/0"]`},
+		{"IPv4 halves", "IPV4", `["0.0.0.0/1","128.0.0.0/1"]`},
+		{"IPv6 halves", "IPV6", `["::/1","8000::/1"]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			var err error
+			s.Registry, err = engine.NewRegistry(psmdb.New(psmdb.Options{Store: s.Store}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := `{"name":"sample","spec":{"provider":"psmdb","exposure":{"public":true,"ipType":"` + tc.ip + `","allowlist":` + tc.allowlist + `,"allowAllAddresses":true}}}`
+			w := call(s, "POST", "/api/v1/clusters", body, token)
+			if w.Code != 201 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			ref := domain.ClusterRef{Namespace: "default", Name: "sample"}
+			for _, step := range []struct {
+				body   string
+				status int
+				public bool
+			}{
+				{`{"spec":{"exposure":{"public":false}}}`, 200, false},
+				{`{"spec":{"exposure":{"public":true}}}`, 400, false},
+				{`{"spec":{"exposure":{"public":true,"allowAllAddresses":true}}}`, 200, true},
+				{`{"spec":{"exposure":{"public":false,"allowAllAddresses":true}}}`, 200, false},
+			} {
+				w = call(s, "PATCH", "/api/v1/clusters/sample", step.body, token)
+				if w.Code != step.status {
+					t.Fatalf("%s: %d %s", step.body, w.Code, w.Body.String())
+				}
+				if step.status == 400 && !strings.Contains(w.Body.String(), "allowAllAddresses") {
+					t.Fatalf("expected acknowledgement error: %s", w.Body.String())
+				}
+				c, err := s.Store.GetCluster(t.Context(), ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if c.Spec.Exposure.Public != step.public || c.Spec.Exposure.AllowAllAddresses != step.public || !domain.ExposureCoversFamily(c.Spec.Exposure) {
+					t.Fatalf("%s: unexpected stored exposure: %+v", step.body, c.Spec.Exposure)
+				}
+			}
+			body = `{"name":"private","spec":{"provider":"psmdb","exposure":{"public":false,"ipType":"` + tc.ip + `","allowlist":` + tc.allowlist + `}}}`
+			w = call(s, "POST", "/api/v1/clusters", body, token)
+			if w.Code != 201 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Namespace: "default", Name: "private"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Spec.Exposure.Public || c.Spec.Exposure.AllowAllAddresses || !domain.ExposureCoversFamily(c.Spec.Exposure) {
+				t.Fatalf("unexpected private creation exposure: %+v", c.Spec.Exposure)
+			}
+		})
+	}
+}
+
+func TestExposureAcknowledgementNormalizedOnCreateAndReplace(t *testing.T) {
+	s, _, token := testServer(t)
+	w := call(s, "POST", "/api/v1/clusters", `{"name":"sample","spec":{"provider":"fake","exposure":{"public":true,"ipType":"IPV4","allowlist":["203.0.113.0/24"],"allowAllAddresses":true}}}`, token)
+	if w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	ref := domain.ClusterRef{Namespace: "default", Name: "sample"}
+	c, err := s.Store.GetCluster(t.Context(), ref)
+	if err != nil || c.Spec.Exposure.AllowAllAddresses {
+		t.Fatal("restricted creation retained acknowledgement", c, err)
+	}
+	c.Spec.Exposure.AllowAllAddresses = true
+	c.Spec.Exposure.Public = false
+	c.Spec.Exposure.Allowlist = []string{"0.0.0.0/0"}
+	body, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = call(s, "PUT", "/api/v1/clusters/sample", string(body), token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	c, err = s.Store.GetCluster(t.Context(), ref)
+	if err != nil || c.Spec.Exposure.AllowAllAddresses {
+		t.Fatal("private replacement retained acknowledgement", c, err)
+	}
+}
+
 func TestClosedSchemasAndCompositions(t *testing.T) {
 	doc, err := apispec.Load()
 	if err != nil {
@@ -339,5 +522,35 @@ func TestTypedClientOmittedFieldsAndExplicitZero(t *testing.T) {
 		if err != nil || res.JSON400 == nil || res.JSON400.Details == nil || (*res.JSON400.Details)["field"] != tc.field {
 			t.Fatal(res, err)
 		}
+	}
+}
+
+func TestBackupConflictExplainsPendingGeneration(t *testing.T) {
+	s, _, token := testServer(t)
+	ref := domain.ClusterRef{Namespace: "default", Name: "prod"}
+	c, err := s.Store.GetCluster(t.Context(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Spec.Components.Engine.Replicas = 5
+	if err := s.Store.UpdateClusterSpec(t.Context(), ref, c.Spec); err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "POST", "/api/v1/clusters/prod/backups", `{"name":"beforechange","type":"logical","storage":"archive"}`, token)
+	var problem api.Error
+	if err := json.Unmarshal(w.Body.Bytes(), &problem); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 409 || !strings.Contains(problem.Message, "Ready") ||
+		!strings.Contains(problem.Message, "generation 2 is pending (observed generation 1)") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if problem.Details == nil || (*problem.Details)["generation"] != float64(2) ||
+		(*problem.Details)["observedGeneration"] != float64(1) {
+		t.Fatal(problem.Details)
+	}
+	backups, err := s.Store.ListBackups(t.Context(), ref)
+	if err != nil || len(backups) != 0 {
+		t.Fatal(backups, err)
 	}
 }

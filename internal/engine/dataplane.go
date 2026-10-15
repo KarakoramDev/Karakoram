@@ -14,12 +14,13 @@ import (
 
 // Sentinel errors providers return so the API layer can map them to HTTP
 // status codes (ErrNotFound → 404, ErrNotSupported and ErrConflict → 409,
-// ErrInvalid → 400). Wrap them with fmt.Errorf("...: %w", err) for context.
+// ErrInvalid → 400, ErrUnavailable → 503). Wrap them with fmt.Errorf("...: %w", err) for context.
 var (
 	ErrNotFound     = errors.New("not found")
 	ErrNotSupported = errors.New("not supported for this cluster")
 	ErrConflict     = errors.New("conflict")
 	ErrInvalid      = errors.New("invalid request")
+	ErrUnavailable  = errors.New("temporarily unavailable")
 )
 
 // ValidationError is an ErrInvalid whose Message is safe to show to the API

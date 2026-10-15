@@ -156,6 +156,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
 			return s.failure(err)
 		}
+		c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
 		}
@@ -213,7 +214,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			if _, yes := v.(map[string]any); !yes {
 				return invalid()
 			}
-			data, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
+			base := c.Spec
+			// Acknowledgement belongs to this request, not the merge-patch base.
+			// Unchanged legacy routing is still accepted by ValidateExposureUpdate.
+			base.Exposure.AllowAllAddresses = false
+			data, err := json.Marshal(map[string]any{"spec": specAPI(base)})
 			if err != nil {
 				return s.failure(err)
 			}
@@ -241,9 +246,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			next.Spec.DataSource.Namespace = namespaceOrDefaultSource(next.Spec.DataSource.Namespace, c.Namespace)
 		}
 		p.ApplyDefaults(&next.Spec)
-		if err = domain.ValidateExposure(next.Spec.Exposure); err != nil {
-			return s.failure(err)
+		if next.Spec.Exposure.Public {
+			if err = domain.ValidateExposureUpdate(&c.Spec.Exposure, next.Spec.Exposure); err != nil {
+				return s.failure(err)
+			}
 		}
+		next.Spec.Exposure.AllowAllAddresses = next.Spec.Exposure.Public && domain.ExposureCoversFamily(next.Spec.Exposure)
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
 		}
@@ -378,7 +386,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "CreateBackup":
 		b := in.Body.(*api.CreateBackupRequest)
 		if c.Deleting || (c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation {
-			return failDetails(409, "conflict", "Backup requires a formed, active cluster; cluster "+c.Name+" is "+string(c.Status.Phase), map[string]any{"resource": "cluster", "name": c.Name, "reason": domain.ReasonInvalidState, "state": string(c.Status.Phase)})
+			state := string(c.Status.Phase)
+			if c.Deleting {
+				state += "; deletion is pending"
+			}
+			if c.Status.ObservedGeneration < c.Generation {
+				state += fmt.Sprintf("; generation %d is pending (observed generation %d)", c.Generation, c.Status.ObservedGeneration)
+			}
+			return failDetails(409, "conflict", "Backup requires a formed, active cluster with no pending changes; cluster "+c.Name+" is "+state, map[string]any{"resource": "cluster", "name": c.Name, "reason": domain.ReasonInvalidState, "state": string(c.Status.Phase), "generation": c.Generation, "observedGeneration": c.Status.ObservedGeneration})
 		}
 		if b.Name == "" {
 			return invalidField("name", domain.ReasonRequired, "name is required")

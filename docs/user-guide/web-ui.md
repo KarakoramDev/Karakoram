@@ -186,6 +186,8 @@ Accepted asynchronous mutations show **View operation** in their success toast
 when the response identifies the operation. Global and cluster **Operations**
 lists, and **Events** rows carrying an operation ID, link to the same detail
 page at `/operations/:id`.
+The link opens the operation in the current app without reloading the page.
+A notification confirms acceptance, not that the operation has finished.
 
 The detail page shows phase, namespace/cluster, target, step, initiating actor,
 progress when reported, message/error and cancellation-request status. Created,
@@ -223,6 +225,11 @@ Group-based roles, complete CSV policy replacement and token ownership are expla
 
 Read error messages, cluster conditions and the failed Operation before resubmitting. A failed request can differ from a failed asynchronous job. Events can replay on SSE reconnect; loss of the live connection does not erase durable operations. If a view looks stale, refresh and inspect [CLI/API](cli.md) status before assuming the mutation was lost. Do not repeatedly initiate backup/restore after a response-loss error; PBM receipts may deliberately report an ambiguous outcome.
 
+If an unexpected display error prevents the app from rendering, it shows
+**The page could not be displayed** with a **Reload page** button instead of
+a blank page. Reloading does not resubmit the action. Inspect existing
+operations and resource state before submitting another mutation.
+
 The sidebar and Events views distinguish **live**, **reconnecting — data may be
 stale** and **connection lost — data may be stale**. Failed background reads can
 mark the sidebar stale even while SSE is connected. During a server/network
@@ -231,9 +238,13 @@ Restore connectivity and re-read durable status before acting on them.
 
 Mutation dialogs keep the server's human error message and field/resource
 context visible without discarding the form. Submit controls become busy
-immediately to prevent duplicate requests; retries for the same submission
-reuse its idempotency key. Read the outcome and existing operation before
-starting another submission.
+immediately to prevent duplicate requests. Cluster create/edit, restart, resume,
+TLS/system-user rotation, FCV raise, member replacement, backup/restore creation,
+database-user/role create/edit, backup-storage create/edit and API-token creation
+reuse their idempotency key when retrying an unchanged submission. The server
+honours these keys for 24 hours after success; other actions are not covered.
+See [safe API retries](api.md#safe-retries-with-idempotency-key). Read the outcome
+and existing operation before starting another submission.
 
 Proxies can **buffer small SSE event frames**. Karakoram sends approximately 16-KiB random-base64 connection comments and similarly padded fifteen-second heartbeats, but view invalidation can still wait until the next heartbeat. Each open stream adds approximately 16 KiB at startup and 16 KiB per heartbeat (~1.1 KiB/s before wire compression). Configure a nonbuffering custom-domain/proxy path where possible. Refresh/read durable status if a view appears stale; do not resubmit a completed mutation. See [API transport details](api.md#pagination-and-events) and [limitations](../limitations.md).
 

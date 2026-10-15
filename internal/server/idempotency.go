@@ -14,7 +14,6 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -42,7 +41,8 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 
 func idempotencyCovered(id string) bool {
 	switch id {
-	case "createAPIToken", "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "createAccount", "createNamespace", "createDatabaseUser", "createDatabaseRole":
+	case "createAPIToken", "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createAccount", "createNamespace", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
+		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		return true
 	}
 	return false
@@ -61,6 +61,9 @@ func validIdempotencyKey(values []string) bool {
 }
 
 func canonicalIdempotencyBody(body []byte) ([]byte, error) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, nil
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	var value any
@@ -95,18 +98,20 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	}
 	namespace := ""
 	switch id {
-	case "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "createDatabaseUser", "createDatabaseRole":
+	case "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
+		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	}
 	// A JSON tuple avoids delimiter collisions. The actual path adds every path
 	// parameter to the method and route-template scope without storing credentials.
-	scope, err := json.Marshal([]string{p.Account, p.OIDCIssuer, p.TokenID, r.Method, r.Pattern, r.URL.Path, namespace, values[0]})
+	scope, err := json.Marshal([]string{p.Account, p.AccountCreatedAt.UTC().Format(time.RFC3339Nano), p.OIDCIssuer, p.TokenID, r.Method, r.Pattern, r.URL.Path, namespace, values[0]})
 	if err != nil {
 		return s.failure(err), nil
 	}
-	identity := secrets.Hash(string(scope))
-	bodyHash := secrets.Hash(string(canonical))
-	record, acquired, err := s.Store.BeginIdempotency(ctx, identity, bodyHash, time.Now())
+	identity := s.Store.IdempotencyIdentityHash(scope)
+	bodyHash := s.Store.IdempotencyBodyHash(canonical)
+	reservedAt := time.Now()
+	record, acquired, err := s.Store.BeginIdempotency(ctx, identity, bodyHash, reservedAt)
 	if err != nil {
 		return s.failure(err), nil
 	}
@@ -131,8 +136,35 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 			}
 		}
 	}()
+	// Keep long-running handlers protected, independently of caller cancellation.
+	// Lease loss or expiry cancels the handler; transient errors do not. Do not
+	// release an ambiguous mutation once lease ownership is no longer certain.
+	handlerCtx, cancelHandler := context.WithCancelCause(ctx)
+	leaseCtx, cancelLease := context.WithCancel(context.WithoutCancel(ctx))
+	leaseDone := make(chan struct{})
+	var leaseErr error
+	go func() {
+		defer close(leaseDone)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		leaseErr = s.renewIdempotencyLease(leaseCtx, identity, record.Owner, reservedAt.Add(store.IdempotencyLease), ticker.C, s.Store.RenewIdempotency)
+		if leaseErr != nil {
+			cancelHandler(leaseErr)
+		}
+	}()
+	stopLease := func() {
+		cancelLease()
+		<-leaseDone
+		cancelHandler(nil)
+	}
+	defer stopLease()
 	capture := &idempotencyWriter{header: w.Header().Clone()}
-	result, err := next(ctx, capture, r, v)
+	result, err := next(handlerCtx, capture, r.WithContext(handlerCtx), v)
+	stopLease()
+	if leaseErr != nil {
+		completed = true
+		return s.failure(leaseErr), nil
+	}
 	if err != nil {
 		return result, err
 	}
@@ -161,6 +193,56 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 		completed = true
 	}
 	return replayResponse(wire, false), nil
+}
+
+func (s *Server) renewIdempotencyLease(ctx context.Context, identity, owner string, expires time.Time, ticks <-chan time.Time, renewLease func(context.Context, string, string, time.Time) error) error {
+	expiry := time.NewTimer(time.Until(expires))
+	defer expiry.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-expiry.C:
+			if ctx.Err() != nil {
+				return nil
+			}
+			return store.ErrConflict
+		case now := <-ticks:
+			if ctx.Err() != nil {
+				return nil
+			}
+			if !now.Before(expires) || !time.Now().Before(expires) {
+				return store.ErrConflict
+			}
+			// A blocked database call must not outlive the lease either.
+			deadline := time.Now().Add(5 * time.Second)
+			if expires.Before(deadline) {
+				deadline = expires
+			}
+			renew, cancel := context.WithDeadline(ctx, deadline)
+			err := renewLease(renew, identity, owner, now)
+			cancel()
+			if ctx.Err() != nil {
+				return nil
+			}
+			if errors.Is(err, store.ErrConflict) {
+				return err
+			}
+			if err != nil {
+				if !time.Now().Before(expires) {
+					return store.ErrConflict
+				}
+				// Keep the last confirmed expiry; a failed write cannot extend it.
+				s.Logger.Warn("Failed to renew idempotency lease; retrying while lease remains valid")
+				continue
+			}
+			expires = now.Add(store.IdempotencyLease)
+			if !time.Now().Before(expires) {
+				return store.ErrConflict
+			}
+			expiry.Reset(time.Until(expires))
+		}
+	}
 }
 
 func idempotencyConflict(reason, message string) response {

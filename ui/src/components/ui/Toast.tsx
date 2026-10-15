@@ -17,7 +17,12 @@ interface ToastApi {
   error: (message: ReactNode) => void;
 }
 
-const ToastContext = createContext<ToastApi | null>(null);
+interface ToastState extends ToastApi {
+  items: Toast[];
+  dismiss: (id: number) => void;
+}
+
+export const ToastContext = createContext<ToastState | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
@@ -42,21 +47,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }),
     [toast],
   );
+  const value = useMemo(() => ({ ...api, items, dismiss }), [api, items, dismiss]);
+  return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>;
+}
 
+/** Mount within the router so toast content can use client-side links. */
+export function ToastViewport() {
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error('ToastViewport must be used within ToastProvider');
+  const { items, dismiss } = ctx;
   return (
-    <ToastContext.Provider value={api}>
-      {children}
-      <div className="toasts" aria-live="polite" aria-atomic="false">
-        {items.map((t) => (
-          <div key={t.id} className={['toast', t.tone !== 'default' ? `toast-${t.tone}` : ''].join(' ')} role={t.tone === 'danger' ? 'alert' : 'status'}>
-            <span>{t.message}</span>
-            <button type="button" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
-    </ToastContext.Provider>
+    <div className="toasts" aria-live="polite" aria-atomic="false">
+      {items.map((t) => (
+        <div key={t.id} className={['toast', t.tone !== 'default' ? `toast-${t.tone}` : ''].join(' ')} role={t.tone === 'danger' ? 'alert' : 'status'}>
+          <span>{t.message}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 

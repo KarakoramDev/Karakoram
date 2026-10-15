@@ -4,9 +4,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -16,7 +19,9 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -108,6 +113,42 @@ func TestIdempotentTokenCreationReplaysEncryptedSecret(t *testing.T) {
 	}
 }
 
+func TestIdempotencyPasswordBodyHashIsKeyed(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path, body, different string
+		status                              int
+	}{
+		{"account", "POST", "/api/v1/accounts", `{"name":"reader","password":"chosen-test-password"}`, `{"name":"reader","password":"different-test-password"}`, 201},
+		{"database user create", "POST", "/api/v1/clusters/prod/database-users", `{"username":"app","database":"app","roles":[],"password":"chosen-test-password"}`, `{"username":"app","database":"app","roles":[],"password":"different-test-password"}`, 201},
+		{"database user replace", "PUT", "/api/v1/clusters/prod/database-users/app/app", `{"roles":[],"password":"chosen-test-password"}`, `{"roles":[],"password":"different-test-password"}`, 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.db")
+			s, _, token := testServerWithDatabase(t, path)
+			first := idempotentCall(s, tc.method, tc.path, tc.body, token, "password-request")
+			second := idempotentCall(s, tc.method, tc.path, tc.body, token, "password-request")
+			assertReplay(t, first, second, tc.status)
+			assertIdempotencyConflict(t, idempotentCall(s, tc.method, tc.path, tc.different, token, "password-request"), domain.ReasonConflict)
+			db, err := sql.Open("sqlite", "file:"+path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			var bodyHash string
+			if err := db.QueryRow("SELECT body_hash FROM idempotency_requests").Scan(&bodyHash); err != nil {
+				t.Fatal(err)
+			}
+			canonical, err := canonicalIdempotencyBody([]byte(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bodyHash == secrets.Hash(string(canonical)) {
+				t.Fatal("password-bearing request stored as unkeyed SHA-256")
+			}
+		})
+	}
+}
+
 func TestIdempotentConcurrentTokenCreation(t *testing.T) {
 	s, _, token := testServer(t)
 	var wg sync.WaitGroup
@@ -187,6 +228,226 @@ func TestIdempotentClusterCreatePutPatchAndPathScope(t *testing.T) {
 	}
 }
 
+func TestIdempotentClusterActions(t *testing.T) {
+	for _, action := range []struct {
+		path, body, different string
+	}{
+		{"/restart", "", ""},
+		{"/raise-fcv", `{"version":"8.0"}`, `{"version":"7.0"}`},
+	} {
+		t.Run(action.path, func(t *testing.T) {
+			s, _, token := testServer(t)
+			path := "/api/v1/clusters/prod" + action.path
+			first := idempotentCall(s, "POST", path, action.body, token, "action-request")
+			second := idempotentCall(s, "POST", path+"?namespace=default", action.body, token, "action-request")
+			assertReplay(t, first, second, 202)
+			if action.different != "" {
+				assertIdempotencyConflict(t, idempotentCall(s, "POST", path, action.different, token, "action-request"), domain.ReasonConflict)
+			}
+			ops, err := s.Store.ListOperations(t.Context(), domain.ClusterRef{Name: "prod"})
+			if err != nil || len(ops) != 1 {
+				t.Fatal("action retry queued another operation", len(ops), err)
+			}
+		})
+	}
+}
+
+func TestIdempotencyContractCoverage(t *testing.T) {
+	doc, err := apispec.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	covered := map[string]bool{}
+	for _, path := range doc.Paths.Map() {
+		for _, operation := range path.Operations() {
+			declared := false
+			for _, parameter := range operation.Parameters {
+				if parameter.Value.In == "header" && parameter.Value.Name == "Idempotency-Key" {
+					declared = true
+				}
+			}
+			if declared != idempotencyCovered(operation.OperationID) {
+				t.Errorf("%s: contract coverage %t differs from server", operation.OperationID, declared)
+			}
+			if declared {
+				covered[operation.OperationID] = true
+			}
+		}
+	}
+	for _, id := range []string{
+		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV",
+		"replaceClusterMember", "rotateSystemUser", "replaceDatabaseUser",
+		"replaceDatabaseRole", "replaceBackupStorage",
+	} {
+		if !covered[id] {
+			t.Errorf("keyed UI operation %s is not covered", id)
+		}
+	}
+	if len(covered) != 20 {
+		t.Fatalf("covered operations = %d, want 20", len(covered))
+	}
+}
+
+func TestIdempotencyLeaseHeartbeat(t *testing.T) {
+	s, _, _ := testServer(t)
+	now := time.Now()
+	record, acquired, err := s.Store.BeginIdempotency(t.Context(), "long-handler", "hash", now)
+	if err != nil || !acquired {
+		t.Fatal(record, acquired, err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	ticks := make(chan time.Time)
+	done := make(chan error, 1)
+	go func() {
+		done <- s.renewIdempotencyLease(ctx, "long-handler", record.Owner, now.Add(store.IdempotencyLease), ticks, s.Store.RenewIdempotency)
+	}()
+	// Inject minute ticks across two original lease periods.
+	for minute := 1; minute <= 10; minute++ {
+		select {
+		case ticks <- now.Add(time.Duration(minute) * time.Minute):
+		case err := <-done:
+			t.Fatal("heartbeat stopped before long handler finished", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	// A heartbeat after the renewed lease expires must stop rather than revive it.
+	select {
+	case ticks <- now.Add(10*time.Minute + store.IdempotencyLease):
+	case err := <-done:
+		t.Fatal("heartbeat stopped early", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, store.ErrConflict) {
+			t.Fatal("lost lease was not reported", err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+}
+
+func TestIdempotencyLeaseTransientRenewalFailure(t *testing.T) {
+	s, _, _ := testServer(t)
+	var logs bytes.Buffer
+	s.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	ticks := make(chan time.Time)
+	calls := make(chan time.Time, 1)
+	done := make(chan error, 1)
+	transient := errors.New("temporary database failure")
+	go func() {
+		done <- s.renewIdempotencyLease(ctx, "request", "owner", start.Add(store.IdempotencyLease), ticks,
+			func(ctx context.Context, identity, owner string, now time.Time) error {
+				calls <- now
+				if now.Equal(start.Add(time.Minute)) {
+					return transient
+				}
+				return nil
+			})
+	}()
+	// A failed first renewal must not cancel the handler. Successful later
+	// renewals must extend protection past the original lease deadline.
+	for _, minute := range []int{1, 2, 6} {
+		now := start.Add(time.Duration(minute) * time.Minute)
+		select {
+		case ticks <- now:
+		case err := <-done:
+			t.Fatalf("heartbeat stopped while lease remained valid: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		select {
+		case got := <-calls:
+			if !got.Equal(now) {
+				t.Fatal("unexpected renewal time", got)
+			}
+		case err := <-done:
+			t.Fatalf("heartbeat stopped while lease remained valid: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal("transient failure survived a recovered lease", err)
+	}
+	if !strings.Contains(logs.String(), "Failed to renew idempotency lease") {
+		t.Fatal("transient renewal failure was not logged")
+	}
+}
+
+func TestIdempotencyLeaseRenewalStopsAtExpiryOrOwnershipLoss(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		err   error
+		ticks []time.Duration
+		calls int
+	}{
+		{"lease lost", store.ErrConflict, []time.Duration{time.Minute}, 1},
+		{"transient until expiry", errors.New("temporary database failure"), []time.Duration{time.Minute, 4 * time.Minute, store.IdempotencyLease}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, _ := testServer(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			start := time.Now()
+			ticks := make(chan time.Time, len(tc.ticks))
+			for _, tick := range tc.ticks {
+				ticks <- start.Add(tick)
+			}
+			calls := 0
+			err := s.renewIdempotencyLease(ctx, "request", "owner", start.Add(store.IdempotencyLease), ticks,
+				func(context.Context, string, string, time.Time) error {
+					calls++
+					return tc.err
+				})
+			if !errors.Is(err, store.ErrConflict) {
+				t.Fatal("expired or lost lease was not reported", err)
+			}
+			if calls != tc.calls {
+				t.Fatalf("renewal calls = %d, want %d", calls, tc.calls)
+			}
+		})
+	}
+}
+
+func TestIdempotencyLeaseExpiryBoundsBlockedRenewal(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	ticks := make(chan time.Time, 1)
+	now := time.Now()
+	ticks <- now
+	err := s.renewIdempotencyLease(ctx, "request", "owner", now.Add(20*time.Millisecond), ticks,
+		func(ctx context.Context, identity, owner string, now time.Time) error {
+			<-ctx.Done()
+			return ctx.Err()
+		})
+	if !errors.Is(err, store.ErrConflict) {
+		t.Fatal("blocked renewal outlived the lease", err)
+	}
+}
+
+func TestIdempotencyLeaseExpiryWithoutHeartbeat(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	err := s.renewIdempotencyLease(ctx, "request", "owner", time.Now().Add(20*time.Millisecond), nil,
+		func(context.Context, string, string, time.Time) error {
+			t.Error("renewed without a heartbeat")
+			return nil
+		})
+	if !errors.Is(err, store.ErrConflict) {
+		t.Fatal("lease expiry did not stop the handler", err)
+	}
+}
+
 func TestIdempotencyValidationAndUncachedFailures(t *testing.T) {
 	s, _, token := testServer(t)
 	for _, key := range []string{"", "with space", "non-ascii-é", strings.Repeat("x", 256)} {
@@ -259,6 +520,70 @@ func TestIdempotencyReplayRechecksAuthentication(t *testing.T) {
 	}
 }
 
+func TestIdempotencyRecreatedAccountCannotReplaySecrets(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx := t.Context()
+	name := "retry-owner"
+	create := func() {
+		t.Helper()
+		if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: name, Roles: []string{"role:admin"}}, "retry-owner-password"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	login := func() *httptest.ResponseRecorder {
+		t.Helper()
+		w := call(s, "POST", "/api/v1/auth/login", `{"username":"retry-owner","password":"retry-owner-password"}`, "")
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		return w
+	}
+	send := func(session *httptest.ResponseRecorder) *httptest.ResponseRecorder {
+		t.Helper()
+		var authenticated api.Session
+		if err := json.Unmarshal(session.Body.Bytes(), &authenticated); err != nil || authenticated.CsrfToken == nil {
+			t.Fatal("login lacks CSRF token", err)
+		}
+		r := httptest.NewRequest("POST", "/api/v1/api-tokens", strings.NewReader(`{"name":"one-time-secret"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Idempotency-Key", "same-account-key")
+		r.Header.Set("X-Karakoram-CSRF", *authenticated.CsrfToken)
+		for _, cookie := range session.Result().Cookies() {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		testHandler(s).ServeHTTP(w, r)
+		return w
+	}
+	create()
+	firstSession := login()
+	first := send(firstSession)
+	assertReplay(t, first, send(firstSession), 201)
+	// Fresh sessions for the same existing account still share its replay scope.
+	assertReplay(t, first, send(login()), 201)
+	if err := s.Auth.DeleteAccount(ctx, name); err != nil {
+		t.Fatal(err)
+	}
+	create()
+	second := send(login())
+	if second.Code != 201 || second.Header().Get("Idempotent-Replayed") != "" || second.Body.String() == first.Body.String() {
+		t.Fatal("recreated account replayed deleted account's secret", second.Code, second.Body.String())
+	}
+	tokens, err := s.Store.ListApiTokens(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned := 0
+	for _, token := range tokens {
+		if token.Owner == name {
+			owned++
+		}
+	}
+	if owned != 1 {
+		t.Fatal("recreated account did not create its own token", owned)
+	}
+}
+
 func TestIdempotentBackupsRestoresAndGeneratedPassword(t *testing.T) {
 	s, _, token := testServer(t)
 	if err := s.Store.CreateBackupStorage(t.Context(), &domain.BackupStorage{Name: "archive", Type: "s3", EndpointURL: "https://storage.example", Region: "region", Bucket: "backups", VerifyTLS: true}); err != nil {
@@ -318,7 +643,12 @@ func TestIdempotencyCanonicalBody(t *testing.T) {
 			t.Fatal("different values conflated", err)
 		}
 	}
-	for _, body := range []string{`{} {}`, `{} garbage`, ``} {
+	for _, body := range []string{"", " \n\t "} {
+		if canonical, err := canonicalIdempotencyBody([]byte(body)); err != nil || len(canonical) != 0 {
+			t.Fatal("empty action body rejected", err)
+		}
+	}
+	for _, body := range []string{`{} {}`, `{} garbage`} {
 		if _, err := canonicalIdempotencyBody([]byte(body)); err == nil {
 			t.Fatal("malformed body accepted")
 		}

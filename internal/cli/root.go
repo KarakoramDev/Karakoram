@@ -86,7 +86,7 @@ func (a *app) connect(cmd *cobra.Command) error {
 		}
 	}
 	if a.format != "table" && a.format != "json" && a.format != "yaml" {
-		return fmt.Errorf("unsupported output format %q", a.format)
+		return usageError("unsupported output format %q", a.format)
 	}
 	path := a.opts.ConfigPath
 	if path == "" {
@@ -111,7 +111,7 @@ func (a *app) connect(cmd *cobra.Command) error {
 	}
 	c, exists := a.config.Contexts[a.selected]
 	if a.contextName != "" && !exists && cmd.Name() != "login" {
-		return fmt.Errorf("context %q does not exist", a.selected)
+		return usageError("context %q does not exist", a.selected)
 	}
 	a.namespaceExplicit = cmd.Flags().Changed("namespace")
 	if !a.namespaceExplicit {
@@ -139,7 +139,7 @@ func (a *app) connect(cmd *cobra.Command) error {
 	}
 	u, err := url.Parse(server)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
-		return fmt.Errorf("server must be an http(s) URL without credentials, query or fragment")
+		return usageError("server must be an http(s) URL without credentials, query or fragment")
 	}
 	a.server = strings.TrimSuffix(server, "/")
 	a.token = token
@@ -162,7 +162,7 @@ func (a *app) connect(cmd *cobra.Command) error {
 		for _, cookie := range a.cookies {
 			name, value, ok := strings.Cut(cookie, "=")
 			if !ok || name == "" {
-				return fmt.Errorf("cookie must be NAME=VALUE")
+				return usageError("cookie must be NAME=VALUE")
 			}
 			r.AddCookie(&http.Cookie{Name: name, Value: value})
 		}
@@ -259,7 +259,7 @@ func decodeResponse(resp *http.Response) (any, error) {
 func (a *app) fileBody(cmd *cobra.Command) (map[string]any, error) {
 	path, _ := cmd.Flags().GetString("file")
 	if path == "" {
-		return nil, fmt.Errorf("--file is required (YAML or JSON; '-' reads stdin)")
+		return nil, usageError("--file is required (YAML or JSON; '-' reads stdin)")
 	}
 	var b []byte
 	var err error

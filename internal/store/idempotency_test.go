@@ -129,7 +129,7 @@ func TestIdempotencyFailuresAndExpiredOwners(t *testing.T) {
 	if err != nil || !acquired {
 		t.Fatal("failed key not reusable", acquired, err)
 	}
-	third, acquired, err := s.BeginIdempotency(ctx, "request", "new", now.Add(IdempotencyTTL))
+	third, acquired, err := s.BeginIdempotency(ctx, "request", "new", now.Add(IdempotencyLease))
 	if err != nil || !acquired {
 		t.Fatal("abandoned reservation not expired", acquired, err)
 	}
@@ -149,5 +149,134 @@ func TestIdempotencyFailuresAndExpiredOwners(t *testing.T) {
 	got, acquired, err := s.BeginIdempotency(ctx, "request", "new", now)
 	if err != nil || acquired || got.Response == nil || !bytes.Equal(got.Response.Body, wire.Body) {
 		t.Fatal("release removed completed response", acquired, err)
+	}
+}
+
+func TestIdempotencyLeaseRenewal(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	clock := func() time.Time { return now }
+	first, acquired, err := s.BeginIdempotency(ctx, "leased", "hash", clock())
+	if err != nil || !acquired {
+		t.Fatal(first, acquired, err)
+	}
+	if err := s.RenewIdempotency(ctx, "leased", "wrong-owner", clock()); !errors.Is(err, ErrConflict) {
+		t.Fatal("another owner renewed reservation", err)
+	}
+	// Renew well beyond the original expiry without allowing another owner.
+	for range 10 {
+		now = now.Add(time.Minute)
+		if err := s.RenewIdempotency(ctx, "leased", first.Owner, clock()); err != nil {
+			t.Fatal("active lease lost", err)
+		}
+		got, acquired, err := s.BeginIdempotency(ctx, "leased", "hash", clock())
+		if err != nil || acquired || got.Owner != first.Owner {
+			t.Fatal("active reservation reclaimed", got, acquired, err)
+		}
+	}
+	now = now.Add(IdempotencyLease)
+	if err := s.RenewIdempotency(ctx, "leased", first.Owner, clock()); !errors.Is(err, ErrConflict) {
+		t.Fatal("expired owner revived reservation", err)
+	}
+	second, acquired, err := s.BeginIdempotency(ctx, "leased", "hash", clock())
+	if err != nil || !acquired || second.Owner == first.Owner {
+		t.Fatal("abandoned reservation not reclaimed", second, acquired, err)
+	}
+	if err := s.RenewIdempotency(ctx, "leased", first.Owner, clock()); !errors.Is(err, ErrConflict) {
+		t.Fatal("stale owner renewed replacement", err)
+	}
+	wire := IdempotentResponse{Status: 202, Body: []byte(`{"operationId":"accepted"}`)}
+	if err := s.CompleteIdempotency(ctx, "leased", second.Owner, wire, clock()); err != nil {
+		t.Fatal(err)
+	}
+	completedAt := clock()
+	now = now.Add(IdempotencyLease)
+	replay, acquired, err := s.BeginIdempotency(ctx, "leased", "hash", clock())
+	if err != nil || acquired || replay.Response == nil {
+		t.Fatal("lease expiry shortened replay retention", replay, acquired, err)
+	}
+	now = completedAt.Add(IdempotencyTTL)
+	if _, acquired, err := s.BeginIdempotency(ctx, "leased", "hash", clock()); err != nil || !acquired {
+		t.Fatal("completed replay did not expire", acquired, err)
+	}
+}
+
+func TestIdempotencyLeaseMigration(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	now := time.Now()
+	replayExpiry := now.Add(IdempotencyTTL).UnixNano()
+	shortExpiry := now.Add(time.Minute).UnixNano()
+	for _, record := range []struct {
+		identity, response string
+		expires            int64
+	}{
+		{"legacy", "", replayExpiry},
+		{"short", "", shortExpiry},
+		{"completed", "sealed-response", replayExpiry},
+	} {
+		if _, err := s.writer.ExecContext(ctx, "INSERT INTO idempotency_requests(identity,body_hash,owner,response,expires) VALUES(?,?,?,?,?)", record.identity, "hash", "owner", record.response, record.expires); err != nil {
+			t.Fatal(err)
+		}
+	}
+	script, err := migrations.ReadFile("migrations/007_idempotency_lease.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.writer.ExecContext(ctx, string(script)); err != nil {
+		t.Fatal(err)
+	}
+	for _, identity := range []string{"legacy", "short", "completed"} {
+		var expiry int64
+		if err := s.reader.QueryRowContext(ctx, "SELECT expires FROM idempotency_requests WHERE identity=?", identity).Scan(&expiry); err != nil {
+			t.Fatal(err)
+		}
+		switch identity {
+		case "legacy":
+			if expiry > now.Add(IdempotencyLease).UnixNano() || expiry <= now.UnixNano() {
+				t.Fatal("legacy reservation not bounded by lease", expiry)
+			}
+		case "short":
+			if expiry != shortExpiry {
+				t.Fatal("migration extended an existing shorter lease", expiry)
+			}
+		case "completed":
+			if expiry != replayExpiry {
+				t.Fatal("migration shortened a successful replay", expiry)
+			}
+		}
+	}
+}
+
+func TestIdempotencyHashUpgradePurgesLegacyRowsOnce(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	if _, err := s.writer.ExecContext(ctx, "DELETE FROM schema_migrations WHERE name='008_idempotency_hmac.sql'"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for _, response := range []string{"", "legacy-sealed-response"} {
+		if _, err := s.writer.ExecContext(ctx, "INSERT INTO idempotency_requests(identity,body_hash,owner,response,expires) VALUES(?,?,?,?,?)", secrets.Hash(response), secrets.Hash("password-body"), "owner", response, now.Add(IdempotencyTTL).UnixNano()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := s.reader.QueryRowContext(ctx, "SELECT count(*) FROM idempotency_requests").Scan(&count); err != nil || count != 0 {
+		t.Fatal("legacy request digests retained after upgrade", count, err)
+	}
+	record, acquired, err := s.BeginIdempotency(ctx, "new-request", "keyed-hash", now)
+	if err != nil || !acquired {
+		t.Fatal("upgrade prevented a fresh reservation", record, acquired, err)
+	}
+	if err := s.migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	retry, acquired, err := s.BeginIdempotency(ctx, "new-request", "keyed-hash", now)
+	if err != nil || acquired || retry.Owner != record.Owner {
+		t.Fatal("restart purged a new reservation", retry, acquired, err)
 	}
 }

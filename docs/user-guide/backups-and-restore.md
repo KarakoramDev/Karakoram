@@ -97,7 +97,14 @@ then inspect the inventory's final outcome. For catalog upgrades marked
 earlier than the last known convergence to the current version qualifies;
 see [the server-enforced gate](scaling-and-upgrades.md#required-pre-upgrade-backups).
 
-Manual backup requests require a formed, active cluster with its current generation observed. Creating, suspended, deleting or otherwise unconverged clusters return **409** naming the phase instead of leaving a Pending record. If an operation fails, expires, is cancelled or is retired by cluster deletion, its unfinished backup inventory becomes Failed with the same message. Failed records without a started PBM snapshot, and never-started records without active work, can be deleted immediately and their name reused; snapshots that did start still need asynchronous backend cleanup. Backups have a 20-failure/two-hour operation limit; restores have a six-hour deadline. See the [API async contract](api.md#declarative-updates-and-asynchronous-work) for configuration and safe cancellation checkpoints.
+Manual backup requests require a formed, active cluster with its current generation observed. Creating, suspended, deleting or otherwise unconverged clusters return **409** naming the phase and, when applicable, the pending and observed generations instead of leaving a Pending record. A cluster may still report Ready while a desired change is pending; wait for `observedGeneration` to reach `generation` before requesting a backup. If an operation fails, expires, is cancelled or is retired by cluster deletion, its unfinished backup inventory becomes Failed with the same message. Failed records without a started PBM snapshot, and never-started records without active work, can be deleted immediately and their name reused; snapshots that did start still need asynchronous backend cleanup. Backups have a 20-consecutive-failure/two-hour ordinary-work limit; restores have a six-hour deadline. Successful provider steps reset the failure count. Expired/exhausted Running work first completes compensating cleanup, retrying with backoff beyond that limit, before the operation becomes Failed with the original reason. Restore cleanup restarts database/PBM processes, clears maintenance/router holds and restores target configuration; this is recovery, not rollback of restored data. See the [API async contract](api.md#declarative-updates-and-asynchronous-work) for configuration and safe cancellation checkpoints.
+
+Failure compensation has its own six-hour window from entry into recovery,
+including observation of an already-running PBM restore. If it expires, the
+operation releases the queue as Failed with a Warning naming the incomplete
+compensation step and requiring manual recovery. This does not prove PBM is
+terminal or undo data mutation. Repair and verify PBM/process state and any
+maintenance/router holds before reopening traffic or starting dependent work.
 
 After full cluster removal, deleting a retained Failed/never-started record without a PBM snapshot is synchronous (**204**) and does not require reachable storage. An active matching operation still blocks deletion until it is cancelled or terminal. Removal also deletes the record's protected recovery credential. Cleanup of a cluster that never configured PBM removes never-started owned records without waiting for nonexistent database agents; ambiguous durable start receipts remain subject to remote snapshot cleanup instead.
 
@@ -157,7 +164,9 @@ PITR records oplog slices into the cluster's primary backup destination. It need
 
 The API validates `source.pitrTime` **before accepting** a restore. A future time, a time before/after the observed coverage, or a gap between continuous windows returns HTTP **400** with `details.field: source.pitrTime`, `reason: out_of_range`, and UTC `earliest`/`latest` bounds for the current coverage. Those bounds do not imply that intervening gaps are recoverable. A source that is initializing or has no coverage returns **409** with reason `invalid_state` and explains the base-snapshot/oplog prerequisite; the PITR-window endpoint also reports initialization as a state conflict, not an internal error. Refresh the window and select a covered time once prerequisites complete. Coverage is checked again during execution; a permanently invalid target fails its Restore and Operation with a reason rather than retrying forever.
 
-Enabling PITR alone does not create proof of a usable window. Gaps, quota exhaustion, failed slicing, base deletion or storage changes can remove recovery coverage. After restore Karakoram holds PITR disabled until its required fresh base snapshot succeeds; check that backup and the new timeline before trusting recovery coverage again.
+Once a replica set is ready and PBM storage is configured, scaling, binary upgrades, resource changes, member joins and reloads do not hide established coverage merely because the cluster is converging. The PITR-window endpoint and restore preflight continue to query PBM; actual agent/storage failures or missing history still affect availability.
+
+Enabling PITR alone does not create proof of a usable window. Gaps, quota exhaustion, failed slicing, base deletion or storage changes can remove recovery coverage. After restore Karakoram holds PITR disabled until a fresh snapshot on primary storage succeeds. Its automatic post-restore base backup cannot be cancelled because it protects PITR continuity. If that backup fails, is cancelled by older software, or its record disappears, Karakoram queues at most three replacement attempts and emits warning events without blocking cluster convergence. If those attempts are exhausted, take a successful manual backup on primary storage; a snapshot queued after the restore also satisfies the fresh-base requirement. Check the backup and new timeline before trusting recovery coverage again.
 
 ## In-place restore
 
@@ -174,11 +183,28 @@ karactl operations cluster demo
 
 The timestamp is illustrative; replace it with a real point in your reported window. Exactly one of backup or time is required. Restore requests accept a source cluster, with the target used by default. Use matching topology/engine major and a successful snapshot; physical restores especially depend on binary/data compatibility.
 
+An in-place **logical restore is not a full rollback**: PBM drops/replaces the
+namespaces contained in the backup, but leaves databases and collections that
+did not exist in that backup untouched, including their documents. On sharded
+clusters PBM drops every database present in the backup before restoring it, so
+collections added later to those databases are removed as well; only databases
+absent from the backup are preserved there. To obtain an
+exact copy of the backed-up data, stop writes and drop those extra databases or
+collections before restoring, or use a physical backup/restore (which replaces
+the data directory) or restore into a new cluster. See
+[PBM logical backups and restores](https://docs.percona.com/percona-backup-mongodb/latest/features/logical.html).
+
 REST uses `source.backup` or `source.pitrTime`: set exactly one. Both selectors or neither return **400**, `details.field: source`, reason `conflict`. A nonexistent backup returns **404** with its name and source cluster/namespace; the same dependency context is returned for clone creation. Duplicate restore names return **409** `already_exists`. These errors are synchronous: no restore operation is accepted.
 
 Karakoram serializes disruptive cluster work. It disables PITR and, for sharding, coordinates balancer/router holds. Physical restore suppresses automatic mongod/PBM restart on all relevant nodes. Mongod may be offline and PBM may exit successfully as part of recovery; progress is read with PBM storage configuration while MongoDB is unavailable. Karakoram then starts mongod/PBM, releases maintenance, restores system users, resyncs target storage and restores router/balancer state. Logical restores do not use the offline physical lifecycle.
 
 While an in-place restore is Running, cluster phase is **Restoring**, with the operation checkpoint exposed in its message. Successful completion transitions to health observation; terminal failure exposes Degraded with the error. Cancellation is cooperative only before data mutation (including waiting for PBM source inventory); already-started restore is not an undoable operation. Wait for cancellation cleanup and inspect member/agent health before reopening traffic.
+
+If the operation exhausts its ordinary work limit after PBM starts, recovery
+continues to observe PBM until a terminal status before starting database
+processes. A PBM `done` outcome remains a Succeeded restore even if recovery
+exceeded that limit; the operation records the limit failure separately. The
+fresh-base backup is still enqueued and PITR remains gated until it succeeds.
 
 After completion verify every member/agent, application authentication, collection data, balancer state, backup inventory and the fresh post-restore base. Do not reopen writers solely because PBM reported `done`. See [physical-restore troubleshooting](../operations.md#troubleshooting-by-symptom).
 
