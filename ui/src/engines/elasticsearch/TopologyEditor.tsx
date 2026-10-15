@@ -53,7 +53,7 @@ export function TopologyEditor({ cluster, provider: catalog, editable, busy, sub
   const topology = provider.topologies.find((t) => t.type === draft.topology.type);
   const components = validateComponents(draft, topology, (resources, stateless, name) => validateResources(resources, componentOf(cluster.spec, name)?.resources, stateless, resourceMinimums(draft.provider, topology, name)));
   const errors = [
-    ...validateSpec(draft),
+    ...validateSpec(draft, cluster.spec),
     ...components.topology,
     ...components.resources,
     ...validateTLS(draft.tls, cluster.spec.tls?.ca),
@@ -79,7 +79,7 @@ export function TopologyEditor({ cluster, provider: catalog, editable, busy, sub
         </Card>
         <ResourcesSection provider={provider} spec={draft} persisted={cluster.spec} onChange={setDraft} />
         <Card title="Elastic Stack options">
-          <OptionsSection provider={provider} spec={draft} onChange={setDraft} />
+          <OptionsSection provider={provider} spec={draft} persisted={cluster.spec} onChange={setDraft} />
         </Card>
         <Card title="Transport security">
           <TLSEditor storedCA={cluster.spec.tls?.ca} value={draft.tls ?? { mode: 'requireTLS', ca: 'selfSigned' }} onChange={(tls) => setDraft((d) => ({ ...d, tls }))} />

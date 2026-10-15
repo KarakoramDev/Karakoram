@@ -15,6 +15,17 @@ export function applicationGrants(drafts: ApplicationDraft[]): Schemas['ElasticA
   return grants.every((grant) => grant.application && grant.privileges.length && grant.resources.length) ? grants : null;
 }
 
+/** Native roles accept arbitrary applications; warn without rejecting those grants. */
+export function applicationWarnings(drafts: ApplicationDraft[]): string[] {
+  return drafts.flatMap((draft) => {
+    const application = draft.application.trim();
+    if (!application) return [];
+    const unknown = values(draft.privileges).filter((privilege) => !/^(?:all|read|feature_[A-Za-z0-9_-]+\.(?:all|read))$/.test(privilege));
+    if (application === 'kibana-.kibana' && !unknown.length) return [];
+    return [`Application "${application}" or its privileges do not match Kibana's registered application kibana-.kibana and known privilege forms (all, read, feature_<name>.all/read). Elasticsearch accepts custom grants, but unregistered privileges do not grant Kibana access.`];
+  });
+}
+
 export const INVALIDATION_WAIT_MS = 45_000;
 export type PendingInvalidation = { id: string; startedAt: number };
 type MarkerStorage = Pick<Storage, 'length' | 'key' | 'getItem' | 'setItem' | 'removeItem'>;

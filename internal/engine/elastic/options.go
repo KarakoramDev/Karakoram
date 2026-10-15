@@ -21,12 +21,14 @@ import (
 // silently ignore it. User settings belong in these typed options instead.
 type Options struct {
 	Kibana struct {
-		Public   bool           `json:"public"`
-		Settings map[string]any `json:"settings,omitempty"`
+		Public            bool           `json:"public"`
+		AllowAllAddresses bool           `json:"allowAllAddresses,omitempty"`
+		Settings          map[string]any `json:"settings,omitempty"`
 	} `json:"kibana"`
 	APM struct {
-		Public  bool  `json:"public"`
-		APIKeys *bool `json:"apiKeys,omitempty"`
+		Public            bool  `json:"public"`
+		AllowAllAddresses bool  `json:"allowAllAddresses,omitempty"`
+		APIKeys           *bool `json:"apiKeys,omitempty"`
 	} `json:"apm"`
 	Logstash struct {
 		Pipelines       []agentspec.Pipeline `json:"pipelines,omitempty"`

@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -379,21 +380,34 @@ func logstashReadiness(ctx context.Context, client *http.Client, base string, pi
 	var loaded struct {
 		Pipelines map[string]json.RawMessage `json:"pipelines"`
 	}
-	if err := getJSON(ctx, client, base+"/_node/pipelines", agentspec.Credentials{}, false, &loaded); err != nil {
-		return fmt.Errorf("Logstash pipeline inventory unavailable: %w", err)
-	}
+	inventoryErr := getJSON(ctx, client, base+"/_node/pipelines", agentspec.Credentials{}, false, &loaded)
 	var stats struct {
 		Pipelines map[string]*struct {
-			Events *json.RawMessage `json:"events"`
+			Events  *json.RawMessage `json:"events"`
+			Reloads struct {
+				LastError            json.RawMessage `json:"last_error"`
+				LastSuccessTimestamp time.Time       `json:"last_success_timestamp"`
+				LastFailureTimestamp time.Time       `json:"last_failure_timestamp"`
+			} `json:"reloads"`
 		} `json:"pipelines"`
 	}
-	if err := getJSON(ctx, client, base+"/_node/stats/pipelines", agentspec.Credentials{}, false, &stats); err != nil {
-		return fmt.Errorf("Logstash pipeline stats unavailable: %w", err)
-	}
+	statsErr := getJSON(ctx, client, base+"/_node/stats/pipelines", agentspec.Credentials{}, false, &stats)
 	if len(pipelines) == 0 {
 		pipelines = []agentspec.Pipeline{{ID: "main"}}
 	}
 	for _, pipeline := range pipelines {
+		// Reload diagnostics remain useful even when the inventory endpoint failed.
+		if running := stats.Pipelines[pipeline.ID]; running != nil && (running.Reloads.LastSuccessTimestamp.IsZero() || running.Reloads.LastFailureTimestamp.After(running.Reloads.LastSuccessTimestamp)) {
+			if message := pipelineConfigurationError(string(running.Reloads.LastError), pipeline.ID); message != "" {
+				return errors.New(message)
+			}
+		}
+		if inventoryErr != nil {
+			return fmt.Errorf("Logstash pipeline inventory unavailable: %w", inventoryErr)
+		}
+		if statsErr != nil {
+			return fmt.Errorf("Logstash pipeline stats unavailable: %w", statsErr)
+		}
 		if info, ok := loaded.Pipelines[pipeline.ID]; !ok || string(info) == "null" {
 			return fmt.Errorf("Logstash pipeline %q is not loaded; check its configuration and startup logs", pipeline.ID)
 		}
@@ -402,6 +416,27 @@ func logstashReadiness(ctx context.Context, client *http.Client, base string, pi
 		}
 	}
 	return nil
+}
+
+var pipelineErrorClass = regexp.MustCompile(`(?:LogStash::)?(?:ConfigurationError|PluginLoadingError)`)
+var pipelineErrorLocation = regexp.MustCompile(`line [0-9]+, column [0-9]+`)
+
+// Only expose a known error class and parser location. Raw errors can quote
+// pipeline source, credentials and event data; those remain in protected logs.
+func pipelineConfigurationError(raw, id string) string {
+	class := pipelineErrorClass.FindString(raw)
+	if class == "" {
+		return ""
+	}
+	label := "Logstash pipeline"
+	if id != "" {
+		label += fmt.Sprintf(" %q", id)
+	}
+	message := label + " configuration failed: " + class
+	if location := pipelineErrorLocation.FindString(raw); location != "" {
+		message += " at " + location
+	}
+	return message + "; correct the pipeline configuration and apply it again (details in component logs)"
 }
 
 // Version returns the payload version only when its installed home exists.

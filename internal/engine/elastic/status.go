@@ -231,7 +231,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				ms.PlacementGroup = status.HostFingerprint
 				if !isES(m) {
 					ms.Version = status.EngineVersion
-					ms.Health, ms.Agent.Message = componentReadiness(ctx, a, m)
+					ms.Health, ms.Agent.Message, _ = componentReadiness(ctx, a, m)
 					ms.Health = ms.Health && ms.Agent.Healthy
 					if ms.Health {
 						ms.State = "joined"

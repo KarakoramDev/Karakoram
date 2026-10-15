@@ -76,8 +76,8 @@ export interface Pipeline {
 
 /** Typed view of `spec.engineOptions` for this provider (internal/engine/elastic/options.go). */
 export interface ElasticOptions {
-  kibana: { public: boolean; settings?: Record<string, unknown> };
-  apm: { public: boolean; apiKeys: boolean };
+  kibana: { public: boolean; allowAllAddresses?: boolean; settings?: Record<string, unknown> };
+  apm: { public: boolean; allowAllAddresses?: boolean; apiKeys: boolean };
   logstash: { pipelines: Pipeline[]; persistentQueue: boolean };
   elasticsearch: { settings?: Record<string, unknown> };
 }
@@ -105,8 +105,8 @@ export function readOptions(spec: Pick<ClusterSpec, 'engineOptions'>): ElasticOp
       })
     : [];
   return {
-    kibana: { public: kibana.public === true, settings: settings(kibana.settings) },
-    apm: { public: apm.public === true, apiKeys: apm.apiKeys !== false },
+    kibana: { public: kibana.public === true, ...(kibana.allowAllAddresses === true ? { allowAllAddresses: true } : {}), settings: settings(kibana.settings) },
+    apm: { public: apm.public === true, ...(apm.allowAllAddresses === true ? { allowAllAddresses: true } : {}), apiKeys: apm.apiKeys !== false },
     logstash: { pipelines, persistentQueue: logstash.persistentQueue === true },
     elasticsearch: { settings: settings(es.settings) },
   };
@@ -115,8 +115,8 @@ export function readOptions(spec: Pick<ClusterSpec, 'engineOptions'>): ElasticOp
 /** Serialize options into the wire shape the server decodes with unknown fields rejected. */
 export function writeOptions(spec: ClusterSpec, o: ElasticOptions): ClusterSpec {
   const engineOptions: Record<string, unknown> = {
-    kibana: { public: o.kibana.public, ...(o.kibana.settings ? { settings: o.kibana.settings } : {}) },
-    apm: { public: o.apm.public, apiKeys: o.apm.apiKeys },
+    kibana: { public: o.kibana.public, ...(o.kibana.public && o.kibana.allowAllAddresses ? { allowAllAddresses: true } : {}), ...(o.kibana.settings ? { settings: o.kibana.settings } : {}) },
+    apm: { public: o.apm.public, ...(o.apm.public && o.apm.allowAllAddresses ? { allowAllAddresses: true } : {}), apiKeys: o.apm.apiKeys },
     logstash: { persistentQueue: o.logstash.persistentQueue, ...(o.logstash.pipelines.length ? { pipelines: o.logstash.pipelines } : {}) },
     elasticsearch: o.elasticsearch.settings ? { settings: o.elasticsearch.settings } : {},
   };
@@ -213,13 +213,17 @@ export function validatePipelines(pipelines: Pipeline[]): string[] {
 }
 
 /** Basics-step errors: engine options, TLS mode and the unsupported free-form engineConfig. */
-export function validateSpec(spec: ClusterSpec): string[] {
+export function validateSpec(spec: ClusterSpec, persisted?: ClusterSpec): string[] {
   const errors: string[] = [];
   const o = readOptions(spec);
   if (spec.engineConfig?.trim()) errors.push('Elasticsearch settings belong in Elastic Stack options, not engine configuration overrides. Clear inherited overrides before creating the cluster.');
   if (spec.tls && spec.tls.mode !== 'requireTLS') errors.push('Elasticsearch always requires TLS; choose the requireTLS mode.');
   if (o.kibana.public && replicasOf(spec, 'kibana') === 0) errors.push('Public Kibana access needs at least one Kibana instance.');
   if (o.apm.public && replicasOf(spec, 'apm') === 0) errors.push('Public APM access needs at least one APM Server instance.');
+  const previous = persisted ? readOptions(persisted) : undefined;
+  for (const name of ['kibana', 'apm'] as const) {
+    if (o[name].public && !previous?.[name].public && !o[name].allowAllAddresses) errors.push(`Confirm that public ${COMPONENT_LABEL[name]} is reachable from the internet without an IP allowlist.`);
+  }
   if (o.logstash.pipelines.length && replicasOf(spec, 'logstash') === 0) errors.push('Logstash pipelines are configured but Logstash is disabled.');
   errors.push(...validatePipelines(o.logstash.pipelines));
   return errors;
@@ -257,8 +261,8 @@ export function specPatch(current: ClusterSpec, draft: ClusterSpec): Record<stri
   if (!same(before, after)) {
     // Merge-patch semantics: optional keys that disappeared must be nulled, not omitted.
     patch.engineOptions = {
-      kibana: { public: after.kibana.public, settings: after.kibana.settings ?? null },
-      apm: { public: after.apm.public, apiKeys: after.apm.apiKeys },
+      kibana: { public: after.kibana.public, ...(after.kibana.allowAllAddresses ? { allowAllAddresses: true } : {}), settings: after.kibana.settings ?? null },
+      apm: { public: after.apm.public, ...(after.apm.allowAllAddresses ? { allowAllAddresses: true } : {}), apiKeys: after.apm.apiKeys },
       logstash: { persistentQueue: after.logstash.persistentQueue, pipelines: after.logstash.pipelines.length ? after.logstash.pipelines : null },
       elasticsearch: { settings: after.elasticsearch.settings ?? null },
     };
@@ -269,12 +273,12 @@ export function specPatch(current: ClusterSpec, draft: ClusterSpec): Record<stri
   if (ca !== (current.tls?.ca ?? 'selfSigned')) tls.ca = ca;
   if ((draft.tls?.mode ?? 'requireTLS') !== (current.tls?.mode ?? 'requireTLS')) tls.mode = draft.tls?.mode;
   if (ca === 'userProvided') {
-    for (const key of ['caCertificate', 'caPrivateKey', 'certificate', 'privateKey'] as const) if (draft.tls?.[key]?.trim()) tls[key] = draft.tls[key];
+    for (const key of ['caCertificate', 'caPrivateKey', 'certificate', 'privateKey'] as const) if (draft.tls?.[key]?.trim() && draft.tls[key]?.trim() !== current.tls?.[key]?.trim()) tls[key] = draft.tls[key];
   }
   if (Object.keys(tls).length) patch.tls = tls;
 
-  const exposureBefore = current.exposure ?? { public: false, ipType: 'IPV6', allowlist: [] };
-  const exposureAfter = draft.exposure ?? exposureBefore;
+  const exposureBefore = { public: current.exposure?.public ?? false, ipType: current.exposure?.ipType ?? 'IPV6', allowlist: current.exposure?.allowlist ?? [] };
+  const exposureAfter = { public: draft.exposure?.public ?? exposureBefore.public, ipType: draft.exposure?.ipType ?? exposureBefore.ipType, allowlist: draft.exposure?.allowlist ?? exposureBefore.allowlist };
   if (exposureAfter.public !== exposureBefore.public || exposureAfter.ipType !== exposureBefore.ipType || !same(exposureAfter.allowlist ?? [], exposureBefore.allowlist ?? [])) {
     patch.exposure = { public: exposureAfter.public, ipType: exposureAfter.ipType, allowlist: exposureAfter.public ? exposureAfter.allowlist ?? [] : [] };
   }
@@ -285,8 +289,12 @@ export function specPatch(current: ClusterSpec, draft: ClusterSpec): Record<stri
 /** Human-readable consequences of applying `draft` over `current`, for the confirmation dialog. */
 export function disruptions(current: ClusterSpec, draft: ClusterSpec): string[] {
   const out: string[] = [];
+  const patch = specPatch(current, draft);
+  const changedComponents = record(patch.components);
   const dedicated = current.topology.type === 'dedicatedMasters';
   for (const name of COMPONENTS) {
+    const change = record(name === 'engine' ? changedComponents.engine : record(changedComponents.extra)[name]);
+    if (!Object.keys(change).length) continue;
     const before = componentOf(current, name);
     const after = componentOf(draft, name);
     if (!after) continue;
@@ -296,23 +304,38 @@ export function disruptions(current: ClusterSpec, draft: ClusterSpec): string[] 
     if (name === 'engine' || name === 'master') {
       if (to > from) out.push(`${label} ${from} → ${to}: new nodes are provisioned and join; shards rebalance automatically.`);
       if (to < from) out.push(`${label} ${from} → ${to}: nodes are drained and removed one at a time; each waits until it holds no shards${name === 'master' || !dedicated ? ' and has left the voting configuration' : ''}.`);
-      if (before && before.resources.minRam !== after.resources.minRam) out.push(`${label} RAM change → heap change → rolling restart of these nodes.`);
+      if (change.resources && before && before.resources.minRam !== after.resources.minRam) out.push(`${label} RAM change → heap change → rolling restart of these nodes.`);
     } else {
       if (from === 0 && to > 0) out.push(`${label} enabled: the service is created and wired to the cluster.`);
       else if (from > 0 && to === 0) out.push(`${label} disabled: the service and its containers are deleted.`);
       else if (from !== to) out.push(`${label} ${from} → ${to} containers.`);
-      if (before && to > 0 && from > 0 && !same(before.resources, after.resources)) out.push(`${label} resources change → containers restart.`);
+      if (change.resources && before && to > 0 && from > 0 && !same(before.resources, after.resources)) out.push(`${label} resources change → containers restart.`);
     }
   }
   const before = readOptions(current);
   const after = readOptions(draft);
-  if (!same(before.kibana, after.kibana)) out.push('Kibana options change → Kibana restarts.');
-  if (!same(before.apm, after.apm)) out.push('APM Server options change → APM Server restarts.');
-  if (!same(before.logstash, after.logstash)) out.push('Logstash options change → Logstash restarts.');
-  if (!same(current.tls, draft.tls)) out.push('TLS change → certificates are re-issued and reloaded.');
-  if (!same(current.exposure, draft.exposure)) out.push('Exposure change → public routes added or removed; HTTP certificates re-issued with the public addresses.');
+  if (patch.engineOptions) {
+    if (!same(before.kibana.settings, after.kibana.settings)) out.push('Kibana settings change → Kibana restarts.');
+    if (before.apm.apiKeys !== after.apm.apiKeys) out.push('APM Server authentication change → APM Server restarts.');
+    if (!same(before.logstash, after.logstash)) out.push('Logstash options change → Logstash restarts.');
+    if (!same(before.elasticsearch, after.elasticsearch)) out.push('Elasticsearch settings change → rolling restart.');
+    for (const name of ['kibana', 'apm'] as const) {
+      if (before[name].public !== after[name].public) out.push(`${COMPONENT_LABEL[name]} public HTTPS ${after[name].public ? 'enabled: reachable from the internet without an IP allowlist; application authentication is required.' : 'disabled: the public route is removed.'}`);
+      if (name === 'kibana' && before.kibana.public !== after.kibana.public) out.push('Kibana public URL and cookie settings change → Kibana restarts.');
+    }
+  }
+  if (patch.tls) out.push('TLS change → certificates are re-issued and reloaded.');
+  if (patch.exposure) {
+    const before = { public: current.exposure?.public ?? false, ipType: current.exposure?.ipType ?? 'IPV6' };
+    const after = { public: draft.exposure?.public ?? false, ipType: draft.exposure?.ipType ?? 'IPV6' };
+    if (before.public !== after.public || before.ipType !== after.ipType) out.push('Exposure change → public routes updated; HTTP certificates re-issued when public addresses change.');
+    else out.push('Exposure allowlist change → database public-route IP restrictions updated.');
+  }
+  if (patch.monitoring) out.push(`Per-member metrics collection ${draft.monitoring?.enabled === false ? 'disabled' : 'enabled'}.`);
   return out;
 }
+
+export const PUBLIC_STACK_WARNING = 'Public Kibana and APM routes are reachable from the internet. The Elasticsearch IP allowlist does not apply: Kibana relies on Elasticsearch/Kibana authentication; APM relies on its secret token or API keys.';
 
 /** Resource checks for one component; `stateless` components (Kibana, Logstash, APM) have no data volume. */
 export type ResourcesCheck = (resources: Resources, stateless: boolean, name: ComponentName) => string[];

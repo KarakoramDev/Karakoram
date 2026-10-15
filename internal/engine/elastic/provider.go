@@ -5,6 +5,7 @@ package elastic
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"math"
 	"reflect"
@@ -236,7 +237,8 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.EngineConfig != "" {
 		return invalid("Elasticsearch uses engineOptions, not engineConfig")
 	}
-	if _, err := ParseOptions(s.EngineOptions); err != nil {
+	options, err := ParseOptions(s.EngineOptions)
+	if err != nil {
 		return invalid("%v", err)
 	}
 	if s.TLS.Mode != "requireTLS" {
@@ -354,6 +356,33 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		target, _ := parseVersion(s.Version)
 		if !ok || a[0] > target[0] || target[0] > a[0]+1 || a[0] == target[0] && (a[1] > target[1] || a[1] == target[1] && a[2] > target[2]) {
 			return invalid("source version is incompatible with target")
+		}
+	}
+	// Public subdomains have no source-IP policy. Acknowledgement is request-only:
+	// never persist it in the merge-patch base, including while routes are disabled.
+	var previous Options
+	if old != nil {
+		previous, err = parseStoredOptions(old.Spec.EngineOptions)
+		if err != nil {
+			return invalid("%v", err)
+		}
+	}
+	for _, route := range []struct {
+		name                            string
+		public, wasPublic, acknowledged bool
+	}{
+		{"kibana", options.Kibana.Public, previous.Kibana.Public, options.Kibana.AllowAllAddresses},
+		{"apm", options.APM.Public, previous.APM.Public, options.APM.AllowAllAddresses},
+	} {
+		if route.public && !route.wasPublic && !route.acknowledged {
+			return engine.InvalidField("spec.engineOptions."+route.name+".allowAllAddresses", domain.ReasonRequired, "public %s is reachable from the internet without an IP allowlist; explicitly acknowledge with allowAllAddresses: true", route.name)
+		}
+	}
+	if options.Kibana.AllowAllAddresses || options.APM.AllowAllAddresses {
+		options.Kibana.AllowAllAddresses, options.APM.AllowAllAddresses = false, false
+		n.Spec.EngineOptions, err = json.Marshal(options)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

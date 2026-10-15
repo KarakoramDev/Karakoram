@@ -16,6 +16,7 @@ import {
   MAX_PIPELINES,
   PIPELINE_ENV,
   PIPELINE_ID_RE,
+  PUBLIC_STACK_WARNING,
   STACK_COMPONENTS,
   STACK_MAX,
   activeComponents,
@@ -183,8 +184,9 @@ function resourceHint(name: ComponentName, heap: number | undefined): string {
 }
 
 /** Basics step: engine options (exposure of stack components, APM auth, Logstash queue and pipelines). */
-export function OptionsSection({ spec, onChange }: WizardSectionProps) {
+export function OptionsSection({ spec, onChange, persisted }: WizardSectionProps & { persisted?: WizardSectionProps['spec'] }) {
   const options = readOptions(spec);
+  const previous = persisted ? readOptions(persisted) : undefined;
   const set = (fn: (o: ElasticOptions) => ElasticOptions) => onChange(writeOptions(spec, fn(options)));
   const kibana = replicasOf(spec, 'kibana') > 0;
   const apm = replicasOf(spec, 'apm') > 0;
@@ -218,6 +220,12 @@ export function OptionsSection({ spec, onChange }: WizardSectionProps) {
           title={apm ? undefined : 'Enable APM Server under Topology first.'}
           onChange={(e) => set((o) => ({ ...o, apm: { ...o.apm, public: e.target.checked } }))}
         />
+        {options.kibana.public || options.apm.public ? <Callout tone="warn" title="Internet access without IP restrictions">
+          <p>{PUBLIC_STACK_WARNING}</p>
+          {(['kibana', 'apm'] as const).filter((name) => options[name].public && !previous?.[name].public).map((name) => (
+            <Switch key={name} label={`I understand that public ${COMPONENT_LABEL[name]} allows connections from every IP address.`} checked={options[name].allowAllAddresses ?? false} onChange={(e) => set((o) => ({ ...o, [name]: { ...o[name], allowAllAddresses: e.target.checked } }))} />
+          ))}
+        </Callout> : null}
         <Switch
           label={
             <span>

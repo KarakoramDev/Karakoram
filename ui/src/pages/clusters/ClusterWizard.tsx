@@ -379,7 +379,7 @@ export function ClusterWizardPage() {
           ) : null}
 
           {step === 'topology' ? (
-            <Card title={mongo ? (sharded ? 'Sharded topology' : 'Replica set') : topology.displayName}>
+            <Card title={mongo ? (sharded ? 'Sharded topology' : 'Replica set') : rules.topology[topology.type]?.title ?? topology.displayName}>
               <div className="stack" style={{ gap: 16 }}>
                 <Callout tone="warn" title="No host anti-affinity on Zerops">
                   Zerops does not guarantee that members land on separate physical hosts. More members improve resilience against process and container failures, but host-failure tolerance cannot be
@@ -574,7 +574,7 @@ export function ClusterWizardPage() {
                     ['Namespace', <span className="mono">{targetNamespace}</span>],
                     ['Name', <span className="mono">{name}</span>],
                     ['Engine', `${provider.displayName} ${spec.version}`],
-                    ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${topology.displayName}, ${engineSummary}`],
+                    ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${rules.topology[topology.type]?.title ?? topology.displayName}, ${engineSummary}`],
                     ...(provider.name === 'elasticsearch' ? elasticResourceRows(spec) : [['Member resources', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
                     spec.components.configServer && ['Config server resources', resourcesSummary(spec.components.configServer.resources)],
                     spec.components.router && ['Router resources', resourcesSummary(spec.components.router.resources, true)],

@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -28,11 +30,12 @@ var (
 
 // Engine adapts the Elastic Stack runner to the shared node toolkit.
 type Engine struct {
-	runner        *Runner
-	mu            sync.RWMutex
-	spec          agentspec.Spec
-	applied       bool
-	configVersion int64
+	runner          *Runner
+	mu              sync.RWMutex
+	spec            agentspec.Spec
+	applied         bool
+	configVersion   int64
+	configAppliedAt time.Time
 }
 
 // NewEngine returns an Elastic Stack engine for agent registration.
@@ -77,6 +80,7 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		return nil, errors.New("unknown Elastic component")
 	}
 	fileLimitOnce.Do(RaiseFileLimit)
+	appliedAt := time.Now()
 	h := nodeHost{Node: n}
 	changes, err := e.runner.Apply(ctx, h, spec, c.Cluster, c.Member)
 	if err != nil {
@@ -92,6 +96,9 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		}
 	}
 	e.mu.Lock()
+	if e.spec.RestartToken != spec.RestartToken {
+		e.configAppliedAt = appliedAt
+	}
 	e.spec, e.applied, e.configVersion = spec, true, c.ConfigVersion
 	e.mu.Unlock()
 	return changes, nil
@@ -149,7 +156,7 @@ func (e *Engine) Metrics(ctx context.Context, n *agent.Node) []agent.Metric {
 func (e *Engine) Routes(mux *http.ServeMux, n *agent.Node) {
 	mux.HandleFunc("POST /v1/elasticsearch/readiness", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.RLock()
-		spec, applied, configVersion := e.spec, e.applied, e.configVersion
+		spec, applied, configVersion, appliedAt := e.spec, e.applied, e.configVersion, e.configAppliedAt
 		e.mu.RUnlock()
 		observation := agentspec.Readiness{Component: spec.Component, ConfigVersion: configVersion}
 		states, maintenance := n.Snapshot()
@@ -169,9 +176,35 @@ func (e *Engine) Routes(mux *http.ServeMux, n *agent.Node) {
 				observation.Ready = true
 			}
 		}
+		if spec.Component == agentspec.ComponentLogstash && spec.Logstash != nil && !observation.Ready && !maintenance && applied {
+			if message := logstashStartupError(n.LogTail(spec.Component, 200), appliedAt, spec.Logstash.Pipelines); message != "" {
+				observation.Message = message
+			}
+			observation.ConfigurationError = strings.Contains(observation.Message, "configuration failed:")
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(observation)
 	})
+}
+
+func logstashStartupError(lines []agentapi.LogLine, since time.Time, pipelines []agentspec.Pipeline) string {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if line.Timestamp.Before(since) {
+			continue
+		}
+		id := ""
+		for _, pipeline := range pipelines {
+			if strings.Contains(line.Message, "["+pipeline.ID+"]") || strings.Contains(line.Message, `"pipeline_id"=>"`+pipeline.ID+`"`) {
+				id = pipeline.ID
+				break
+			}
+		}
+		if message := pipelineConfigurationError(line.Message, id); message != "" {
+			return message
+		}
+	}
+	return ""
 }
 
 type nodeHost struct{ *agent.Node }

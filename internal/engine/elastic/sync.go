@@ -315,29 +315,37 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *state, m *
 	s.Pending = v
 	return nil
 }
-func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (bool, string) {
+func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (bool, string, error) {
 	var observation agentspec.Readiness
 	if err := a.Engine(ctx, "elasticsearch", "readiness", nil, &observation); err != nil {
-		return false, "Component application readiness unavailable"
+		return false, "Component application readiness unavailable", nil
 	}
 	if observation.ConfigVersion < m.ConfigVersion {
-		return false, "Component is waiting for its current configuration"
+		return false, "Component is waiting for its current configuration", nil
 	}
-	return observation.Ready, observation.Message
+	if observation.ConfigurationError {
+		return false, observation.Message, fmt.Errorf("%w: %s", engine.ErrInvalid, observation.Message)
+	}
+	return observation.Ready, observation.Message, nil
 }
 
 func (p *Provider) componentReady(ctx context.Context, rc *engine.Context, m *member) bool {
+	ready, _ := p.componentReadyResult(ctx, rc, m)
+	return ready
+}
+
+func (p *Provider) componentReadyResult(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 	a, err := p.agentClient(ctx, rc, m.Name)
 	if err != nil {
-		return false
+		return false, nil
 	}
 	defer a.Close()
 	if !isES(m) {
-		ready, _ := componentReadiness(ctx, a, m)
-		return ready
+		ready, _, readinessErr := componentReadiness(ctx, a, m)
+		return ready, readinessErr
 	}
 	status, err := a.Status(ctx)
-	return err == nil && strings.EqualFold(status.Processes[product(m)].State, "running") && status.ConfigVersion >= m.ConfigVersion
+	return err == nil && strings.EqualFold(status.Processes[product(m)].State, "running") && status.ConfigVersion >= m.ConfigVersion, nil
 }
 
 // Sync makes at most one disruptive platform or database transition per call.
@@ -607,8 +615,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		case stageImported:
 			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 		case stageDeployed:
-			if !p.componentReady(ctx, rc, m) {
-				return result, nil
+			ready, readinessErr := p.componentReadyResult(ctx, rc, m)
+			if readinessErr != nil || !ready {
+				s.Phase = "components"
+				return result, readinessErr
 			}
 			m.Stage = stageJoined
 			return result, nil
@@ -665,9 +675,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	for _, m := range s.componentMembers() {
-		if !p.componentReady(ctx, rc, m) {
+		ready, readinessErr := p.componentReadyResult(ctx, rc, m)
+		if readinessErr != nil || !ready {
 			s.Phase = "components"
-			return result, nil
+			return result, readinessErr
 		}
 	}
 	s.Phase = "ready"

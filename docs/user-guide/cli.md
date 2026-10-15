@@ -510,6 +510,15 @@ The file, not convenience flags, supplies the provider and full request body.
 For dedicated masters, component sizing, supported settings and snapshot
 semantics, see the [Elasticsearch guide](elasticsearch.md).
 
+Public Kibana/APM HTTPS subdomains are internet reachable and do not use the
+database IP allowlist. Create/patch files that enable a route must include
+`spec.engineOptions.kibana.allowAllAddresses: true` or
+`spec.engineOptions.apm.allowAllAddresses: true`, respectively. This request-only
+acknowledgement is consumed rather than stored; re-enabling a private route
+requires fresh confirmation. See [public Stack access](elasticsearch.md#kibana).
+Confirmed Logstash configuration errors fail the convergence operation without
+discarding the cluster; correct the pipeline and submit a new patch.
+
 
 ### `karactl clusters delete`
 

@@ -247,6 +247,12 @@ Open the returned Kibana endpoint and initially log in as **`elastic`** with the
 
 Set `spec.engineOptions.kibana.public: true` for the Zerops subdomain HTTPS route. Karakoram supplies the public base URL, secure cookies and stable encryption keys shared across replicas. The balancer terminates TLS and forwards HTTP on the private project network. Zerops documents a **50-MB upload cap** and says the shared subdomain balancer is **not recommended for production**; custom-domain management is not supplied by this feature ([Zerops public access](https://docs.zerops.io/references/networking/public-access)). The same limits apply to optional public APM intake.
 
+**Public Kibana and APM routes are reachable from the internet, without source-IP restrictions.** The Elasticsearch `spec.exposure.allowlist` applies only to direct database access on port 9200, not these HTTPS subdomains. Kibana is protected by Elasticsearch/Kibana authentication; APM intake is protected by its secret token or API keys. Leave these routes private unless that exposure is intentional.
+
+Creating a public route, or changing a component from private to public, requires a request-only acknowledgement alongside its `public` flag: `engineOptions.kibana.allowAllAddresses: true` or `engineOptions.apm.allowAllAddresses: true`. For example, a Kibana merge patch is `{"spec":{"engineOptions":{"kibana":{"public":true,"allowAllAddresses":true}}}}`. The acknowledgement is consumed, not stored or inherited by later PATCH requests. An unchanged public route does not need another acknowledgement; disabling and re-enabling it requires fresh confirmation. The wizard and topology editor ask for confirmation and Review lists every enabled public route, even when database access stays private.
+
+These routes use Zerops's **shared subdomain access**, not custom-domain HTTP locations. The [public REST schema](https://api.app-prg1.zerops.io/api/rest/public/swagger/) exposes enable/disable-subdomain-access actions without a routing-policy body. Source-IP access policies are available on [custom-domain HTTP locations](https://docs.zerops.io/references/networking/l7-balancer-config#access-policy-configuration), a different route type; they cannot be attached to the generated subdomain routes.
+
 A provisioned Kibana route can exist while the application is still starting.
 Wait for component readiness and retry after initialization; a route alone is
 not proof Kibana is usable. Suspended clusters show Kibana as suspended, not
@@ -292,11 +298,18 @@ karactl clusters patch search -f logstash.json --wait
 The default writer covers `logstash-*`, `ecs-logstash-*`, `logs-*` and `metrics-*`. A pipeline targeting other names needs a separately authorized writer/role; do not put the `elastic` password in pipeline source. Keep real secrets out of settings and committed files. The existing declared inputs are 5044/8080; a pipeline listener on another port does not by itself provision routing for that port. See [Elastic's output options](https://www.elastic.co/docs/reference/logstash/plugins/plugins-outputs-elasticsearch).
 
 Logstash readiness requires **every configured pipeline** to be loaded and
-running, not just a live JVM or an open monitoring port. A pipeline compile/start
-failure appears as a component that is not ready and an unsuccessful rollout,
-with the failing/missing pipeline identified. Inspect the component logs,
-correct the pipeline and apply the configuration again. Readiness still does
-not prove events reached their destination.
+running, not just a live JVM or an open monitoring port. Pipeline configuration
+errors from node reload statistics or current-configuration startup logs appear
+in member status and the `ComponentsReady=False` condition, including the error
+class and parser line/column when available. Raw source and credentials are not
+copied into status. A confirmed `ConfigurationError` or `PluginLoadingError`
+fails the create/update convergence operation on the next observation rather
+than waiting for the ordinary two-hour operation deadline; transient startup or
+unavailable monitoring APIs retain that normal deadline. Failed operations do
+not delete the cluster or discard desired state. Correct the pipeline and apply
+the configuration again; the new generation can converge normally. Inspect the
+protected component logs for full diagnostics. Readiness still does not prove
+events reached their destination.
 
 `persistentQueue: true` writes queues to **container disk**, not a Local Storage volume. Events survive a Logstash process restart, but queues are lost on redeployment, version upgrade, container replacement or service deletion. Each replica has its own queue, without replication or snapshot protection. Size runtime disk for every pipeline's queue and retain upstream replay where loss is unacceptable ([queue semantics](https://www.elastic.co/docs/reference/logstash/persistent-queues)).
 
@@ -395,6 +408,8 @@ data without the separate `indices` privileges. Elastic recommends Kibana's
 own role UI/API for general Kibana role management; see
 [Kibana application privilege mapping](https://www.elastic.co/docs/extend/kibana/key-concepts/security/rbac-and-saved-objects)
 and [Kibana privileges](https://www.elastic.co/docs/deploy-manage/users-roles/cluster-or-deployment-auth/kibana-privileges).
+
+Elasticsearch accepts arbitrary application names and privilege strings, even if no application has registered them. Acceptance does not prove Kibana authorization. The role editor gives a non-blocking warning for applications other than `kibana-.kibana` or privileges outside the known `all`, `read`, `feature_<name>.all` and `feature_<name>.read` forms; custom application grants remain valid native inputs. This is a form check, not a live inventory of privileges registered by Kibana.
 
 The Elasticsearch CLI uses these commands and flags:
 

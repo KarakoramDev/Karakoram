@@ -87,7 +87,7 @@ test('pipeline validation mirrors the server rules', () => {
 test('spec validation ties options to enabled components and rejects engineConfig', () => {
   assert.deepEqual(validateSpec(base), []);
   assert.equal(validateSpec({ ...base, engineConfig: 'http.port: 1' }).length, 1);
-  const publicKibana = writeOptions(base, { ...readOptions(base), kibana: { public: true } });
+  const publicKibana = writeOptions(base, { ...readOptions(base), kibana: { public: true, allowAllAddresses: true } });
   assert.match(validateSpec(publicKibana)[0] ?? '', /Kibana/);
   const withKibana = withReplicas(publicKibana, undefined, 'kibana', 1);
   assert.deepEqual(validateSpec(withKibana), []);
@@ -248,5 +248,5 @@ test('disruptions explain scaling, restarts and component lifecycle', () => {
   assert.match(disruptions(dedicated, withReplicas(dedicated, topology, 'kibana', 0))[0] ?? '', /Kibana disabled/);
   assert.match(disruptions(dedicated, withReplicas(dedicated, topology, 'kibana', 3))[0] ?? '', /Kibana 2 → 3 containers/);
   const publicKibana = writeOptions(dedicated, { ...readOptions(dedicated), kibana: { public: true } });
-  assert.deepEqual(disruptions(dedicated, publicKibana), ['Kibana options change → Kibana restarts.']);
+  assert.match(disruptions(dedicated, publicKibana).join(' '), /Kibana public HTTPS enabled: reachable from the internet without an IP allowlist/);
 });

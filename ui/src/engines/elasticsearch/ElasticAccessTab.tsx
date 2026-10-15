@@ -14,9 +14,9 @@ import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
 import { useSubmissionKey } from '@/pages/clusters/detail/use-submission-key';
 import { hasCapability } from '../index';
-import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, visibleElasticRoles, type MemberKind } from './spec';
+import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, PUBLIC_STACK_WARNING, readOptions, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, visibleElasticRoles, type MemberKind } from './spec';
 
-import { applicationDrafts, applicationGrants, failedInvalidation, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation, type ApplicationDraft, type PendingInvalidation } from './access-state';
+import { applicationDrafts, applicationGrants, applicationWarnings, failedInvalidation, forgetInvalidation, invalidationState, INVALIDATION_WAIT_MS, pendingInvalidations, rememberInvalidation, type ApplicationDraft, type PendingInvalidation } from './access-state';
 type ElasticUser = Schemas['ElasticUser'];
 type ElasticRole = Schemas['ElasticRole'];
 type ElasticAPIKey = Schemas['ElasticAPIKey'];
@@ -119,6 +119,7 @@ export function ElasticAccessTab() {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
+      {readOptions(cluster.spec).kibana.public || readOptions(cluster.spec).apm.public ? <Callout tone="warn" title="Public Elastic Stack routes">{PUBLIC_STACK_WARNING}</Callout> : null}
       <div className="grid-2">
         <StackTopology members={cluster.status.members} />
         <Card title="Endpoints">
@@ -652,6 +653,7 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
         ))}
         <div><Button size="sm" onClick={() => setApplications((items) => [...items, { application: '', privileges: '', resources: '' }])}>+ Add application grant</Button></div>
         {grants === null ? <p className="field-error">Each application grant needs an application, at least one privilege and at least one resource.</p> : null}
+        {applicationWarnings(applications).map((warning) => <Callout key={warning} tone="warn">{warning}</Callout>)}
       </div>
     </Dialog>
   );

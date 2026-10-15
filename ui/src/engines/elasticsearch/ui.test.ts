@@ -73,6 +73,19 @@ test('public APM is offered, serializes enabled state and clears when APM is dis
   assert.equal(readOptions(withReplicas(published, topology, 'apm', 0)).apm.public, false);
 });
 
+test('public stack wizard and topology options warn and ask only for newly enabled routes', () => {
+  const enabled = withReplicas(withReplicas(spec, topology, 'kibana', 1), topology, 'apm', 1);
+  const published = writeOptions(enabled, { ...readOptions(enabled), kibana: { public: true }, apm: { public: true, apiKeys: true } });
+  const wizard = renderToStaticMarkup(createElement(OptionsSection, { provider, spec: published, onChange: () => {} }));
+  assert.match(wizard, /reachable from the internet/);
+  assert.match(wizard, /IP allowlist does not apply/);
+  assert.match(wizard, /public Kibana allows connections from every IP address/);
+  assert.match(wizard, /public APM Server allows connections from every IP address/);
+  const unchanged = renderToStaticMarkup(createElement(OptionsSection, { provider, spec: published, persisted: published, onChange: () => {} }));
+  assert.match(unchanged, /reachable from the internet/);
+  assert.doesNotMatch(unchanged, /I understand/);
+});
+
 test('clone disabled stack options normalize into a valid request and Create emits one POST', async () => {
   const enabled = withReplicas(withReplicas(withReplicas(spec, topology, 'kibana', 1), topology, 'apm', 1), topology, 'logstash', 1);
   const inherited = writeOptions(enabled, { ...readOptions(enabled), kibana: { public: true }, apm: { public: true, apiKeys: true }, logstash: { persistentQueue: true, pipelines: [{ id: 'main', config: 'input {}' }] } });

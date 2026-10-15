@@ -98,10 +98,11 @@ type Spec struct {
 
 // Readiness is a live local application observation, not just process liveness.
 type Readiness struct {
-	Component     string `json:"component"`
-	Ready         bool   `json:"ready"`
-	Message       string `json:"message,omitempty"`
-	ConfigVersion int64  `json:"configVersion"`
+	Component          string `json:"component"`
+	Ready              bool   `json:"ready"`
+	Message            string `json:"message,omitempty"`
+	ConfigurationError bool   `json:"configurationError,omitempty"`
+	ConfigVersion      int64  `json:"configVersion"`
 }
 
 // ElasticsearchSpec configures one Elasticsearch node.

@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
@@ -28,6 +31,9 @@ func TestLogstashReadinessRequiresEveryConfiguredPipeline(t *testing.T) {
 		{name: "startup failure", loaded: `{"pipelines":{"logs":{},"broken":{}}}`, stats: `{"pipelines":{"logs":{"events":{}}}}`, pipelines: []agentspec.Pipeline{{ID: "logs"}, {ID: "broken"}}, message: `pipeline "broken" is not running`},
 		{name: "missing running stats", loaded: `{"pipelines":{"main":{}}}`, stats: `{"pipelines":{"main":{}}}`, message: `pipeline "main" is not running`},
 		{name: "no pipelines", loaded: `{"pipelines":{}}`, stats: `{"pipelines":{}}`, message: `pipeline "main" is not loaded`},
+		{name: "reload error", loaded: `{"pipelines":{}}`, stats: `{"pipelines":{"main":{"reloads":{"last_error":{"type":"LogStash::ConfigurationError","message":"Expected token at line 1, column 8; secret pipeline source"}}}}}`, message: `configuration failed: LogStash::ConfigurationError at line 1, column 8`},
+		{name: "reload error without inventory", loaded: `not JSON`, stats: `{"pipelines":{"main":{"reloads":{"last_error":{"type":"LogStash::ConfigurationError"}}}}}`, message: `configuration failed: LogStash::ConfigurationError`},
+		{name: "repaired reload", loaded: `{"pipelines":{"main":{}}}`, stats: `{"pipelines":{"main":{"events":{},"reloads":{"last_error":{"type":"LogStash::ConfigurationError"},"last_failure_timestamp":"2026-01-01T00:00:00Z","last_success_timestamp":"2026-01-01T00:01:00Z"}}}}`},
 		{name: "invalid API response", loaded: `not JSON`, stats: `{}`, message: "pipeline inventory unavailable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,5 +76,21 @@ func TestLogstashReadinessLoadsConfiguredPipelineIDs(t *testing.T) {
 	err := NewEngine().Readiness(t.Context(), agent.Options{DataDir: dir}, []string{"logstash", port})
 	if err == nil || !strings.Contains(err.Error(), `pipeline "broken" is not loaded`) {
 		t.Fatalf("configured pipeline was ignored: %v", err)
+	}
+}
+
+func TestLogstashStartupErrorIsCurrentAndDoesNotExposePipelineSource(t *testing.T) {
+	at := time.Now()
+	pipelines := []agentspec.Pipeline{{ID: "broken"}}
+	lines := []agentapi.LogLine{{Timestamp: at, Message: `[ERROR][logstash.javapipeline][broken] LogStash::ConfigurationError: Expected input at line 1, column 8, after password=secret`}}
+	message := logstashStartupError(lines, at, pipelines)
+	if !strings.Contains(message, `pipeline "broken" configuration failed: LogStash::ConfigurationError at line 1, column 8`) || strings.Contains(message, "secret") {
+		t.Fatalf("unsafe or missing startup diagnostic: %s", message)
+	}
+	if message := logstashStartupError(lines, at.Add(time.Second), pipelines); message != "" {
+		t.Fatal("stale configuration failure survived a new apply", message)
+	}
+	if message := pipelineConfigurationError("request failed password=secret", "broken"); message != "" {
+		t.Fatal("unclassified error escaped", message)
 	}
 }
