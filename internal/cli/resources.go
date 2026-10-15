@@ -264,6 +264,13 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	}
 	components := map[string]any{"engine": map[string]any{"replicas": members, "resources": resourceFlags(cmd, true)}}
 	t := map[string]any{"type": topology}
+	if topology != "sharded" {
+		for _, flag := range []string{"shards", "config-servers", "routers"} {
+			if cmd.Flags().Changed(flag) {
+				return nil, usageError("--%s requires --topology sharded", flag)
+			}
+		}
+	}
 	if topology == "sharded" {
 		shards, _ := cmd.Flags().GetInt("shards")
 		if shards < 1 || shards > 128 {

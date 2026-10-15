@@ -61,7 +61,7 @@ delete returns the existing in-flight Operation; output and `--wait` use that
 same operation ID. Changing either option supersedes the previous tracking
 record with a new Operation.
 
-Every failure exits non-zero, including a successful HTTP storage-verification response with `verified: false`. Output retains the verification message. Server errors print their human message plus available field, reason and resource details on stderr; command-line mistakes also print usage on stderr. Locally rejected flag values (including `--output` and `--shards` bounds) and missing required convenience flags exit with status 2; request bodies rejected by the server exit with status 6.
+Every failure exits non-zero, including a successful HTTP storage-verification response with `verified: false`. Output retains the verification message. Server errors print their human message plus available field, reason and resource details on stderr; command-line mistakes also print usage on stderr. Locally rejected flag values (including `--output` and `--shards` bounds, and `--shards`, `--config-servers` or `--routers` on `clusters create` without `--topology sharded`) and missing required convenience flags exit with status 2; request bodies rejected by the server exit with status 6.
 
 | Exit status | Meaning |
 | --- | --- |
