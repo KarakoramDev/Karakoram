@@ -240,7 +240,9 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 		if counts[m.Name] != 0 || h.RelocatingShards != 0 || h.InitializingShards != 0 {
 			return nil
 		}
-		if _, present := counts[m.Name]; !present {
+		// Dedicated masters hold no shards and are omitted by _cat/allocation.
+		// Data nodes missing a row still require confirmation that they left.
+		if _, present := counts[m.Name]; !present && m.Kind != kindMaster {
 			nodes, err := c.Nodes(ctx)
 			if err != nil {
 				return err

@@ -239,7 +239,11 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.infra.mu.Lock()
 		nodes := map[string]any{}
 		for name, version := range f.infra.nodes {
-			nodes[name] = map[string]any{"name": name, "version": version, "roles": []string{"master", "data"}}
+			roles := []string{"master", "data"}
+			if strings.HasPrefix(name, "demom") {
+				roles = []string{"master"}
+			}
+			nodes[name] = map[string]any{"name": name, "version": version, "roles": roles}
 		}
 		f.infra.mu.Unlock()
 		reply(map[string]any{"nodes": nodes})
@@ -259,6 +263,9 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rows := []map[string]any{}
 		f.infra.mu.Lock()
 		for node := range f.infra.nodes {
+			if strings.HasPrefix(node, "demom") {
+				continue
+			}
 			rows = append(rows, map[string]any{"node": node, "shards": strconv.Itoa(f.shards[node])})
 		}
 		f.infra.mu.Unlock()

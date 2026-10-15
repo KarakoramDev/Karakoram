@@ -7,11 +7,51 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
+
+func TestDedicatedMasterScaleDownCompletesWithoutAllocationRows(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 2)
+	rc.Cluster.Spec.Topology.Type = "dedicatedMasters"
+	p.ApplyDefaults(&rc.Cluster.Spec)
+	masters := rc.Cluster.Spec.Components.Extra[kindMaster]
+	masters.Replicas = 5
+	rc.Cluster.Spec.Components.Extra[kindMaster] = masters
+	s := coreConverge(t, p, rc, f)
+	if len(s.members(kindMaster)) != 5 {
+		t.Fatal("initial master count", s.Members)
+	}
+	c, err := p.es(t.Context(), rc, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts, err := c.ShardCounts(t.Context())
+	c.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, present := counts["demom4"]; present {
+		t.Fatal("dedicated master unexpectedly has an allocation row")
+	}
+	masters.Replicas = 3
+	rc.Cluster.Spec.Components.Extra[kindMaster] = masters
+	s = coreConverge(t, p, rc, f)
+	if len(s.members(kindMaster)) != 3 || len(s.members(kindNode)) != 2 {
+		t.Fatal("dedicated master scale-down did not converge", s.Members)
+	}
+	for _, name := range []string{"demom3", "demom4"} {
+		if s.find(name) != nil || f.services[name] != nil || f.services[VolumeHostname(name)] != nil {
+			t.Fatal("retired master runtime or volume remains", name)
+		}
+	}
+	if !slices.Contains(es.mutations, "POST /_cluster/voting_config_exclusions") || !slices.Contains(es.mutations, "DELETE /_cluster/voting_config_exclusions") {
+		t.Fatal("master retirement skipped voting exclusion", es.mutations)
+	}
+}
 
 func TestScaleUpCancelsUnfinishedDrain(t *testing.T) {
 	for _, stage := range []string{stageJoined, stageDraining} {
