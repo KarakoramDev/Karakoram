@@ -81,7 +81,7 @@ func ZeropsYAML(in YAMLInput) (string, error) {
 		"deploy": map[string]any{
 			"temporaryShutdown": true,
 			"readinessCheck": map[string]any{
-				"exec":           map[string]string{"command": fmt.Sprintf("/var/www/karakoram agent readiness --engine=%s %s", agentspec.Engine, in.Component)},
+				"exec":           map[string]string{"command": fmt.Sprintf("/var/www/karakoram agent readiness --engine=%s --data-dir=%s %s", agentspec.Engine, dir, in.Component)},
 				"failureTimeout": timeout, "retryPeriod": "10s",
 			},
 		},

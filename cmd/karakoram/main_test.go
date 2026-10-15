@@ -79,6 +79,21 @@ func TestAgentReadinessExplicitEngineOverridesEnvironment(t *testing.T) {
 	}
 }
 
+func TestAgentReadinessExplicitDataDirWithoutEnvironment(t *testing.T) {
+	t.Setenv("KARAKORAM_ENGINE", "")
+	t.Setenv("KARAKORAM_DATA_DIR", "")
+	dir := t.TempDir()
+	opts, args := readinessOptions([]string{"--engine=elasticsearch", "--data-dir=" + dir, "logstash"})
+	if opts.Engine != "elasticsearch" || opts.DataDir != dir || len(args) != 1 || args[0] != "logstash" {
+		t.Fatalf("readiness options = %+v, args = %v", opts, args)
+	}
+	t.Setenv("KARAKORAM_ENGINE", "psmdb")
+	opts, args = readinessOptions([]string{"--data-dir=" + dir, "component", "1234"})
+	if opts.Engine != "psmdb" || opts.DataDir != dir || strings.Join(args, " ") != "component 1234" {
+		t.Fatalf("default-engine readiness options = %+v, args = %v", opts, args)
+	}
+}
+
 func TestOfflinePasswordReset(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
