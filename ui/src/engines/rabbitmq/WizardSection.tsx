@@ -41,7 +41,7 @@ export default function RabbitMQWizardSection({ provider, spec, onChange }: Wiza
         <legend className="field-label">Optional plugins</legend>
         {PLUGIN_GROUPS.map((group) => <Checkbox key={group.id} label={group.label} description={`${group.description} Includes its management plugin.`} checked={selected.includes(group.id)} onChange={(event) => onChange({ ...spec, engineOptions: { ...buildEngineOptions(event.target.checked ? [...selected, group.id] : selected.filter((id) => id !== group.id), publicManagement) } })} />)}
       </fieldset>
-      <p className="small muted">Management and Prometheus plugins are always enabled. Set the public AMQPS allowlist and certificate authority in Access &amp; TLS; set rabbitmq.conf overrides under Resources.</p>
+      <p className="small muted">Management and Prometheus plugins are always enabled. Set the public AMQPS allowlist and certificate authority in Access &amp; TLS; set rabbitmq.conf overrides under Topology.</p>
     </section>
   );
 }

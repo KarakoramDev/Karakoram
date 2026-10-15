@@ -9,7 +9,7 @@ import { memberChoices, nameError, topologyErrors, validateWizard } from './vali
 import { resourceErrors, resourceMinimums } from './resources.ts';
 import { cleanTLS, coversAllAddresses, validateExposure, validateTLS, wireExposure } from './access.ts';
 import { scheduleErrors } from './schedules.ts';
-import { exposureSummary, totalFootprint } from './review.ts';
+import { configurationReviewRows, exposureReviewRows, exposureSummary, totalFootprint } from './review.ts';
 import { engineConsequences, engineRules } from './engine.ts';
 import { validatePitrPoint } from './restore-point.ts';
 
@@ -213,6 +213,31 @@ test('Review exposure and engine consequences reflect the enabled surface and re
   assert.match(engineConsequences(exposed).join(' '), /completed base backup/);
   assert.match(engineRules('psmdb').topology.replicaSet!.title, /Replica set/);
   assert.match(engineRules('psmdb').topology.sharded!.description, /routers/);
+});
+
+test('RabbitMQ Review distinguishes private AMQP from public management and the inverse', () => {
+  const rabbit = { ...spec, provider: 'rabbitmq', engineOptions: { managementUI: { public: true } } };
+  const rows = Object.fromEntries(exposureReviewRows(rabbit));
+  assert.match(rows['AMQP exposure']!, /Database private/);
+  assert.match(rows['Management UI exposure']!, /Public RabbitMQ management UI\/API.*RabbitMQ credentials/);
+  assert.match(rows['Management UI exposure']!, /Not limited by the AMQP allowlist/);
+  const inverse = Object.fromEntries(exposureReviewRows({
+    ...rabbit, exposure: { public: true, ipType: 'IPV6', allowlist: ['2001:db8::/32'] },
+    engineOptions: { managementUI: { public: false } },
+  }));
+  assert.match(inverse['AMQP exposure']!, /Public database.*allowlist: 2001:db8::\/32/);
+  assert.match(inverse['Management UI exposure']!, /management UI\/API private/);
+  assert.equal(exposureReviewRows(spec).length, 1);
+});
+
+test('RabbitMQ Review names optional groups and distinguishes overrides from defaults', () => {
+  const rabbit = { ...spec, provider: 'rabbitmq' };
+  assert.deepEqual(configurationReviewRows(rabbit), [['Engine configuration', 'Provider defaults'], ['Optional plugins', 'none']]);
+  assert.deepEqual(configurationReviewRows({
+    ...rabbit, engineConfig: ' consumer_timeout = 600000\n',
+    engineOptions: { plugins: ['rabbitmq_stream', 'rabbitmq_shovel', 'rabbitmq_stream_management'], managementUI: { public: true } },
+  }), [['Engine configuration', 'consumer_timeout = 600000'], ['Optional plugins', 'Shovel, Stream']]);
+  assert.deepEqual(configurationReviewRows(spec), [['Engine configuration', 'Provider defaults']]);
 });
 
 test('Create synchronously locks duplicate clicks and unlocks for a failed-attempt retry', () => {

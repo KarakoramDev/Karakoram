@@ -14,7 +14,7 @@ import { ChoiceGroup, SelectField, Switch, TextField } from '@/components/ui/Fie
 import { Badge, Callout, Card, ErrorBlock, Loading, Menu, MenuItem, Time, formatBytes, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { OperationNotice } from '@/components/OperationNotice';
-import { SchedulesEditor } from '../editors/SchedulesEditor';
+import { RabbitMQBackupNotice, SchedulesEditor } from '../editors/SchedulesEditor';
 import { validateSchedules } from '../wizard/schedules';
 import { BackupPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
@@ -192,7 +192,7 @@ export function BackupsTab() {
 
       <BackupPolicyCard storageNames={storageNames} backupTypes={backupTypes} />
 
-      {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
+      {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} provider={cluster.spec.provider} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
 
       <ConfirmDialog open={deleteName !== null} onClose={() => { setDeleteName(null); del.reset(); }} onConfirm={() => deleteName && del.mutateAsync(deleteName)} title={`Delete backup ${deleteName ?? ''}`} confirmLabel="Delete" danger busy={del.isPending} error={del.error}>
         <p className="small">Backup data is removed from object storage.{hasCapability(provider, 'pitr') ? ' If PITR depends on this base backup, the restorable window shrinks accordingly.' : ''}</p>
@@ -201,7 +201,7 @@ export function BackupsTab() {
   );
 }
 
-function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, backupTypes, onClose }: { namespace: string; cluster: string; storages: string[]; defaultStorage?: string; backupTypes: BackupType[]; onClose: () => void }) {
+export function CreateBackupDialog({ namespace, cluster, provider, storages, defaultStorage, backupTypes, onClose }: { namespace: string; cluster: string; provider: string; storages: string[]; defaultStorage?: string; backupTypes: BackupType[]; onClose: () => void }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState(() => `manual-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
@@ -236,6 +236,7 @@ function CreateBackupDialog({ namespace, cluster, storages, defaultStorage, back
         </>
       }
     >
+      <RabbitMQBackupNotice provider={provider} />
       <TextField label="Name" mono value={name} onChange={(e) => setName(e.target.value)} required autoFocus error={name && !/^[a-z0-9][a-z0-9-]{0,62}$/.test(name) ? 'Lowercase letters, digits and dashes.' : undefined} />
       <ChoiceGroup<BackupType>
         name="backup-type"
@@ -365,7 +366,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
           {pitr ? <TextField label="Oplog slice (minutes)" type="number" min={1} value={span} disabled={!pitrEnabled} onChange={(e) => setSpan(Math.max(1, Number(e.target.value) || 10))} /> : null}
         </div>
         <div className="section-title">Schedules</div>
-        <SchedulesEditor value={schedules} onChange={setSchedules} storages={storageNames} defaultStorage={storage || undefined} backupTypes={backupTypes} />
+        <SchedulesEditor value={schedules} onChange={setSchedules} storages={storageNames} defaultStorage={storage || undefined} backupTypes={backupTypes} provider={cluster.spec.provider} />
         {errors.length && dirty ? <span className="field-error">{errors[0]}</span> : null}
         {draft.pitr?.enabled && !persisted.pitr?.enabled ? <Badge plain tone="info">PITR starts after the next successful base backup.</Badge> : null}
       </fieldset>

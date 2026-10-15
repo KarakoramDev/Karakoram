@@ -26,12 +26,13 @@ import { STEPS, claimSubmission, firstInvalidStep, navigateStep, normalizeWizard
 import { componentEntries, memberChoices, nameError, topologyErrors, validateWizard } from './wizard/validation';
 import { resourceMinimums } from './wizard/resources';
 import { engineConsequences, engineRules } from './wizard/engine';
-import { exposureSummary, totalFootprint } from './wizard/review';
+import { configurationReviewRows, exposureReviewRows, exposureSummary, totalFootprint } from './wizard/review';
 import { validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
 import { cleanTLS, wireExposure } from './wizard/access';
 import { WizardNavigation } from './wizard/Navigation';
 import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable } from '@/engines';
+import { managementIsPublic } from '@/engines/rabbitmq/helpers';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -532,6 +533,7 @@ export function ClusterWizardPage() {
                   storages={storageNames}
                   defaultStorage={spec.backup?.storage}
                   backupTypes={provider.backupTypes}
+                  provider={provider.name}
                 />
               </Card>
               {hasCapability(provider, 'restores') ? <Card title="Seed data (optional)">
@@ -580,16 +582,17 @@ export function ClusterWizardPage() {
                     ['Total data volumes', `${footprint.volumes} volumes · ${footprint.minDisk}–${footprint.maxDisk} GiB data disk`],
                     footprint.runtimeMaxDisk > 0 && ['Runtime disks (additional)', `${footprint.runtimeMinDisk}–${footprint.runtimeMaxDisk} GiB across ${footprint.members} runtime instances`],
                     ['Placement', 'Selected namespace/project; physical hosts are unknown until allocation. Zerops does not guarantee host anti-affinity.'],
-                    ['Engine configuration', spec.engineConfig?.trim() || 'Provider defaults'],
+                    ...configurationReviewRows(spec),
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     pitr && ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],
                     spec.dataSource && ['Seed from', `${dataSourceLabel(spec.dataSource, targetNamespace)} ${spec.dataSource.backup ? `backup ${spec.dataSource.backup}` : `at ${spec.dataSource.pitrTime}`}`],
                     ['TLS', `${spec.tls?.mode ?? 'requireTLS'} · ${spec.tls?.ca === 'userProvided' ? 'user-provided certificates' : 'managed CA'}`],
-                    ['Exposure', exposureSummary(spec)],
+                    ...exposureReviewRows(spec),
                     ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
                   ]}
                 />
+                {spec.provider === 'rabbitmq' && managementIsPublic(spec.engineOptions) ? <p className="small"><a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md#public-access" target="_blank" rel="noreferrer">Review RabbitMQ public management access and its security boundaries</a>.</p> : null}
                 <p className="small muted">These are aggregate autoscaling bounds, not a price estimate or the initial allocation. Billing follows <a href="https://zerops.io/pricing" target="_blank" rel="noreferrer">Zerops pricing</a> for runtime CPU/RAM, runtime disks, data volumes and other enabled resources; backup storage is additional.</p>
                 <Callout tone="info" title="What this configuration means">
                   <ul style={{ margin: 0, paddingLeft: 18 }}>{engineConsequences(spec).map((consequence) => <li key={consequence}>{consequence}</li>)}</ul>
