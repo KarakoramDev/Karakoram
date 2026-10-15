@@ -59,22 +59,24 @@ func (e *fakeEvents) Record(_ context.Context, v domain.Event) error {
 }
 
 type fakeAgent struct {
-	mu                   sync.Mutex
-	requests             []agentapi.PBMRequest
-	actions              []string
-	receipts             map[string]agentapi.PBMResponse
-	starts               int
-	deleted              bool
-	pitrDeleted          bool
-	failRestore          bool
-	restorePolling       int
-	restoreRunning       bool
-	restoreDescribeError string
-	requireConfig        bool
-	configured           bool
-	activeBackup         bool
-	cancelledBackup      bool
-	backupCancelCalls    int
+	mu                      sync.Mutex
+	requests                []agentapi.PBMRequest
+	actions                 []string
+	receipts                map[string]agentapi.PBMResponse
+	starts                  int
+	deleted                 bool
+	pitrDeleted             bool
+	failRestore             bool
+	restorePolling          int
+	restoreRunning          bool
+	restoreDescribeError    string
+	restoreStartUnavailable bool
+	restoreDescribeOutput   json.RawMessage
+	requireConfig           bool
+	configured              bool
+	activeBackup            bool
+	cancelledBackup         bool
+	backupCancelCalls       int
 }
 
 func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +122,10 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.starts++
 			data = `{"name":"2024-01-05T11:10:54Z"}`
 		case "restore":
+			if f.restoreStartUnavailable {
+				http.Error(w, "command transport unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			f.starts++
 			raw, _ := json.Marshal("Started logical restore.\nWaiting to finish...\n{\"name\":\"2024-01-05T11:12:26.296561123Z\"}\n")
 			data = string(raw)
@@ -146,6 +152,9 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if f.restoreRunning {
 				data = `{"status":"running"}`
+			}
+			if len(f.restoreDescribeOutput) > 0 {
+				data = string(f.restoreDescribeOutput)
 			}
 		case "delete-backup":
 			f.deleted = true

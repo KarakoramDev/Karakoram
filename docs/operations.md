@@ -155,8 +155,9 @@ This is intentional safety, not a retry suggestion. Inspect PBM operation metada
 
 Immediately after restore initiation, PBM may not yet expose restore metadata.
 The control plane reports this specific absence as **restore starting** for up
-to one minute after issuing the restore. The deadline survives reconciliation
-retries. Missing metadata after that deadline, or after PBM has already reported
+to one minute after PBM accepts the restore. Failed submission attempts do not
+consume that window, and its deadline survives reconciliation retries. Missing
+metadata after that deadline, or after PBM has already reported
 the restore, is an error; unrelated command failures are surfaced immediately.
 
 ## Routine operating checks

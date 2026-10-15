@@ -152,6 +152,15 @@ func healthyMember(ctx context.Context, env Env) (string, error) {
 	return "", errors.New("no healthy mongod/PBM agent available")
 }
 
+type commandFailure struct {
+	command  string
+	exitCode int
+	stderr   string
+	message  string
+}
+
+func (e *commandFailure) Error() string { return e.message }
+
 func command(ctx context.Context, env Env, member, requestID, name string, cfg []byte, args ...string) ([]byte, error) {
 	if member == "" {
 		var err error
@@ -182,7 +191,10 @@ func command(ctx context.Context, env Env, member, requestID, name string, cfg [
 		data = []byte(text)
 	}
 	if out.ExitCode != 0 {
-		return nil, fmt.Errorf("pbm %s failed (exit %d): %s %s", name, out.ExitCode, out.Stderr, data)
+		return nil, &commandFailure{
+			command: name, exitCode: out.ExitCode, stderr: out.Stderr,
+			message: fmt.Sprintf("pbm %s failed (exit %d): %s %s", name, out.ExitCode, out.Stderr, data),
+		}
 	}
 	return data, nil
 }
