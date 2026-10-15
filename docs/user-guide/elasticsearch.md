@@ -303,11 +303,15 @@ errors from node reload statistics or current-configuration startup logs appear
 in member status and the `ComponentsReady=False` condition, including the error
 class and parser line/column when available. Raw source and credentials are not
 copied into status. A confirmed `ConfigurationError` or `PluginLoadingError`
-fails the create/update convergence operation on the next observation rather
-than waiting for the ordinary two-hour operation deadline; transient startup or
-unavailable monitoring APIs retain that normal deadline. Failed operations do
-not delete the cluster or discard desired state. Correct the pipeline and apply
-the configuration again; the new generation can converge normally. Inspect the
+fails only the current generation's create/update convergence operation on the
+next observation, rather than waiting for the ordinary two-hour operation
+deadline; transient startup or unavailable monitoring APIs retain that normal
+deadline. The component warning is recorded once per applied configuration and
+error, and does not block independent snapshots, restores or queued operations.
+Failed operations do not delete the cluster or discard desired state. Correct
+the pipeline and apply the configuration again; Karakoram republishes changed
+configuration even when initial deployment or rolling rejoin was not ready.
+The new generation can converge normally. Inspect the
 protected component logs for full diagnostics. Readiness still does not prove
 events reached their destination.
 

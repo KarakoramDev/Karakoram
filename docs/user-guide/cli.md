@@ -516,8 +516,10 @@ database IP allowlist. Create/patch files that enable a route must include
 `spec.engineOptions.apm.allowAllAddresses: true`, respectively. This request-only
 acknowledgement is consumed rather than stored; re-enabling a private route
 requires fresh confirmation. See [public Stack access](elasticsearch.md#kibana).
-Confirmed Logstash configuration errors fail the convergence operation without
-discarding the cluster; correct the pipeline and submit a new patch.
+Confirmed Logstash configuration errors fail only the current generation's
+convergence operation, without discarding the cluster or blocking independent
+snapshot/restore work. Correct the pipeline and submit a new patch; changed
+configuration is republished even if deployment or rolling rejoin was blocked.
 
 
 ### `karactl clusters delete`

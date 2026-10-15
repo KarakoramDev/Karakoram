@@ -394,6 +394,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	}
 	result, syncErr := m.synchronize(ctx, p, &rc)
 	convergenceErr, convergenceAttempted = syncErr, true
+	if convergenceErr == nil {
+		convergenceErr = result.ConvergenceError
+	} else if result.ConvergenceError != nil {
+		convergenceErr = errors.Join(convergenceErr, result.ConvergenceError)
+	}
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}
@@ -465,7 +470,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	result, syncErr := p.Sync(ctx, rc)
 	// A successful Sync may record the generation it applied while still
 	// requesting periodic requeues; that observation only moves forward.
-	if applied := rc.Cluster.Status.ObservedGeneration; syncErr == nil && applied > observedGeneration && applied <= rc.Cluster.Generation {
+	if applied := rc.Cluster.Status.ObservedGeneration; syncErr == nil && result.ConvergenceError == nil && applied > observedGeneration && applied <= rc.Cluster.Generation {
 		observedGeneration = applied
 	}
 	if err := m.resolve(ctx, rc); err != nil {
@@ -493,7 +498,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		// Automatic retries must not make an applied request appear pending again.
 		status.ObservedGeneration = observedGeneration
 		rc.Cluster.Status = status
-		if syncErr == nil && result.RequeueAfter <= 0 {
+		if syncErr == nil && result.ConvergenceError == nil && result.RequeueAfter <= 0 {
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		}
 	}

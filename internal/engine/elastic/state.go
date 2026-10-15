@@ -116,6 +116,8 @@ type member struct {
 	RestartToken string `json:"restartToken"`
 	// ConfigHash excludes imperative restart nonces and dynamically refreshed credentials.
 	ConfigHash string `json:"configHash,omitempty"`
+	// ConfigurationWarning suppresses repeated warnings for one applied config/error.
+	ConfigurationWarning string `json:"configurationWarning,omitempty"`
 	// HeapMB is the last published process heap; stateless resizes do not restart.
 	HeapMB int `json:"heapMB,omitempty"`
 	// Resources/Disk/Containers are the last applied platform values.

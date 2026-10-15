@@ -201,8 +201,22 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 			p.reloadMembers(ctx, rc, m.Name)
 			return false, "restarting component", nil
 		case "rejoin":
-			if !p.componentReady(ctx, rc, m) {
-				return false, "waiting for component readiness", nil
+			desired, err := p.desiredSpec(ctx, rc, s, m, version)
+			if err != nil {
+				return false, "", err
+			}
+			if desired.RestartToken != m.ConfigHash {
+				r.Step = "apply"
+				return false, "component configuration changed; applying current configuration", nil
+			}
+			ready, readinessErr := p.componentReadyResult(ctx, rc, m)
+			if _, configurationFailed := readinessErr.(*componentConfigurationError); configurationFailed && r.OperationID == "" {
+				// Database operations do not own this failed stateless rollout.
+				// Keep its applied config repairable without gating repositories.
+				m.Stage, s.Phase, s.Rolling = stageDeployed, "components", nil
+			}
+			if readinessErr != nil || !ready {
+				return false, "waiting for component readiness", readinessErr
 			}
 			m.Version = version
 			m.Stage = stageJoined

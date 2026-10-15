@@ -315,6 +315,14 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *state, m *
 	s.Pending = v
 	return nil
 }
+
+// componentConfigurationError is terminal for an applied generation, not for
+// independent database operations or future configuration repair.
+type componentConfigurationError struct{ message string }
+
+func (e *componentConfigurationError) Error() string { return e.message }
+func (*componentConfigurationError) Unwrap() error   { return engine.ErrInvalid }
+
 func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (bool, string, error) {
 	var observation agentspec.Readiness
 	if err := a.Engine(ctx, "elasticsearch", "readiness", nil, &observation); err != nil {
@@ -324,7 +332,7 @@ func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (boo
 		return false, "Component is waiting for its current configuration", nil
 	}
 	if observation.ConfigurationError {
-		return false, observation.Message, fmt.Errorf("%w: %s", engine.ErrInvalid, observation.Message)
+		return false, observation.Message, &componentConfigurationError{message: observation.Message}
 	}
 	return observation.Ready, observation.Message, nil
 }
@@ -342,6 +350,17 @@ func (p *Provider) componentReadyResult(ctx context.Context, rc *engine.Context,
 	defer a.Close()
 	if !isES(m) {
 		ready, _, readinessErr := componentReadiness(ctx, a, m)
+		if readinessErr != nil {
+			warning := m.ConfigHash + "\n" + readinessErr.Error()
+			if m.ConfigurationWarning != warning {
+				if rc.Events != nil {
+					if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "ComponentConfigurationError", Message: m.Name + ": " + readinessErr.Error(), CreatedAt: now(rc)}); err != nil {
+						return false, err
+					}
+				}
+				m.ConfigurationWarning = warning
+			}
+		}
 		return ready, readinessErr
 	}
 	status, err := a.Status(ctx)
@@ -356,6 +375,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, err
 	}
 	defer func() {
+		var configurationErr *componentConfigurationError
+		if errors.As(err, &configurationErr) {
+			result.ConvergenceError, err = err, nil
+		}
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
 		}
@@ -615,6 +638,17 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		case stageImported:
 			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 		case stageDeployed:
+			desired, err := p.desiredSpec(ctx, rc, s, m, m.Version)
+			if err != nil {
+				return result, err
+			}
+			if desired.RestartToken != m.ConfigHash {
+				if err := p.publishConfig(ctx, rc, s, m, m.Version, ""); err != nil {
+					return result, err
+				}
+				p.reloadMembers(ctx, rc, m.Name)
+				return result, nil
+			}
 			ready, readinessErr := p.componentReadyResult(ctx, rc, m)
 			if readinessErr != nil || !ready {
 				s.Phase = "components"
