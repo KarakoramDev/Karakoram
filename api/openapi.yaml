@@ -4189,6 +4189,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -4251,6 +4252,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -4330,6 +4332,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -4392,6 +4395,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -4477,6 +4481,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       parameters:
         - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:

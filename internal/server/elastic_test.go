@@ -86,6 +86,42 @@ func elasticTestServer(t *testing.T) (*Server, *fakeElasticAccess, string) {
 	s.Registry = registry
 	return s, f, token
 }
+
+func TestElasticNativeMutationsReplayAndScopeIdempotency(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path, body, different string
+		status                              int
+	}{
+		{"create user", "POST", "users", `{"username":"app","roles":["viewer"],"enabled":true,"password":"private-password"}`, `{"username":"app","roles":["viewer"],"enabled":false,"password":"private-password"}`, 201},
+		{"update user", "PUT", "users/app", `{"username":"app","roles":["viewer"],"enabled":true}`, `{"username":"app","roles":["viewer"],"enabled":false}`, 200},
+		{"create role", "POST", "roles", `{"name":"ingest","cluster":[],"indices":[],"applications":[]}`, `{"name":"ingest","cluster":["monitor"],"indices":[],"applications":[]}`, 201},
+		{"update role", "PUT", "roles/ingest", `{"name":"ingest","cluster":[],"indices":[],"applications":[]}`, `{"name":"ingest","cluster":["monitor"],"indices":[],"applications":[]}`, 200},
+		{"create API key", "POST", "api-keys", `{"name":"agent","roleDescriptors":{"reader":{"cluster":[],"indices":[],"applications":[]}}}`, `{"name":"other","roleDescriptors":{"reader":{"cluster":[],"indices":[],"applications":[]}}}`, 201},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, f, token := elasticTestServer(t)
+			path := "/api/v1/clusters/prod/elasticsearch/" + tc.path
+			first := idempotentCall(s, tc.method, path, tc.body, token, "native-request")
+			// Any duplicate provider execution now fails instead of returning
+			// the original object or one-time secret.
+			f.err = engine.ErrConflict
+			second := idempotentCall(s, tc.method, path, tc.body, token, "native-request")
+			assertReplay(t, first, second, tc.status)
+			normalized := idempotentCall(s, tc.method, path+"?namespace=default", tc.body, token, "native-request")
+			if normalized.Code != tc.status || normalized.Header().Get("Idempotent-Replayed") != "true" {
+				t.Fatal("default namespace scope changed", normalized.Code, normalized.Body.String())
+			}
+			assertIdempotencyConflict(t, idempotentCall(s, tc.method, path, tc.different, token, "native-request"), domain.ReasonConflict)
+			isolated := idempotentCall(s, tc.method, path+"?namespace=missing", tc.body, token, "native-request")
+			if isolated.Code != 404 || isolated.Header().Get("Idempotent-Replayed") != "" {
+				t.Fatal("namespace shared an object or secret replay", isolated.Code, isolated.Body.String())
+			}
+			if tc.path == "api-keys" && (second.Header().Get("Cache-Control") != "no-store" || !strings.Contains(second.Body.String(), "one-time-secret")) {
+				t.Fatal("API-key replay lost secret response protection", second.Header())
+			}
+		})
+	}
+}
 func TestElasticAccessHandlers(t *testing.T) {
 	s, f, token := elasticTestServer(t)
 	routes := []struct {

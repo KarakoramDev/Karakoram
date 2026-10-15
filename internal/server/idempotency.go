@@ -45,6 +45,7 @@ func idempotencyCovered(id string) bool {
 		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
+		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
 		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		return true
 	}
@@ -105,6 +106,7 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
+		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
 		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	}

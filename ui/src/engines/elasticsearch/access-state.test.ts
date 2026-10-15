@@ -123,3 +123,20 @@ test('role and user dialogs keep native errors visible, and submit edited applic
   assert.match(source, /applications: grants \?\? \[\]/);
   assert.match(source, /DLS\/FLS requires an Elasticsearch licence tier/);
 });
+
+test('native access submissions key every create and update and reset the key when fields change', () => {
+  const source = readFileSync(new URL('./ElasticAccessTab.tsx', import.meta.url), 'utf8');
+  for (const [method, path] of [
+    ['POST', 'users'], ['PUT', 'users/{username}'],
+    ['POST', 'roles'], ['PUT', 'roles/{role}'], ['POST', 'api-keys'],
+  ]) {
+    const mutation = `api.${method}('/clusters/{cluster}/elasticsearch/${path}', { headers: idempotencyHeaders(submission.key)`;
+    assert.ok(source.includes(mutation), `${method} ${path} must send its submission key`);
+  }
+  for (const fields of [
+    'username, password, fullName, email, roles, enabled',
+    'name, clusterPrivileges, indicesText, applications',
+    'name, expiration, descriptors',
+  ]) assert.ok(source.includes(`useSubmissionKey(JSON.stringify({ ${fields} }))`), `edits must reset the key for ${fields}`);
+  assert.equal(source.match(/submission\.reset\(\)/g)?.length, 3);
+});

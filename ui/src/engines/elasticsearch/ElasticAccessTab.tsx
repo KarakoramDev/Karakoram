@@ -5,12 +5,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { Switch, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Menu, MenuItem, Time, type Tone } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { useClusterContext } from '@/pages/clusters/detail/ClusterDetail';
+import { useSubmissionKey } from '@/pages/clusters/detail/use-submission-key';
 import { hasCapability } from '../index';
 import { COMPONENT_LABEL, EXPIRATION_RE, ROLE_NAME_RE, USERNAME_RE, formatIndexPrivileges, memberKind, parseIndexPrivileges, parseRoleDescriptors, validUserPassword, visibleElasticRoles, type MemberKind } from './spec';
 
@@ -519,6 +521,7 @@ function UserDialog({ namespace, cluster, existing, roleNames, onClose, onSaved 
   const [email, setEmail] = useState(existing?.email ?? '');
   const [roles, setRoles] = useState(existing?.roles.join(', ') ?? '');
   const [enabled, setEnabled] = useState(existing?.enabled ?? true);
+  const submission = useSubmissionKey(JSON.stringify({ username, password, fullName, email, roles, enabled }));
   const parsedRoles = list(roles);
   const passwordOk = validUserPassword(password, Boolean(existing));
   const valid = USERNAME_RE.test(username) && parsedRoles.length > 0 && passwordOk;
@@ -527,10 +530,11 @@ function UserDialog({ namespace, cluster, existing, roleNames, onClose, onSaved 
     mutationFn: () => {
       const body = { username: existing?.username ?? username, enabled, roles: parsedRoles, ...(fullName.trim() ? { fullName: fullName.trim() } : {}), ...(email.trim() ? { email: email.trim() } : {}) };
       return existing
-        ? unwrap(api.PUT('/clusters/{cluster}/elasticsearch/users/{username}', { params: { path: { cluster, username: existing.username }, query: { namespace } }, body: { ...body, ...(password ? { password } : {}) } }))
-        : unwrap(api.POST('/clusters/{cluster}/elasticsearch/users', { params: { path: { cluster }, query: { namespace } }, body: { ...body, password } }));
+        ? unwrap(api.PUT('/clusters/{cluster}/elasticsearch/users/{username}', { headers: idempotencyHeaders(submission.key), params: { path: { cluster, username: existing.username }, query: { namespace } }, body: { ...body, ...(password ? { password } : {}) } }))
+        : unwrap(api.POST('/clusters/{cluster}/elasticsearch/users', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { ...body, password } }));
     },
     onSuccess: () => {
+      submission.reset();
       toast.success(existing ? 'User updated.' : 'User created.');
       onSaved();
       onClose();
@@ -583,6 +587,7 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
   const [clusterPrivileges, setClusterPrivileges] = useState(existing?.cluster.join(', ') ?? '');
   const [indicesText, setIndicesText] = useState(existing ? formatIndexPrivileges(existing.indices) : '');
   const [applications, setApplications] = useState<ApplicationDraft[]>(() => applicationDrafts(existing?.applications ?? []));
+  const submission = useSubmissionKey(JSON.stringify({ name, clusterPrivileges, indicesText, applications }));
   const grants = applicationGrants(applications);
   const [error, setError] = useState<string | null>(null);
   const indices = parseIndexPrivileges(indicesText);
@@ -593,10 +598,11 @@ function RoleDialog({ namespace, cluster, existing, onClose, onSaved }: { namesp
     mutationFn: () => {
       const body: ElasticRole = { name: existing?.name ?? name, cluster: clusterList, indices: indices ?? [], applications: grants ?? [] };
       return existing
-        ? unwrap(api.PUT('/clusters/{cluster}/elasticsearch/roles/{role}', { params: { path: { cluster, role: existing.name }, query: { namespace } }, body }))
-        : unwrap(api.POST('/clusters/{cluster}/elasticsearch/roles', { params: { path: { cluster }, query: { namespace } }, body }));
+        ? unwrap(api.PUT('/clusters/{cluster}/elasticsearch/roles/{role}', { headers: idempotencyHeaders(submission.key), params: { path: { cluster, role: existing.name }, query: { namespace } }, body }))
+        : unwrap(api.POST('/clusters/{cluster}/elasticsearch/roles', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body }));
     },
     onSuccess: () => {
+      submission.reset();
       toast.success(existing ? 'Role updated.' : 'Role created.');
       onSaved();
       onClose();
@@ -656,14 +662,16 @@ function APIKeyDialog({ namespace, cluster, onClose, onSaved }: { namespace: str
   const [name, setName] = useState('');
   const [expiration, setExpiration] = useState('');
   const [descriptors, setDescriptors] = useState('');
+  const submission = useSubmissionKey(JSON.stringify({ name, expiration, descriptors }));
   const [created, setCreated] = useState<Schemas['ElasticAPIKeyCreated'] | null>(null);
   const parsed = parseRoleDescriptors(descriptors);
   const expirationOk = !expiration.trim() || EXPIRATION_RE.test(expiration.trim());
   const valid = name.trim().length > 0 && !parsed.error && expirationOk;
 
   const save = useMutation({
-    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/elasticsearch/api-keys', { params: { path: { cluster }, query: { namespace } }, body: { name: name.trim(), ...(expiration.trim() ? { expiration: expiration.trim() } : {}), roleDescriptors: parsed.value! } })),
+    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/elasticsearch/api-keys', { headers: idempotencyHeaders(submission.key), params: { path: { cluster }, query: { namespace } }, body: { name: name.trim(), ...(expiration.trim() ? { expiration: expiration.trim() } : {}), roleDescriptors: parsed.value! } })),
     onSuccess: (key) => {
+      submission.reset();
       toast.success('API key created.');
       onSaved();
       setCreated(key);

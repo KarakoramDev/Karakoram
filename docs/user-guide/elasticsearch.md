@@ -437,7 +437,7 @@ karactl elasticsearch api-keys list search
 karactl elasticsearch api-keys invalidate search KEY_ID
 ```
 
-Creation returns `id`, `apiKey` and `encoded` **once**; store them immediately and securely. Lists do not reveal key secrets. Prefer explicit expiry and narrow role descriptors. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
+Creation returns `id`, `apiKey` and `encoded`; store them immediately and securely. Lists do not reveal key secrets. API-key creation and native user/role POST/PUT operations accept `Idempotency-Key`: retry an unchanged request with the same key to replay the original successful response, including the one-time API-key secret, for 24 hours without creating another object. The UI sends a submission key and changes it when the request is edited. Without that header, an uncertain key-creation outcome requires listing and invalidating any unwanted key before creating another. See [safe API retries](api.md#safe-retries-with-idempotency-key). Prefer explicit expiry and narrow role descriptors. Use `Authorization: ApiKey $ES_API_KEY` with the encoded key for Elasticsearch HTTP. Expiration, invalidation and role descriptors follow [Elastic API-key semantics](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key); keys are not Karakoram management bearer tokens.
 
 API-key invalidation is safe to retry, including when a reload or interrupted
 client leaves its outcome uncertain; invalidating an already invalidated key
