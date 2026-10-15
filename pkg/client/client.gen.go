@@ -38,9 +38,9 @@ const (
 
 // Defines values for BackupTrigger.
 const (
-	BackupTriggerManual   BackupTrigger = "manual"
-	BackupTriggerRestore  BackupTrigger = "restore"
-	BackupTriggerSchedule BackupTrigger = "schedule"
+	BackupTriggerRestore BackupTrigger = "restore"
+	Manual               BackupTrigger = "manual"
+	Schedule             BackupTrigger = "schedule"
 )
 
 // Defines values for BackupType.
@@ -68,12 +68,12 @@ const (
 
 // Defines values for CanRequestAction.
 const (
-	Asterisk CanRequestAction = "*"
-	Create   CanRequestAction = "create"
-	Delete   CanRequestAction = "delete"
-	Export   CanRequestAction = "export"
-	Read     CanRequestAction = "read"
-	Update   CanRequestAction = "update"
+	CanRequestActionAsterisk CanRequestAction = "*"
+	CanRequestActionCreate   CanRequestAction = "create"
+	CanRequestActionDelete   CanRequestAction = "delete"
+	CanRequestActionExport   CanRequestAction = "export"
+	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
 // Defines values for ClusterStatusPhase.

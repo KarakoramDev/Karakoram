@@ -6156,6 +6156,11 @@ components:
             - manual
             - schedule
             - restore
+          # Keep existing Go constant names independent of new enum collisions.
+          x-enum-varnames:
+            - Manual
+            - Schedule
+            - BackupTriggerRestore
         schedule:
           type: string
           minLength: 1

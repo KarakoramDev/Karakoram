@@ -11,8 +11,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/legacy"
@@ -197,6 +199,35 @@ func TestConformancePostRestoreBackupTrigger(t *testing.T) {
 		w := call(s, "GET", path, "", token)
 		if w.Code != http.StatusOK || !bytes.Contains(w.Body.Bytes(), []byte(`"trigger":"restore"`)) {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestGeneratedEnumIdentifiersRemainStable(t *testing.T) {
+	// Refer to the exported names in both generated packages so a schema change
+	// cannot silently rename existing constants through enum collision handling.
+	for _, pair := range [][2]string{
+		{string(api.Manual), "manual"},
+		{string(api.Schedule), "schedule"},
+		{string(api.BackupTriggerRestore), "restore"},
+		{string(api.CanRequestActionAsterisk), "*"},
+		{string(api.CanRequestActionCreate), "create"},
+		{string(api.CanRequestActionRead), "read"},
+		{string(api.CanRequestActionUpdate), "update"},
+		{string(api.CanRequestActionDelete), "delete"},
+		{string(api.CanRequestActionExport), "export"},
+		{string(client.Manual), "manual"},
+		{string(client.Schedule), "schedule"},
+		{string(client.BackupTriggerRestore), "restore"},
+		{string(client.CanRequestActionAsterisk), "*"},
+		{string(client.CanRequestActionCreate), "create"},
+		{string(client.CanRequestActionRead), "read"},
+		{string(client.CanRequestActionUpdate), "update"},
+		{string(client.CanRequestActionDelete), "delete"},
+		{string(client.CanRequestActionExport), "export"},
+	} {
+		if pair[0] != pair[1] {
+			t.Errorf("generated enum value = %q, want %q", pair[0], pair[1])
 		}
 	}
 }

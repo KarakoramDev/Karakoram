@@ -521,6 +521,9 @@ The same compiled example lives in [`pkg/client/example_test.go`](../../pkg/clie
 
 Optional OpenAPI properties use pointers. For example, successful `CreateAPITokenWithResponse` returns `JSON201.Secret` as `*string`: check both `JSON201` and `Secret` for nil before dereferencing, store the one-time secret securely, and never print it in ordinary logs. Later token reads expose metadata, not that secret. For all clusters in a namespace pass `ListClustersParams.Namespace`; continue pagination using `NextCursor` with the same filters.
 
+The Go backup-trigger constants are `Manual` (`manual`), `Schedule` (`schedule`)
+and `BackupTriggerRestore` (`restore`, the automatic post-restore base backup).
+
 ### Consume SSE
 
 The generated client's `StreamEvents` returns a raw `*http.Response`; it does not decode a sequence of SSE events into JSON objects. Close the body when finished and use a streaming SSE parser (not JSON decoding or `io.ReadAll` of an unending body). For raw frame inspection:
