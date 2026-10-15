@@ -15,13 +15,14 @@ import (
 )
 
 type commandError struct {
-	code    int
-	message string
+	code       int
+	message    string
+	httpStatus int
 }
 
 func (e *commandError) Error() string { return e.message }
 func usageError(format string, args ...any) error {
-	return &commandError{2, fmt.Sprintf(format, args...)}
+	return &commandError{code: 2, message: fmt.Sprintf(format, args...)}
 }
 
 // ExitCode maps failures to stable shell exit statuses.
@@ -87,7 +88,7 @@ func apiFailure(status int, message string) error {
 	case 408, 504:
 		code = 7
 	}
-	return &commandError{code, message}
+	return &commandError{code: code, message: message, httpStatus: status}
 }
 
 func printPEM(w io.Writer, pem string) error {

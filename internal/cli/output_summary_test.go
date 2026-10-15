@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package cli
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+)
+
+const summaryProvider = `{
+  "name":"psmdb","displayName":"Percona Server for MongoDB",
+  "versions":[{"version":"7.0","major":"7.0","default":false,"status":"supported"},{"version":"8.0","major":"8.0","default":true,"status":"supported"}],
+  "backupTypes":["logical","physical"],
+  "presets":[{"name":"dev","displayName":"Development","spec":{"components":{"engine":{"replicas":1}}}}],
+  "topologies":[
+    {"type":"replicaSet","displayName":"Replica set","defaults":{"version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":3,"resources":{"minCpu":1,"maxCpu":2,"minRam":1,"maxRam":2}}},"tls":{"mode":"requireTLS"}},"limits":{"engine":{"allowedReplicas":[1,3,5,7],"minReplicas":1,"maxReplicas":7}},"componentSchemas":{},"uiSchema":{"schemaMarker":"full-schema-only"}},
+    {"type":"sharded","displayName":"Sharded","defaults":{"topology":{"type":"sharded","shards":2},"components":{"engine":{"replicas":3},"configServer":{"replicas":3},"router":{"replicas":2}}},"limits":{"shards":{"min":1,"max":128}},"componentSchemas":{},"uiSchema":{}}
+  ],
+  "upgradePaths":[{"from":"7.0","to":"8.0","requiresFCV":"7.0","requiresBackup":true},{"from":"8.0","to":"8.1","requiresBackup":false}]
+}`
+
+func TestProviderHumanSummaryAndUnchangedDocuments(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/providers" {
+			fmt.Fprintf(w, `{"items":[%s]}`, summaryProvider)
+		} else {
+			fmt.Fprint(w, summaryProvider)
+		}
+	}))
+	defer server.Close()
+	for _, args := range [][]string{{"providers", "get", "psmdb"}, {"providers", "list"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			code, out, stderr := runCLI(t, server.URL, "", false, args...)
+			if code != 0 {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			for _, want := range []string{"psmdb", "Percona Server for MongoDB", "7.0", "8.0", "replicaSet", "sharded", "dev", "-o json", "-o yaml"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("missing %q: %q", want, out)
+				}
+			}
+			for _, unwanted := range []string{"full-schema-only", "componentSchemas=", "defaults=", ";", "spec="} {
+				if strings.Contains(out, unwanted) {
+					t.Errorf("flattened content %q: %q", unwanted, out)
+				}
+			}
+			if args[1] == "get" {
+				for _, want := range []string{"Default version", "Topologies", "KEY DEFAULTS", "engine replicas=3", "router replicas=2", "shards=2", "Limits", "allowedReplicas", "1, 3, 5, 7", "Upgrade paths", "7.0 → 8.0 (requires FCV 7.0) (requires backup)", "8.0 → 8.1"} {
+					if !strings.Contains(out, want) {
+						t.Errorf("missing %q: %q", want, out)
+					}
+				}
+			}
+			var expected any
+			body := summaryProvider
+			if args[1] == "list" {
+				body = `{"items":[` + body + `]}`
+			}
+			if err := json.Unmarshal([]byte(body), &expected); err != nil {
+				t.Fatal(err)
+			}
+			for _, format := range []string{"json", "yaml"} {
+				code, out, stderr := runCLI(t, server.URL, "", false, append(append([]string{}, args...), "-o", format)...)
+				if code != 0 {
+					t.Fatalf("%s: code=%d stderr=%q", format, code, stderr)
+				}
+				var actual any
+				if format == "json" {
+					if err := json.Unmarshal([]byte(out), &actual); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					var document map[string]any
+					if err := yaml.Unmarshal([]byte(out), &document); err != nil {
+						t.Fatal(err)
+					}
+					// Normalize YAML integer values to the JSON response's numeric representation.
+					normalized, err := json.Marshal(document)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := json.Unmarshal(normalized, &actual); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if !reflect.DeepEqual(actual, expected) {
+					t.Errorf("%s document changed: %s", format, out)
+				}
+			}
+		})
+	}
+}
+
+func TestNestedResourceTablesUseDetailSections(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		const resource = `{"name":"demo","spec":{"components":{"engine":{"replicas":3,"resources":{"maxCpu":2,"maxRam":4}}}},"status":{"phase":"Ready"}}`
+		if r.URL.Path == "/api/v1/clusters" {
+			fmt.Fprintf(w, `{"items":[%s],"nextCursor":"next-page"}`, resource)
+		} else {
+			fmt.Fprint(w, resource)
+		}
+	}))
+	defer server.Close()
+	for _, args := range [][]string{{"clusters", "get", "demo"}, {"clusters", "list"}} {
+		code, out, stderr := runCLI(t, server.URL, "", false, args...)
+		if code != 0 || strings.Contains(out, "components=") || strings.Contains(out, ";") {
+			t.Fatalf("%v: code=%d stdout=%q stderr=%q", args, code, out, stderr)
+		}
+		for _, text := range []string{"spec:", "components:", "engine:", "resources:", "maxCpu", "maxRam", "replicas"} {
+			if !strings.Contains(out, text) {
+				t.Errorf("%v missing %q: %q", args, text, out)
+			}
+		}
+		if args[1] == "list" && (!strings.Contains(out, "Details for demo:") || !strings.Contains(stderr, "--cursor next-page")) {
+			t.Errorf("missing list details/pagination: stdout=%q stderr=%q", out, stderr)
+		}
+	}
+}

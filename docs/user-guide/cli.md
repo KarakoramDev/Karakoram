@@ -29,7 +29,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 
 ## Requests, output and waits
 
-- `-o table` is default; nested values are summarized rather than embedded JSON, and numbers use decimal rather than scientific notation. Provider tables summarize versions and preset names; status conditions appear as rows and member resources as named values. Use `-o json`/`-o yaml` for the unchanged full structured response.
+- `-o table` is default; nested values appear in hierarchical detail sections rather than one flattened cell, and numbers use decimal rather than scientific notation. Provider lists summarize engines, versions/defaults, topology types and preset names. Provider details show one row per topology with key defaults, separate limits and `from → to` upgrade paths; UI/component schemas and full resource defaults remain available with `-o json`/`-o yaml`. Status conditions appear as rows. Structured output preserves the full response unchanged.
 - `karactl openapi > openapi.yaml` downloads the running server's authoritative OpenAPI document as raw YAML. This public endpoint does not require login.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. Use protected input for secret fields. When supplied, the file defines the request body instead of convenience body flags.
 - Cluster **create** files contain `name` and `spec`; **edit** replaces the full `spec` and can open the configured editor when no file is supplied; **patch/scale/upgrade** files have `{spec: {...}}` merge-patch shape. Arrays such as schedules are replaced, not appended.
@@ -38,7 +38,7 @@ For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` through a secret 
 - `rbac policy set -f FILE` is the exception: the file contains raw policy CSV.
 - `clusters connection NAME` prints a password-free endpoint/TLS summary without requiring credentials-read permission. CA availability is not checked on this path; TLS-disabled clusters report that no CA is configured. Add `--reveal` to display sensitive engine credentials, copyable URIs and the CA as a multiline PEM block. Do not capture revealed output in logs.
 - `karactl clusters ca NAME > ca.pem` exports only the PEM to stdout, regardless of output format. It uses the existing connection API and requires its separate `cluster-credentials:read` permission. Use `-n NAMESPACE` as with other cluster commands; an unavailable CA is an error.
-- Cluster mutations with `--wait` immediately report acceptance and the cluster/generation or operation ID on stderr, then print phase/message changes and a progress heartbeat every fifteen seconds. Default timeout is thirty minutes; `--timeout` changes it. Timeout or interruption does not cancel server work. The error includes a non-mutating resume command: `karactl clusters wait NAME --timeout 30m` observes the current desired generation (or deletion/suspension), and `karactl operations wait ID --timeout 30m` observes a persisted operation. Keep the same context/server and namespace; never repeat create merely to resume waiting.
+- Cluster mutations with `--wait` immediately report acceptance and the cluster/generation or operation ID on stderr, then print phase/message changes and a progress heartbeat every fifteen seconds. Default timeout is thirty minutes; `--timeout` changes it. Observation failures from HTTP 408/429/502/503/504, connection errors and timeouts retry with bounded backoff until the deadline, with a short stderr note; the mutation is never resubmitted. Timeout or interruption does not cancel server work. An unfinished wait reports acceptance, the known operation ID and a non-mutating resume command, including when observation fails with a non-retryable error. `karactl clusters wait NAME --timeout 30m` observes the current desired generation (or deletion/suspension), and `karactl operations wait ID --timeout 30m` observes a persisted operation. Keep the same context/server and namespace; never repeat create merely to resume waiting. Suspension progress compares the observed generation with the operation's target generation, or the cluster's current desired generation if no target is returned.
 - Backup/restore creation returns accepted records; inspect the corresponding Operation and record with `operations wait ID`, `backups get` or `restores get`. Those creation commands do not have an invented `--wait` flag.
 - `events watch` streams SSE, supports replay/filter flags, and runs until interrupted. `operations wait` polls a persisted operation until its terminal phase.
 - `karactl operations cancel ID` requests cancellation with cluster-update permission on the operation's recorded namespace/cluster. Pending work is cancelled immediately; Running work stops only at provider-supported safe checkpoints and may remain Running during cleanup. Terminal/unsafe states return 409. Cancellation does not undo accepted desired state or completed database work; inspect the returned operation and resume `operations wait ID`. See [API cancellation](api.md#cancel-an-operation).
@@ -54,7 +54,7 @@ Examples and safety prerequisites: [namespaces](namespaces.md), [replica sets](r
 
 ## Safety and exit statuses
 
-Deleting clusters, backups, storages, API tokens, accounts, namespaces, database users or roles prompts **Type the name to confirm** when stdin is a terminal. The same safeguard applies to in-place restores, member replacement, compatibility-version raises, system-user/TLS/namespace-token rotation and account password resets. For compound identities, type the final argument (the backup/member/user/role); in-place restore asks for the target cluster. `--yes` / `-y` skips confirmation. Non-terminal stdin does not prompt, preserving automation behavior. Declining or reaching EOF without confirmation exits non-zero without submitting the mutation. Repeated deletion of a cluster already Deleting reports that deletion is already underway; it does not imply that cleanup has finished.
+Deleting clusters, backups, storages, API tokens, accounts, namespaces, database users or roles prompts **Type the name to confirm** when stdin is a terminal. The same safeguard applies to in-place restores, member replacement, compatibility-version raises, system-user/TLS/namespace-token rotation, account password resets and operation cancellation. For compound identities, type the final argument (the backup/member/user/role); in-place restore asks for the target cluster. `--yes` / `-y` skips confirmation without reading stdin. Without a terminal, the command reads one line: `y` or `yes` (case-insensitive) confirms; any other non-empty answer cancels with exit status 1 and no mutation submitted. Empty input or EOF without an answer exits with status 2 and asks for `--yes` for non-interactive use. Commands reading a payload from stdin (`-f -` or `--token-file -`) require `--yes` before reading any payload; they never use payload bytes as confirmation. Cloning with `restores create --into-new` does not replace an existing target and does not require destructive confirmation. Repeated deletion of a cluster already Deleting reports that deletion is already underway; it does not imply that cleanup has finished.
 
 With unchanged `--keep-volumes` and `--keep-backups` options, a repeated cluster
 delete returns the existing in-flight Operation; output and `--wait` use that
@@ -67,12 +67,12 @@ Every failure exits non-zero, including a successful HTTP storage-verification r
 | --- | --- |
 | 0 | Success |
 | 1 | Generic failure, including failed operations, declined confirmation and failed storage verification |
-| 2 | Usage error: unknown/missing subcommand, invalid arguments or flags |
+| 2 | Usage error: unknown/missing subcommand, invalid arguments or flags, missing non-interactive confirmation |
 | 3 | Resource not found (HTTP 404) |
 | 4 | Resource conflict (HTTP 409) |
 | 5 | Authentication or permission failure (HTTP 401/403) |
 | 6 | Request validation/media error (HTTP 400/415/422) |
-| 7 | Wait deadline exceeded or HTTP timeout (408/504); accepted work may continue |
+| 7 | Wait deadline exceeded (including persistent transient observation failures) or HTTP timeout (408/504); accepted work may continue |
 
 
 ## Orphaned platform volumes

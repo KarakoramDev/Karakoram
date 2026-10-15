@@ -42,12 +42,8 @@ func (a *app) print(v any) error {
 			}
 			return nil
 		}
-		// Detailed resources retain every field, including catalog versions and upgrade paths.
 		w := tabwriter.NewWriter(a.opts.Out, 0, 4, 2, ' ', 0)
-		keys := sortedKeys(m)
-		for _, k := range keys {
-			fmt.Fprintf(w, "%s\t%s\n", k, cell(m[k]))
-		}
+		detailFields(w, m, "")
 		return w.Flush()
 	}
 	if rows, ok := v.([]any); ok {
@@ -105,6 +101,49 @@ func cell(v any) string {
 		return r
 	}, s)
 }
+
+func nestedTableValue(v any) bool {
+	switch value := v.(type) {
+	case map[string]any:
+		return true
+	case []any:
+		for _, item := range value {
+			switch item.(type) {
+			case map[string]any, []any:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Detail fields retain hierarchy without squeezing whole documents into a cell.
+func detailFields(w *tabwriter.Writer, m map[string]any, prefix string) {
+	for _, key := range sortedKeys(m) {
+		label := prefix + key
+		switch value := m[key].(type) {
+		case map[string]any:
+			fmt.Fprintf(w, "%s:\n", label)
+			detailFields(w, value, prefix+"  ")
+		case []any:
+			if !nestedTableValue(value) {
+				fmt.Fprintf(w, "%s\t%s\n", label, cell(value))
+				continue
+			}
+			fmt.Fprintf(w, "%s:\n", label)
+			for i, item := range value {
+				fmt.Fprintf(w, "%s  %d:\n", prefix, i+1)
+				if fields, ok := item.(map[string]any); ok {
+					detailFields(w, fields, prefix+"    ")
+				} else {
+					fmt.Fprintf(w, "%s    %s\n", prefix, cell(item))
+				}
+			}
+		default:
+			fmt.Fprintf(w, "%s\t%s\n", label, cell(value))
+		}
+	}
+}
 func (a *app) table(rows []any) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(a.opts.Out, "No results.")
@@ -152,9 +191,40 @@ func (a *app) table(rows []any) error {
 					v = status["phase"]
 				}
 			}
-			fmt.Fprint(w, cell(v))
+			if nestedTableValue(v) {
+				fmt.Fprint(w, "see details")
+			} else {
+				fmt.Fprint(w, cell(v))
+			}
 		}
 		fmt.Fprintln(w)
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	for i, row := range rows {
+		m, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+		details := map[string]any{}
+		for _, key := range ordered {
+			if key != "status" && nestedTableValue(m[key]) {
+				details[key] = m[key]
+			}
+		}
+		if len(details) == 0 {
+			continue
+		}
+		label := cell(m["name"])
+		if label == "-" {
+			label = cell(m["id"])
+		}
+		if label == "-" {
+			label = strconv.Itoa(i + 1)
+		}
+		fmt.Fprintf(w, "\nDetails for %s:\n", label)
+		detailFields(w, details, "  ")
 	}
 	return w.Flush()
 }
@@ -184,5 +254,101 @@ func (a *app) orphanedVolumesTable(v any) error {
 			cell(m["member"]), cell(m["attempts"]), cell(m["nextAttemptAt"]),
 			cell(m["lastProcessId"]))
 	}
+	return w.Flush()
+}
+
+func providerDefault(m map[string]any) string {
+	versions, _ := m["versions"].([]any)
+	for _, version := range versions {
+		if nested(version, "default") == true {
+			return cell(nested(version, "version"))
+		}
+	}
+	return "-"
+}
+
+func topologyDefaults(topology any) string {
+	defaults, _ := nested(topology, "defaults").(map[string]any)
+	parts := []string{}
+	if components, ok := defaults["components"].(map[string]any); ok {
+		for _, name := range sortedKeys(components) {
+			if replicas := nested(components[name], "replicas"); replicas != nil {
+				parts = append(parts, name+" replicas="+cell(replicas))
+			}
+		}
+	}
+	if shards := nested(defaults, "topology", "shards"); shards != nil {
+		parts = append(parts, "shards="+cell(shards))
+	}
+	if tls := nested(defaults, "tls", "mode"); tls != nil {
+		parts = append(parts, "TLS="+cell(tls))
+	}
+	if len(parts) == 0 {
+		return "-"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (a *app) providersTable(v any, list bool) error {
+	if list {
+		items, _ := nested(v, "items").([]any)
+		rows := make([]any, 0, len(items))
+		for _, item := range items {
+			provider, ok := item.(map[string]any)
+			if !ok {
+				return fmt.Errorf("unexpected provider record")
+			}
+			topologies, _ := provider["topologies"].([]any)
+			types := make([]any, 0, len(topologies))
+			for _, topology := range topologies {
+				types = append(types, nested(topology, "type"))
+			}
+			rows = append(rows, map[string]any{
+				"name": provider["name"], "engine": provider["displayName"],
+				"versions": cell(provider["versions"]), "defaultVersion": providerDefault(provider),
+				"topologies": types, "presets": cell(provider["presets"]), "backupTypes": provider["backupTypes"],
+			})
+		}
+		if err := a.print(map[string]any{"items": rows, "nextCursor": nested(v, "nextCursor")}); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(a.opts.Out, "Use providers get NAME for topology defaults, limits and upgrade paths. Use -o json or -o yaml for the full document, including uiSchema.")
+		return err
+	}
+	provider, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("unexpected provider response")
+	}
+	w := tabwriter.NewWriter(a.opts.Out, 0, 4, 2, ' ', 0)
+	fmt.Fprintf(w, "Provider\t%s\nEngine\t%s\nVersions\t%s\nDefault version\t%s\nPresets\t%s\nBackup types\t%s\n",
+		cell(provider["name"]), cell(provider["displayName"]), cell(provider["versions"]), providerDefault(provider), cell(provider["presets"]), cell(provider["backupTypes"]))
+	fmt.Fprintln(w, "\nTopologies\nTYPE\tNAME\tKEY DEFAULTS")
+	topologies, _ := provider["topologies"].([]any)
+	for _, topology := range topologies {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", cell(nested(topology, "type")), cell(nested(topology, "displayName")), topologyDefaults(topology))
+	}
+	fmt.Fprintln(w, "\nLimits")
+	for _, topology := range topologies {
+		fmt.Fprintf(w, "%s:\n", cell(nested(topology, "type")))
+		if limits, ok := nested(topology, "limits").(map[string]any); ok {
+			detailFields(w, limits, "  ")
+		}
+	}
+	fmt.Fprintln(w, "\nUpgrade paths")
+	paths, _ := provider["upgradePaths"].([]any)
+	if len(paths) == 0 {
+		fmt.Fprintln(w, "None.")
+	}
+	for _, path := range paths {
+		fmt.Fprintf(w, "%s → %s", cell(nested(path, "from")), cell(nested(path, "to")))
+		if fcv := nested(path, "requiresFCV"); fcv != nil && fcv != "" {
+			fmt.Fprintf(w, " (requires FCV %s)", cell(fcv))
+		}
+		if nested(path, "requiresBackup") == true {
+			fmt.Fprint(w, " (requires backup)")
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintln(w, "\nUse -o json or -o yaml for the full document, including uiSchema, component schemas and resource defaults.")
 	return w.Flush()
 }

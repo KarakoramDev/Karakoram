@@ -10,15 +10,58 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"time"
 )
 
 func waitFailure(ctx context.Context, err error, resume string) error {
 	if ctx.Err() != nil {
-		return fmt.Errorf("%w; work continues server-side. Resume waiting without resubmitting: %s", ctx.Err(), resume)
+		err = ctx.Err()
 	}
-	return err
+	return fmt.Errorf("%w; work continues server-side. Resume waiting without resubmitting: %s", err, resume)
+}
+
+func transientObservationError(err error) bool {
+	var response *commandError
+	if errors.As(err, &response) {
+		switch response.httpStatus {
+		case 408, 429, 502, 503, 504:
+			return true
+		}
+		return false
+	}
+	var network net.Error
+	return errors.As(err, &network) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+// Observation retries never resubmit the accepted mutation.
+func (a *app) observe(ctx context.Context, op, id string) (any, error) {
+	delay := 100 * time.Millisecond
+	for {
+		result, err := a.request(ctx, op, []string{id}, nil, nil)
+		if err == nil || !transientObservationError(err) || ctx.Err() != nil {
+			return result, err
+		}
+		fmt.Fprintf(a.opts.Err, "Observation temporarily unavailable; retrying in %s: %s\n", delay, err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("%w (last observation error: %v)", ctx.Err(), err)
+		case <-timer.C:
+		}
+		if delay < 2*time.Second {
+			delay *= 2
+			if delay > 2*time.Second {
+				delay = 2 * time.Second
+			}
+		}
+	}
+}
+
+func (a *app) acceptedOperationFailure(ctx context.Context, err error, id string, timeout time.Duration) error {
+	return fmt.Errorf("operation %s was accepted; %w", id, waitFailure(ctx, err, a.resumeCommand("operations", id, timeout)))
 }
 
 func operationMessage(op any) string {
@@ -45,9 +88,9 @@ func (a *app) waitOperation(ctx context.Context, id string, timeout time.Duratio
 	last := ""
 	lastPrinted := time.Time{}
 	for {
-		op, err := a.request(ctx, "getOperation", []string{id}, nil, nil)
+		op, err := a.observe(ctx, "getOperation", id)
 		if err != nil {
-			return waitFailure(ctx, err, a.resumeCommand("operations", id, timeout))
+			return a.acceptedOperationFailure(ctx, err, id, timeout)
 		}
 		phase, _ := nested(op, "phase").(string)
 		progress := phase + ": " + operationMessage(op)
@@ -65,7 +108,7 @@ func (a *app) waitOperation(ctx context.Context, id string, timeout time.Duratio
 			return fmt.Errorf("operation %s %s: %s", id, phase, operationMessage(op))
 		}
 		if err = pollPause(ctx); err != nil {
-			return waitFailure(ctx, err, a.resumeCommand("operations", id, timeout))
+			return a.acceptedOperationFailure(ctx, err, id, timeout)
 		}
 	}
 }
@@ -82,6 +125,9 @@ func (a *app) waitMutation(ctx context.Context, op string, args []string, result
 		cluster = args[0]
 	}
 	generation, _ := nested(result, "generation").(float64)
+	if generation == 0 {
+		generation, _ = nested(result, "targetGeneration").(float64)
+	}
 	if id != "" {
 		fmt.Fprintf(a.opts.Err, "Accepted %s for cluster %s; operation %s.\n", mutationDescription(op), cluster, id)
 		if err := a.waitOperation(ctx, id, timeout, cluster == ""); err != nil {
@@ -96,7 +142,11 @@ func (a *app) waitMutation(ctx context.Context, op string, args []string, result
 	if cluster == "" {
 		return fmt.Errorf("mutation response lacks cluster name or operation ID")
 	}
-	return a.waitCluster(ctx, op, cluster, generation, q, timeout)
+	err := a.waitCluster(ctx, op, cluster, generation, q, timeout)
+	if err != nil && id != "" {
+		return a.acceptedOperationFailure(ctx, err, id, timeout)
+	}
+	return err
 }
 
 func mutationDescription(op string) string {
@@ -130,7 +180,7 @@ func (a *app) waitCluster(ctx context.Context, op, cluster string, generation fl
 	lastPrinted := time.Time{}
 	deleting := op == "deleteCluster"
 	for {
-		observed, err := a.request(ctx, "getCluster", []string{cluster}, nil, nil)
+		observed, err := a.observe(ctx, "getCluster", cluster)
 		if err != nil {
 			if deleting && ExitCode(err) == 3 {
 				return a.print(map[string]any{"name": cluster, "status": "deleted"})
@@ -144,7 +194,7 @@ func (a *app) waitCluster(ctx context.Context, op, cluster string, generation fl
 		message := cell(nested(observed, "status", "message"))
 		observedGeneration, _ := nested(observed, "status", "observedGeneration").(float64)
 		currentGeneration, _ := nested(observed, "generation").(float64)
-		if op == "observe" && generation == 0 {
+		if generation == 0 {
 			generation = currentGeneration
 		}
 		progress := fmt.Sprintf("%s; generation %.0f/%.0f; %s", phase, observedGeneration, generation, message)
