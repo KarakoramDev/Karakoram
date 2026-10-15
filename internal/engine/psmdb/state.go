@@ -38,6 +38,7 @@ type internalState struct {
 	CleanupBackups     bool                      `json:"cleanupBackups"`
 	CleanupSecrets     bool                      `json:"cleanupSecrets"`
 	CleanedStorages    []string                  `json:"cleanedStorages,omitempty"`
+	FinalizedStorages  []string                  `json:"finalizedStorages,omitempty"`
 	RotationSecrets    []string                  `json:"rotationSecrets,omitempty"`
 	LastRotatedAt      map[string]*time.Time     `json:"lastRotatedAt,omitempty"`
 	ReplaceActive      bool                      `json:"replaceActive"`
@@ -167,7 +168,7 @@ func save(c *domain.Cluster, s *internalState) error {
 	for k, v := range owned {
 		raw[k] = v
 	}
-	for _, k := range []string{"pending", "retry", "platformRetries", "targetTLS"} {
+	for _, k := range []string{"pending", "retry", "platformRetries", "targetTLS", "finalizedStorages"} {
 		if _, ok := owned[k]; !ok {
 			delete(raw, k)
 		}

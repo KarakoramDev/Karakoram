@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
@@ -42,6 +43,29 @@ func deleteBackupRecord(ctx context.Context, rc *engine.Context, b domain.Backup
 	}
 	if err := rc.Store.DeleteBackup(ctx, rc.Cluster.Ref(), b.Name); err != nil && !missing(err) {
 		return err
+	}
+	return nil
+}
+
+// Namespace removal is safe only after no database runtime can recreate PBM's
+// initialization marker. The incarnation identity must be durable and exact.
+func (p *Provider) deleteBackupNamespace(ctx context.Context, rc *engine.Context, s *internalState, storage domain.BackupStorage) error {
+	if s.UID == "" || s.PBMPrefix != "karakoram/"+rc.Cluster.Name+"-"+s.UID {
+		return fmt.Errorf("cannot delete backup artifacts without runtimes: cluster lacks a verified PBM namespace; resume the cluster or delete with --keep-backups")
+	}
+	absent, err := backupRuntimesAbsent(ctx, rc, s)
+	if err != nil {
+		return err
+	}
+	if !absent {
+		return fmt.Errorf("cannot finalize backup storage while database runtimes still exist; finish runtime deletion and retry, or delete with --keep-backups")
+	}
+	deleteObjects := p.deleteClusterObjects
+	if deleteObjects == nil {
+		deleteObjects = backupstorage.DeleteCluster
+	}
+	if err := deleteObjects(ctx, storage, rc.Cluster.Name, s.UID); err != nil {
+		return backupCleanupError(storage.Name, err)
 	}
 	return nil
 }

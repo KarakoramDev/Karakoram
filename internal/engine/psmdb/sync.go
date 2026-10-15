@@ -294,6 +294,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		s.Suspended = false
 		s.CleanupBackups = false
 		s.CleanedStorages = nil
+		s.FinalizedStorages = nil
 		for _, m := range s.Members {
 			m.PublicHash = ""
 			m.ConfigVersion = 0

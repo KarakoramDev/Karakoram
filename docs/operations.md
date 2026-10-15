@@ -164,11 +164,14 @@ This is intentional safety, not a retry suggestion. Inspect PBM operation metada
 
 ## Deleting MongoDB backup data
 
-Deleting a cluster without `--keep-backups` removes its backup artifacts before
-removing persistent resources and credentials. When member runtimes exist, PBM
-disables PITR, resynchronizes storage inventory, then removes PITR chunks and
-snapshots. An unreachable agent alone never authorizes direct storage deletion:
-PBM could still be writing data.
+Deleting a cluster without `--keep-backups` removes snapshots and PITR chunks
+before removing member data, and finalizes storage before removing credentials.
+When member runtimes exist, PBM disables PITR, resynchronizes inventory and removes
+snapshots. After database runtimes are gone, the control plane makes a final
+direct sweep of each cleaned incarnation directory to remove PBM initialization
+markers and any other remaining objects. This sweep is checkpointed per storage
+and retries before credentials are removed. An unreachable agent alone never
+authorizes direct storage deletion: PBM could still be writing data.
 
 For a suspended cluster, or another cluster whose database runtimes are all
 absent, the control plane deletes objects directly from S3 under the exact

@@ -218,18 +218,11 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 				// A suspended cluster has no command node. Its private storage
 				// namespace is still authoritative, including unlisted snapshots
 				// and PITR chunks left by interrupted operations.
-				if s.UID == "" || s.PBMPrefix != "karakoram/"+rc.Cluster.Name+"-"+s.UID {
-					return false, fmt.Errorf("cannot delete backup artifacts without runtimes: cluster lacks a verified PBM namespace; resume the cluster or delete with --keep-backups")
-				}
-				deleteObjects := p.deleteClusterObjects
-				if deleteObjects == nil {
-					deleteObjects = backupstorage.DeleteCluster
-				}
-				if e = deleteObjects(ctx, env.Storage, rc.Cluster.Name, s.UID); e != nil {
+				if e = p.deleteBackupNamespace(ctx, rc, s, env.Storage); e != nil {
 					if errors.Is(e, backupstorage.ErrDeletionInProgress) {
 						return false, nil
 					}
-					return false, backupCleanupError(storage, e)
+					return false, e
 				}
 			} else {
 				r, e := pbm.DeleteAll(ctx, env)
@@ -250,6 +243,9 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			}
 			if !cleaned {
 				s.CleanedStorages = append(s.CleanedStorages, storage)
+			}
+			if withoutRuntimes && !slices.Contains(s.FinalizedStorages, storage) {
+				s.FinalizedStorages = append(s.FinalizedStorages, storage)
 			}
 			return false, nil
 		}
@@ -311,6 +307,28 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			if e != nil {
 				return false, s.failPending(rc, e.Error())
 			}
+			return false, nil
+		}
+	}
+	if !opts.KeepBackups {
+		for _, storage := range s.CleanedStorages {
+			if slices.Contains(s.FinalizedStorages, storage) {
+				continue
+			}
+			// PBM removes snapshots and PITR chunks but leaves its namespace
+			// marker. Sweep only after runtime deletion, before credentials
+			// disappear, and checkpoint each destination independently.
+			env, e := p.pbmEnvForStorage(ctx, rc, s, rc.Cluster.Ref().Namespace, storage)
+			if e != nil {
+				return false, backupCleanupError(storage, e)
+			}
+			if e = p.deleteBackupNamespace(ctx, rc, s, env.Storage); e != nil {
+				if errors.Is(e, backupstorage.ErrDeletionInProgress) {
+					return false, nil
+				}
+				return false, e
+			}
+			s.FinalizedStorages = append(s.FinalizedStorages, storage)
 			return false, nil
 		}
 	}
