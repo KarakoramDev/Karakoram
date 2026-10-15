@@ -149,10 +149,12 @@ func roleWriteError(err error, role Role) error {
 	}
 	if native.Status == 400 || native.Status == 422 {
 		reason := strings.ToLower(native.Reason)
-		if strings.Contains(reason, "privilege") {
-			if strings.Contains(reason, "cluster") {
-				return engine.InvalidField("cluster", domain.ReasonInvalid, "cluster contains an invalid Elasticsearch privilege; select a supported cluster privilege")
-			}
+		switch {
+		case strings.Contains(reason, "unknown cluster privilege"):
+			return engine.InvalidField("cluster", domain.ReasonInvalid, "cluster contains an invalid Elasticsearch privilege; select a supported cluster privilege")
+		case strings.Contains(reason, "application privilege"):
+			return engine.InvalidField("applications", domain.ReasonInvalid, "applications contains an invalid Elasticsearch application privilege")
+		case strings.Contains(reason, "unknown index privilege"):
 			for i, index := range role.Indices {
 				for _, privilege := range index.Privileges {
 					if strings.Contains(reason, "["+strings.ToLower(privilege)+"]") {

@@ -343,6 +343,8 @@ Create a custom role before the user referencing it, or select an existing built
 
 A user create body is `{username, password, roles, fullName, email, enabled}`; supply a password of at least eight characters securely on create. Passwords are write-only. Reads cannot recover application passwords. User roles are string names, not MongoDB role/database tuples. Role bodies include `cluster`, `indices` and `applications` privilege arrays; use an empty array where no grant is needed.
 
+Invalid native privilege errors identify the cluster, index or application grant field separately; index privilege diagnostics can list cross-cluster privileges without implying a cluster-grant error.
+
 Index privileges can also include a document-level `query` (an opaque Elasticsearch query JSON string) and `fieldSecurity` with optional `grant` and `except` field-pattern arrays. **Both require a licence tier that includes document/field-level security; Basic does not.** Requests that require unavailable licensed features return an actionable 4xx response explaining the licensing prerequisite, rather than creating an unrestricted role. Reads and role edits preserve these restrictions, including explicitly empty grant arrays. The UI accepts a JSON array for index privileges when these restrictions are needed, in addition to the simple one-entry-per-line format. API-key descriptors support the same fields.
 
 Kibana browser access needs application privileges as well as privileges on the
