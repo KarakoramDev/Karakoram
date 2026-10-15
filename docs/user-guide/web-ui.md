@@ -216,6 +216,9 @@ terminal result; see [API cancellation semantics](api.md#cancel-an-operation).
 **Monitoring** offers **15m**, **1h**, **6h** and **24h** ranges, kept in the URL
 as `range`; the default is **1h**. There is no seven-day UI query. Their query
 steps are **15s**, **30s**, **2m** and **10m**, respectively.
+Charts keep the complete query window even when only one recent sample exists.
+Time-axis ticks use evenly spaced, rounded times and include the calendar date
+when the window crosses midnight; repeated local hours include their UTC offset.
 
 Charts identify member/series lines and provide state-code labels and legends
 for recognized state series, including MongoDB replica member states and

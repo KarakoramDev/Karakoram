@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chartTicks, elapsedSeconds, errorDetails, exactUtc, formatBuildVersion, metricCategories, monitoringRange, namespaceMissing, scopedPath, storageTransport } from './presentation.ts';
+import { chartTicks, chartTimeTicks, elapsedSeconds, errorDetails, exactUtc, formatBuildVersion, metricCategories, monitoringRange, namespaceMissing, scopedPath, storageTransport } from './presentation.ts';
 import { beginSubmission, backgroundDataStale, copyText } from './submission.ts';
 import { applyEventFilters, eventFilters } from '../event-filters.ts';
 
@@ -54,6 +54,42 @@ test('integer and categorical chart ticks never repeat rounded labels', () => {
   const ticks = chartTicks(10, String, states);
   assert.equal(new Set(ticks.map((tick) => states[tick])).size, ticks.length);
   assert.equal(metricCategories('connections.current'), undefined);
+});
+
+test('monitoring time ticks are rounded, evenly spaced and distinct for every range', () => {
+  for (const minutes of [15, 60, 360, 1440]) {
+    const start = Date.parse('2026-01-02T12:47:01Z');
+    const end = start + minutes * 60_000;
+    const ticks = chartTimeTicks(start, end, 'en-US', 'UTC');
+    assert.ok(ticks.length >= 3 && ticks.length <= 5);
+    assert.equal(new Set(ticks.map((tick) => tick.label)).size, ticks.length);
+    const spacing = ticks[1]!.time - ticks[0]!.time;
+    for (let index = 0; index < ticks.length; index++) {
+      assert.ok(ticks[index]!.time >= start && ticks[index]!.time <= end);
+      assert.equal(ticks[index]!.time % 60_000, 0);
+      if (index > 0) assert.equal(ticks[index]!.time - ticks[index - 1]!.time, spacing);
+    }
+    if (minutes === 1440) {
+      assert.match(ticks[0]!.label, /Jan 2/);
+      assert.match(ticks.at(-1)!.label, /Jan 3/);
+    }
+  }
+});
+
+test('short monitoring windows crossing midnight include dates and daylight-saving ticks stay distinct', () => {
+  const midnight = chartTimeTicks(Date.parse('2026-01-02T23:52:00Z'), Date.parse('2026-01-03T00:07:00Z'), 'en-US', 'UTC');
+  assert.match(midnight[0]!.label, /Jan 2/);
+  assert.match(midnight.at(-1)!.label, /Jan 3/);
+  const fallback = chartTimeTicks(Date.parse('2026-11-01T05:00:00Z'), Date.parse('2026-11-01T07:00:00Z'), 'en-US', 'America/New_York');
+  assert.equal(new Set(fallback.map((tick) => tick.label)).size, fallback.length);
+  assert.ok(fallback.some((tick) => tick.label.includes('GMT-4')));
+  assert.ok(fallback.some((tick) => tick.label.includes('GMT-5')));
+});
+
+test('a single timestamp produces one meaningful time label rather than repeated minute labels', () => {
+  const time = Date.parse('2026-01-02T12:37:12Z');
+  const ticks = chartTimeTicks(time, time, 'en-US', 'UTC');
+  assert.deepEqual(ticks, [{ time, label: '12:37:12 PM' }]);
 });
 
 test('TLS settings describe configuration, never a verification result', () => {
