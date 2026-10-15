@@ -136,11 +136,39 @@ func TestNestedResourceTablesUseDetailSections(t *testing.T) {
 func TestOperationListSummarizesNestedResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"items":[{"id":"op-one","phase":"Running","result":{"details":{"largeField":"nested-result-only"}}}]}`)
+		fmt.Fprint(w, `{"items":[{"id":"op-one","namespace":"default","cluster":"demo","type":"upgrade","phase":"Running","target":{"kind":"cluster","name":"demo"},"targetGeneration":4,"message":"Waiting for upgraded members","actor":"account:operator","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:01Z","result":{"details":{"largeField":"nested-result-only"}}}]}`)
 	}))
 	defer server.Close()
 	code, out, stderr := runCLI(t, server.URL, "", false, "operations", "list")
-	if code != 0 || !strings.Contains(out, "op-one") || !strings.Contains(out, "Running") || !strings.Contains(out, "-o json") || strings.Contains(out, "nested-result-only") || strings.Contains(out, "Details for") {
+	if code != 0 || !strings.Contains(out, "op-one") || !strings.Contains(out, "Running") || !strings.Contains(out, "cluster/demo") || !strings.Contains(out, "-o json") || strings.Contains(out, "nested-result-only") || strings.Contains(out, "Details for") {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, stderr)
+	}
+}
+
+func TestCompactObjectCells(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   map[string]any
+		want    string
+		compact bool
+	}{
+		{"target", map[string]any{"kind": "cluster", "name": "demo"}, "cluster/demo", true},
+		{"target with scope", map[string]any{"kind": "cluster", "name": "demo", "namespace": "dev"}, "cluster/demo,namespace=dev", true},
+		{"scalar fields", map[string]any{"replicas": float64(3), "ready": true}, "ready=true,replicas=3", true},
+		{"empty", map[string]any{}, "-", true},
+		{"forty characters", map[string]any{"key": strings.Repeat("x", 36)}, "key=" + strings.Repeat("x", 36), true},
+		{"long", map[string]any{"key": strings.Repeat("x", 37)}, "", false},
+		{"integer fields", map[string]any{"replicas": 3}, "replicas=3", true},
+		{"unicode characters", map[string]any{"key": strings.Repeat("é", 36)}, "key=" + strings.Repeat("é", 36), true},
+		{"too many fields", map[string]any{"a": true, "b": true, "c": true, "d": true}, "", false},
+		{"nested object", map[string]any{"nested": map[string]any{"name": "demo"}}, "", false},
+		{"array", map[string]any{"values": []any{"one", "two"}}, "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			summary, compact := compactObjectCell(tc.value)
+			if compact != tc.compact || compact && summary != tc.want {
+				t.Fatalf("summary=%q compact=%t, want %q compact=%t", summary, compact, tc.want, tc.compact)
+			}
+		})
 	}
 }
