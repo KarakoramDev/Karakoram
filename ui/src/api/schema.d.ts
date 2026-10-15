@@ -2575,6 +2575,14 @@ export type components = {
             backupTypes: ("logical" | "physical" | "definitions" | "snapshot")[];
             capabilities?: string[];
             displayName: string;
+            /** @description Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics. */
+            engineConfig?: {
+                [key: string]: unknown;
+            };
+            /** @description Provider-specific engine option descriptions and constraints, such as plugin groups, dependencies, always-enabled plugins and management exposure settings. */
+            engineOptions?: {
+                [key: string]: unknown;
+            };
             name: string;
             operations?: string[];
             presets: components["schemas"]["Preset"][];

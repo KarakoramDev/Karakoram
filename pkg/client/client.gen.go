@@ -1505,13 +1505,19 @@ type Provider struct {
 	BackupTypes  []ProviderBackupTypes `json:"backupTypes"`
 	Capabilities *[]string             `json:"capabilities,omitempty"`
 	DisplayName  string                `json:"displayName"`
-	Name         string                `json:"name"`
-	Operations   *[]string             `json:"operations,omitempty"`
-	Presets      []Preset              `json:"presets"`
-	Processes    *[]string             `json:"processes,omitempty"`
-	Topologies   []ProviderTopology    `json:"topologies"`
-	UpgradePaths []UpgradePath         `json:"upgradePaths"`
-	Versions     []ProviderVersion     `json:"versions"`
+
+	// EngineConfig Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics.
+	EngineConfig *map[string]interface{} `json:"engineConfig,omitempty"`
+
+	// EngineOptions Provider-specific engine option descriptions and constraints, such as plugin groups, dependencies, always-enabled plugins and management exposure settings.
+	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
+	Name          string                  `json:"name"`
+	Operations    *[]string               `json:"operations,omitempty"`
+	Presets       []Preset                `json:"presets"`
+	Processes     *[]string               `json:"processes,omitempty"`
+	Topologies    []ProviderTopology      `json:"topologies"`
+	UpgradePaths  []UpgradePath           `json:"upgradePaths"`
+	Versions      []ProviderVersion       `json:"versions"`
 }
 
 // ProviderBackupTypes defines model for Provider.BackupTypes.

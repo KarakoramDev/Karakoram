@@ -278,7 +278,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	if r.MinRAM == 0 {
 		r = runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
 	}
-	spec := rmqspec.MemberSpec{NodeName: "rabbit@" + name, Peers: peers, Cookie: string(cookie), Version: m.DesiredVersion, Plugins: append([]string{"rabbitmq_management", "rabbitmq_prometheus"}, options.Plugins...), PrometheusPort: 15692, ConfigOverrides: m.EngineConfig, TotalMemoryBytes: int64(r.MinRAM * 1e9), MemoryHighWatermarkBytes: int64(r.MinRAM * 1e9 * 0.6), DiskFreeLimitBytes: int64(max(0.5, r.MinRAM) * 1e9), DefaultQueueType: "quorum", InterNodeTLS: s.InterNodeTLS}
+	spec := rmqspec.MemberSpec{NodeName: "rabbit@" + name, Peers: peers, Cookie: string(cookie), Version: m.DesiredVersion, Plugins: slices.Concat(alwaysEnabledPlugins, options.Plugins), PrometheusPort: 15692, ConfigOverrides: m.EngineConfig, TotalMemoryBytes: int64(r.MinRAM * 1e9), MemoryHighWatermarkBytes: int64(r.MinRAM * 1e9 * 0.6), DiskFreeLimitBytes: int64(max(0.5, r.MinRAM) * 1e9), DefaultQueueType: "quorum", InterNodeTLS: s.InterNodeTLS}
 	switch m.TLSMode {
 	case "disabled":
 		spec.AMQPPort = 5672
