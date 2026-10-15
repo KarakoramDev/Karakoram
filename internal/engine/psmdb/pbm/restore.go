@@ -7,12 +7,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
+
+const restoreMetadataGrace = time.Minute
 
 // RunRestore resumes logical, PITR, physical and clone restores. Every member lifecycle change advances a durable index.
 // After success with PITR desired, the provider must enqueue a fresh base snapshot before applying enabled PITR configuration.
@@ -241,6 +244,10 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		if op.ID == "" {
 			return result(cp, false), errors.New("durable PBM start requires an operation ID")
 		}
+		if cp.RestoreMetadataDeadline == nil {
+			deadline := now(env).Add(restoreMetadataGrace)
+			cp.RestoreMetadataDeadline = &deadline
+		}
 		args := []string{cp.Snapshot, "--yes", "--out=json"}
 		if cp.TargetTime != nil {
 			args = []string{"--time=" + cp.TargetTime.UTC().Format("2006-01-02T15:04:05"), "--base-snapshot=" + cp.Snapshot, "--yes", "--out=json"}
@@ -275,6 +282,15 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		data, e := command(ctx, active, cp.Member, "", "describe-restore", cfg, args...)
 		if e != nil {
+			// PBM can accept a restore before publishing its metadata. Only
+			// this specific startup absence gets a bounded progress window.
+			if cp.RestoreMetadataDeadline != nil && now(env).Before(*cp.RestoreMetadataDeadline) &&
+				strings.HasPrefix(e.Error(), "pbm describe-restore failed (exit 1):") &&
+				strings.TrimSpace(strings.TrimPrefix(e.Error(), "pbm describe-restore failed (exit 1):")) == "Error: get restore meta: not found" {
+				progress := result(cp, false)
+				progress.Message = "restore starting: waiting for PBM restore metadata"
+				return progress, nil
+			}
 			return result(cp, false), e
 		}
 		var desc struct {
@@ -284,6 +300,11 @@ func RunRestore(ctx context.Context, env Env, op *domain.Operation) (engine.OpRe
 		}
 		if e = decodeLast(data, &desc); e != nil {
 			return result(cp, false), e
+		}
+		if desc.Status != "" {
+			// Once PBM reports the restore, later missing metadata is no
+			// longer an expected initiation delay, even before the deadline.
+			cp.RestoreMetadataDeadline = nil
 		}
 		switch desc.Status {
 		case "done":

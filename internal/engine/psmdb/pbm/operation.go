@@ -20,25 +20,26 @@ import (
 
 // checkpoint contains no credentials or YAML. Steps are committed before non-idempotent starts.
 type checkpoint struct {
-	Step             string       `json:"step"`
-	Cancelling       bool         `json:"cancelling,omitempty"`
-	CancelIssued     bool         `json:"cancelIssued,omitempty"`
-	Member           string       `json:"member,omitempty"`
-	PBMName          string       `json:"pbmName,omitempty"`
-	Snapshot         string       `json:"snapshot,omitempty"`
-	Physical         bool         `json:"physical,omitempty"`
-	Source           string       `json:"source,omitempty"`
-	SourceNamespace  string       `json:"sourceNamespace,omitempty"`
-	TargetTime       *time.Time   `json:"targetTime,omitempty"`
-	Index            int          `json:"index,omitempty"`
-	Failure          string       `json:"failure,omitempty"`
-	FreshBase        bool         `json:"freshBaseBackupRequired,omitempty"`
-	Destination      string       `json:"destination,omitempty"`
-	Storage          string       `json:"storage,omitempty"`
-	Prefix           string       `json:"prefix,omitempty"`
-	RecoveryIdentity string       `json:"recoveryIdentity,omitempty"`
-	RouterOp         *infra.Op    `json:"routerOp,omitempty"`
-	RouterRetry      *routerRetry `json:"routerRetry,omitempty"`
+	Step                    string       `json:"step"`
+	Cancelling              bool         `json:"cancelling,omitempty"`
+	CancelIssued            bool         `json:"cancelIssued,omitempty"`
+	Member                  string       `json:"member,omitempty"`
+	PBMName                 string       `json:"pbmName,omitempty"`
+	Snapshot                string       `json:"snapshot,omitempty"`
+	Physical                bool         `json:"physical,omitempty"`
+	Source                  string       `json:"source,omitempty"`
+	SourceNamespace         string       `json:"sourceNamespace,omitempty"`
+	TargetTime              *time.Time   `json:"targetTime,omitempty"`
+	Index                   int          `json:"index,omitempty"`
+	Failure                 string       `json:"failure,omitempty"`
+	FreshBase               bool         `json:"freshBaseBackupRequired,omitempty"`
+	Destination             string       `json:"destination,omitempty"`
+	Storage                 string       `json:"storage,omitempty"`
+	Prefix                  string       `json:"prefix,omitempty"`
+	RecoveryIdentity        string       `json:"recoveryIdentity,omitempty"`
+	RouterOp                *infra.Op    `json:"routerOp,omitempty"`
+	RouterRetry             *routerRetry `json:"routerRetry,omitempty"`
+	RestoreMetadataDeadline *time.Time   `json:"restoreMetadataDeadline,omitempty"`
 }
 
 type routerRetry struct {

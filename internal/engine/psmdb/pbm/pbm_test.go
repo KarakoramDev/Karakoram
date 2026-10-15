@@ -59,21 +59,22 @@ func (e *fakeEvents) Record(_ context.Context, v domain.Event) error {
 }
 
 type fakeAgent struct {
-	mu                sync.Mutex
-	requests          []agentapi.PBMRequest
-	actions           []string
-	receipts          map[string]agentapi.PBMResponse
-	starts            int
-	deleted           bool
-	pitrDeleted       bool
-	failRestore       bool
-	restorePolling    int
-	restoreRunning    bool
-	requireConfig     bool
-	configured        bool
-	activeBackup      bool
-	cancelledBackup   bool
-	backupCancelCalls int
+	mu                   sync.Mutex
+	requests             []agentapi.PBMRequest
+	actions              []string
+	receipts             map[string]agentapi.PBMResponse
+	starts               int
+	deleted              bool
+	pitrDeleted          bool
+	failRestore          bool
+	restorePolling       int
+	restoreRunning       bool
+	restoreDescribeError string
+	requireConfig        bool
+	configured           bool
+	activeBackup         bool
+	cancelledBackup      bool
+	backupCancelCalls    int
 }
 
 func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +136,10 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.backupCancelCalls++
 		case "describe-restore":
 			f.restorePolling++
+			if f.restoreDescribeError != "" {
+				_ = enc.Encode(agentapi.PBMResponse{ExitCode: 1, Stderr: f.restoreDescribeError})
+				return
+			}
 			data = `{"name":"2024-01-05T11:12:26.296561123Z","status":"done","finish":"2024-01-05T11:16:13Z"}`
 			if f.failRestore {
 				data = `{"status":"error","error":"restore failed"}`

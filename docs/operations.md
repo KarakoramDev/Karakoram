@@ -153,6 +153,12 @@ PBM starts use the durable Operation ID as RequestID and pin the command member 
 
 This is intentional safety, not a retry suggestion. Inspect PBM operation metadata/logs/storage and the persisted Karakoram Operation before any recovery action. Do not erase receipts, change the request ID, switch command nodes, or start a second restore to evade ambiguity. Keep receipts and controls with retained volumes across recovery. Private agent commands are for the controller's bounded protocol; there is no public arbitrary exec endpoint.
 
+Immediately after restore initiation, PBM may not yet expose restore metadata.
+The control plane reports this specific absence as **restore starting** for up
+to one minute after issuing the restore. The deadline survives reconciliation
+retries. Missing metadata after that deadline, or after PBM has already reported
+the restore, is an error; unrelated command failures are surfaced immediately.
+
 ## Routine operating checks
 
 - Check database/agent health, lag, disk headroom and current Zerops allocations; desired resource bounds are not instantaneous observed allocation.
