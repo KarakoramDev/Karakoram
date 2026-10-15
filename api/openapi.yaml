@@ -2678,6 +2678,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQVhost'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2751,6 +2752,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQVhost'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2851,6 +2853,7 @@ paths:
                 $ref: '#/components/schemas/CreatedRabbitMQUser'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2933,6 +2936,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQUser'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3024,6 +3028,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3103,6 +3108,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3194,6 +3200,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQTopicPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3273,6 +3280,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQTopicPermission'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3364,6 +3372,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3443,6 +3452,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3534,6 +3544,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3613,6 +3624,7 @@ paths:
                 $ref: '#/components/schemas/RabbitMQPolicy'
       parameters:
       - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -7120,7 +7132,7 @@ components:
         generatedPassword:
           type: string
           readOnly: true
-          description: Present only when a password was generated at creation; store it securely once.
+          description: Present only when a password was generated at creation. Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
       required: [name, tags]
     RabbitMQPermission:
       type: object

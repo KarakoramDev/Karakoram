@@ -209,6 +209,13 @@ karactl rabbitmq policies list brokers
 
 All six command groups have `list/get/create/update/delete`. Reads and writes require the corresponding `database-users` permission on `<namespace>/<cluster>`. See the [CLI build/install instructions](cli.md#build-and-install) and [access reference](cli.md#rabbitmq-access) for argument order. The `rabbitmq` group is available in binaries built from a release containing RabbitMQ support; an older CLI will not gain commands by connecting to a newer server. Generic MongoDB database-users/roles endpoints are not RabbitMQ access endpoints.
 
+All six access collections support [safe retries with `Idempotency-Key`](api.md#safe-retries-with-idempotency-key)
+on create (POST) and update (PUT). Reusing the same key and body replays the
+original successful status and body for 24 hours with `Idempotent-Replayed: true`,
+including any generated user password. Reusing a key with a changed body returns
+409. Omitted `namespace` and `namespace=default` share the same key scope;
+different namespaces and object paths are independent. Deletes are not covered.
+
 User tags govern management access; they do **not** grant messaging permission. Vhost/topic permission grants govern messaging access. Password and passwordHash are mutually exclusive. Creating a user without either generates a password returned **once**; subsequent reads expose neither passwords nor hashes. Updating without either preserves the password. `karakoram`, `admin`, `monitor` and `guest` are reserved: access routes cannot create, modify or delete these identities or mutate their permission/topic-permission grants. Bootstrap creates `karakoram` (control-plane administration) and `admin` (customer administrator), with administrator tags and all permissions on `/`, and removes `guest`; `monitor` is reserved but not created by bootstrap. Use `karactl -n NS system-users rotate brokers admin` (or `karakoram`) for supported system-user rotation, not an access-user update.
 
 Malformed permission regexes and rejected policy-definition keys return field errors. Check the named field (`configure`, `write`, `read` or `definition`) and RabbitMQ's accepted PCRE/policy definition rules; a syntactically valid regex can still grant more access than intended. A permission or topic-permission write referencing a missing user or vhost instead names `user,vhost` with reason `not_found`; create or correct that identity before retrying the grant.

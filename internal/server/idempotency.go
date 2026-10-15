@@ -42,6 +42,9 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 func idempotencyCovered(id string) bool {
 	switch id {
 	case "createAPIToken", "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createAccount", "createNamespace", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
+		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
+		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
+		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
 		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		return true
 	}
@@ -99,6 +102,9 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	namespace := ""
 	switch id {
 	case "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
+		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
+		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
+		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
 		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	}

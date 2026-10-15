@@ -120,6 +120,11 @@ A vhost body contains `name`, `tags`, optional `defaultQueueType` (`classic`, `q
 
 When a user creation omits its password, `generatedPassword` is returned **once**. Store it securely; subsequent reads never return passwords or password hashes. Updates that omit both password fields preserve the existing password. The protected identities `karakoram`, `admin`, `monitor` and `guest` cannot be created, modified or deleted through access commands, nor can their permission/topic-permission grants be changed there. Only `karakoram` and `admin` are rotatable system users: use `karactl -n NS system-users rotate brokers admin` (or `karakoram`). `guest` and `monitor` are reserved names that cannot be created or modified; they are not rotation targets.
 
+For direct HTTP clients, access create/update routes accept `Idempotency-Key`.
+Matching retries replay the original successful response for 24 hours, including
+the generated password; a changed body with the same key returns 409. This does
+not make passwords recoverable through GET. See [safe API retries](api.md#safe-retries-with-idempotency-key).
+
 Permission bodies contain `vhost`, `user`, and the `configure`, `write`, and `read` regular expressions. Topic permission bodies instead contain `exchange`, `write`, and `read`. Topic `get` and `delete` identify a `vhost`/`user` pair: **delete removes all topic permissions for that pair**, not only one exchange. Policy bodies contain `vhost`, `name`, `pattern`, `applyTo`, a nonnegative `priority`, and a JSON-object `definition`. Both regular and operator policy commands use this shape.
 
 Patterns use RabbitMQ's PCRE syntax, including lookarounds and backreferences. Karakoram permits patterns of at most 4096 bytes and forwards them unchanged; RabbitMQ validates their syntax. Empty vhost/topic permission patterns deny access. Regular and operator policy patterns must remain nonempty. Invalid permission regexes and rejected policy-definition keys return field errors; correct the reported regex field or `definition` rather than retrying the unchanged payload.
