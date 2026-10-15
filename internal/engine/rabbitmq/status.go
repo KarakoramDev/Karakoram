@@ -65,9 +65,6 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		names = append(names, "rabbit@"+m.Name)
 	}
 	for _, m := range ordered(s) {
-		if m.Removing {
-			continue
-		}
 		ms := domain.MemberStatus{Name: m.Name, Set: "rabbitmq", Role: "broker", Version: m.Version, State: "UNKNOWN"}
 		if r, ok := resources[m.Name]; ok {
 			copy := r
@@ -141,6 +138,17 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				v.Connection.PublicHosts = append(v.Connection.PublicHosts, ms.PublicHost)
 			}
 		}
+		if m.Removing {
+			ms.State = "LEAVING"
+			if m.RemovalBlocked != "" {
+				ms.State = "LEAVING_BLOCKED"
+			}
+			ms.Health = false
+			ms.Agent.Message = m.RemovalBlocked
+		} else if m.Stage != "ready" && m.Stage != "joined" {
+			ms.State = memberStage(s, m, ms.Agent.Healthy)
+			ms.Health = false
+		}
 		allHealthy = allHealthy && ms.Health
 		v.Members = append(v.Members, ms)
 		if m.ManagementPublic {
@@ -181,6 +189,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			v.Message = m.RemovalBlocked
 		}
 	}
+	projectQuorumStatus(rc, s, &v)
 	if s.Retry != nil {
 		if r := s.PlatformRetries[platformRetryKey(s.Retry)]; r != nil && r.CPUModeCooldown {
 			condition("PlatformCooldown", true, "CPUModeChangeTooRecent")

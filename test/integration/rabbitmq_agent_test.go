@@ -336,7 +336,7 @@ func TestRabbitMQAgent(t *testing.T) {
 		}
 	}
 	var streamCritical rmqspec.QuorumCriticalResponse
-	if err := first.Engine(ctx, "rabbitmq", "quorum-critical", rmqspec.EmptyRequest{}, &streamCritical); err != nil || !streamCritical.Critical {
+	if err := first.Engine(ctx, "rabbitmq", "quorum-critical", rmqspec.EmptyRequest{}, &streamCritical); err != nil || len(streamCritical.Blockers) == 0 {
 		t.Fatal("single-replica stream quorum check", streamCritical, err)
 	}
 	// Leave only the three-replica quorum queue for shutdown safety checks.
@@ -377,7 +377,7 @@ func TestRabbitMQAgent(t *testing.T) {
 		return nil
 	})
 	var critical rmqspec.QuorumCriticalResponse
-	if err = first.Engine(ctx, "rabbitmq", "quorum-critical", rmqspec.EmptyRequest{}, &critical); err != nil || critical.Critical {
+	if err = first.Engine(ctx, "rabbitmq", "quorum-critical", rmqspec.EmptyRequest{}, &critical); err != nil || len(critical.Blockers) != 0 {
 		t.Fatal("quorum check", critical, err)
 	}
 	action(first, "await-quorum", rmqspec.AwaitQuorumRequest{TimeoutSeconds: 30})

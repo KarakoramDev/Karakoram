@@ -202,6 +202,7 @@ type fakeBroker struct {
 	down         bool
 	joined       bool
 	critical     bool
+	blockers     []rmqspec.QuorumBlocker
 	maintenance  bool
 	appStopped   bool
 	version      string
@@ -222,6 +223,7 @@ type fakeAgents struct {
 	streamHandler func(rmqspec.StreamReplicasRequest)
 	queueSource   func() []mgmt.Queue
 	forgetHandler func(string)
+	requestHook   func(string)
 }
 
 func (a *fakeAgents) broker(name string) *fakeBroker {
@@ -255,6 +257,9 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 		action := strings.TrimPrefix(r.URL.Path, "/v1/rabbitmq/")
 		if r.URL.Path != "/v1/status" && action != "status" {
 			a.log.add("agent:" + name + ":" + action)
+		}
+		if a.requestHook != nil {
+			a.requestHook(action)
 		}
 		if code := a.failures[name+":"+action]; code != 0 {
 			http.Error(w, "scripted agent failure", code)
@@ -324,7 +329,11 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			}
 			_ = json.NewEncoder(w).Encode(rmqspec.StatusResponse{NodeName: "rabbit@" + name, RunningNodes: nodes, DiskNodes: diskNodes, Alarms: alarms, Partitions: partitions, Maintenance: b.maintenance, Version: b.version})
 		case "/v1/rabbitmq/quorum-critical":
-			_ = json.NewEncoder(w).Encode(rmqspec.QuorumCriticalResponse{Critical: b.critical})
+			blockers := b.blockers
+			if b.critical && len(blockers) == 0 {
+				blockers = []rmqspec.QuorumBlocker{{VHost: "/", Queue: "orders", Type: "quorum", Members: []string{"rabbit@" + name}}}
+			}
+			_ = json.NewEncoder(w).Encode(rmqspec.QuorumCriticalResponse{Blockers: blockers})
 		case "/v1/rabbitmq/stream-replicas":
 			var req rmqspec.StreamReplicasRequest
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

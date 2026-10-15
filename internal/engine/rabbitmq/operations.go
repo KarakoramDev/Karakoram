@@ -45,9 +45,16 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result, e
 	}
 	defer func() {
+		for _, m := range s.Members {
+			if len(m.QuorumBlockers) > 0 {
+				result.Message = quorumMessage(m)
+				break
+			}
+		}
 		if e := s.save(rc.Cluster); err == nil {
 			err = e
 		}
+		projectQuorumStatus(rc, s, &rc.Cluster.Status)
 	}()
 	var cp operationState
 	if e = decodeJSON(op.Checkpoint, &cp); e != nil {

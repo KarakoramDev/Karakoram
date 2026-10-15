@@ -13,6 +13,7 @@ import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from 
 import { memberHealthCounts } from '../member-status';
 import { certificateDownload, colocatedGroups, credentialDatabaseLabel, generationState, knownHost, psmdbConnect } from './detail-state';
 import { hasCapability, hasReplicaSetDetails } from '@/engines';
+import { QuorumCallout } from '@/engines/rabbitmq/QuorumCallout';
 
 
 export function OverviewTab() {
@@ -48,6 +49,7 @@ export function OverviewTab() {
   return (
     <div className="stack" style={{ gap: 20 }}>
       {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
+      {spec.provider === 'rabbitmq' ? <QuorumCallout cluster={cluster} base={base} /> : null}
       <div className={replicaSetDetails ? 'grid-4' : 'grid-3'}>
         <Card flush>
           <div className="stat">

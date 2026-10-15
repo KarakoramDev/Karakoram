@@ -75,9 +75,9 @@ func TestCommandTimeoutAndOutputLimit(t *testing.T) {
 func TestQuorumCriticalDoesNotSuppressCLIError(t *testing.T) {
 	t.Setenv("KARAKORAM_RABBITMQ_BIN", t.TempDir())
 	e := New()
-	fakeCLI(t, "rabbitmq-queues", "printf 'Erlang warning\\n' >&2\nprintf '%s' '{\"result\":\"error\",\"queues\":[{\"name\":\"q\"}]}' >&2\nexit 69\n")
+	fakeCLI(t, "rabbitmq-queues", "printf 'Erlang warning\\n' >&2\nprintf '%s' '{\"result\":\"error\",\"queues\":[{\"name\":\"q\",\"virtual_host\":\"/\",\"type\":\"rabbit_quorum_queue\"}]}' >&2\nexit 69\n")
 	result, err := e.execute(context.Background(), nil, "quorum-critical", &rmqspec.EmptyRequest{})
-	if err != nil || !result.(rmqspec.QuorumCriticalResponse).Critical {
+	if err != nil || len(result.(rmqspec.QuorumCriticalResponse).Blockers) != 1 {
 		t.Fatal(result, err)
 	}
 	fakeCLI(t, "rabbitmq-queues", "printf '%s' '{\"result\":\"error\",\"message\":\"broker unavailable\"}' >&2\nexit 69\n")
@@ -86,7 +86,7 @@ func TestQuorumCriticalDoesNotSuppressCLIError(t *testing.T) {
 	}
 	fakeCLI(t, "rabbitmq-queues", "printf '%s' '{\"result\":\"ok\"}'\n")
 	result, err = e.execute(context.Background(), nil, "quorum-critical", &rmqspec.EmptyRequest{})
-	if err != nil || result.(rmqspec.QuorumCriticalResponse).Critical {
+	if err != nil || len(result.(rmqspec.QuorumCriticalResponse).Blockers) != 0 {
 		t.Fatal(result, err)
 	}
 }

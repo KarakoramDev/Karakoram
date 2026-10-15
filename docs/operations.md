@@ -367,6 +367,37 @@ RabbitMQ drain suspends client listeners, closes connections and transfers quoru
 
 RAM can change live in Zerops, but RabbitMQ's rendered total-memory override and 60% watermark follow minimum RAM only after the gated rolling restart. Disk-free limit is max(0.5 GB, minimum RAM). Compare desired spec, platform configuration/allocation and current metric limits before assuming a resize is effective. CPU-mode cooldowns retain their retry deadline; inspect `PlatformCooldown`/events rather than resubmitting changes.
 
+#### Quorum-blocked restarts
+
+`QuorumCriticalQueues` / `RollingRestartBlocked` identify affected queues, vhosts
+and known members instead of an unexplained agent HTTP 503. The provider checks
+before the online-quorum wait and again after a failed wait. A distinct Warning
+`RollingRestartBlocked` is emitted on blocker transitions, not every retry.
+Cluster and operation messages name up to ten blockers plus the remaining count.
+
+Use **cluster detail → Queue recovery** for the exact native Management API GET,
+replica-add POST and Raft-status GET commands. Run from inside the project using
+the exported cluster CA and revealed `admin` credential; curl prompts for the
+password. No broker shell or Erlang cookie is needed. This is native administrative
+access outside Karakoram RBAC, not a queued Karakoram mutation. The
+[step-by-step procedure](user-guide/rabbitmq.md#quorum-blocked-restarts-and-replica-growth)
+documents the pinned RabbitMQ 4.3.6 route/body, URL encoding and retry precautions.
+Confirm quorum queue type, an online majority, a healthy target not already in the
+group, and voting membership/log catch-up after each addition. Prefer three
+replicas; scale-up alone never increases existing groups. Recover offline
+replicas/metadata/streams rather than forcing membership when majority is lost.
+HTTP success alone does not establish synchronization. Once safe, observe the
+existing workflow resume instead of submitting a duplicate operation.
+
+Creation member states distinguish platform import, deployment, agent readiness
+and bootstrap/join. A departing broker stays in status as `LEAVING` or
+`LEAVING_BLOCKED` until removed, never contributing to healthy-member counts.
+`MemberRemovalBlocked` warns once per changed blocking reason; inspect the
+condition and queue names, migrate/delete durable classic queues explicitly or
+recover unavailable survivors before continuing. Do not hide or forcibly delete
+the still-live member.
+
+
 ### Scaling and replacing lost nodes
 
 Scale-up provisions and joins brokers, then rebalances leaders; it does not automatically grow all existing queue groups. Scale-down handles highest indexes first, requires healthy survivors, grows quorum replicas and migrates stream queues independently of the optional stream-protocol plugin before shrinking the leaving node. The reachable node's application is drained/stopped while its Erlang VM remains a Khepri voter; a survivor forgets it before full process shutdown and deletion. Durable classic queues hosted on the node block both scale-down and replacement with `MemberRemovalBlocked` and queue names. Explicitly migrate/delete them before retrying; no classic message-store migration is automatic.

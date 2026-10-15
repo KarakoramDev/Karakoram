@@ -477,19 +477,21 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 	switch m.ChangeStep {
 	case "quorum":
 		if len(s.runningMembers()) > 1 {
+			if err := p.checkQuorum(ctx, rc, m); err != nil {
+				return false, err
+			}
 			if err := p.action(ctx, rc, m.Name, "await-quorum", rmqspec.AwaitQuorumRequest{TimeoutSeconds: 30}); err != nil {
+				if checkErr := p.checkQuorum(ctx, rc, m); checkErr != nil {
+					return false, checkErr
+				}
 				return false, err
 			}
 		}
 		m.ChangeStep = "critical"
 	case "critical":
 		if len(s.runningMembers()) > 1 {
-			var out rmqspec.QuorumCriticalResponse
-			if err := p.call(ctx, rc, m.Name, "quorum-critical", rmqspec.EmptyRequest{}, &out); err != nil {
+			if err := p.checkQuorum(ctx, rc, m); err != nil {
 				return false, err
-			}
-			if out.Critical {
-				return false, fmt.Errorf("%w: member %s is quorum critical", engine.ErrConflict, m.Name)
 			}
 		}
 		m.ChangeStep = "drain"
@@ -596,7 +598,15 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 	}
 	return false, nil
 }
-func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *internalState, m *member) error {
+func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *internalState, m *member) (err error) {
+	previousBlock := m.RemovalBlocked
+	defer func() {
+		if m.RemovalBlocked != "" && m.RemovalBlocked != previousBlock {
+			if eventErr := warningEvent(ctx, rc, "MemberRemovalBlocked", "Member "+m.Name+": "+m.RemovalBlocked); eventErr != nil {
+				err = eventErr
+			}
+		}
+	}()
 	survivors := s.runningMembers()
 	if m.RemoveStep == "" {
 		if m.Stage == "planned" || m.Stage == "imported" {

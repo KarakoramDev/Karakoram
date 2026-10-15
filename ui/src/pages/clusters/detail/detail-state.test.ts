@@ -13,6 +13,14 @@ test('membership review does not invent resources, TLS or exposure changes', () 
   assert.match(copy, /initial sync and voting promotion/);
   assert.doesNotMatch(copy, /restart|TLS|certificate|public/);
 });
+test('RabbitMQ broker scale-up preserves existing queue replica counts and points to explicit growth', () => {
+  const rabbit = { ...spec, provider: 'rabbitmq' };
+  const copy = scalingReview(rabbit, { components: { engine: { replicas: 3 } } }).join(' ');
+  assert.match(copy, /Existing quorum queues keep their replica count/);
+  assert.match(copy, /Queue recovery.*Management API/);
+  for (const replicas of [1, 0]) assert.doesNotMatch(scalingReview(rabbit, { components: { engine: { replicas } } }).join(' '), /quorum queues|Queue recovery/);
+  assert.doesNotMatch(scalingReview({ ...spec, provider: 'psmdb' }, { components: { engine: { replicas: 3 } } }).join(' '), /quorum queues|Queue recovery/);
+});
 test('CPU review describes existing-volume resource updates, not data movement', () => {
   const copy = scalingReview(spec, { components: { engine: { resources: { ...resources, maxCpu: 4 } } } }).join(' ');
   assert.match(copy, /CPU limits apply without data movement/);

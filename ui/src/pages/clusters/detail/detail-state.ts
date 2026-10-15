@@ -58,7 +58,7 @@ export function clusterEmptyCopy(canCreate: boolean): { title: string; message: 
 type ReviewComponent = { replicas: number; resources: object };
 
 /** Describe only the fields included in an RFC 7396 spec patch. */
-export function scalingReview(spec: { components: { engine: ReviewComponent; configServer?: ReviewComponent; router?: ReviewComponent } }, patch: Record<string, unknown>): string[] {
+export function scalingReview(spec: { provider?: string; components: { engine: ReviewComponent; configServer?: ReviewComponent; router?: ReviewComponent } }, patch: Record<string, unknown>): string[] {
   const changes: string[] = [];
   const components = patch.components as Record<string, { replicas?: number; resources?: Record<string, unknown> }> | undefined;
   for (const [name, component] of Object.entries(components ?? {})) {
@@ -66,6 +66,9 @@ export function scalingReview(spec: { components: { engine: ReviewComponent; con
     if (component.replicas !== undefined) {
       const action = component.replicas > (current?.replicas ?? 0) ? 'add members with initial sync and voting promotion' : 'remove members while preserving a voting majority';
       changes.push(name === 'router' ? `Routers: ${current?.replicas ?? 0} → ${component.replicas}; update router capacity.` : `${name} members: ${current?.replicas ?? 0} → ${component.replicas}; ${action}.`);
+      if (spec.provider === 'rabbitmq' && name === 'engine' && component.replicas > (current?.replicas ?? 0)) {
+        changes.push('Existing quorum queues keep their replica count; adding brokers alone does not improve their fault tolerance. To grow replicas explicitly, open Queue recovery for the Management API procedure.');
+      }
     }
     if (component.resources) {
       const previous = (current?.resources ?? {}) as Record<string, unknown>;

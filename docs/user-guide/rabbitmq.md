@@ -270,6 +270,73 @@ RAM updates can be live at the platform, but the broker memory limit/watermark a
 
 Replacement provisions and joins a fresh identity before growing/migrating replicas and removing the old member. A reachable broker follows the drain/application-stop/forget/full-stop sequence; an unreachable lost broker skips local drain/stop and is forgotten through a survivor only with a surviving Khepri voter majority. Surviving queue/stream majorities are also needed: replacement cannot recover classic messages or messages whose last surviving copy is lost. Preserve data/state and consult the [operations notes](../operations.md#rabbitmq-operations) after permanent node/volume loss or majority loss; never reset survivors to make a join succeed.
 
+### Quorum-blocked restarts and replica growth
+
+Adding brokers does **not** enlarge existing quorum queues. A queue originally
+created on one broker can still have just one replica after scale-up. Restarting
+that broker would make the queue unavailable, even when the other brokers are
+healthy. Karakoram checks quorum-critical resources **before** waiting for quorum
+and checks again if that wait fails. `QuorumCriticalQueues` names up to ten affected
+queues/vhosts and their known members (plus the remaining count); the warning event
+is `RollingRestartBlocked`. The operation and cluster message name the same blockers.
+Stream or metadata-component blockers require their own majority recovery, not
+quorum queue additions.
+
+Open **cluster detail → Queue recovery** from the blocked-queue callout. It shows
+targeted, copyable Management API commands with the actual broker, vhost, queue and
+candidate node names. This is an explicit native administrative procedure, **not**
+a Karakoram `grow-replicas` operation or CLI command: it requires the revealed
+RabbitMQ `admin` credential and bypasses Karakoram RBAC. It does not require a
+broker shell, Erlang cookie, deleting/recreating a queue or purging messages.
+
+Run from an application/administration environment **inside the cluster's project**
+so private broker DNS and management ports are reachable. Export the CA with
+`karactl -n NS clusters ca CLUSTER > ca.pem` and reveal the admin password from
+Connection details. `--user admin` prompts for the password; do not put it in
+shell history. For example, for queue `orders` in `/`, adding `rabbit@ordersm1`:
+
+```sh
+# Inspect type, members and online replicas first.
+curl --fail-with-body --user admin --cacert ca.pem \
+  'https://ordersm0:15671/api/queues/%2F/orders'
+# Only when an existing majority is online and the target is a healthy joined broker:
+curl --fail-with-body --user admin --cacert ca.pem \
+  -X POST -H 'Content-Type: application/json' \
+  --data '{"node":"rabbit@ordersm1"}' \
+  'https://ordersm0:15671/api/queues/quorum/%2F/orders/replicas/add'
+# Observe Raft state before adding the next missing replica.
+curl --fail-with-body --user admin --cacert ca.pem \
+  'https://ordersm0:15671/api/queues/quorum/%2F/orders/status'
+```
+
+Use **your** values from Queue recovery, not these example hostnames. Encode each
+vhost/queue path segment once (`/` becomes `%2F`). With explicitly disabled TLS,
+use private `http://BROKER:15672` without `--cacert`; never disable TLS verification
+for an HTTPS listener. Do not expose management publicly just for this recovery.
+The endpoint/body and status endpoint are supported by the pinned RabbitMQ
+[4.3.6 Management API](https://github.com/rabbitmq/rabbitmq-server/blob/v4.3.6/deps/rabbitmq_management/src/rabbit_mgmt_dispatcher.erl).
+
+Add **one** missing member at a time, normally growing a one-replica group to three
+across healthy brokers. After each addition, inspect the queue and Raft status:
+the new member must be online, promoted to voting membership and caught up to the
+leader's committed log (allowing for active writes). An HTTP success or a changed
+`members` list alone is not proof of synchronization. Re-read membership before
+retrying a timed-out request; it may already have added the replica. If the queue
+already uses all brokers, recover its offline members instead of adding duplicates.
+Do not add replicas without a live majority, force membership or restart several
+brokers. Once safe quorum is restored, the existing rolling workflow retries its
+checkpoint; observe it rather than submitting duplicate resource edits/restarts.
+
+During creation, member state identifies `PLANNED` (platform import pending),
+`IMPORTED` (package deployment pending), `DEPLOYED` (agent/broker readiness pending)
+and `AGENT_READY` (bootstrap or join pending). `RUNNING` means the joined broker
+has been observed; cluster readiness still requires every expected broker and
+healthy membership. A blocked departing broker remains in member inventory as
+`LEAVING_BLOCKED`, is not counted healthy, and emits one `MemberRemovalBlocked`
+warning when its blocking reason changes. Resolve the reported cause; the broker
+remains visible as `LEAVING` until its removal completes.
+
+
 ## Definitions backups and cleanup
 
 RabbitMQ supports only the **`definitions`** backup type. Manual and UTC scheduled backups export definitions through the Management API, gzip them and upload to registered S3-compatible storage. Successful scheduled-backup count retention and explicit backup deletion remove recorded objects. No PBM is deployed for RabbitMQ.

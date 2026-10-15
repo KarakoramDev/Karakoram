@@ -54,8 +54,14 @@ type ActionResponse struct {
 	OK     bool            `json:"ok"`
 	Output json.RawMessage `json:"output,omitempty"`
 }
+type QuorumBlocker struct {
+	VHost   string   `json:"vhost"`
+	Queue   string   `json:"queue"`
+	Type    string   `json:"type"`
+	Members []string `json:"members"`
+}
 type QuorumCriticalResponse struct {
-	Critical bool `json:"critical"`
+	Blockers []QuorumBlocker `json:"blockers"`
 }
 type FeatureFlag struct {
 	Name      string `json:"name"`
