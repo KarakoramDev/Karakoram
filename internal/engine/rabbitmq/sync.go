@@ -229,6 +229,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		if m.ChangeAction != "" && m.ChangeAction != "password" {
 			s.Phase = "upgrade"
 			_, e = p.changeStep(ctx, rc, s, m)
+			if e == nil && len(m.QuorumBlockers) > 0 {
+				result.RequeueAfter = quorumBlockedRequeueAfter
+			}
 			return result, e
 		}
 	}

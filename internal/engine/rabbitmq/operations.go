@@ -45,7 +45,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result, e
 	}
 	defer func() {
-		if op.Kind == domain.OperationRestart || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationUpdate {
+		if op.Kind == domain.OperationRestart || op.Kind == domain.OperationRotateTLS || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationUpdate {
 			for _, m := range s.Members {
 				if len(m.QuorumBlockers) > 0 {
 					result.Message = quorumMessage(m)
@@ -81,6 +81,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 				r, checkpointErr := opResult(cp, false, "waiting-member-change")
 				if e != nil {
 					return r, e
+				}
+				if len(m.QuorumBlockers) > 0 {
+					r.RequeueAfter = quorumBlockedRequeueAfter
 				}
 				return r, checkpointErr
 			}
@@ -239,7 +242,11 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 			cp.Done = append(cp.Done, m.Name)
 			cp.Waiting = ""
 		}
-		return opResult(cp, false, "member-change")
+		result, err := opResult(cp, false, "member-change")
+		if !done && len(m.QuorumBlockers) > 0 {
+			result.RequeueAfter = quorumBlockedRequeueAfter
+		}
+		return result, err
 	}
 	// Do not begin a rolling change until ordinary Sync has finished the entire
 	// desired membership. This checkpoint alone permits provisioning Sync; once

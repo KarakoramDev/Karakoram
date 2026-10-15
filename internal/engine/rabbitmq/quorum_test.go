@@ -4,11 +4,13 @@
 package rabbitmq
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -36,7 +38,7 @@ func TestRollingQuorumBlockHasQueuesConditionOperationMessageAndSingleEvent(t *t
 	op.Checkpoint = result.Checkpoint
 	for range 2 {
 		result, err = p.RunOperation(t.Context(), rc, op)
-		if err != nil || result.Done || result.RequeueAfter <= 0 || !strings.Contains(result.Message, `"orders" in vhost "/"`) {
+		if err != nil || result.Done || result.RequeueAfter != 30*time.Second || !strings.Contains(result.Message, `"orders" in vhost "/"`) {
 			t.Fatal(result, err)
 		}
 		op.Checkpoint = result.Checkpoint
@@ -90,6 +92,64 @@ func TestRollingQuorumBlockHasQueuesConditionOperationMessageAndSingleEvent(t *t
 	}
 }
 
+func TestQuorumBlockedOperationsUseSafetyWaitIntervalAndMessage(t *testing.T) {
+	for _, kind := range []string{domain.OperationRestart, domain.OperationRotateTLS, domain.OperationUpdate, domain.OperationUpgrade} {
+		for _, gate := range []string{"quorum", "critical"} {
+			t.Run(kind+"/"+gate, func(t *testing.T) {
+				p, rc, _, a := setup(t)
+				ready(t, p, rc)
+				s := state(t, rc)
+				m := s.find("demom0")
+				beginChange(rc, s, m, "deploy")
+				m.ChangeStep = gate
+				if err := s.save(rc.Cluster); err != nil {
+					t.Fatal(err)
+				}
+				op := &domain.Operation{Kind: kind}
+				if kind == domain.OperationRestart || kind == domain.OperationRotateTLS {
+					var err error
+					op.Checkpoint, err = json.Marshal(operationState{Waiting: m.Name})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				a.broker(m.Name).critical = true
+				if gate == "quorum" {
+					a.failures[m.Name+":await-quorum"] = 503
+				}
+				for range 2 {
+					result, err := p.RunOperation(t.Context(), rc, op)
+					if err != nil || result.Done || result.RequeueAfter != 30*time.Second || !strings.Contains(result.Message, `"orders" in vhost "/"`) {
+						t.Fatal(result, err)
+					}
+					op.Checkpoint = result.Checkpoint
+					rc.Cluster = cloneCluster(t, rc.Cluster)
+					if current := state(t, rc).find(m.Name); current.ChangeStep != gate {
+						t.Fatal("blocked operation advanced", current)
+					}
+				}
+				a.broker(m.Name).critical = false
+				delete(a.failures, m.Name+":await-quorum")
+				// Passing the final pre-drain gate restores the ordinary cadence.
+				for range 2 {
+					result, err := p.RunOperation(t.Context(), rc, op)
+					if err != nil {
+						t.Fatal(err)
+					}
+					op.Checkpoint = result.Checkpoint
+					if state(t, rc).find(m.Name).ChangeStep == "drain" {
+						if result.RequeueAfter != 5*time.Second || result.Message != "" {
+							t.Fatal("recovered operation retained the blocked cadence or message", result)
+						}
+						return
+					}
+				}
+				t.Fatal("recovered operation did not reach the pre-drain gate")
+			})
+		}
+	}
+}
+
 func TestQuorumWaitFailureRunsDiagnosis(t *testing.T) {
 	p, rc, _, a := setup(t)
 	ready(t, p, rc)
@@ -136,7 +196,7 @@ func TestQuorumBlockedSyncWaitsWithoutReconcileErrors(t *testing.T) {
 				result, err := p.Sync(t.Context(), rc)
 				// Returning an error here makes the reconciler emit ReconcileError
 				// on every pass, duplicating the transition-only blocked event.
-				if err != nil || result.RequeueAfter <= 0 {
+				if err != nil || result.RequeueAfter != 30*time.Second {
 					t.Fatal(result, err)
 				}
 				rc.Cluster = cloneCluster(t, rc.Cluster)

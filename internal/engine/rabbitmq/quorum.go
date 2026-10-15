@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -19,7 +20,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 )
 
-const maxStoredQuorumBlockers = 50
+const (
+	maxStoredQuorumBlockers   = 50
+	quorumBlockedRequeueAfter = 30 * time.Second
+)
 
 var quorumMemberPattern = regexp.MustCompile(`^rabbit@[a-z][a-z0-9]{1,24}$`)
 
