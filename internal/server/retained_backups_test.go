@@ -56,15 +56,30 @@ func retainedS3(t *testing.T, keys []string) (string, func() map[string]bool, fu
 		if !strings.Contains(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256") {
 			t.Error("S3 cleanup request is not signed")
 		}
-		key := strings.TrimPrefix(r.URL.Path, "/bucket/")
-		if r.Method == "DELETE" {
-			if key == failKey {
-				w.WriteHeader(403)
-				_, _ = w.Write([]byte("<Error><Code>AccessDenied</Code><Message>denied</Message></Error>"))
+		if r.Method == http.MethodPost && r.URL.Query().Has("delete") {
+			var request struct {
+				Objects []struct{ Key string } `xml:"Object"`
+			}
+			if err := xml.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+				http.Error(w, "invalid deletion request", http.StatusBadRequest)
 				return
 			}
-			delete(objects, key)
-			w.WriteHeader(204)
+			result := struct {
+				XMLName xml.Name                              `xml:"DeleteResult"`
+				Deleted []struct{ Key string }                `xml:"Deleted"`
+				Errors  []struct{ Key, Code, Message string } `xml:"Error"`
+			}{}
+			for _, object := range request.Objects {
+				if object.Key == failKey {
+					result.Errors = append(result.Errors, struct{ Key, Code, Message string }{object.Key, "AccessDenied", "denied"})
+				} else {
+					delete(objects, object.Key)
+					result.Deleted = append(result.Deleted, object)
+				}
+			}
+			w.Header().Set("Content-Type", "application/xml")
+			_ = xml.NewEncoder(w).Encode(result)
 			return
 		}
 		if r.Method != "GET" || r.URL.Path != "/bucket/" {
@@ -77,11 +92,11 @@ func retainedS3(t *testing.T, keys []string) (string, func() map[string]bool, fu
 			Size int64
 		}
 		result := struct {
-			XMLName     xml.Name `xml:"ListBucketResult"`
+			XMLName     xml.Name `xml:"ListVersionsResult"`
 			Name        string
 			Prefix      string
 			IsTruncated bool
-			Contents    []object
+			Contents    []object `xml:"Version"`
 		}{Name: "bucket", Prefix: r.URL.Query().Get("prefix")}
 		ordered := make([]string, 0, len(objects))
 		for key := range objects {

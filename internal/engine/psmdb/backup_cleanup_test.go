@@ -272,3 +272,130 @@ func TestOfflineCleanupRemovesInventoryAfterOlderStorageCheckpoint(t *testing.T)
 	}
 	t.Fatal("cleanup did not finish")
 }
+
+func TestDeletingReplacementPreservesRetainedSourceBackup(t *testing.T) {
+	p, rc, _, _ := backupCleanupSetup(t)
+	old := retryState(t, rc)
+	b := &domain.Backup{Name: "retained", Cluster: rc.Cluster.Name, Storage: "archive", Phase: domain.PhaseSucceeded, PBMName: "snapshot", PBMPrefix: "archive/" + old.PBMPrefix, RecoveryIdentity: "retained-recovery"}
+	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+		t.Fatal(err)
+	}
+	identity := domain.ClusterRef{Name: b.RecoveryIdentity}
+	if err := rc.Secrets.SetClusterSecret(t.Context(), identity, "users/userAdmin", []byte("recovery")); err != nil {
+		t.Fatal(err)
+	}
+	deleted := false
+	for range 30 {
+		done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepBackups: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done {
+			deleted = true
+			break
+		}
+	}
+	if !deleted {
+		t.Fatal("original cluster deletion did not finish")
+	}
+	st := rc.Store.(*store.Store)
+	if err := st.DeleteCluster(t.Context(), rc.Cluster.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	replacement := &domain.Cluster{Name: rc.Cluster.Name, Spec: rc.Cluster.Spec}
+	replacement.Spec.Backup.Storage = "archive"
+	replacement.Spec.DataSource = &domain.DataSource{Cluster: b.Cluster, Backup: b.Name}
+	if err := st.CreateCluster(t.Context(), replacement); err != nil {
+		t.Fatal(err)
+	}
+	rc.Cluster = replacement
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	s := retryState(t, rc)
+	if s.UID == old.UID {
+		t.Fatal("replacement reused its source incarnation")
+	}
+	// A replacement using this retained restore source owns only its new
+	// destination prefix, whether deleted before or after runtime provisioning.
+	s.PBMStorage, s.PBMHash = "archive", "configured"
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	p.deleteClusterObjects = func(_ context.Context, _ domain.BackupStorage, _ string, uid string) error {
+		calls++
+		if uid != s.UID || uid == old.UID {
+			t.Fatal("deleting retained source artifacts", uid)
+		}
+		return nil
+	}
+	for range 30 {
+		done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done {
+			items, err := st.ListBackups(t.Context(), rc.Cluster.Ref())
+			if err != nil || len(items) != 1 || items[0].PBMPrefix != b.PBMPrefix {
+				t.Fatal("replacement deletion discarded retained source", items, err)
+			}
+			if _, err := rc.Secrets.GetClusterSecret(t.Context(), identity, "users/userAdmin"); err != nil {
+				t.Fatal("retained recovery credential was deleted", err)
+			}
+			if calls != 1 {
+				t.Fatal("unexpected storage deletion passes", calls)
+			}
+			return
+		}
+	}
+	t.Fatal("replacement deletion did not finish")
+}
+
+func TestChangedStoragePrefixReportsProvenanceMismatch(t *testing.T) {
+	p, rc, _, _ := backupCleanupSetup(t)
+	suspendForBackupCleanup(t, p, rc)
+	s := retryState(t, rc)
+	b := &domain.Backup{Name: "backup", Cluster: rc.Cluster.Name, Storage: "archive", PBMName: "snapshot", PBMPrefix: "original-prefix/" + s.PBMPrefix}
+	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+		t.Fatal(err)
+	}
+	direct := false
+	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error { direct = true; return nil }
+	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
+	if done || err == nil || direct || !strings.Contains(err.Error(), "restore the original storage prefix") || strings.Contains(err.Error(), "repair storage access") {
+		t.Fatal("provenance failure was misreported", done, err, direct)
+	}
+	if _, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name); err != nil {
+		t.Fatal("mismatched backup inventory was deleted", err)
+	}
+}
+
+func TestProductiveStorageCleanupPassRequeuesWithoutFailure(t *testing.T) {
+	p, rc, _, _ := backupCleanupSetup(t)
+	suspendForBackupCleanup(t, p, rc)
+	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error {
+		return backupstorage.ErrDeletionInProgress
+	}
+	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
+	if done || err != nil || len(retryState(t, rc).CleanedStorages) != 0 || strings.Contains(rc.Cluster.Status.Message, "repair") {
+		t.Fatal("normal storage cleanup progress became a failure", done, err, rc.Cluster.Status.Message)
+	}
+}
+
+type unsupportedCleanupStorage struct{ engine.ClusterStore }
+
+func (s unsupportedCleanupStorage) GetBackupStorage(context.Context, string, string) (*domain.BackupStorage, error) {
+	return &domain.BackupStorage{Name: "archive", Type: "unsupported", Prefix: "archive"}, nil
+}
+
+func TestZeroValueProviderDefaultsStorageDeletion(t *testing.T) {
+	p, rc, _, _ := backupCleanupSetup(t)
+	suspendForBackupCleanup(t, p, rc)
+	rc.Store = unsupportedCleanupStorage{rc.Store}
+	var zero Provider
+	done, err := zero.Cleanup(t.Context(), rc, domain.DeleteOptions{})
+	if done || err == nil || !strings.Contains(err.Error(), "unsupported backup storage type") {
+		t.Fatal("zero-value provider did not invoke default storage cleanup", done, err)
+	}
+}

@@ -177,8 +177,9 @@ the backup inventory, their metadata, PITR chunks and namespace markers. It does
 not resume database runtimes or delete adjacent cluster namespaces. Backup
 records and protected recovery credentials are removed only after artifact
 deletion succeeds; interrupted object or inventory deletion can be retried.
-Snapshots retained from an earlier incarnation are deleted only through their
-individual recorded snapshot identities, not by deleting an enclosing prefix.
+Snapshots explicitly retained from an earlier incarnation are preserved when a
+same-name replacement cluster is deleted. They remain listed and can be deleted
+individually using their recorded snapshot identities.
 
 Keep the backup storage and its credentials available until deletion finishes.
 Storage access failures are reported in the cluster status and delete operation
@@ -188,6 +189,15 @@ to use PBM cleanup or retain backups; the control plane will not guess an object
 prefix. Deleting an individual retained backup after its cluster is gone uses
 its recorded snapshot directory and metadata file directly; it does not require
 a PBM node and does not remove other snapshots or PITR chunks.
+
+Direct storage deletion batches requests and removes every object version and
+delete marker in the selected namespace. Versioned buckets require
+`s3:ListBucketVersions` and `s3:DeleteObjectVersion` permissions in addition to
+ordinary list/delete access. Large cluster namespaces are cleaned over bounded
+passes; a pass that makes progress before its time limit requeues normally.
+If a storage prefix has changed since a current backup was written, restore
+the original prefix before retrying deletion; changing access permissions does
+not repair a mismatched recorded snapshot location.
 
 ## Orphaned platform volumes
 

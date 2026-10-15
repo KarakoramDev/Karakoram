@@ -6,8 +6,10 @@ package psmdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -131,6 +133,15 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		if e != nil {
 			return false, e
 		}
+		// Explicitly retained snapshots belong to their original incarnation,
+		// not to a replacement cluster that happens to reuse its name.
+		current := backups[:0]
+		for _, b := range backups {
+			if b.PBMPrefix == "" || s.PBMPrefix != "" && (b.PBMPrefix == s.PBMPrefix || strings.HasSuffix(b.PBMPrefix, "/"+s.PBMPrefix)) {
+				current = append(current, b)
+			}
+		}
+		backups = current
 		started := s.PBMStorage != "" || s.PBMHash != ""
 		for _, b := range backups {
 			started = started || b.PBMName != "" || b.StartedAt != nil
@@ -198,6 +209,11 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			if e != nil {
 				return false, backupCleanupError(storage, e)
 			}
+			for _, b := range backups {
+				if b.Storage == storage && b.PBMPrefix != "" && b.PBMPrefix != env.Prefix {
+					return false, fmt.Errorf("cannot delete backup %q: its recorded PBM prefix differs from storage %q's current prefix; restore the original storage prefix and retry, or delete with --keep-backups", b.Name, storage)
+				}
+			}
 			if withoutRuntimes {
 				// A suspended cluster has no command node. Its private storage
 				// namespace is still authoritative, including unlisted snapshots
@@ -205,7 +221,14 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 				if s.UID == "" || s.PBMPrefix != "karakoram/"+rc.Cluster.Name+"-"+s.UID {
 					return false, fmt.Errorf("cannot delete backup artifacts without runtimes: cluster lacks a verified PBM namespace; resume the cluster or delete with --keep-backups")
 				}
-				if e = p.deleteClusterObjects(ctx, env.Storage, rc.Cluster.Name, s.UID); e != nil {
+				deleteObjects := p.deleteClusterObjects
+				if deleteObjects == nil {
+					deleteObjects = backupstorage.DeleteCluster
+				}
+				if e = deleteObjects(ctx, env.Storage, rc.Cluster.Name, s.UID); e != nil {
+					if errors.Is(e, backupstorage.ErrDeletionInProgress) {
+						return false, nil
+					}
 					return false, backupCleanupError(storage, e)
 				}
 			} else {
@@ -220,13 +243,6 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			for _, b := range backups {
 				if b.Storage != storage {
 					continue
-				}
-				// Backups retained from an earlier incarnation have immutable
-				// snapshot identities outside the current cluster's namespace.
-				if b.PBMPrefix != "" && b.PBMPrefix != env.Prefix && b.PBMName != "" {
-					if e = backupstorage.DeleteSnapshot(ctx, env.Storage, b); e != nil {
-						return false, backupCleanupError(storage, e)
-					}
 				}
 				if e = deleteBackupRecord(ctx, rc, b); e != nil {
 					return false, e

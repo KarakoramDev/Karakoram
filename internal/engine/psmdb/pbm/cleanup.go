@@ -120,7 +120,7 @@ func DeleteAll(ctx context.Context, env Env) (engine.OpResult, error) {
 			return finish(false, err)
 		}
 		for _, b := range records {
-			if b.PBMName == cp.PBMName && b.Storage == env.Storage.Name {
+			if b.PBMName == cp.PBMName && b.Storage == env.Storage.Name && (b.PBMPrefix == "" || b.PBMPrefix == env.Prefix) {
 				if b.RecoveryIdentity != "" {
 					if err := env.RC.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); err != nil && !errors.Is(err, engine.ErrNotFound) && !errors.Is(err, store.ErrNotFound) {
 						return finish(false, err)
