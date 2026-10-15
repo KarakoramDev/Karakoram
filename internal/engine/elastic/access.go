@@ -488,6 +488,23 @@ func (p *Provider) CreateAPIKey(ctx context.Context, rc *engine.Context, req API
 	}
 	k, err := c.CreateAPIKey(ctx, esapi.APIKeyRequest{Name: req.Name, Expiration: req.Expiration, RoleDescriptors: roles, Metadata: map[string]any{"karakoram": true}})
 	if err != nil {
+		var native *esapi.Error
+		if errors.As(err, &native) && securityLicenseRejected(native) {
+			for _, name := range sortedKeys(req.RoleDescriptors) {
+				for i, index := range req.RoleDescriptors[name].Indices {
+					field := ""
+					if index.Query != nil {
+						field = fmt.Sprintf("roleDescriptors.%s.indices[%d].query", name, i)
+					} else if index.FieldSecurity != nil {
+						field = fmt.Sprintf("roleDescriptors.%s.indices[%d].fieldSecurity", name, i)
+					}
+					if field != "" {
+						return nil, engine.InvalidField(field, domain.ReasonUnsupported, "%s requires an Elasticsearch licence tier that includes document- and field-level security; the current licence does not include it", field)
+					}
+				}
+			}
+			return nil, engine.InvalidField("roleDescriptors", domain.ReasonUnsupported, "roleDescriptors require an Elasticsearch licence tier that includes document- and field-level security; the current licence does not include it")
+		}
 		return nil, accessError(err)
 	}
 	return &APIKeyCreated{ID: k.ID, Name: k.Name, APIKey: k.APIKey, Encoded: k.Encoded, Expiration: k.Expiration}, nil

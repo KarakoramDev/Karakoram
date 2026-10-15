@@ -350,6 +350,8 @@ Invalid native privilege errors identify the cluster, index or application grant
 
 Index privileges can also include a document-level `query` (an opaque Elasticsearch query JSON string) and `fieldSecurity` with optional `grant` and `except` field-pattern arrays. **Both require a licence tier that includes document/field-level security; Basic does not.** Requests that require unavailable licensed features return an actionable 4xx response explaining the licensing prerequisite, rather than creating an unrestricted role. Reads and role edits preserve these restrictions, including explicitly empty grant arrays. The UI accepts a JSON array for index privileges when these restrictions are needed, in addition to the simple one-entry-per-line format. API-key descriptors support the same fields.
 
+API-key licence errors identify the restricted grant under `roleDescriptors.<name>.indices[i].query` or `.fieldSecurity`, rather than a top-level query field.
+
 Kibana browser access needs application privileges as well as privileges on the
 underlying data indices. For example, this complete role body grants read-only
 Kibana access across all spaces plus read access to `orders-*`:

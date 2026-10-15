@@ -366,6 +366,34 @@ func TestNativeRoleWriteErrors(t *testing.T) {
 	}
 }
 
+func TestAPIKeyLicenceErrorIdentifiesRoleDescriptor(t *testing.T) {
+	query := `{"term":{"tenant":"one"}}`
+	grant := []string{"public.*"}
+	for _, tc := range []struct {
+		name  string
+		index IndexPrivileges
+	}{
+		{"query", IndexPrivileges{Query: &query}},
+		{"fieldSecurity", IndexPrivileges{FieldSecurity: &FieldSecurity{Grant: &grant}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc := accessFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				fmt.Fprint(w, `{"error":{"type":"security_exception","reason":"current license is non-compliant for [field and document level security]"},"status":403}`)
+			})
+			_, err := p.CreateAPIKey(t.Context(), rc, APIKeyCreate{Name: "restricted", RoleDescriptors: map[string]RoleDescriptor{
+				"reader": {Indices: []IndexPrivileges{{Names: []string{"public-*"}, Privileges: []string{"read"}}, tc.index}},
+			}})
+			var field *engine.ValidationError
+			want := "roleDescriptors.reader.indices[1]." + tc.name
+			if !errors.As(err, &field) || field.Field != want || field.Reason != domain.ReasonUnsupported || !strings.Contains(field.Message, want) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestRepeatedAPIKeyInvalidation(t *testing.T) {
 	invalidated, writes := false, 0
 	p, rc := accessFixture(t, func(w http.ResponseWriter, r *http.Request) {
