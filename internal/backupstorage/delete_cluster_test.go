@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -42,19 +43,26 @@ type storedVersion struct {
 }
 
 type versionedS3 struct {
-	mu            sync.Mutex
-	objects       map[string]storedVersion
-	deleted       []storedVersion
-	denied        string
-	foreign       string
-	pageSize      int
-	batches       int
-	blockNextPage bool
+	mu                sync.Mutex
+	objects           map[string]storedVersion
+	deleted           []storedVersion
+	denied            string
+	foreign           string
+	pageSize          int
+	batches           int
+	blockNextPage     bool
+	versionCode       string
+	versionStatus     int
+	versionLists      int
+	plainLists        int
+	deleteCode        string
+	hidden            map[string]bool
+	confirmationModes []bool
 }
 
 func versionKey(v storedVersion) string { return v.Key + "\x00" + v.VersionID }
 func newVersionedS3(objects ...storedVersion) *versionedS3 {
-	f := &versionedS3{objects: map[string]storedVersion{}, pageSize: 2}
+	f := &versionedS3{objects: map[string]storedVersion{}, hidden: map[string]bool{}, pageSize: 2}
 	for _, v := range objects {
 		f.objects[versionKey(v)] = v
 	}
@@ -66,8 +74,26 @@ func (f *versionedS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml")
 	switch r.Method {
 	case http.MethodGet:
+		if r.URL.Query().Get("max-keys") == "1" {
+			f.confirmationModes = append(f.confirmationModes, r.URL.Query().Has("versions"))
+		}
 		if !r.URL.Query().Has("versions") {
-			http.Error(w, "version listing required", http.StatusBadRequest)
+			f.plainLists++
+			f.servePlainList(w, r)
+			return
+		}
+		f.versionLists++
+		if f.versionCode != "" {
+			status := f.versionStatus
+			if status == 0 {
+				status = http.StatusForbidden
+			}
+			w.WriteHeader(status)
+			_ = xml.NewEncoder(w).Encode(struct {
+				XMLName xml.Name `xml:"Error"`
+				Code    string
+				Message string
+			}{Code: f.versionCode, Message: "version listing is unavailable"})
 			return
 		}
 		marker := r.URL.Query().Get("key-marker") + "\x00" + r.URL.Query().Get("version-id-marker")
@@ -93,9 +119,13 @@ func (f *versionedS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Versions    []storedVersion `xml:"Version"`
 			Markers     []storedVersion `xml:"DeleteMarker"`
 		}{}
-		if len(keys) > f.pageSize {
+		pageSize := f.pageSize
+		if max, _ := strconv.Atoi(r.URL.Query().Get("max-keys")); max > 0 && max < pageSize {
+			pageSize = max
+		}
+		if len(keys) > pageSize {
 			result.Truncated = true
-			keys = keys[:f.pageSize]
+			keys = keys[:pageSize]
 			last := f.objects[keys[len(keys)-1]]
 			result.NextKey = last.Key
 			result.NextVersion = last.VersionID
@@ -137,15 +167,24 @@ func (f *versionedS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}{}
 		for _, v := range request.Objects {
 			if f.denied != "" && strings.Contains(v.Key, f.denied) {
+				code := f.deleteCode
+				if code == "" {
+					code = "AccessDenied"
+				}
 				result.Errors = append(result.Errors, struct {
 					Key       string
 					VersionID string `xml:"VersionId"`
 					Code      string
 					Message   string
-				}{v.Key, v.VersionID, "AccessDenied", "denied"})
+				}{v.Key, v.VersionID, code, "denied"})
 				continue
 			}
 			f.deleted = append(f.deleted, v)
+			if v.VersionID == "" {
+				// A key-only delete on a versioned bucket hides the current
+				// object but leaves its historical versions in storage.
+				f.hidden[v.Key] = true
+			}
 			delete(f.objects, versionKey(v))
 			result.Deleted = append(result.Deleted, v)
 		}
@@ -153,6 +192,44 @@ func (f *versionedS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "unsupported operation", http.StatusMethodNotAllowed)
 	}
+}
+
+// servePlainList runs with the fake's mutex held and exposes current keys only.
+func (f *versionedS3) servePlainList(w http.ResponseWriter, r *http.Request) {
+	prefix := r.URL.Query().Get("prefix")
+	marker := r.URL.Query().Get("continuation-token")
+	latest := map[string]storedVersion{}
+	for _, v := range f.objects {
+		if old, ok := latest[v.Key]; !ok || v.VersionID > old.VersionID {
+			latest[v.Key] = v
+		}
+	}
+	keys := []string{}
+	for key, v := range latest {
+		if strings.HasPrefix(key, prefix) && key > marker && !f.hidden[key] && !v.Marker {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	result := struct {
+		XMLName   xml.Name               `xml:"ListBucketResult"`
+		Truncated bool                   `xml:"IsTruncated"`
+		Next      string                 `xml:"NextContinuationToken,omitempty"`
+		Contents  []struct{ Key string } `xml:"Contents"`
+	}{}
+	pageSize := f.pageSize
+	if max, _ := strconv.Atoi(r.URL.Query().Get("max-keys")); max > 0 && max < pageSize {
+		pageSize = max
+	}
+	if len(keys) > pageSize {
+		result.Truncated = true
+		keys = keys[:pageSize]
+		result.Next = keys[len(keys)-1]
+	}
+	for _, key := range keys {
+		result.Contents = append(result.Contents, struct{ Key string }{key})
+	}
+	_ = xml.NewEncoder(w).Encode(result)
 }
 
 func storageFixture(t *testing.T, f *versionedS3) (domain.BackupStorage, http.RoundTripper) {
@@ -267,5 +344,94 @@ func TestDeleteSnapshotRemovesAllVersionsAndMetadataLast(t *testing.T) {
 	}
 	if err := deleteSnapshot(t.Context(), s, b, transport); err != nil {
 		t.Fatal("missing snapshot must succeed", err)
+	}
+}
+
+func TestClusterDeletionFallsBackWhenVersionListingUnavailable(t *testing.T) {
+	for _, test := range []struct {
+		code   string
+		status int
+	}{
+		{"AccessDenied", http.StatusForbidden},
+		{"NotImplemented", http.StatusNotImplemented},
+		{"MethodNotAllowed", http.StatusMethodNotAllowed},
+		{"InvalidRequest", http.StatusBadRequest},
+		{"UnsupportedOperation", http.StatusBadRequest},
+	} {
+		t.Run(test.code, func(t *testing.T) {
+			const key = "production/karakoram/demo-incarnation/snapshot/data"
+			f := newVersionedS3(storedVersion{Key: key, VersionID: "old"}, storedVersion{Key: key, VersionID: "latest"}, storedVersion{Key: "production/karakoram/other-incarnation/data", VersionID: "keep"})
+			f.versionCode, f.versionStatus = test.code, test.status
+			s, transport := storageFixture(t, f)
+			if err := deleteCluster(t.Context(), s, "demo", "incarnation", transport); err != nil {
+				t.Fatal("ordinary list/delete credentials could not delete current objects", err)
+			}
+			f.mu.Lock()
+			if len(f.objects) != 3 || !f.hidden[key] || len(f.deleted) != 1 || f.deleted[0].VersionID != "" {
+				t.Error("fallback must delete only current keys, preserving historical versions", f.objects, f.deleted)
+			}
+			if f.versionLists != 1 || f.plainLists < 2 || len(f.confirmationModes) != 1 || f.confirmationModes[0] {
+				t.Error("fallback did not confirm absence using plain listing", f.versionLists, f.plainLists, f.confirmationModes)
+			}
+			// Once version-aware access is available, a later cleanup can
+			// remove the historical versions left by key-only deletion.
+			f.versionCode = ""
+			f.mu.Unlock()
+			if err := deleteCluster(t.Context(), s, "demo", "incarnation", transport); err != nil {
+				t.Fatal(err)
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if len(f.objects) != 1 {
+				t.Fatal("version-aware cleanup left historical versions", f.objects)
+			}
+		})
+	}
+}
+
+func TestSnapshotDeletionFallsBackToOrdinaryPermissions(t *testing.T) {
+	const base = "production/karakoram/demo-old/snapshot"
+	f := newVersionedS3(storedVersion{Key: base + "/data"}, storedVersion{Key: base + ".pbm.json"}, storedVersion{Key: base + ".pbm.json.other"})
+	f.versionCode = "AccessDenied"
+	s, transport := storageFixture(t, f)
+	b := domain.Backup{Storage: s.Name, PBMPrefix: "production/karakoram/demo-old", PBMName: "snapshot"}
+	if err := deleteSnapshot(t.Context(), s, b, transport); err != nil {
+		t.Fatal("retained snapshot required version permissions", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.objects) != 1 || len(f.deleted) != 2 {
+		t.Fatal("fallback removed sibling metadata or retained snapshot objects", f.objects, f.deleted)
+	}
+	if len(f.confirmationModes) != 2 || f.confirmationModes[0] || f.confirmationModes[1] {
+		t.Fatal("snapshot fallback confirmed with the wrong listing mode", f.confirmationModes)
+	}
+}
+
+func TestDeletionConfirmsAbsenceAfterSDKSuppressesObjectErrors(t *testing.T) {
+	for _, code := range []string{"InvalidArgument", "NoSuchVersion"} {
+		for _, versions := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/versions=%v", code, versions), func(t *testing.T) {
+				const key = "production/karakoram/demo-incarnation/data"
+				v := storedVersion{Key: key}
+				if versions {
+					v.VersionID = "version"
+				}
+				f := newVersionedS3(v)
+				f.denied, f.deleteCode = "/data", code
+				if !versions {
+					f.versionCode = "AccessDenied"
+				}
+				s, transport := storageFixture(t, f)
+				if err := deleteCluster(t.Context(), s, "demo", "incarnation", transport); err == nil {
+					t.Fatal("suppressed object error incorrectly completed cleanup")
+				}
+				f.mu.Lock()
+				defer f.mu.Unlock()
+				if len(f.objects) != 1 || len(f.deleted) != 0 || len(f.confirmationModes) != 1 || f.confirmationModes[0] != versions {
+					t.Fatal("cleanup did not confirm the still-present selected object", f.objects, f.deleted, f.confirmationModes)
+				}
+			})
+		}
 	}
 }

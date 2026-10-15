@@ -190,11 +190,18 @@ prefix. Deleting an individual retained backup after its cluster is gone uses
 its recorded snapshot directory and metadata file directly; it does not require
 a PBM node and does not remove other snapshots or PITR chunks.
 
-Direct storage deletion batches requests and removes every object version and
-delete marker in the selected namespace. Versioned buckets require
-`s3:ListBucketVersions` and `s3:DeleteObjectVersion` permissions in addition to
-ordinary list/delete access. Large cluster namespaces are cleaned over bounded
-passes; a pass that makes progress before its time limit requeues normally.
+Direct storage deletion batches requests. When object-version listing is
+supported and permitted, it removes every selected object version and delete
+marker; this requires `s3:ListBucketVersions` and `s3:DeleteObjectVersion`.
+If version listing is unavailable or denied, cleanup falls back to ordinary
+listing and key-only deletion using the original list/delete permissions.
+On a versioned bucket this fallback removes only currently visible objects:
+noncurrent versions remain in storage and must be removed separately with
+version-aware credentials or a bucket lifecycle policy. A successful version
+listing followed by denied version deletion remains an access error.
+Cleanup confirms the selected namespace is empty in the listing mode used.
+Large cluster namespaces are cleaned over bounded passes; a pass that makes
+progress before its time limit requeues normally.
 If a storage prefix has changed since a current backup was written, restore
 the original prefix before retrying deletion; changing access permissions does
 not repair a mismatched recorded snapshot location.
