@@ -111,6 +111,6 @@ export function SchedulesEditor({ value, onChange, storages, defaultStorage, bac
 
 export function RabbitMQBackupNotice({ provider }: { provider?: string }) {
   return provider === 'rabbitmq' ? <Callout tone="info" title="Definitions backups only">
-    RabbitMQ definitions backups capture broker definitions (vhosts, users, permissions, policies, and queues/exchanges/bindings metadata), not messages. They do not provide point-in-time restore. See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md#definitions-backups-and-cleanup" target="_blank" rel="noreferrer">RabbitMQ backup and restore guide</a>.
+    RabbitMQ definitions backups capture broker definitions (vhosts, users, permissions, policies, and queues/exchanges/bindings metadata), not messages. They do not provide point-in-time restore. Exports contain user password hashes. Treat exports and their object storage as sensitive. See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md#definitions-backups-and-cleanup" target="_blank" rel="noreferrer">RabbitMQ backup and restore guide</a>.
   </Callout> : null;
 }

@@ -350,6 +350,9 @@ remains visible as `LEAVING` until its removal completes.
 RabbitMQ supports only the **`definitions`** backup type. Manual and UTC scheduled backups export definitions through the Management API, gzip them and upload to registered S3-compatible storage. Successful scheduled-backup count retention and explicit backup deletion remove recorded objects. No PBM is deployed for RabbitMQ.
 
 **Definitions contain no messages and provide no PITR.** They contain topology, application users/password hashes, grants, policies and runtime parameters; treat the object storage and exports as sensitive. Before compression/upload, Karakoram excludes `karakoram`, `admin`, `monitor` and `guest` users and their vhost/topic grants. Restore imports **merge** objects into the target, not rewind it or remove unrelated existing objects. The same reserved-user/grant filter applies on import, including older backups, so target credentials remain authoritative. Imports are bounded to 64 MiB of uncompressed definitions. A creation-time `dataSource` clone needs a successful RabbitMQ definitions backup and imports after the target is ready; it does not replicate source messages continuously.
+The UI repeats the password-hash sensitivity warning when choosing storage for a
+schedule or a manual backup. Restrict bucket access and protect stored exports
+even though they do not contain message payloads.
 
 Deletion drains/stops brokers and removes public routes/subdomains before runtime removal. `keepVolumes` suspends the cluster, retaining broker volumes and secrets for resume. `keepBackups` independently retains definitions records/objects for later recovery/deletion. Full deletion removes owned volumes/secrets; volumes the platform refuses to delete are ownership-checked and tracked for orphan cleanup. Retained backups still require the control-plane state, original master key and storage credentials. Preserve these separately from message durability.
 

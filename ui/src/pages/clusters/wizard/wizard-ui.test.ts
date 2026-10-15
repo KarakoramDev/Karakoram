@@ -29,6 +29,7 @@ const provider: Schemas['Provider'] = {
 };
 
 const backupWarning = /broker definitions \(vhosts, users, permissions, policies, and queues\/exchanges\/bindings metadata\), not messages\. They do not provide point-in-time restore/;
+const backupSensitivity = /Exports contain user password hashes\. Treat exports and their object storage as sensitive/;
 
 function renderWithQueries(element: ReactNode, context?: ClusterContext) {
   const client = new QueryClient({ defaultOptions: { queries: { enabled: false, retry: false, gcTime: 0 } } });
@@ -56,6 +57,7 @@ test('wizard schedule editor discloses definitions-only backup limits only for R
     }));
     if (name === 'rabbitmq') {
       assert.match(markup, backupWarning);
+      assert.match(markup, backupSensitivity);
       assert.match(markup, /rabbitmq.md#definitions-backups-and-cleanup/);
     } else assert.doesNotMatch(markup, /Definitions backups only|point-in-time restore/);
   }
@@ -66,8 +68,10 @@ test('backup create dialog discloses definitions-only backup limits only for Rab
     const markup = renderWithQueries(createElement(CreateBackupDialog, {
       provider: name, namespace: 'default', cluster: 'brokers', storages: ['archive'], backupTypes: name === 'rabbitmq' ? ['definitions'] : ['logical'], onClose: () => {},
     }));
-    if (name === 'rabbitmq') assert.match(markup, backupWarning);
-    else assert.doesNotMatch(markup, /Definitions backups only|point-in-time restore/);
+    if (name === 'rabbitmq') {
+      assert.match(markup, backupWarning);
+      assert.match(markup, backupSensitivity);
+    } else assert.doesNotMatch(markup, /Definitions backups only|point-in-time restore/);
   }
 });
 
@@ -80,7 +84,9 @@ test('detail backup policy discloses definitions-only backup limits only for Rab
     };
     const markup = renderWithQueries(createElement(BackupsTab), context);
     assert.match(markup, /Backup policy/);
-    if (name === 'rabbitmq') assert.match(markup, backupWarning);
-    else assert.doesNotMatch(markup, /Definitions backups only|point-in-time restore/);
+    if (name === 'rabbitmq') {
+      assert.match(markup, backupWarning);
+      assert.match(markup, backupSensitivity);
+    } else assert.doesNotMatch(markup, /Definitions backups only|point-in-time restore/);
   }
 });
