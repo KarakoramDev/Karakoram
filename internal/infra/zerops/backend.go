@@ -677,19 +677,20 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 	if err != nil {
 		return infra.Op{}, err
 	}
-	// Effective free-resource defaults are not valid input: for example Zerops
-	// returns 0.0625 GB but its PUT validator accepts only three decimal places.
-	// Preserve the nullable custom override (including null = platform default)
-	// instead of rounding or freezing a derived value.
+	// Effective defaults are not necessarily valid PUT input: free RAM may have
+	// unsupported precision, and start CPU may be outside newly requested bounds.
+	// Preserve nullable custom values instead of freezing derived defaults.
 	if s.CustomAutoscaling != nil {
 		custom, e := decodeObject(s.CustomAutoscaling["verticalAutoscaling"])
 		if e != nil {
 			return infra.Op{}, e
 		}
-		if free := custom["minFreeResource"]; len(free) != 0 {
-			v["minFreeResource"] = free
-		} else {
-			v["minFreeResource"] = json.RawMessage("null")
+		for _, key := range []string{"minFreeResource", "startCpuCoreCount", "swapEnabled"} {
+			if raw := custom[key]; len(raw) != 0 {
+				v[key] = raw
+			} else {
+				v[key] = json.RawMessage("null")
+			}
 		}
 	}
 	if r != nil {
@@ -719,6 +720,35 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 		putJSON(v, "minResource", low)
 		putJSON(v, "maxResource", high)
 	}
+	if (r == nil || r.StartCPU == nil) && len(v["startCpuCoreCount"]) != 0 && string(v["startCpuCoreCount"]) != "null" {
+		start := number(v, "startCpuCoreCount")
+		clamped := start
+		if minCPU := number(low, "cpuCoreCount"); minCPU > 0 && clamped < minCPU {
+			clamped = minCPU
+		}
+		if maxCPU := number(high, "cpuCoreCount"); maxCPU > 0 && clamped > maxCPU {
+			clamped = maxCPU
+		}
+		if clamped != start {
+			putJSON(v, "startCpuCoreCount", clamped)
+		}
+	}
+	// Absolute headroom cannot exceed capacity. Reset only conflicting values;
+	// percentages remain relative to capacity and need no adjustment.
+	free, err := decodeObject(v["minFreeResource"])
+	if err != nil {
+		return infra.Op{}, err
+	}
+	freeChanged := false
+	for _, key := range []string{"cpuCoreCount", "memoryGBytes"} {
+		if capacity := number(high, key); capacity > 0 && number(free, key) > capacity {
+			free[key] = json.RawMessage("null")
+			freeChanged = true
+		}
+	}
+	if freeChanged {
+		putJSON(v, "minFreeResource", free)
+	}
 	putJSON(config, "verticalAutoscaling", v)
 	if minCount != nil {
 		h, e := decodeObject(config["horizontalAutoscaling"])
@@ -736,8 +766,9 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 	return op, rejectedUpdate(err, "resource update", name, attempted)
 }
 
-// SetResources fetches current effective configuration and preserves every field
-// not specified by nonzero bounds, CPUMode or StartCPU. Zero bounds mean unchanged.
+// SetResources updates nonzero bounds, CPUMode and explicit StartCPU, preserving
+// nullable custom defaults. Preserved start CPU is clamped to the resulting bounds;
+// absolute free-resource thresholds exceeding capacity revert to platform defaults.
 func (b *Backend) SetResources(ctx context.Context, name string, r infra.Resources) (infra.Op, error) {
 	return b.resources(ctx, name, &r, nil, nil)
 }

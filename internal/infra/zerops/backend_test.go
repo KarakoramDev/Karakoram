@@ -165,6 +165,8 @@ func TestResourcesPreservesCompleteConfig(t *testing.T) {
 	oldV, _ := decodeObject(s.CurrentAutoscaling["verticalAutoscaling"])
 	customV, _ := decodeObject(s.CustomAutoscaling["verticalAutoscaling"])
 	oldV["minFreeResource"] = customV["minFreeResource"]
+	oldV["startCpuCoreCount"] = customV["startCpuCoreCount"]
+	oldV["swapEnabled"] = customV["swapEnabled"]
 	for _, body := range bodies {
 		v, _ := decodeObject(body["verticalAutoscaling"])
 		for _, k := range []string{"cpuMode", "startCpuCoreCount", "swapEnabled", "minFreeResource", "minResource"} {
@@ -184,6 +186,220 @@ func TestResourcesPreservesCompleteConfig(t *testing.T) {
 	h, _ := decodeObject(bodies[1]["horizontalAutoscaling"])
 	if number(h, "minContainerCount") != 2 || number(h, "maxContainerCount") != 2 {
 		t.Fatal("horizontal unchanged")
+	}
+}
+
+func TestAutoscalingPreservesAndClampsStartCPU(t *testing.T) {
+	explicit := 3.0
+	for _, tc := range []struct {
+		name           string
+		customStart    string
+		customSwap     string
+		customState    string
+		currentStart   float64
+		resources      infra.Resources
+		containerCount bool
+		wantStart      string
+		wantMinCPU     float64
+		wantMaxCPU     float64
+	}{
+		{name: "platform_default", customStart: "null", resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "null", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "absent_custom_start", customState: "absent_start", resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "null", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "null_custom_vertical", customState: "null_vertical", resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "null", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "absent_custom_vertical", customState: "absent_vertical", resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "null", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "custom_start_clamped_up", customStart: "1", resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "2", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "custom_start_clamped_down", customStart: "4", currentStart: 4, resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "2", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "explicit_start", customStart: "1", resources: infra.Resources{MinCPU: 2, MaxCPU: 4, StartCPU: &explicit, CPUMode: "DEDICATED"}, wantStart: "3", wantMinCPU: 2, wantMaxCPU: 4},
+		{name: "explicit_start_not_clamped", customStart: "1", resources: infra.Resources{MinCPU: 2, MaxCPU: 2, StartCPU: &explicit}, wantStart: "3", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "widening_keeps_custom_start", customStart: "1", resources: infra.Resources{MinCPU: 1, MaxCPU: 4}, wantStart: "1", wantMinCPU: 1, wantMaxCPU: 4},
+		{name: "effective_start_clamped_up", customState: "no_custom", resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "2", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "effective_start_clamped_down", customState: "no_custom", currentStart: 4, resources: infra.Resources{MinCPU: 2, MaxCPU: 2}, wantStart: "2", wantMinCPU: 2, wantMaxCPU: 2},
+		{name: "only_minimum_changed", customStart: "1", resources: infra.Resources{MinCPU: 2}, wantStart: "2", wantMinCPU: 2, wantMaxCPU: 4},
+		{name: "only_maximum_changed", customStart: "4", currentStart: 4, resources: infra.Resources{MaxCPU: 2}, wantStart: "2", wantMinCPU: 1, wantMaxCPU: 2},
+		{name: "container_count_platform_default", customStart: "null", containerCount: true, wantStart: "null", wantMinCPU: 1, wantMaxCPU: 1},
+		{name: "container_count_custom_start", customStart: "1", containerCount: true, wantStart: "1", wantMinCPU: 1, wantMaxCPU: 1},
+		{name: "container_count_effective_start", customState: "no_custom", containerCount: true, wantStart: "1", wantMinCPU: 1, wantMaxCPU: 1},
+		{name: "container_count_explicit_swap_disabled", customStart: "null", customSwap: "false", containerCount: true, wantStart: "null", wantMinCPU: 1, wantMaxCPU: 1},
+		{name: "container_count_explicit_swap_enabled", customStart: "null", customSwap: "true", containerCount: true, wantStart: "null", wantMinCPU: 1, wantMaxCPU: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var service ServiceStack
+			if err := json.Unmarshal(fixture(t, "service"), &service); err != nil {
+				t.Fatal(err)
+			}
+			current, _ := decodeObject(service.CurrentAutoscaling["verticalAutoscaling"])
+			if tc.currentStart != 0 {
+				putJSON(current, "startCpuCoreCount", tc.currentStart)
+				high, _ := decodeObject(current["maxResource"])
+				putJSON(high, "cpuCoreCount", tc.currentStart)
+				putJSON(current, "maxResource", high)
+			}
+			if tc.resources.MinCPU > 0 && tc.resources.MaxCPU == 0 {
+				high, _ := decodeObject(current["maxResource"])
+				putJSON(high, "cpuCoreCount", 4)
+				putJSON(current, "maxResource", high)
+			}
+			putJSON(service.CurrentAutoscaling, "verticalAutoscaling", current)
+			custom, _ := decodeObject(service.CustomAutoscaling["verticalAutoscaling"])
+			if tc.customStart != "" {
+				custom["startCpuCoreCount"] = json.RawMessage(tc.customStart)
+			}
+			if tc.customSwap != "" {
+				custom["swapEnabled"] = json.RawMessage(tc.customSwap)
+			}
+			if tc.customState == "absent_start" {
+				delete(custom, "startCpuCoreCount")
+			}
+			putJSON(service.CustomAutoscaling, "verticalAutoscaling", custom)
+			switch tc.customState {
+			case "no_custom":
+				service.CustomAutoscaling = nil
+			case "null_vertical":
+				service.CustomAutoscaling["verticalAutoscaling"] = json.RawMessage("null")
+			case "absent_vertical":
+				delete(service.CustomAutoscaling, "verticalAutoscaling")
+			}
+			var got map[string]any
+			var writes int
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/service-stack/"+service.ID && r.Method == http.MethodGet {
+					_ = json.NewEncoder(w).Encode(service)
+					return
+				}
+				if serviceHandler(t, w, r) {
+					return
+				}
+				if r.URL.Path != "/service-stack/"+service.ID+"/autoscaling" || r.Method != http.MethodPut {
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				writes++
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Error(err)
+				}
+				reply(t, w, "autoscaling")
+			})
+			var err error
+			if tc.containerCount {
+				_, err = b.SetContainerCount(context.Background(), service.Name, 2, 2)
+			} else {
+				_, err = b.SetResources(context.Background(), service.Name, tc.resources)
+			}
+			if err != nil || writes != 1 {
+				t.Fatalf("update: %v, writes %d", err, writes)
+			}
+			var want map[string]any
+			if err := json.Unmarshal([]byte(`{"customAutoscaling":{"verticalAutoscaling":{"minResource":{"cpuCoreCount":1,"memoryGBytes":0.25,"diskGBytes":1},"maxResource":{"cpuCoreCount":1,"memoryGBytes":0.5,"diskGBytes":2},"minFreeResource":{"cpuCoreCount":null,"cpuCorePercent":null,"memoryGBytes":null,"memoryPercent":null},"cpuMode":"SHARED","startCpuCoreCount":null,"swapEnabled":null},"horizontalAutoscaling":{"minContainerCount":1,"maxContainerCount":1}}}`), &want); err != nil {
+				t.Fatal(err)
+			}
+			config := want["customAutoscaling"].(map[string]any)
+			vertical := config["verticalAutoscaling"].(map[string]any)
+			vertical["minResource"].(map[string]any)["cpuCoreCount"] = tc.wantMinCPU
+			vertical["maxResource"].(map[string]any)["cpuCoreCount"] = tc.wantMaxCPU
+			var start any
+			if err := json.Unmarshal([]byte(tc.wantStart), &start); err != nil {
+				t.Fatal(err)
+			}
+			vertical["startCpuCoreCount"] = start
+			if tc.resources.CPUMode != "" {
+				vertical["cpuMode"] = tc.resources.CPUMode
+			}
+			if tc.customSwap != "" {
+				var swap bool
+				if err := json.Unmarshal([]byte(tc.customSwap), &swap); err != nil {
+					t.Fatal(err)
+				}
+				vertical["swapEnabled"] = swap
+			}
+			if tc.customState == "no_custom" {
+				if err := json.Unmarshal([]byte(`{"cpuCoreCount":0.10000000149011612,"cpuCorePercent":0,"memoryGBytes":0.0625,"memoryPercent":0}`), &start); err != nil {
+					t.Fatal(err)
+				}
+				vertical["minFreeResource"] = start
+				vertical["swapEnabled"] = true
+			} else if tc.customState == "null_vertical" || tc.customState == "absent_vertical" {
+				vertical["minFreeResource"] = nil
+			}
+			if tc.containerCount {
+				config["horizontalAutoscaling"] = map[string]any{"minContainerCount": float64(2), "maxContainerCount": float64(2)}
+			}
+			if !reflect.DeepEqual(got, want) {
+				gotJSON, _ := json.Marshal(got)
+				wantJSON, _ := json.Marshal(want)
+				t.Fatalf("PUT body:\n got %s\nwant %s", gotJSON, wantJSON)
+			}
+		})
+	}
+}
+
+func TestAutoscalingResetsFreeThresholdsExceedingCapacity(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		free      string
+		resources infra.Resources
+		noCustom  bool
+		want      string
+	}{
+		{name: "memory", free: `{"cpuCoreCount":0.1,"cpuCorePercent":20,"memoryGBytes":0.5,"memoryPercent":30}`, resources: infra.Resources{MaxRAM: 0.25}, want: `{"cpuCoreCount":0.1,"cpuCorePercent":20,"memoryGBytes":null,"memoryPercent":30}`},
+		{name: "cpu", free: `{"cpuCoreCount":2,"cpuCorePercent":20,"memoryGBytes":0.125,"memoryPercent":30}`, resources: infra.Resources{MaxCPU: 1}, want: `{"cpuCoreCount":null,"cpuCorePercent":20,"memoryGBytes":0.125,"memoryPercent":30}`},
+		{name: "both", free: `{"cpuCoreCount":2,"cpuCorePercent":null,"memoryGBytes":1,"memoryPercent":null}`, resources: infra.Resources{MaxCPU: 1, MaxRAM: 0.25}, want: `{"cpuCoreCount":null,"cpuCorePercent":null,"memoryGBytes":null,"memoryPercent":null}`},
+		{name: "equal_to_capacity", free: `{"cpuCoreCount":1,"cpuCorePercent":20,"memoryGBytes":0.25,"memoryPercent":30}`, resources: infra.Resources{MaxCPU: 1, MaxRAM: 0.25}, want: `{"cpuCoreCount":1,"cpuCorePercent":20,"memoryGBytes":0.25,"memoryPercent":30}`},
+		{name: "effective_fallback", free: `{"cpuCoreCount":2,"cpuCorePercent":0,"memoryGBytes":1,"memoryPercent":0}`, noCustom: true, resources: infra.Resources{MaxCPU: 1, MaxRAM: 0.25}, want: `{"cpuCoreCount":null,"cpuCorePercent":0,"memoryGBytes":null,"memoryPercent":0}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var service ServiceStack
+			if err := json.Unmarshal(fixture(t, "service"), &service); err != nil {
+				t.Fatal(err)
+			}
+			config := service.CustomAutoscaling
+			if tc.noCustom {
+				service.CustomAutoscaling = nil
+				config = service.CurrentAutoscaling
+			}
+			vertical, _ := decodeObject(config["verticalAutoscaling"])
+			vertical["minFreeResource"] = json.RawMessage(tc.free)
+			putJSON(config, "verticalAutoscaling", vertical)
+			var got json.RawMessage
+			var writes int
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/service-stack/"+service.ID && r.Method == http.MethodGet {
+					_ = json.NewEncoder(w).Encode(service)
+					return
+				}
+				if serviceHandler(t, w, r) {
+					return
+				}
+				if r.URL.Path != "/service-stack/"+service.ID+"/autoscaling" || r.Method != http.MethodPut {
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				writes++
+				var body struct {
+					Custom map[string]json.RawMessage `json:"customAutoscaling"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				vertical, _ := decodeObject(body.Custom["verticalAutoscaling"])
+				got = vertical["minFreeResource"]
+				reply(t, w, "autoscaling")
+			})
+			if _, err := b.SetResources(context.Background(), service.Name, tc.resources); err != nil {
+				t.Fatal(err)
+			}
+			var actual, expected any
+			if err := json.Unmarshal(got, &actual); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal([]byte(tc.want), &expected); err != nil {
+				t.Fatal(err)
+			}
+			if writes != 1 || !reflect.DeepEqual(actual, expected) {
+				t.Fatalf("free thresholds: got %s, want %s, writes %d", got, tc.want, writes)
+			}
+		})
 	}
 }
 func TestSecretsWaitWithoutRestartAndSkipUnchanged(t *testing.T) {
