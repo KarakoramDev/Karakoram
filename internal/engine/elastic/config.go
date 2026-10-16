@@ -14,7 +14,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
-	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func isES(m *member) bool { return m.Kind == kindNode || m.Kind == kindMaster }
@@ -266,7 +265,7 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state
 			return v, err
 		}
 		if o.Kibana.Public {
-			if sub, ok := rc.Backend.(infra.SubdomainAccess); ok {
+			if sub, err := engine.PublicHTTPS(rc.Backend); err == nil {
 				urls, e := sub.SubdomainURLs(ctx, m.Name)
 				if e != nil {
 					return v, e

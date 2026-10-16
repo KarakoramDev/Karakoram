@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func phase(s *internalState) domain.Phase {
@@ -159,7 +160,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Health = false
 		} else {
 			for _, container := range containers {
-				if container.Status != "ACTIVE" && container.Status != "RUNNING" {
+				if container.Status != infra.ContainerActive && container.Status != infra.ContainerRunning {
 					ms.Health = false
 				}
 			}

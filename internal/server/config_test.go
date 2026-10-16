@@ -11,14 +11,17 @@ import (
 	"encoding/pem"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestConfigFromZeropsEnvironment(t *testing.T) {
-	for _, key := range []string{"KARAKORAM_DATA_DIR", "KARAKORAM_LISTEN", "KARAKORAM_INTERNAL_LISTEN", "KARAKORAM_PUBLIC_URL", "KARAKORAM_ADVERTISE_URL", "KARAKORAM_ZEROPS_PROJECT_ID", "KARAKORAM_ZEROPS_API_URL"} {
+	for _, key := range []string{"KARAKORAM_BACKEND", "KARAKORAM_DATA_DIR", "KARAKORAM_LISTEN", "KARAKORAM_INTERNAL_LISTEN", "KARAKORAM_PUBLIC_URL", "KARAKORAM_ADVERTISE_URL", "KARAKORAM_ZEROPS_PROJECT_ID", "KARAKORAM_ZEROPS_API_URL"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("hostname", "karakoram")
@@ -30,9 +33,22 @@ func TestConfigFromZeropsEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.PublicURL != "https://karakoram.example.test" || c.AdvertiseURL != "https://karakoram:9443" || c.ZeropsProjectID != "project-test" || c.DatabasePath() != "/mnt/karakoramdata/karakoram.db" {
+	if c.Backend != "zerops" || c.PublicURL != "https://karakoram.example.test" || c.AdvertiseURL != "https://karakoram:9443" || c.ZeropsProjectID != "project-test" || c.DatabasePath() != "/mnt/karakoramdata/karakoram.db" {
 		t.Fatal(c)
 	}
+	registry, err := backendRegistry(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := c.defaultTarget(registry)
+	if err != nil || target.Kind != "zerops" || target.ID != "project-test" || target.Token != "test-token" || len(target.Config) != 0 {
+		t.Fatalf("default target: %+v %v", target, err)
+	}
+	t.Setenv("KARAKORAM_BACKEND", "unknown")
+	if _, err := ConfigFromEnv(); err == nil {
+		t.Fatal("unknown backend accepted")
+	}
+	t.Setenv("KARAKORAM_BACKEND", "")
 	t.Setenv("KARAKORAM_PUBLIC_URL", "https://name:password@example.test")
 	if _, err = ConfigFromEnv(); err == nil {
 		t.Fatal("credential-bearing public URL accepted")
@@ -41,6 +57,30 @@ func TestConfigFromZeropsEnvironment(t *testing.T) {
 	t.Setenv("KARAKORAM_ADVERTISE_URL", "http://karakoram:9443")
 	if _, err = ConfigFromEnv(); err == nil {
 		t.Fatal("plaintext internal URL accepted")
+	}
+}
+
+func TestBackendRegistryUsesOperatorAPIURL(t *testing.T) {
+	operatorAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer project-token" {
+			t.Error("operator API request lost project credentials")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": strings.TrimPrefix(r.URL.Path, "/project/"), "name": "Test project"})
+	}))
+	defer operatorAPI.Close()
+	registry, err := backendRegistry(Config{ZeropsAPIURL: operatorAPI.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"legacy", "new"} {
+		b, err := registry.New(infra.Target{Kind: "zerops", ID: name, Token: "project-token"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := b.ProjectInfo(t.Context())
+		if err != nil || p.ID != name {
+			t.Fatalf("%s target did not use operator API URL: %+v %v", name, p, err)
+		}
 	}
 }
 func TestInternalPKIPersistsSealedWithExpectedSANs(t *testing.T) {

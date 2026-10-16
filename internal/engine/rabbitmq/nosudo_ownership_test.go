@@ -70,7 +70,7 @@ func TestLegacyOwnershipBackfillsMarkers(t *testing.T) {
 	_, rc, f, _, m, token := pendingMemberImport(t)
 	m.ServiceID, m.VolumeID = "", ""
 	for _, name := range []string{m.Name, m.Volume} {
-		f.services[name].Ownership = ownershipEnv(rc.Cluster.Name, m.Name, token)
+		f.services[name].Ownership = engine.OwnershipEnv(rc.Cluster.Name, m.Name, token)
 	}
 	if err := verifyMemberServices(t.Context(), rc, m); err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestRecordedRuntimeCannotBackfillVolumeEvidence(t *testing.T) {
 	_, rc, f, _, m, _ := pendingMemberImport(t)
 	m.ServiceID = f.services[m.Name].ID
 	m.VolumeID = ""
-	f.services[m.Name].Ownership = map[string]string{"KARAKORAM_DATA_DIR": "/mnt/" + m.Volume}
+	f.services[m.Name].Ownership = map[string]string{engine.DataDirVariable: rc.Backend.Layout().VolumePath(m.Volume)}
 	f.services[m.Volume].Ownership = nil
 	if err := verifyMemberServices(t.Context(), rc, m); !errors.Is(err, engine.ErrConflict) {
 		t.Fatalf("recorded runtime ID authorized an unverified volume: %v", err)

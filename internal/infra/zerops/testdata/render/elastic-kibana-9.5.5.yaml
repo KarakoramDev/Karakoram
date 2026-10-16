@@ -1,0 +1,30 @@
+zerops:
+    - deploy:
+        readinessCheck:
+            exec:
+                command: /var/www/karakoram agent readiness --engine=elasticsearch --data-dir=/var/www/karakoram-data kibana
+            failureTimeout: 300s
+            retryPeriod: 10s
+        temporaryShutdown: true
+      run:
+        base: ubuntu@24.04
+        envVariables:
+            KARAKORAM_CLUSTER: demo
+            KARAKORAM_DATA_DIR: /var/www/karakoram-data
+            KARAKORAM_ENGINE: elasticsearch
+            KARAKORAM_INTERNAL_CA: |
+                -----BEGIN CERTIFICATE-----
+                dDAtY2FwdHVyZS1jYQ==
+                -----END CERTIFICATE-----
+            KARAKORAM_MEMBER: demokb
+            KARAKORAM_URL: https://control.example.com
+        ports:
+            - httpSupport: true
+              port: 5601
+              protocol: tcp
+            - port: 9443
+              protocol: tcp
+        prepareCommands:
+            - sudo mkdir -p /opt/elastic && cd /tmp && curl -fsSLO https://artifacts.elastic.co/downloads/kibana/kibana-9.5.5-linux-x86_64.tar.gz && curl -fsSLO https://artifacts.elastic.co/downloads/kibana/kibana-9.5.5-linux-x86_64.tar.gz.sha512 && sha512sum -c kibana-9.5.5-linux-x86_64.tar.gz.sha512 && sudo tar -xzf kibana-9.5.5-linux-x86_64.tar.gz -C /opt/elastic && sudo chown -R zerops:zerops /opt/elastic && rm -f kibana-9.5.5-linux-x86_64.tar.gz kibana-9.5.5-linux-x86_64.tar.gz.sha512
+        start: ./karakoram agent
+      setup: demokb

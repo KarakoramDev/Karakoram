@@ -106,8 +106,14 @@ func (p *Provider) issueAction(ctx context.Context, rc *engine.Context, s *state
 	case "resources":
 		op, err = rc.Backend.SetResources(ctx, m.Name, v.Resources)
 	case "disk":
+		if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
+			return err
+		}
 		op, err = rc.Backend.SetResources(ctx, m.Volume, v.Resources)
 	case "containers":
+		if v.Containers > 1 && !rc.Backend.Capabilities().HorizontalScaling {
+			return fmt.Errorf("%w: component %s requires horizontal scaling", engine.ErrNotSupported, m.Kind)
+		}
 		op, err = rc.Backend.SetContainerCount(ctx, m.Name, v.Containers, v.Containers)
 	case "delete-runtime", "cleanup-runtime":
 		op, err = rc.Backend.DeleteService(ctx, m.Name)
@@ -118,9 +124,9 @@ func (p *Provider) issueAction(ctx context.Context, rc *engine.Context, s *state
 	case "start":
 		op, err = rc.Backend.Start(ctx, m.Name)
 	case "subdomain-on", "subdomain-off":
-		sub, ok := rc.Backend.(infra.SubdomainAccess)
-		if !ok {
-			return engine.ErrNotSupported
+		sub, e := engine.PublicHTTPS(rc.Backend)
+		if e != nil {
+			return e
 		}
 		op, err = sub.SetSubdomainAccess(ctx, m.Name, v.Action == "subdomain-on")
 	default:
@@ -128,6 +134,9 @@ func (p *Provider) issueAction(ctx context.Context, rc *engine.Context, s *state
 	}
 	v.Op = op
 	if err != nil {
+		if errors.Is(err, infra.ErrUnsupported) || errors.Is(err, engine.ErrNotSupported) {
+			return err
+		}
 		return p.failPending(ctx, rc, s, v, err.Error())
 	}
 	s.Pending = v
@@ -263,7 +272,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 			return err
 		}
 		if volume == nil {
-			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: comp.Resources.MinDisk, MaxDisk: comp.Resources.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Volume)})
+			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, comp.Resources))
 		}
 	}
 	service, err := rc.Backend.GetService(ctx, m.Name)
@@ -276,11 +285,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 	}
 	r := runtimeResources(m, comp.Resources)
 	if service == nil {
-		env := ownershipEnv(rc.Cluster.Name, m.Name, tok.Token)
-		if m.Volume != "" {
-			env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
-		}
-		specs = append(specs, infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: r, MinContainers: containers, MaxContainers: containers, Env: env, Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Name), Volume: m.Volume})
+		specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: r, Containers: containers}))
 	}
 	if len(specs) == 0 {
 		m.Stage = stageImported
@@ -308,16 +313,11 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *state, m *
 	if url == "" {
 		url = p.options.ControlPlaneURL
 	}
-	doc, err := ZeropsYAML(YAMLInput{Hostname: m.Name, Cluster: rc.Cluster.Name, Component: product(m), Version: version, Volume: m.Volume, AgentURL: url, InternalCAPEM: p.options.InternalCAPEM})
+	spec, err := RuntimeSpec(rc.Backend.Layout(), RuntimeInput{Hostname: m.Name, Cluster: rc.Cluster.Name, Component: product(m), Version: version, Volume: m.Volume, AgentURL: url, InternalCAPEM: p.options.InternalCAPEM})
 	if err != nil {
 		return err
 	}
-	artifact, err := rc.Artifact.Open(ctx)
-	if err != nil {
-		return err
-	}
-	defer artifact.Close()
-	op, err := rc.Backend.Deploy(ctx, m.Name, infra.Deployment{Artifact: artifact, ZeropsYAML: doc, SetupName: m.Name, Filename: "karakoram.tar.gz"})
+	op, err := engine.Deploy(ctx, rc, m.Name, spec)
 	v := &pending{Op: op, Action: action, Member: m.Name, Version: version}
 	if err != nil {
 		return p.failPending(ctx, rc, s, v, err.Error())
@@ -622,53 +622,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			return result, nil
 		}
 	}
-	for _, kind := range []string{kindKibana, kindLogstash, kindAPM} {
-		comp := rc.Cluster.Spec.Components.Extra[kind]
-		ms := s.members(kind)
-		if len(ms) == 0 {
-			if comp.Replicas > 0 {
-				m, e := p.allocate(rc, s, kind)
-				if e != nil {
-					return result, e
-				}
-				if e = p.ensureSecrets(ctx, rc, s); e != nil {
-					return result, e
-				}
-				return result, p.importMember(ctx, rc, s, m)
-			}
-			continue
-		}
-		m := ms[0]
-		if comp.Replicas == 0 {
-			return result, p.deleteComponent(ctx, rc, s, m)
-		}
-		switch m.Stage {
-		case stagePlanned:
-			return result, p.importMember(ctx, rc, s, m)
-		case stageImported:
-			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
-		case stageDeployed:
-			desired, err := p.desiredSpec(ctx, rc, s, m, m.Version)
-			if err != nil {
-				return result, err
-			}
-			if desired.RestartToken != m.ConfigHash {
-				if err := p.publishConfig(ctx, rc, s, m, m.Version, ""); err != nil {
-					return result, err
-				}
-				p.reloadMembers(ctx, rc, m.Name)
-				return result, nil
-			}
-			ready, readinessErr := p.componentReadyResult(ctx, rc, m)
-			if readinessErr != nil || !ready {
-				s.Phase = "components"
-				return result, readinessErr
-			}
-			m.Stage = stageJoined
-			return result, nil
-		}
-		if m.Containers != comp.Replicas {
-			return result, p.issueAction(ctx, rc, s, &pending{Action: "containers", Member: m.Name, Containers: comp.Replicas})
+	for _, def := range stackComponents {
+		if changed, e := p.reconcileComponent(ctx, rc, s, def); changed || e != nil {
+			return result, e
 		}
 	}
 	if changed, e := p.scale(ctx, rc, s); changed || e != nil {

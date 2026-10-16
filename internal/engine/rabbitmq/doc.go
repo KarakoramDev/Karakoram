@@ -2,7 +2,11 @@
 // Copyright 2026 The Karakoram Authors
 
 // Package rabbitmq manages RabbitMQ 4.3 singleton brokers with one persistent
-// Local Storage volume per broker. Names use monotonically increasing member
+// volume per broker. Runtime and import specifications use backend-neutral
+// infrastructure descriptions and the backend's application and volume layout.
+// Public TCP, allowlists, public HTTPS and disk growth require backend support.
+// Unsupported requests are surfaced without scheduling platform retries.
+// Names use monotonically increasing member
 // indexes; hostname matches alone never establish infrastructure ownership.
 // Recorded service IDs, IDs returned by the member's own import, non-sensitive
 // ownership markers and readable legacy agent-token secrets establish ownership.

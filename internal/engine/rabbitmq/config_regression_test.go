@@ -20,7 +20,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
-	"gopkg.in/yaml.v3"
 )
 
 func TestProvidedCAMemberCertificates(t *testing.T) {
@@ -337,24 +336,19 @@ func TestCatalogErlangPackageControlsAllBrokerVersions(t *testing.T) {
 	catalog.ErlangVersion = "1:27.3.4.18-1"
 	t.Cleanup(func() { catalog.ErlangVersion = original })
 	for _, v := range catalog.Versions {
-		text, err := p.zeropsYAML(rc, m, v.Version)
+		runtime, err := p.runtimeSpec(rc, m, v.Version)
 		if err != nil {
 			t.Fatal(err)
 		}
+		text := strings.Join(runtime.Prepare, "\n")
 		for _, pkg := range []string{"base", "asn1", "crypto", "eldap", "inets", "mnesia", "os-mon", "parsetools", "public-key", "runtime-tools", "ssl", "syntax-tools", "tools", "xmerl"} {
 			if !strings.Contains(text, "erlang-"+pkg+"="+catalog.ErlangVersion) {
 				t.Fatalf("%s does not use catalog Erlang package for %s", v.Version, pkg)
 			}
 		}
-		var doc map[string]any
-		if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
-			t.Fatal(err)
-		}
-		run := doc["zerops"].([]any)[0].(map[string]any)["run"].(map[string]any)
 		preference := "printf '%s\\n' 'Package: erlang*' 'Pin: version " + catalog.ErlangVersion + "' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang"
 		repositoryIndex, preferenceIndex, updateIndex, installIndex := -1, -1, -1, -1
-		for i, entry := range run["prepareCommands"].([]any) {
-			command := entry.(string)
+		for i, command := range runtime.Prepare {
 			switch {
 			case strings.Contains(command, "/etc/apt/sources.list.d/rabbitmq.list"):
 				repositoryIndex = i
@@ -374,7 +368,7 @@ func TestCatalogErlangPackageControlsAllBrokerVersions(t *testing.T) {
 			t.Fatalf("%s retains the previous Erlang pin", v.Version)
 		}
 	}
-	if _, err := p.zeropsYAML(rc, m, "4.4.0"); !errors.Is(err, engine.ErrInvalid) {
+	if _, err := p.runtimeSpec(rc, m, "4.4.0"); !errors.Is(err, engine.ErrInvalid) {
 		t.Fatalf("deployment bypassed catalog: %v", err)
 	}
 }

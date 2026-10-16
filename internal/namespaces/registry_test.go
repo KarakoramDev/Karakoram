@@ -20,11 +20,9 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 type projectBackend struct {
@@ -42,6 +40,13 @@ type projectBackend struct {
 }
 
 func (b *projectBackend) SetToken(s string) { b.token = s }
+func (b *projectBackend) Name() string      { return "zerops" }
+func (b *projectBackend) Capabilities() infra.Capabilities {
+	return infra.Capabilities{PublicTCP: true, Logs: true}
+}
+func (b *projectBackend) Layout() infra.Layout {
+	return infra.Layout{AppDir: "/var/www", VolumeRoot: "/mnt", User: "zerops"}
+}
 func (b *projectBackend) ProjectInfo(context.Context) (infra.Project, error) {
 	return infra.Project{ID: b.project, Name: "Test project"}, nil
 }
@@ -56,7 +61,7 @@ func (b *projectBackend) ImportServices(_ context.Context, s []infra.ServiceSpec
 	for key, value := range s[0].Vars {
 		ownership[key] = value
 	}
-	b.service = &infra.Service{ID: "service-test", Hostname: s[0].Hostname, Ownership: ownership}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "service-test", Hostname: s[0].Hostname, Ownership: ownership}
 	return infra.Op{ID: "op-import", Kind: "import", Services: map[string]string{s[0].Hostname: b.service.ID}}, nil
 }
 func (b *projectBackend) SetEnvSecrets(_ context.Context, _ string, env map[string]string) error {
@@ -85,7 +90,7 @@ func (b *projectBackend) Restart(context.Context, string) (infra.Op, error) {
 }
 func (b *projectBackend) Deploy(_ context.Context, _ string, d infra.Deployment) (infra.Op, error) {
 	b.deploys++
-	_, err := io.Copy(io.Discard, d.Artifact)
+	_, err := io.Copy(io.Discard, d.Artifact.Reader)
 	return infra.Op{ID: "op-deploy"}, err
 }
 func (b *projectBackend) DeleteServiceByID(ctx context.Context, hostname, id string) (infra.Op, error) {
@@ -139,22 +144,26 @@ func setupRegistry(t *testing.T) (*Registry, *projectBackend, *eventLog) {
 	defaultBackend := &projectBackend{project: "proj-default", token: "env-token", opDone: true}
 	remote := &projectBackend{project: "proj-test", token: "valid-token", opDone: true}
 	log := &eventLog{}
-	o := Options{Store: st, DefaultBackend: defaultBackend, Zerops: zerops.Options{ProjectID: "proj-default", Token: "env-token"}, RelayHostname: "controlrelay", PublicURL: "https://example.com", AdvertiseURL: "https://control:9443", Events: log, Artifact: testArtifact{}, ExecutableHash: "test-hash", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	o.Validate = func(_ context.Context, z zerops.Options) (Backend, infra.Project, error) {
+	backends, err := infra.NewRegistry(&testFactory{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := Options{Store: st, DefaultBackend: defaultBackend, Backends: backends, DefaultTarget: infra.Target{Kind: "zerops", ID: "proj-default", Token: "env-token"}, RelayHostname: "controlrelay", PublicURL: "https://example.com", AdvertiseURL: "https://control:9443", Events: log, Artifact: testArtifact{}, ExecutableHash: "test-hash", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	registryFactory(o.Backends).validate = func(_ context.Context, z infra.Target) (Backend, infra.Project, error) {
 		if z.Token == "bad-token" {
-			return nil, infra.Project{}, &zerops.APIError{StatusCode: 403, Code: "accessDenied"}
+			return nil, infra.Project{}, infra.ErrUnauthorized
 		}
 		if z.Token == "wrong-project-token" {
-			return nil, infra.Project{}, &zerops.APIError{Code: "accessDenied", Message: "Token project does not match requested project"}
+			return nil, infra.Project{}, &credentialError{message: "Token project does not match requested project"}
 		}
 		b := remote
-		if z.ProjectID == "proj-default" {
+		if z.ID == "proj-default" {
 			b = defaultBackend
 		}
-		return b, infra.Project{ID: z.ProjectID, Name: "Test project"}, nil
+		return b, infra.Project{ID: z.ID, Name: "Test project"}, nil
 	}
-	o.NewBackend = func(z zerops.Options) (Backend, error) {
-		return &projectBackend{project: z.ProjectID, token: z.Token, opDone: true}, nil
+	registryFactory(o.Backends).newBackend = func(z infra.Target) (Backend, error) {
+		return &projectBackend{project: z.ID, token: z.Token, opDone: true}, nil
 	}
 	r, err := New(context.Background(), o)
 	if err != nil {
@@ -165,7 +174,7 @@ func setupRegistry(t *testing.T) (*Registry, *projectBackend, *eventLog) {
 }
 func createTestNamespace(t *testing.T, r *Registry) *domain.Namespace {
 	t.Helper()
-	n, err := r.Create(context.Background(), "testing", "proj-test", "valid-token", "")
+	n, err := r.Create(context.Background(), "testing", "proj-test", "valid-token", "", "zerops", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,19 +188,19 @@ func TestCreateValidationAndRouting(t *testing.T) {
 			if tc.name == "default" {
 				want = ErrConflict
 			}
-			if _, err := r.Create(context.Background(), tc.name, tc.project, tc.token, ""); !errors.Is(err, want) {
+			if _, err := r.Create(context.Background(), tc.name, tc.project, tc.token, "", "zerops", nil); !errors.Is(err, want) {
 				t.Fatalf("validation: %v", err)
 			}
 		})
 	}
 	r, b, _ := setupRegistry(t)
-	b.service = &infra.Service{ID: "someone-elses-service", Hostname: "controlrelay", Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": "other-owner"}}
-	if _, err := r.Create(context.Background(), "testing", "proj-test", "valid-token", ""); !errors.Is(err, ErrInvalid) {
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "someone-elses-service", Hostname: "controlrelay", Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": "other-owner"}}
+	if _, err := r.Create(context.Background(), "testing", "proj-test", "valid-token", "", "zerops", nil); !errors.Is(err, ErrInvalid) {
 		t.Fatal("foreign relay accepted", err)
 	}
 	b.service = nil
 	n := createTestNamespace(t, r)
-	if _, err := r.Create(context.Background(), "another", "proj-test", "valid-token", ""); !errors.Is(err, ErrInvalid) {
+	if _, err := r.Create(context.Background(), "another", "proj-test", "valid-token", "", "zerops", nil); !errors.Is(err, ErrInvalid) {
 		t.Fatal("duplicate project", err)
 	}
 	if r.Dialer("default") != nil || r.Dialer("") != nil || r.Dialer(n.Name) == nil {
@@ -276,7 +285,7 @@ func TestRotationPreservesLiveRelaySession(t *testing.T) {
 	r.syncSession(context.Background(), n)
 	n.DeployedExecutableHash = "test-hash"
 	n.SecretsPending = false
-	b.service = &infra.Service{ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
 	if err = r.save(context.Background(), n); err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +359,7 @@ func TestDeleteGuardsAndOwnedRelay(t *testing.T) {
 	if err := r.o.Store.DeleteOrphanedVolume(ctx, n.Name, orphan.Hostname); err != nil {
 		t.Fatal(err)
 	}
-	b.service = &infra.Service{ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
 	if err := r.Delete(ctx, n.Name); err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +385,7 @@ func TestDeleteGuardsAndOwnedRelay(t *testing.T) {
 func TestForeignRelayNeverDeleted(t *testing.T) {
 	r, b, _ := setupRegistry(t)
 	n := createTestNamespace(t, r)
-	b.service = &infra.Service{ID: "foreign-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": "foreign"}}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "foreign-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": "foreign"}}
 	if err := r.Delete(context.Background(), n.Name); err != nil {
 		t.Fatal(err)
 	}
@@ -420,22 +429,9 @@ func TestRelayReconcileDurableOperationsAndSecretFreeYAML(t *testing.T) {
 	if _, sensitive := b.env["KARAKORAM_RELAY_OWNER"]; sensitive {
 		t.Fatal("ownership marker imported as a sensitive variable")
 	}
-	text, err := RelayYAML("controlrelay", "https://example.com", "testing")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc struct {
-		Zerops []struct {
-			Run struct {
-				Env   map[string]string `yaml:"envVariables"`
-				Start string            `yaml:"start"`
-			} `yaml:"run"`
-		} `yaml:"zerops"`
-	}
-	if err = yaml.Unmarshal([]byte(text), &doc); err != nil {
-		t.Fatal(err)
-	}
-	env := doc.Zerops[0].Run.Env
+	spec := RelayRuntime("https://example.com", "testing")
+	text := fmt.Sprintf("%+v", spec)
+	env := spec.Env
 	if len(env) != 2 || env["KARAKORAM_RELAY_URL"] != "https://example.com" || env["KARAKORAM_RELAY_NAMESPACE"] != "testing" {
 		t.Fatal("relay public configuration", env)
 	}
@@ -458,7 +454,7 @@ func TestClientRenewalUsesSecretsAndRestartWithoutRedeploy(t *testing.T) {
 	n.Relay.CertNotAfter = time.Now().Add(24 * time.Hour)
 	n.DeployedExecutableHash = "test-hash"
 	n.SecretsPending = false
-	b.service = &infra.Service{ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
 	if err = r.save(ctx, n); err != nil {
 		t.Fatal(err)
 	}
@@ -587,7 +583,7 @@ func TestStartupIsolatesUnavailableStoredToken(t *testing.T) {
 func TestRegistryLifecycleEventsUseSystemActor(t *testing.T) {
 	r, b, log := setupRegistry(t)
 	ctx := store.WithActor(t.Context(), "alice")
-	n, err := r.Create(ctx, "testing", "proj-test", "valid-token", "")
+	n, err := r.Create(ctx, "testing", "proj-test", "valid-token", "", "zerops", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -658,7 +654,7 @@ func TestMaskedRelayRecordedIdentityBackfillsOwnership(t *testing.T) {
 	n.Relay.ServiceID = "owned-relay"
 	n.DeployedExecutableHash = r.o.ExecutableHash
 	n.SecretsPending = false
-	b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
 	if !owned(n, b.service) {
 		t.Fatal("recorded service identity did not prove ownership")
 	}
@@ -687,7 +683,7 @@ func TestMaskedRelayWithoutIdentityRequiresOwnershipRecovery(t *testing.T) {
 			if deleting {
 				n.Phase = "Deleting"
 			}
-			b.service = &infra.Service{ID: "unverified-relay", Hostname: n.Relay.Hostname, Masked: true}
+			b.service = &infra.Service{Kind: infra.KindRuntime, ID: "unverified-relay", Hostname: n.Relay.Hostname, Masked: true}
 			err := r.reconcile(t.Context(), n, b)
 			if err == nil {
 				t.Fatal("masked hostname alone proved ownership")
@@ -720,7 +716,7 @@ func TestRelayOwnershipRejectsForeignServices(t *testing.T) {
 			r, b, _ := setupRegistry(t)
 			n := createTestNamespace(t, r)
 			n.Relay.ServiceID = tc.recordedID
-			b.service = &infra.Service{ID: "foreign-relay", Hostname: n.Relay.Hostname, Masked: tc.masked, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": tc.marker}}
+			b.service = &infra.Service{Kind: infra.KindRuntime, ID: "foreign-relay", Hostname: n.Relay.Hostname, Masked: tc.masked, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": tc.marker}}
 			if owned(n, b.service) {
 				t.Fatal("foreign relay accepted")
 			}
@@ -739,7 +735,7 @@ func TestMaskedRelayDeletionUsesRecordedIdentity(t *testing.T) {
 	r, b, _ := setupRegistry(t)
 	n := createTestNamespace(t, r)
 	n.Relay.ServiceID = "owned-relay"
-	b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
 	if err := r.save(t.Context(), n); err != nil {
 		t.Fatal(err)
 	}
@@ -763,7 +759,7 @@ func TestRelayOwnershipMigrationFailureIsRetried(t *testing.T) {
 	n.Relay.ServiceID = "owned-relay"
 	n.DeployedExecutableHash = r.o.ExecutableHash
 	n.SecretsPending = false
-	b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+	b.service = &infra.Service{Kind: infra.KindRuntime, ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
 	b.envVarError = errors.New("write failed")
 	if err := r.reconcile(t.Context(), n, b); err == nil || err.Error() != "Cannot update relay ownership marker" {
 		t.Fatal("ownership migration failure was ignored", err)
@@ -793,7 +789,7 @@ func TestExpiredRelayOperationsResumeFromObservedState(t *testing.T) {
 			if kind == "delete" {
 				n.Phase = "Deleting"
 			} else {
-				b.service = &infra.Service{ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
+				b.service = &infra.Service{Kind: infra.KindRuntime, ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
 			}
 			b.opExpired = true
 			err := r.reconcile(t.Context(), n, b)
@@ -828,5 +824,110 @@ func TestExpiredRelayOperationsResumeFromObservedState(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type testFactory struct {
+	validate   func(context.Context, infra.Target) (Backend, infra.Project, error)
+	newBackend func(infra.Target) (Backend, error)
+}
+
+func (*testFactory) Info() infra.BackendInfo {
+	return infra.BackendInfo{Kind: "zerops", DisplayName: "Zerops", Relay: true}
+}
+func (*testFactory) TargetFromEnv(func(string) string) (infra.Target, error) {
+	return infra.Target{}, nil
+}
+func (f *testFactory) New(target infra.Target) (Backend, error) { return f.newBackend(target) }
+func (f *testFactory) Validate(ctx context.Context, target infra.Target) (Backend, infra.Project, error) {
+	return f.validate(ctx, target)
+}
+func registryFactory(registry *infra.Registry) *testFactory {
+	f, _ := registry.Get("zerops")
+	return f.(*testFactory)
+}
+
+type alternateFactory struct {
+	testFactory
+	info infra.BackendInfo
+}
+
+func (f *alternateFactory) Info() infra.BackendInfo { return f.info }
+
+type immutableCredentialBackend struct{ infra.Backend }
+
+func TestBackendTargetIsolationAndOptionalRelay(t *testing.T) {
+	r, _, _ := setupRegistry(t)
+	r.o.DefaultTarget.Config = map[string]string{"apiUrl": "https://api.example.com"}
+	var observed infra.Target
+	original := registryFactory(r.o.Backends).validate
+	registryFactory(r.o.Backends).validate = func(ctx context.Context, target infra.Target) (Backend, infra.Project, error) {
+		observed = target
+		return original(ctx, target)
+	}
+	first, err := r.Create(t.Context(), "testing", "proj-test", "credential", "", "zerops", nil)
+	if err != nil || len(first.Config) != 0 || len(observed.Config) != 0 {
+		t.Fatalf("inherited operator config: %+v %+v %v", first, observed, err)
+	}
+	if _, err := r.Create(t.Context(), "unknown", "target", "credential", "", "unknown", nil); !errors.Is(err, infra.ErrUnsupported) {
+		t.Fatal("unknown backend", err)
+	}
+	if _, err := r.Create(t.Context(), "unknown", "target", "credential", "", "zerops", map[string]string{"secret": "value"}); !errors.Is(err, infra.ErrRejected) {
+		t.Fatal("unknown config", err)
+	}
+	if _, err := r.Create(t.Context(), "unknown", "target", "credential", "", "zerops", map[string]string{"apiUrl": "https://untrusted.example.com"}); !errors.Is(err, infra.ErrRejected) {
+		t.Fatal("namespace API URL override accepted", err)
+	}
+	var clients []Backend
+	newBackend := func(target infra.Target) (Backend, error) {
+		observed = target
+		b := immutableCredentialBackend{&projectBackend{project: target.ID, token: target.Token}}
+		clients = append(clients, b)
+		return b, nil
+	}
+	factory := &alternateFactory{info: infra.BackendInfo{Kind: "nomad", DisplayName: "Nomad", ConfigKeys: []string{"region"}}}
+	factory.newBackend = newBackend
+	factory.validate = func(ctx context.Context, target infra.Target) (Backend, infra.Project, error) {
+		b, err := newBackend(target)
+		return b, infra.Project{ID: target.ID, Name: "Target"}, err
+	}
+	if err := r.o.Backends.Register(factory); err != nil {
+		t.Fatal(err)
+	}
+	config := map[string]string{"region": "example"}
+	n, err := r.Create(t.Context(), "nomad", first.ProjectID, "credential", "", "nomad", config)
+	if err != nil {
+		t.Fatal("same target ID across backend kinds", err)
+	}
+	config["region"] = "changed"
+	if n.Config["region"] != "example" || observed.Config["region"] != "example" {
+		t.Fatal("caller config was not isolated", n.Config, observed.Config)
+	}
+	if n.Phase != "Ready" || n.Relay.Phase != "NotRequired" || n.ClientSerial != "" || n.Relay.Hostname != "" {
+		t.Fatalf("unexpected relay state: %+v", n)
+	}
+	if _, inherited := observed.Config["apiUrl"]; inherited {
+		t.Fatal("configuration leaked across backend kinds")
+	}
+	if r.Dialer(n.Name) != nil || r.AgentURL(n.Name) != r.o.AdvertiseURL {
+		t.Fatal("direct namespace uses relay networking")
+	}
+	before := r.backend(n.Name)
+	if _, err := r.RotateToken(t.Context(), n.Name, "replacement"); err != nil {
+		t.Fatal(err)
+	}
+	if r.backend(n.Name) == before || len(clients) != 2 {
+		t.Fatal("immutable credential client was not rebuilt")
+	}
+	if _, err := r.Create(t.Context(), "duplicate", n.ProjectID, "credential", "", "nomad", nil); !errors.Is(err, ErrInvalid) {
+		t.Fatal("duplicate backend target accepted", err)
+	}
+	r.step(t.Context(), n.Name)
+	if err := r.Delete(t.Context(), n.Name); err != nil {
+		t.Fatal(err)
+	}
+	r.step(t.Context(), n.Name)
+	if _, err := r.Get(t.Context(), n.Name); !errors.Is(err, ErrNotFound) {
+		t.Fatal("direct namespace not deleted", err)
 	}
 }

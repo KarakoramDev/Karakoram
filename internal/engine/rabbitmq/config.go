@@ -25,12 +25,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
-func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (string, error) {
+func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (infra.RuntimeSpec, error) {
 	if !slices.ContainsFunc(catalog.Versions, func(v domain.VersionInfo) bool { return v.Version == version }) {
-		return "", invalid("unsupported engine version %q", version)
+		return infra.RuntimeSpec{}, invalid("unsupported engine version %q", version)
 	}
 	agentURL := rc.AgentURL
 	if agentURL == "" {
@@ -55,34 +54,29 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 	prepare = append(prepare, "sudo apt-get install -y --no-install-recommends "+strings.Join(packages, " "))
 	options, err := parseOptions(m.EngineOptions)
 	if err != nil {
-		return "", err
+		return infra.RuntimeSpec{}, err
 	}
-	ports := []map[string]any{}
+	ports := []infra.Port{}
 	for _, port := range []int{5672, 5671, 15672, 15671, 15692, 4369, 25672} {
-		v := map[string]any{"port": port, "protocol": "tcp"}
+		v := infra.Port{Port: port, Protocol: "tcp"}
 		if port == 15672 && options.ManagementUI.Public && (m.TLSMode == "disabled" || m.TLSMode == "preferTLS") {
-			v["httpSupport"] = true
+			v.HTTP = true
 		}
 		ports = append(ports, v)
 	}
 	if slices.Contains(options.Plugins, "rabbitmq_stream") {
 		for _, port := range []int{5551, 5552} {
-			ports = append(ports, map[string]any{"port": port, "protocol": "tcp"})
+			ports = append(ports, infra.Port{Port: port, Protocol: "tcp"})
 		}
 	}
-	run := map[string]any{"base": "ubuntu@24.04", "ports": ports, "prepareCommands": prepare, "envVariables": map[string]string{"KARAKORAM_URL": agentURL, "KARAKORAM_CLUSTER": rc.Cluster.Name, "KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM, "KARAKORAM_DATA_DIR": "/mnt/" + m.Volume, "KARAKORAM_ENGINE": "rabbitmq"}, "start": "./karakoram agent", "volume": map[string]string{"hostname": m.Volume}}
-	b, err := yaml.Marshal(map[string]any{"zerops": []map[string]any{{"setup": m.Name, "deploy": map[string]any{"temporaryShutdown": true, "readinessCheck": map[string]any{"exec": map[string]string{"command": "/var/www/karakoram agent readiness --engine=rabbitmq --data-dir=/mnt/" + m.Volume}, "failureTimeout": "300s", "retryPeriod": "10s"}}, "run": run}}})
-	return string(b), err
+	layout := rc.Backend.Layout()
+	return (engine.AgentRuntime{
+		Cluster: rc.Cluster.Name, Member: m.Name, Engine: "rabbitmq", Volume: m.Volume,
+		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM, Ports: ports, Prepare: prepare,
+		ReadinessArgs: []string{"--engine=rabbitmq", "--data-dir=" + layout.VolumePath(m.Volume)},
+	}).Spec(layout), nil
 }
 func runtimeResources(r domain.Resources) domain.Resources { r.MinDisk = 1; r.MaxDisk = 3; return r }
-func ownershipEnv(cluster, member, token string) map[string]string {
-	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
-}
-func serviceSpec(c *domain.Cluster, m *member, token string) infra.ServiceSpec {
-	env := ownershipEnv(c.Name, m.Name, token)
-	env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
-	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(c.Spec.Components.Engine.Resources), MinContainers: 1, MaxContainers: 1, Env: env, Vars: engine.OwnerVars(token, c.Name, m.Name, m.Name), Volume: m.Volume}
-}
 func missing(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound)
 }

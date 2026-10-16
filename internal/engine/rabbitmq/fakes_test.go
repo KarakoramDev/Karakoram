@@ -52,12 +52,22 @@ type fakeInfra struct {
 	states       map[string]infra.OpState
 	log          *callLog
 	agents       *fakeAgents
+	capabilities *infra.Capabilities
 }
 
 var _ infra.Backend = (*fakeInfra)(nil)
 var _ infra.SubdomainAccess = (*fakeInfra)(nil)
 
 func (f *fakeInfra) Name() string { return "test" }
+func (f *fakeInfra) Capabilities() infra.Capabilities {
+	if f.capabilities != nil {
+		return *f.capabilities
+	}
+	return infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true, DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true, DedicatedCPU: true, HorizontalScaling: true}
+}
+func (f *fakeInfra) Layout() infra.Layout {
+	return infra.Layout{AppDir: filepath.Join("/", "var", "www"), VolumeRoot: filepath.Join("/", "mnt"), User: "zerops"}
+}
 func (f *fakeInfra) ProjectInfo(context.Context) (infra.Project, error) {
 	return infra.Project{ID: "project", PublicIPv6: "2001:db8::1", PublicIPv4: "192.0.2.1"}, nil
 }
@@ -83,7 +93,7 @@ func (f *fakeInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		ownership := make(map[string]string, len(s.Env)+len(s.Vars))
 		maps.Copy(ownership, s.Env)
 		maps.Copy(ownership, s.Vars)
-		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: ownership}
+		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Kind: s.Kind, Resources: s.Resources, Ownership: ownership}
 		op.Services[s.Hostname] = s.Hostname
 	}
 	return op, nil
@@ -105,18 +115,28 @@ func (f *fakeInfra) DeleteService(_ context.Context, name string) (infra.Op, err
 	}
 	return op, err
 }
+func (f *fakeInfra) DeleteServiceByID(ctx context.Context, name, expectedID string) (infra.Op, error) {
+	service := f.services[name]
+	if service == nil {
+		return infra.Op{}, nil
+	}
+	if service.ID != expectedID {
+		return infra.Op{}, infra.ErrConflict
+	}
+	return f.DeleteService(ctx, name)
+}
 func (f *fakeInfra) Deploy(_ context.Context, name string, d infra.Deployment) (infra.Op, error) {
-	if d.Artifact == nil {
+	if d.Artifact.Reader == nil {
 		return infra.Op{}, errors.New("missing artifact")
 	}
-	if _, err := io.ReadAll(d.Artifact); err != nil {
+	if _, err := io.ReadAll(d.Artifact.Reader); err != nil {
 		return infra.Op{}, err
 	}
 	op, err := f.op("deploy", name)
 	if err != nil {
 		return op, err
 	}
-	d.Artifact = nil
+	d.Artifact.Reader = nil
 	f.deployments = append(f.deployments, d)
 	if f.agents != nil {
 		f.agents.redeploy(name)
@@ -187,7 +207,7 @@ func (f *fakeInfra) DeletePublicPorts(_ context.Context, name string) error {
 	return nil
 }
 func (f *fakeInfra) Containers(context.Context, string) ([]infra.Container, error) {
-	return []infra.Container{{Status: "ACTIVE"}}, nil
+	return []infra.Container{{Status: infra.ContainerActive}}, nil
 }
 func (f *fakeInfra) Logs(context.Context, string, infra.LogQuery) ([]infra.LogLine, error) {
 	return nil, nil

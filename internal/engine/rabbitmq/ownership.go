@@ -44,7 +44,7 @@ func verifyServiceOwnership(ctx context.Context, rc *engine.Context, m *member, 
 			// A partial import may leave Local Storage without environment.
 			// Only an evidence-verified runtime's exact mount proves ownership;
 			// a recorded runtime ID alone cannot authorize a new volume.
-			if runtime != nil && engine.HasOwnership(runtime, tok.Token, rc.Cluster.Name, m.Name) && runtime.Ownership["KARAKORAM_DATA_DIR"] == "/mnt/"+service.Hostname {
+			if runtime != nil && engine.HasOwnership(runtime, tok.Token, rc.Cluster.Name, m.Name) && engine.MountsVolume(rc.Backend, runtime, service.Hostname) {
 				return nil
 			}
 		}

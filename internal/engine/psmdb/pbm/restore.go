@@ -485,8 +485,8 @@ func routerService(ctx context.Context, env Env, cp *checkpoint, action string) 
 			if service == nil {
 				return result(*cp, false), engine.ErrNotFound
 			}
-			if (action == "stop" && service.Status == "STOPPED") ||
-				(action == "start" && (service.Status == "ACTIVE" || service.Status == "RUNNING")) {
+			if (action == "stop" && service.Status == infra.StatusStopped) ||
+				(action == "start" && (service.Status == infra.StatusActive || service.Status == infra.StatusRunning)) {
 				cp.RouterRetry = nil
 				cp.Index++
 				return result(*cp, false), nil

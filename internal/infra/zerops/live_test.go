@@ -12,7 +12,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/contracttest"
 )
 
 // TestLiveSmoke exercises a real prebuilt runtime plus Local Storage. It requires
@@ -80,8 +80,8 @@ func TestLiveSmoke(t *testing.T) {
 	})
 	artifact := liveArtifact(t)
 	op, err := b.ImportServices(ctx, []infra.ServiceSpec{
-		{Hostname: volume, Type: "local-storage:single@1", Resources: infra.Resources{MinDisk: 5, MaxDisk: 5}},
-		{Hostname: name, Type: "ubuntu@24.04", MinContainers: 1, MaxContainers: 1, Resources: infra.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 0.25, MaxRAM: 0.25, MinDisk: 1, MaxDisk: 1}, Env: map[string]string{"KKZT_SECRET": "smoke-initial"}},
+		{Hostname: volume, Kind: infra.KindVolume, Resources: infra.Resources{MinDisk: 5, MaxDisk: 5}},
+		{Hostname: name, Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, MinContainers: 1, MaxContainers: 1, Resources: infra.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 0.25, MaxRAM: 0.25, MinDisk: 1, MaxDisk: 1}, Env: map[string]string{"KKZT_SECRET": "smoke-initial"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -90,33 +90,15 @@ func TestLiveSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("runtime and volume imported without inline build")
-	pipeline := fmt.Sprintf(`zerops:
-  - setup: %s
-    deploy:
-      temporaryShutdown: true
-      readinessCheck:
-        exec:
-          command: /var/www/karakoram check
-        failureTimeout: "120s"
-        retryPeriod: "10s"
-    run:
-      base: ubuntu@24.04
-      volume:
-        hostname: %s
-      envVariables:
-        DATA_DIR: /mnt/%s
-      ports:
-        - port: 8080
-          protocol: tcp
-          scheme: http
-      start: ./karakoram
-`, name, volume, volume)
 	f, err := os.Open(artifact)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	op, err = b.Deploy(ctx, name, infra.Deployment{Artifact: f, ZeropsYAML: pipeline, SetupName: name, Filename: "karakoram-zerops-smoke"})
+	op, err = b.Deploy(ctx, name, infra.Deployment{
+		Artifact: infra.Artifact{Reader: f, Name: "karakoram-zerops-smoke", Binary: "karakoram"},
+		Runtime:  infra.RuntimeSpec{Base: infra.BaseUbuntu2404, Args: []string{"serve"}, Volume: volume, Env: map[string]string{"DATA_DIR": b.Layout().VolumePath(volume)}, Ports: []infra.Port{{Port: 8080, Protocol: "tcp", HTTP: true}}, StopBeforeStart: true, Readiness: &infra.Readiness{Args: []string{"check"}, FailureTimeout: 120 * time.Second, RetryPeriod: 10 * time.Second}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,6 +177,51 @@ func TestLiveSmoke(t *testing.T) {
 		t.Fatal("runtime has no containers")
 	}
 }
+
+func TestLiveContract(t *testing.T) {
+	token, project := os.Getenv("ZEROPS_TOKEN"), os.Getenv("ZEROPS_PROJECT_ID")
+	if token == "" || project == "" {
+		t.Skip("ZEROPS_TOKEN and ZEROPS_PROJECT_ID required")
+	}
+	archive := liveArtifact(t)
+	contracttest.Run(t, func(t *testing.T) contracttest.Harness {
+		b, err := New(Options{BaseURL: os.Getenv("ZEROPS_API_URL"), Token: token, ProjectID: project, WaitTimeout: 8 * time.Minute, PollInterval: 3 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var suffix [5]byte
+		if _, err := rand.Read(suffix[:]); err != nil {
+			t.Fatal(err)
+		}
+		prefix := "kkzt" + hex.EncodeToString(suffix[:])
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			for _, name := range []string{prefix + "runtime", prefix + "volume"} {
+				op, err := b.DeleteService(ctx, name)
+				if err == nil {
+					err = b.waitOp(ctx, op)
+				}
+				if err != nil {
+					t.Errorf("contract cleanup %s: %v", name, err)
+				}
+			}
+		})
+		return contracttest.Harness{
+			Backend:  b,
+			Hostname: func(s string) string { return prefix + s },
+			Artifact: func() infra.Artifact {
+				f, err := os.Open(archive)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { f.Close() })
+				return infra.Artifact{Reader: f, Name: "karakoram.tar.gz", Binary: "karakoram"}
+			},
+			PollInterval: 3 * time.Second, Timeout: 15 * time.Minute,
+		}
+	})
+}
 func liveArtifact(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -204,8 +231,9 @@ func liveArtifact(t *testing.T) string {
 package main
 import("fmt";"net/http";"os";"path/filepath";"time")
 func main(){
- if len(os.Args)>1&&os.Args[1]=="check"{c:=http.Client{Timeout:3*time.Second};r,e:=c.Get("http://127.0.0.1:8080/");if e!=nil{os.Exit(1)};r.Body.Close();if r.StatusCode!=200{os.Exit(1)};return}
- path:=filepath.Join(os.Getenv("DATA_DIR"),"kkzt-marker");if e:=os.WriteFile(path,[]byte("persistent"),0600);e!=nil{panic("volume not writable")}
+ for _,arg:=range os.Args[1:]{if arg=="check"||arg=="readiness"{c:=http.Client{Timeout:3*time.Second};r,e:=c.Get("http://127.0.0.1:8080/");if e!=nil{os.Exit(1)};r.Body.Close();if r.StatusCode!=200{os.Exit(1)};return}}
+ dir:=os.Getenv("DATA_DIR");if dir==""{dir=os.Getenv("KARAKORAM_DATA_DIR")};if dir==""{dir="."}
+ path:=filepath.Join(dir,"kkzt-marker");if e:=os.WriteFile(path,[]byte("persistent"),0600);e!=nil{panic("volume not writable")}
  http.HandleFunc("/",func(w http.ResponseWriter,r *http.Request){if _,e:=os.ReadFile(path);e!=nil{http.Error(w,"volume unavailable",503);return};fmt.Fprintln(w,"ready")})
  if e:=http.ListenAndServe(":8080",nil);e!=nil{panic("HTTP server failed")}
 }

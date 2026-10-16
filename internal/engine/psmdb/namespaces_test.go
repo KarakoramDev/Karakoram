@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -25,17 +24,17 @@ func TestRelayTargetsIncludesPlannedReplacementsAndObservedRouters(t *testing.T)
 	}
 }
 
-func TestMemberYAMLUsesNamespaceAgentURL(t *testing.T) {
+func TestMemberRuntimeUsesNamespaceAgentURL(t *testing.T) {
 	p, rc, _, _ := setup(t)
 	rc.AgentURL = "https://examplerelay:9443"
-	text, err := p.zeropsYAML(rc, &member{Name: "demom0"}, rc.Cluster.Spec.Version)
-	if err != nil || !strings.Contains(text, rc.AgentURL) {
-		t.Fatal(text, err)
+	spec := p.runtimeSpec(rc, &member{Name: "demom0"}, rc.Cluster.Spec.Version)
+	if spec.Env["KARAKORAM_URL"] != rc.AgentURL {
+		t.Fatal(spec)
 	}
 	rc.AgentURL = ""
-	text, err = p.zeropsYAML(rc, &member{Name: "demom0"}, rc.Cluster.Spec.Version)
-	if err != nil || !strings.Contains(text, p.options.ControlPlaneURL) {
-		t.Fatal(text, err)
+	spec = p.runtimeSpec(rc, &member{Name: "demom0"}, rc.Cluster.Spec.Version)
+	if spec.Env["KARAKORAM_URL"] != p.options.ControlPlaneURL {
+		t.Fatal(spec)
 	}
 }
 

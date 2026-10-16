@@ -82,6 +82,23 @@ const (
 	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
+// Defines values for Capability.
+const (
+	CapabilityDedicatedCpu      Capability = "dedicatedCpu"
+	CapabilityDiskGrowth        Capability = "diskGrowth"
+	CapabilityEnvChangeRestarts Capability = "envChangeRestarts"
+	CapabilityExec              Capability = "exec"
+	CapabilityHorizontalScaling Capability = "horizontalScaling"
+	CapabilityLogs              Capability = "logs"
+	CapabilityMetrics           Capability = "metrics"
+	CapabilityPlacement         Capability = "placement"
+	CapabilityPublicHttps       Capability = "publicHttps"
+	CapabilityPublicTcp         Capability = "publicTcp"
+	CapabilityScopedTokens      Capability = "scopedTokens"
+	CapabilityTcpAllowlist      Capability = "tcpAllowlist"
+	CapabilityVolumeQuota       Capability = "volumeQuota"
+)
+
 // Defines values for ClusterStatusPhase.
 const (
 	ClusterStatusPhaseCreating     ClusterStatusPhase = "Creating"
@@ -535,6 +552,23 @@ type AgentStatus struct {
 	Version       *string    `json:"version,omitempty"`
 }
 
+// BackendInfo defines model for BackendInfo.
+type BackendInfo struct {
+	Capabilities []Capability `json:"capabilities"`
+
+	// ConfigKeys Accepted namespace config keys; empty for Zerops because its API URL is operator-only.
+	ConfigKeys   []string `json:"configKeys"`
+	DisplayName  string   `json:"displayName"`
+	Experimental bool     `json:"experimental"`
+	Kind         string   `json:"kind"`
+	Relay        bool     `json:"relay"`
+}
+
+// BackendList defines model for BackendList.
+type BackendList struct {
+	Items []BackendInfo `json:"items"`
+}
+
 // Backup defines model for Backup.
 type Backup struct {
 	Cluster       string     `json:"cluster"`
@@ -685,6 +719,9 @@ type CanRequestAction string
 type CanResponse struct {
 	Allowed bool `json:"allowed"`
 }
+
+// Capability defines model for Capability.
+type Capability string
 
 // ChangePasswordRequest defines model for ChangePasswordRequest.
 type ChangePasswordRequest struct {
@@ -1492,16 +1529,21 @@ type MonitoringSpecPatch struct {
 
 // Namespace defines model for Namespace.
 type Namespace struct {
-	ClusterCount *int      `json:"clusterCount,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
-	Default      bool      `json:"default"`
-	Description  *string   `json:"description,omitempty"`
+	Backend      string             `json:"backend"`
+	Capabilities []Capability       `json:"capabilities"`
+	ClusterCount *int               `json:"clusterCount,omitempty"`
+	Config       *map[string]string `json:"config,omitempty"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	Default      bool               `json:"default"`
+	Description  *string            `json:"description,omitempty"`
 
 	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
-	Name        NamespaceName  `json:"name"`
-	Phase       NamespacePhase `json:"phase"`
-	ProjectId   string         `json:"projectId"`
-	ProjectName string         `json:"projectName"`
+	Name  NamespaceName  `json:"name"`
+	Phase NamespacePhase `json:"phase"`
+
+	// ProjectId Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace).
+	ProjectId   string `json:"projectId"`
+	ProjectName string `json:"projectName"`
 
 	// Relay Relay health; the default namespace uses direct networking.
 	Relay RelayStatus `json:"relay"`
@@ -1516,12 +1558,18 @@ type NamespacePhase string
 
 // NamespaceCreate defines model for NamespaceCreate.
 type NamespaceCreate struct {
-	Description *string `json:"description,omitempty"`
+	Backend *string `json:"backend,omitempty"`
+
+	// Config Non-secret backend settings. Zerops accepts no keys; its API URL is operator-only and cannot be overridden by a namespace.
+	Config      *map[string]string `json:"config,omitempty"`
+	Description *string            `json:"description,omitempty"`
 
 	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
-	Name      NamespaceName `json:"name"`
-	ProjectId string        `json:"projectId"`
-	Token     *string       `json:"token,omitempty"`
+	Name NamespaceName `json:"name"`
+
+	// ProjectId Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace).
+	ProjectId string  `json:"projectId"`
+	Token     *string `json:"token,omitempty"`
 }
 
 // NamespaceList defines model for NamespaceList.
@@ -4398,6 +4446,9 @@ type ClientInterface interface {
 	// RefreshSession request
 	RefreshSession(ctx context.Context, params *RefreshSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListBackends request
+	ListBackends(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListBackupStorages request
 	ListBackupStorages(ctx context.Context, params *ListBackupStoragesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5106,6 +5157,18 @@ func (c *Client) OidcLogin(ctx context.Context, params *OidcLoginParams, reqEdit
 
 func (c *Client) RefreshSession(ctx context.Context, params *RefreshSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRefreshSessionRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListBackends(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBackendsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -7864,6 +7927,33 @@ func NewRefreshSessionRequest(server string, params *RefreshSessionParams) (*htt
 			req.Header.Set("X-Karakoram-CSRF", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewListBackendsRequest generates requests for ListBackends
+func NewListBackendsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/backends")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -16768,6 +16858,9 @@ type ClientWithResponsesInterface interface {
 	// RefreshSessionWithResponse request
 	RefreshSessionWithResponse(ctx context.Context, params *RefreshSessionParams, reqEditors ...RequestEditorFn) (*RefreshSessionResponse, error)
 
+	// ListBackendsWithResponse request
+	ListBackendsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackendsResponse, error)
+
 	// ListBackupStoragesWithResponse request
 	ListBackupStoragesWithResponse(ctx context.Context, params *ListBackupStoragesParams, reqEditors ...RequestEditorFn) (*ListBackupStoragesResponse, error)
 
@@ -17734,6 +17827,35 @@ func (r RefreshSessionResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r RefreshSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListBackendsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BackendList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON405      *MethodNotAllowed
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBackendsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBackendsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -21367,6 +21489,15 @@ func (c *ClientWithResponses) RefreshSessionWithResponse(ctx context.Context, pa
 	return ParseRefreshSessionResponse(rsp)
 }
 
+// ListBackendsWithResponse request returning *ListBackendsResponse
+func (c *ClientWithResponses) ListBackendsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackendsResponse, error) {
+	rsp, err := c.ListBackends(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBackendsResponse(rsp)
+}
+
 // ListBackupStoragesWithResponse request returning *ListBackupStoragesResponse
 func (c *ClientWithResponses) ListBackupStoragesWithResponse(ctx context.Context, params *ListBackupStoragesParams, reqEditors ...RequestEditorFn) (*ListBackupStoragesResponse, error) {
 	rsp, err := c.ListBackupStorages(ctx, params, reqEditors...)
@@ -24237,6 +24368,81 @@ func ParseRefreshSessionResponse(rsp *http.Response) (*RefreshSessionResponse, e
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListBackendsResponse parses an HTTP response from a ListBackendsWithResponse call
+func ParseListBackendsResponse(rsp *http.Response) (*ListBackendsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBackendsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BackendList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest PayloadTooLarge

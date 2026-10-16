@@ -26,7 +26,7 @@ func (f *failedImportInfra) ImportServices(ctx context.Context, specs []infra.Se
 	}
 	for _, spec := range specs {
 		service := f.services[spec.Hostname]
-		if spec.Type == "local-storage:single@1" {
+		if spec.Kind == infra.KindVolume {
 			service.ID = "volume-id"
 			service.Ownership = nil
 		} else {
@@ -58,7 +58,7 @@ func failedMemberImport(t *testing.T) (*Provider, *engine.Context, *coreInfra, *
 	if f.services[m.Name] == nil || f.services[m.Volume] == nil || len(f.services[m.Volume].Ownership) != 0 {
 		t.Fatal("partial import did not leave a runtime and untagged volume")
 	}
-	if got := f.services[m.Name].Ownership["KARAKORAM_DATA_DIR"]; got != "/mnt/"+m.Volume {
+	if got := f.services[m.Name].Ownership["KARAKORAM_DATA_DIR"]; got != f.Layout().VolumePath(m.Volume) {
 		t.Fatalf("runtime import must identify its volume mount, got %q", got)
 	}
 	return p, rc, f, s
@@ -156,9 +156,9 @@ func TestUntaggedVolumeRequiresTokenVerifiedRuntimeMount(t *testing.T) {
 			case "missing-mount":
 				delete(runtime.Ownership, "KARAKORAM_DATA_DIR")
 			case "wrong-mount":
-				runtime.Ownership["KARAKORAM_DATA_DIR"] = "/mnt/other"
+				runtime.Ownership["KARAKORAM_DATA_DIR"] = f.Layout().VolumePath("other")
 			case "mount-prefix":
-				runtime.Ownership["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume + "/data"
+				runtime.Ownership["KARAKORAM_DATA_DIR"] = f.Layout().VolumePath(m.Volume) + "/data"
 			}
 			if err := save(rc.Cluster, s); err != nil {
 				t.Fatal(err)

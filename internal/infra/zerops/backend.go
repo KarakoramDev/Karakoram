@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
-	"gopkg.in/yaml.v3"
 )
 
 // Backend implements Zerops infrastructure operations. Persistent disk changes must
@@ -53,6 +52,12 @@ func New(o Options) (*Backend, error) {
 
 // Name returns the infrastructure backend identifier.
 func (b *Backend) Name() string { return "zerops" }
+
+// Capabilities reports the optional Zerops platform features.
+func (b *Backend) Capabilities() infra.Capabilities { return zeropsCapabilities }
+
+// Layout describes the deployed artifact, volume mounts and runtime user.
+func (b *Backend) Layout() infra.Layout { return zeropsLayout }
 
 // SetToken swaps the live client's credential without restarting services.
 func (b *Backend) SetToken(token string) { b.client.SetToken(token) }
@@ -136,10 +141,10 @@ var ownershipKeys = map[string]bool{"KARAKORAM_OWNER": true, "KARAKORAM_CLUSTER"
 
 func (b *Backend) resolve(ctx context.Context, name string) (*ServiceStack, error) {
 	if name == "core" {
-		return nil, errors.New("zerops: refusing protected service")
+		return nil, &infra.RejectedError{Message: "zerops: refusing protected service"}
 	}
 	if !hostnamePattern.MatchString(name) {
-		return nil, errors.New("zerops: invalid service hostname")
+		return nil, &infra.RejectedError{Message: "zerops: invalid service hostname"}
 	}
 	for range 2 {
 		b.mu.Lock()
@@ -167,7 +172,7 @@ func (b *Backend) resolve(ctx context.Context, name string) (*ServiceStack, erro
 		}
 		if s.protected() {
 			b.invalidate(name)
-			return nil, errors.New("zerops: refusing protected service")
+			return nil, &infra.RejectedError{Message: "zerops: refusing protected service"}
 		}
 		if s.Name != name {
 			b.invalidate(name)
@@ -183,7 +188,7 @@ func (b *Backend) resolve(ctx context.Context, name string) (*ServiceStack, erro
 func (b *Backend) require(ctx context.Context, name string) (*ServiceStack, error) {
 	s, err := b.resolve(ctx, name)
 	if err == nil && s == nil {
-		err = fmt.Errorf("zerops: service %s not found", name)
+		err = &classifiedError{cause: fmt.Errorf("zerops: service %s not found", name), class: infra.ErrNotFound}
 	}
 	return s, err
 }
@@ -195,73 +200,18 @@ func processOp(p *Process, kind, id string) infra.Op {
 }
 
 // ImportServices builds the no-inline-pipeline import YAML and aggregates all
-// returned process IDs. ZeropsYAML/Volume belong in Deployment's runtime document.
+// returned process IDs. Runtime commands and volumes belong in Deployment.
 func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec) (infra.Op, error) {
-	type vertical struct {
-		CPUMode  string   `yaml:"cpuMode,omitempty"`
-		MinCPU   float64  `yaml:"minCpu,omitempty"`
-		MaxCPU   float64  `yaml:"maxCpu,omitempty"`
-		MinRAM   float64  `yaml:"minRam,omitempty"`
-		MaxRAM   float64  `yaml:"maxRam,omitempty"`
-		MinDisk  float64  `yaml:"minDisk,omitempty"`
-		MaxDisk  float64  `yaml:"maxDisk,omitempty"`
-		StartCPU *float64 `yaml:"startCpuCoreCount,omitempty"`
-	}
-	type service struct {
-		Hostname      string            `yaml:"hostname"`
-		Type          string            `yaml:"type"`
-		MinContainers int               `yaml:"minContainers,omitempty"`
-		MaxContainers int               `yaml:"maxContainers,omitempty"`
-		Vertical      vertical          `yaml:"verticalAutoscaling"`
-		Env           map[string]string `yaml:"envSecrets,omitempty"`
-		Vars          map[string]string `yaml:"envVariables,omitempty"`
-	}
-	doc := struct {
-		Services []service `yaml:"services"`
-	}{Services: make([]service, 0, len(specs))}
-	seen := map[string]bool{}
-	for _, s := range specs {
-		if !hostnamePattern.MatchString(s.Hostname) || s.Hostname == "core" || seen[s.Hostname] {
-			return infra.Op{}, errors.New("zerops: invalid or duplicate import hostname")
-		}
-		seen[s.Hostname] = true
-		if s.Type == "" || strings.HasPrefix(s.Type, "core") {
-			return infra.Op{}, errors.New("zerops: invalid or protected service type")
-		}
-		r := s.Resources
-		v := vertical{CPUMode: r.CPUMode, MinCPU: r.MinCPU, MaxCPU: r.MaxCPU, MinRAM: r.MinRAM, MaxRAM: r.MaxRAM, MinDisk: r.MinDisk, MaxDisk: r.MaxDisk, StartCPU: r.StartCPU}
-		minCount, maxCount := s.MinContainers, s.MaxContainers
-		if strings.HasPrefix(s.Type, "local-storage") {
-			s.Type = "local-storage:single@1"
-			v = vertical{MinDisk: max(r.MinDisk, 5), MaxDisk: max(r.MaxDisk, max(r.MinDisk, 5))}
-			minCount, maxCount = 0, 0
-		} else {
-			if minCount == 0 {
-				minCount = 1
-			}
-			if maxCount == 0 {
-				maxCount = minCount
-			}
-			if v.CPUMode == "" {
-				v.CPUMode = "SHARED"
-			}
-		}
-		if minCount < 0 || maxCount < minCount {
-			return infra.Op{}, errors.New("zerops: invalid container bounds")
-		}
-		for k := range s.Vars {
-			if _, dup := s.Env[k]; dup {
-				return infra.Op{}, errors.New("zerops: variable declared both sensitive and non-sensitive")
-			}
-		}
-		doc.Services = append(doc.Services, service{s.Hostname, s.Type, minCount, maxCount, v, s.Env, s.Vars})
+	doc, data, err := buildImport(specs)
+	if err != nil {
+		return infra.Op{}, err
 	}
 	if len(specs) == 0 {
 		return infra.Op{Kind: "import"}, nil
 	}
-	data, err := yaml.Marshal(doc)
-	if err != nil {
-		return infra.Op{}, errors.New("zerops: cannot encode import YAML")
+	seen := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		seen[s.Hostname] = true
 	}
 	var hostnames, attempts []string
 	for _, s := range doc.Services {
@@ -360,7 +310,11 @@ func observed(s ServiceStack) infra.Service {
 	if typ == "" {
 		typ = s.ServiceStackTypeInfo.Version
 	}
-	return infra.Service{ID: s.ID, Hostname: s.Name, Type: typ, Status: s.Status, Resources: r, MinContainers: int(number(h, "minContainerCount")), MaxContainers: int(number(h, "maxContainerCount"))}
+	kind := infra.KindRuntime
+	if strings.HasPrefix(typ, "local-storage") {
+		kind = infra.KindVolume
+	}
+	return infra.Service{ID: s.ID, Hostname: s.Name, Kind: kind, Status: s.Status, Resources: r, MinContainers: int(number(h, "minContainerCount")), MaxContainers: int(number(h, "maxContainerCount"))}
 }
 
 // GetService returns nil when absent, invalidating stale platform IDs as needed.
@@ -434,13 +388,13 @@ func (b *Backend) DeleteServiceByID(ctx context.Context, name, expectedID string
 				return infra.Op{}, err
 			}
 			if err == nil && recorded.protected() {
-				return infra.Op{}, errors.New("zerops: refusing protected service")
+				return infra.Op{}, &infra.RejectedError{Message: "zerops: refusing protected service"}
 			}
 		}
 		return infra.Op{Kind: "delete"}, nil
 	}
 	if expectedID == "" || s.ID != expectedID {
-		return infra.Op{}, errors.New("zerops: refusing deletion of replaced service")
+		return infra.Op{}, &classifiedError{cause: errors.New("zerops: refusing deletion of replaced service"), class: infra.ErrConflict}
 	}
 	p, err := b.client.DeleteService(ctx, s.ID)
 	b.invalidate(name)
@@ -450,16 +404,20 @@ func (b *Backend) DeleteServiceByID(ctx context.Context, name, expectedID string
 // Deploy streams a gzip-tar artifact, spooling only non-seekable readers to a
 // private temporary file to supply the fixed Content-Length expected by Zerops.
 func (b *Backend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	if err := d.Validate(); err != nil {
+		return infra.Op{}, &infra.RejectedError{Message: err.Error()}
+	}
+	runtimeYAML, err := RenderYAML(name, b.Layout(), d.Artifact.Binary, d.Runtime)
+	if err != nil {
+		return infra.Op{}, err
+	}
 	s, err := b.require(ctx, name)
 	if err != nil {
 		return infra.Op{}, err
 	}
-	if d.Artifact == nil || d.ZeropsYAML == "" || d.SetupName == "" {
-		return infra.Op{}, errors.New("zerops: artifact, runtime YAML and setup required")
-	}
-	var reader io.Reader = d.Artifact
+	var reader io.Reader = d.Artifact.Reader
 	var size int64
-	if seeker, ok := d.Artifact.(io.ReadSeeker); ok {
+	if seeker, ok := d.Artifact.Reader.(io.ReadSeeker); ok {
 		start, e := seeker.Seek(0, io.SeekCurrent)
 		if e != nil {
 			return infra.Op{}, e
@@ -479,7 +437,7 @@ func (b *Backend) Deploy(ctx context.Context, name string, d infra.Deployment) (
 		}
 		defer os.Remove(f.Name())
 		defer f.Close()
-		size, e = io.Copy(f, contextReader{ctx, d.Artifact})
+		size, e = io.Copy(f, contextReader{ctx, d.Artifact.Reader})
 		if e != nil {
 			return infra.Op{}, e
 		}
@@ -488,7 +446,7 @@ func (b *Backend) Deploy(ctx context.Context, name string, d infra.Deployment) (
 		}
 		reader = f
 	}
-	version, err := b.client.CreateAppVersion(ctx, s.ID, d.Filename)
+	version, err := b.client.CreateAppVersion(ctx, s.ID, d.Artifact.Name)
 	if err != nil {
 		return infra.Op{}, err
 	}
@@ -498,7 +456,7 @@ func (b *Backend) Deploy(ctx context.Context, name string, d infra.Deployment) (
 	if err = b.client.Upload(ctx, version.ID, reader, size); err != nil {
 		return infra.Op{}, err
 	}
-	p, err := b.client.Deploy(ctx, version.ID, d.ZeropsYAML, d.SetupName)
+	p, err := b.client.Deploy(ctx, version.ID, runtimeYAML, name)
 	return processOp(&p, "deploy", s.ID), err
 }
 
@@ -547,12 +505,12 @@ func (b *Backend) setUserData(ctx context.Context, name string, kv map[string]st
 		for _, item := range items {
 			if item.Key == key {
 				if item.Type != "USER" {
-					return errors.New("zerops: cannot replace system environment entry")
+					return &infra.RejectedError{Message: "zerops: cannot replace system environment entry"}
 				}
 				// Only ownership markers may turn a sensitive entry into a
 				// readable one; anything else could publish a secret.
 				if item.Sensitive && !sensitive && !convertibleToPlain[key] {
-					return errors.New("zerops: refusing to make a sensitive variable readable")
+					return &infra.RejectedError{Message: "zerops: refusing to make a sensitive variable readable"}
 				}
 				id = item.ID
 				// A masked value never equals anything: rewrite it.
@@ -695,7 +653,7 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 	if r != nil {
 		if strings.HasPrefix(s.Base, "local-storage") || strings.HasPrefix(s.ServiceStackTypeInfo.Version, "local-storage") {
 			if (r.MinDisk > 0 && r.MinDisk < 5) || (r.MaxDisk > 0 && r.MaxDisk < 5) {
-				return infra.Op{}, errors.New("zerops: volume disk bounds must be at least 5 GB")
+				return infra.Op{}, &infra.RejectedError{Message: "zerops: volume disk bounds must be at least 5 GB"}
 			}
 		}
 		for _, entry := range []struct {
@@ -704,7 +662,7 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 			n float64
 		}{{low, "cpuCoreCount", r.MinCPU}, {high, "cpuCoreCount", r.MaxCPU}, {low, "memoryGBytes", r.MinRAM}, {high, "memoryGBytes", r.MaxRAM}, {low, "diskGBytes", r.MinDisk}, {high, "diskGBytes", r.MaxDisk}} {
 			if entry.n < 0 {
-				return infra.Op{}, errors.New("zerops: negative resource bound")
+				return infra.Op{}, &infra.RejectedError{Message: "zerops: negative resource bound"}
 			}
 			if entry.n > 0 {
 				putJSON(entry.m, entry.k, entry.n)
@@ -776,7 +734,7 @@ func (b *Backend) SetResources(ctx context.Context, name string, r infra.Resourc
 // settings, including platform defaults, free-resource thresholds and swap.
 func (b *Backend) SetContainerCount(ctx context.Context, name string, minCount, maxCount int) (infra.Op, error) {
 	if minCount < 1 || maxCount < minCount {
-		return infra.Op{}, errors.New("zerops: invalid container bounds")
+		return infra.Op{}, &infra.RejectedError{Message: "zerops: invalid container bounds"}
 	}
 	return b.resources(ctx, name, nil, &minCount, &maxCount)
 }
@@ -828,7 +786,7 @@ func (b *Backend) EnsurePublicPort(ctx context.Context, name string, p infra.Pub
 		protocol = "tcp"
 	}
 	if protocol != "tcp" {
-		return errors.New("zerops: only TCP public routing supported")
+		return &infra.RejectedError{Message: "zerops: only TCP public routing supported"}
 	}
 	ip := p.IPType
 	switch ip {
@@ -837,10 +795,10 @@ func (b *Backend) EnsurePublicPort(ctx context.Context, name string, p infra.Pub
 	case "IPV4", "IP_V4":
 		ip = "IP_V4"
 	default:
-		return errors.New("zerops: public IP type required")
+		return &infra.RejectedError{Message: "zerops: public IP type required"}
 	}
 	if p.Port < 1 || p.Port > 65535 || p.TargetPort < 1 || p.TargetPort > 65535 {
-		return errors.New("zerops: invalid public port")
+		return &infra.RejectedError{Message: "zerops: invalid public port"}
 	}
 	wanted := PublicPortRouting{PublicIPType: ip, PublicPort: p.Port, InternalPort: p.TargetPort, InternalProtocol: protocol, FirewallPolicy: "WHITELIST", FirewallIPRanges: slices.Clone(p.Allowlist)}
 	if wanted.FirewallIPRanges == nil {
@@ -1000,7 +958,7 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	ids := []string{op.ID}
 	if strings.HasPrefix(op.ID, "multi:") {
 		if err := json.Unmarshal([]byte(strings.TrimPrefix(op.ID, "multi:")), &ids); err != nil {
-			return infra.OpState{}, errors.New("zerops: invalid aggregate operation ID")
+			return infra.OpState{}, &infra.RejectedError{Message: "zerops: invalid aggregate operation ID"}
 		}
 	}
 	state := infra.OpState{Done: true, Status: "FINISHED"}

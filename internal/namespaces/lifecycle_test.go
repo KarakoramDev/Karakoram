@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/coder/websocket"
@@ -196,7 +196,7 @@ func TestRelayHostnameBoundsAndDeferredValidation(t *testing.T) {
 		t.Fatal("default-only startup rejected relay configuration", err)
 	}
 	defer restored.Close()
-	if _, err = restored.Create(t.Context(), "testing", "proj-test", "valid-token", ""); !errors.Is(err, ErrInvalid) {
+	if _, err = restored.Create(t.Context(), "testing", "proj-test", "valid-token", "", "zerops", nil); !errors.Is(err, ErrInvalid) {
 		t.Fatal("non-default namespace accepted invalid relay hostname", err)
 	}
 }
@@ -343,7 +343,7 @@ func TestReregisteredNamespaceRejectsDeletedEnrollment(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.step(t.Context(), n.Name)
-	replacement, err := r.Create(t.Context(), n.Name, "proj-replacement", "replacement-token", "")
+	replacement, err := r.Create(t.Context(), n.Name, "proj-replacement", "replacement-token", "", "zerops", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +358,10 @@ func TestRegistrationWaitsForNamespaceLifecycleLock(t *testing.T) {
 	m := r.lock("testing")
 	m.Lock()
 	done := make(chan error, 1)
-	go func() { _, err := r.Create(t.Context(), "testing", "proj-test", "valid-token", ""); done <- err }()
+	go func() {
+		_, err := r.Create(t.Context(), "testing", "proj-test", "valid-token", "", "zerops", nil)
+		done <- err
+	}()
 	select {
 	case err := <-done:
 		m.Unlock()
@@ -374,7 +377,7 @@ func TestRegistrationWaitsForNamespaceLifecycleLock(t *testing.T) {
 func TestNamespaceDeleteAndRecreatePersistsFreshEnrollment(t *testing.T) {
 	r, backend, _ := setupRegistry(t)
 	ctx := t.Context()
-	old, err := r.Create(ctx, "production", "proj-test", "valid-token", "Original description")
+	old, err := r.Create(ctx, "production", "proj-test", "valid-token", "Original description", "zerops", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +407,7 @@ func TestNamespaceDeleteAndRecreatePersistsFreshEnrollment(t *testing.T) {
 	}
 	step()
 	deletingOptions := r.o
-	deletingOptions.NewBackend = func(_ zerops.Options) (Backend, error) { return backend, nil }
+	registryFactory(deletingOptions.Backends).newBackend = func(_ infra.Target) (Backend, error) { return backend, nil }
 	deletingReload, err := New(ctx, deletingOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -451,7 +454,7 @@ func TestNamespaceDeleteAndRecreatePersistsFreshEnrollment(t *testing.T) {
 	if _, err = r.Get(ctx, old.Name); !errors.Is(err, ErrNotFound) {
 		t.Fatal("delayed snapshot restored the deleted row", err)
 	}
-	fresh, err := r.Create(ctx, old.Name, old.ProjectID, "replacement-token", "Replacement description")
+	fresh, err := r.Create(ctx, old.Name, old.ProjectID, "replacement-token", "Replacement description", "zerops", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -537,7 +540,7 @@ drained:
 		t.Fatal("replacement repeated the original relay deletion")
 	}
 	o := r.o
-	o.NewBackend = func(_ zerops.Options) (Backend, error) { return backend, nil }
+	registryFactory(o.Backends).newBackend = func(_ infra.Target) (Backend, error) { return backend, nil }
 	if err = r.Close(); err != nil {
 		t.Fatal(err)
 	}

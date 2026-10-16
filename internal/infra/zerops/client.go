@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // DefaultBaseURL is the public Prague Zerops REST endpoint.
@@ -47,10 +49,10 @@ func NewClient(o Options) (*Client, error) {
 	}
 	u, err := url.Parse(o.BaseURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, errors.New("zerops: invalid base URL")
+		return nil, &infra.RejectedError{Message: "zerops: invalid base URL"}
 	}
 	if o.Token == "" || o.ProjectID == "" {
-		return nil, errors.New("zerops: token and project ID required")
+		return nil, &infra.RejectedError{Message: "zerops: token and project ID required"}
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{Timeout: 2 * time.Minute}
@@ -141,7 +143,7 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 			}
 			// net/http errors contain target URLs. In particular signed log URLs must not escape.
 			retryable = networkFailure(err)
-			err = errors.New("zerops: network request failed")
+			err = unavailable(errors.New("zerops: network request failed"))
 		} else {
 			retryable = resp.StatusCode == 429 || (resp.StatusCode >= 500 && resp.StatusCode < 600)
 			if n, e := strconv.Atoi(resp.Header.Get("Retry-After")); e == nil {
@@ -168,11 +170,14 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 			} else if out != nil {
 				if e := json.NewDecoder(resp.Body).Decode(out); e != nil {
 					retryable = networkFailure(e)
-					err = errors.New("zerops: invalid JSON response")
+					err = unavailable(errors.New("zerops: invalid JSON response"))
 				}
 			} else {
 				_, err = io.Copy(io.Discard, resp.Body)
 				retryable = networkFailure(err)
+				if err != nil {
+					err = unavailable(err)
+				}
 			}
 			resp.Body.Close()
 		}
@@ -262,7 +267,7 @@ func (c *Client) DeleteService(ctx context.Context, id string) (Process, error) 
 // Lifecycle schedules start, stop or restart. These process-creating PUTs are not replayed.
 func (c *Client) Lifecycle(ctx context.Context, id, action string) (Process, error) {
 	if action != "start" && action != "stop" && action != "restart" {
-		return Process{}, errors.New("zerops: invalid lifecycle action")
+		return Process{}, &infra.RejectedError{Message: "zerops: invalid lifecycle action"}
 	}
 	var v Process
 	err := c.json(ctx, "PUT", "/service-stack/"+escape(id)+"/"+action, struct{}{}, &v, false)

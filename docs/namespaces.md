@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Namespaces and relays
 
-A namespace maps one existing Zerops project to its infrastructure credentials, management routing and RBAC scope.
+A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind. Zerops (`zerops`) remains the only registered backend, so targets are existing Zerops projects; existing records and omitted create kinds default to `zerops`.
 
-`default` is the control-plane project: its token comes from `KARAKORAM_ZEROPS_TOKEN` and networking is direct. Additional projects each use an outbound management relay. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
+`default` is the control-plane project: its token comes from `KARAKORAM_ZEROPS_TOKEN` and networking is direct. Additional namespaces use an outbound management relay when their backend requires one (`BackendInfo.Relay`); Zerops keeps this requirement. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
 
 ## Names and selection
 
-Names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters/digits/hyphens, starting with a letter and ending with a letter/digit. `default` is reserved. A project belongs to only one namespace. Name/project identity are immutable; description is editable. Cluster/storage names are namespace-local.
+Names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters/digits/hyphens, starting with a letter and ending with a letter/digit. `default` is reserved. A target belongs to only one namespace within its backend kind. Name/backend/target identity are immutable; description is editable. Cluster/storage names are namespace-local.
 
 | Interface | Selection |
 | --- | --- |
@@ -25,6 +25,16 @@ Responses carry `namespace`; unfiltered tables identify it. CLI/UI namespace lis
 
 An explicit nonexistent `?namespace=NAME` returns **404 `not_found` only if the caller holds a permission in that namespace**; otherwise collections remain empty and object requests return their normal **403**. The 404 identifies `details.resource: namespace` and `details.name`. Omit the parameter for all namespaces; empty/malformed values return **400**.
 
+## Backend discovery
+
+`GET /api/v1/backends` and `karactl backends list` require `namespaces/read` on global `*` and list registered backend kinds, display names, experimental status, enabled capabilities, relay requirements and accepted non-secret config keys. Namespace responses include `backend`, `capabilities` and non-secret `config`; use `karactl namespaces get NAME -o yaml` to inspect them. Capabilities describe optional infrastructure features, not engine-provider features or availability guarantees.
+
+In **Settings → Namespaces**, the table and detail identify the backend; the detail's **Capabilities** section marks each known feature **Supported** or **Not supported**.
+
+Namespace creation accepts `backend` (default `zerops`) and a string-to-string `config` object. CLI flags are `--backend zerops` and repeatable `--config key=value`; Zerops accepts no config keys. Its API URL is operator-only, set with `KARAKORAM_ZEROPS_API_URL` for all namespaces, including legacy records; namespace callers cannot override it. Credentials belong in the write-only token input, never config. Unknown backend kinds/config keys are rejected with **400**. The backend registry is not a list of additional supported platforms.
+
+Cluster create, replace and patch requests check the namespace backend's advertised capabilities after engine defaults and validation. Specs requiring unavailable features (such as public TCP exposure or dedicated CPU) return **400 `invalid_request`** before any cluster change is saved; capability admission uses static backend metadata, not a platform API request.
+
 ## Add, validate and rotate
 
 1. Create a token for the additional project using the [required Zerops token scope](security.md). Allow capacity for one relay runtime and an available hostname, normally `karakoramrelay`.
@@ -33,7 +43,7 @@ An explicit nonexistent `?namespace=NAME` returns **404 `not_found` only if the 
 
 ```sh
 # Store the project token in a private, untracked file; '-' reads stdin.
-karactl namespaces create --name dev --project-id '<project-id>' \
+karactl namespaces create --name dev --backend zerops --project-id '<project-id>' \
   --token-file namespace-token.txt
 karactl namespaces get dev -o yaml
 # Once the relay is connected, select the namespace for cluster commands.
@@ -45,9 +55,9 @@ karactl namespaces rotate-token dev --token-file replacement-token.txt --yes
 
 Tokens are write-only. Never put them in argument values, committed files or shell traces. Registration validates synchronously and returns **201**; deployment follows asynchronously. Missing required fields/invalid names return **400**; existing/reserved names **409**; invalid credentials/project scope, duplicate projects or occupied relay hostnames **422**.
 
-Validation checks project identity/service-list access, not every mutation grant: insufficient read-capable tokens can pass and fail deployment. Wait for `token.valid: true`, namespace/relay `Ready` and `relay.connected: true`.
+Validation checks project identity/service-list access, not every mutation grant: insufficient read-capable tokens can pass and fail deployment. For Zerops, wait for `token.valid: true`, namespace/relay `Ready` and `relay.connected: true`. A backend that does not require a relay reports `relay.phase: NotRequired` and uses direct management connectivity.
 
-Re-validation reports invalid stored credentials through `token.valid: false`/`lastError`, not necessarily an HTTP error. Checks run about every five minutes. Explicit **401/403** or authentication errors invalidate tokens; **429/5xx**, timeouts and connection failures retain last-known validity with `Zerops API temporarily unavailable: <safe detail>; retrying`. First validation must succeed before validity is known. Transient create/rotation failures return **500 `internal_error`**, not 422, and do not save submitted credentials.
+Re-validation reports invalid stored credentials through `token.valid: false`/`lastError`, not necessarily an HTTP error. A manual validation request returns a stored-token read error to the caller without changing token health. Checks run about every five minutes. Explicit **401/403** or authentication errors invalidate tokens; **429/5xx**, timeouts and connection failures retain last-known validity with `Zerops API temporarily unavailable: <safe detail>; retrying`. First validation must succeed before validity is known. Transient create/rotation failures return **500 `internal_error`**, not 422, and do not save submitted credentials; rejected or unsupported backend requests return **400**.
 
 Rotation validates the **same project**, seals the replacement and updates live infrastructure access without restarting the relay/session. Revoke the old token only after success. `default` API rotation returns **409**: update its service secret and restart instead.
 
@@ -63,7 +73,7 @@ The hostname appends `relay` to the control-plane hostname; over 25 characters i
 | `token.source`, `valid` | `env` for default or `stored`; last validation result |
 | `token.lastValidatedAt`, `lastError`, `rotatedAt` | Validation/rotation timestamps and diagnostic; no token/fingerprint |
 | `relay.hostname`, `serviceId` | Private service identity |
-| `relay.phase` | `NotRequired` for default; otherwise `Pending`, `Deploying`, `Ready`, `Error` |
+| `relay.phase` | `NotRequired` for default or a non-relay backend; otherwise `Pending`, `Deploying`, `Ready`, `Error` |
 | `relay.connected`, `connectedSince`, `lastSeenAt` | Authenticated session/activity |
 | `relay.version`, `desiredVersion` | Reported/desired executable; digest mismatch triggers redeployment |
 | `relay.certNotAfter` | Certificate expiry; renewal starts within thirty days |

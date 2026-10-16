@@ -16,7 +16,7 @@ import (
 func TestImportRejectsVariableAndSecretKeyOverlap(t *testing.T) {
 	calls := 0
 	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) { calls++; t.Errorf("unexpected request %s", r.URL.Path) })
-	_, err := b.ImportServices(t.Context(), []infra.ServiceSpec{{Hostname: "member", Type: "ubuntu@24.04", Env: map[string]string{"OWNER": "secret"}, Vars: map[string]string{"OWNER": "public"}}})
+	_, err := b.ImportServices(t.Context(), []infra.ServiceSpec{{Hostname: "member", Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, Env: map[string]string{"OWNER": "secret"}, Vars: map[string]string{"OWNER": "public"}}})
 	if err == nil || calls != 0 {
 		t.Fatalf("overlap accepted: calls=%d err=%v", calls, err)
 	}

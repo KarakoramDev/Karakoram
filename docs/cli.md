@@ -65,6 +65,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | --- | --- | --- | --- |
 | `accounts` | Local control-plane accounts | list, get, create, set, delete, reset-password, change-password | All |
 | `auth` | Advanced cookie/OIDC flows | refresh, oidc-login, oidc-callback | All |
+| `backends` | Registered infrastructure kinds and capabilities | list | All |
 | `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window MongoDB only |
 | `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, restart, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
 | `completion` | Generate shell scripts | bash, zsh, fish, powershell | Local |
@@ -123,6 +124,7 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `backups create CLUSTER [NAME]` | `-f`, `--storage` (cluster default), `--type` (CLI default logical; choose the engine-supported type in [backup guidance](backups.md)) |
 | `backups list CLUSTER` | `--limit`, `--cursor` |
 | `restores create CLUSTER [NAME]` | `-f`, `--backup`, `--time` (RFC3339, where supported), `--source-cluster`, `--source-namespace`, `--into-new`, `--yes` |
+| `namespaces create` | `-f`, `--name`, `--project-id` (backend target ID), `--token-file`, `--description`, `--backend` (zerops), repeatable `--config key=value` (non-secret backend settings; Zerops accepts none, its API URL is operator-only) |
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |
 | `tokens create/set` | `-f`; list has `--limit`, `--cursor`; delete/revoke has `--yes` |
 | `events list` | `--cluster`, `--type`, `--operation`, `--actor`, `--resource`, `--order asc\|desc`, `--limit`, `--cursor` |

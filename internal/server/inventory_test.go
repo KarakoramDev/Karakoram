@@ -54,6 +54,7 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"ReplaceBackupStorage", "PUT", "/api/v1/backup-storages/storage", "{\"type\":\"s3\",\"endpointURL\":\"http://127.0.0.1:1\",\"region\":\"us-east-1\",\"bucket\":\"test\",\"forcePathStyle\":true,\"verifyTLS\":true}"},
 		{"VerifyBackupStorage", "POST", "/api/v1/backup-storages/storage/verify", "{}"},
 		{"ListNamespaces", "GET", "/api/v1/namespaces", ""},
+		{"ListBackends", "GET", "/api/v1/backends", ""},
 		{"CreateNamespace", "POST", "/api/v1/namespaces", `{"name":"inventoryns","projectId":"proj-inventory","token":"synthetic-token"}`},
 		{"GetNamespace", "GET", "/api/v1/namespaces/inventoryns", ""},
 		{"UpdateNamespace", "PATCH", "/api/v1/namespaces/inventoryns", `{"description":"Inventory namespace"}`},

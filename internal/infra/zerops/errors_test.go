@@ -236,9 +236,11 @@ func TestResourceRejectionClassificationAndBounds(t *testing.T) {
 		api := &APIError{StatusCode: 400, Code: code, Message: strings.Repeat("界 ", 1000)}
 		err := rejectedUpdate(api, "resource update", "dbzero", "cpuMode=SHARED cpu=2-2 startCpu=1")
 		var got *APIError
-		var coded interface{ ErrorCode() string }
-		if !errors.As(err, &got) || got != api || !errors.As(err, &coded) || coded.ErrorCode() != code {
+		if !errors.As(err, &got) || got != api || got.Code != code {
 			t.Fatalf("classification lost: %v", err)
+		}
+		if errors.Is(err, infra.ErrResourceChangeCooldown) != (code == "lastCpuModeChangeTooRecent") || errors.Is(err, infra.ErrUnauthorized) != (code == "tokenExpired") || errors.Is(err, infra.ErrRejected) != (code != "tokenExpired") {
+			t.Fatalf("neutral classification lost: %v", err)
 		}
 		if IsAuthenticationError(err) != (code == "tokenExpired") {
 			t.Fatalf("authentication classification lost: %v", err)

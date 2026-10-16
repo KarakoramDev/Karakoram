@@ -13,6 +13,7 @@ export const keys = {
   cluster: (namespace: string, name: string) => ['cluster', namespace, name] as const,
   clusterSub: (namespace: string, name: string, sub: string) => ['cluster', namespace, name, sub] as const,
   providers: ['providers'] as const,
+  backends: ['backends'] as const,
   backupStorages: ['backup-storages'] as const,
   backupStorageList: (namespace: string | undefined) => ['backup-storages', namespace ?? ''] as const,
   orphanedVolumes: ['orphaned-volumes'] as const,

@@ -99,7 +99,7 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		return domain.Placement{}, e
 	}
 	out := domain.Placement{Groups: map[string][]string{}}
-	warnings := []string{"Zerops does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance"}
+	warnings := []string{"The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance"}
 	unknown := false
 	for _, m := range ordered(s) {
 		a, e := p.agent(ctx, rc, m.Name)

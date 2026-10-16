@@ -88,6 +88,30 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	s.trigger(ctx, ref)
 	return response{status: 202, body: operationAPI(op), operationID: op.ID}
 }
+func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster) *response {
+	kind := "zerops"
+	namespace := domain.NormalizedNamespace(c.Namespace)
+	n, err := s.Store.GetNamespace(ctx, namespace)
+	if err != nil && !(namespace == domain.DefaultNamespace && errors.Is(err, store.ErrNotFound)) {
+		r := s.failure(err)
+		return &r
+	}
+	if n != nil && n.Backend != "" {
+		kind = n.Backend
+	}
+	factory, err := s.Backends.Get(kind)
+	if err != nil {
+		r := s.namespaceFailure(err)
+		return &r
+	}
+	info := factory.Info()
+	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, info.Capabilities); err != nil {
+		r := fail(400, "invalid_request", err.Error())
+		return &r
+	}
+	return nil
+}
+
 func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	switch name {
 	case "ListProviders":
@@ -166,6 +190,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
+		}
+		if failure := s.validateBackendCapabilities(ctx, p, &c); failure != nil {
+			return *failure
 		}
 		if err = s.validateStorages(ctx, &c); err != nil {
 			return s.failure(err)
@@ -282,6 +309,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		next.Spec.Exposure.AllowAllAddresses = next.Spec.Exposure.Public && domain.ExposureCoversFamily(next.Spec.Exposure)
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
+		}
+		if failure := s.validateBackendCapabilities(ctx, p, &next); failure != nil {
+			return *failure
 		}
 		if next.Spec.Version != c.Spec.Version {
 			if err = s.validateUpgradeBackup(ctx, c, next.Spec.Version, p); err != nil {

@@ -1,0 +1,29 @@
+{
+  "binary": "karakoram",
+  "hostname": "demorelay",
+  "runtime": {
+    "base": "ubuntu-24.04",
+    "env": {
+      "KARAKORAM_RELAY_NAMESPACE": "demo",
+      "KARAKORAM_RELAY_URL": "https://control.example.com"
+    },
+    "args": [
+      "relay"
+    ],
+    "ports": [
+      {
+        "port": 9443,
+        "protocol": "tcp"
+      }
+    ],
+    "readiness": {
+      "args": [
+        "relay",
+        "readiness"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

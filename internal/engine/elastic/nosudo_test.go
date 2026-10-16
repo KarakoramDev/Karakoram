@@ -76,7 +76,7 @@ func TestMaskedMemberOwnershipEvidence(t *testing.T) {
 func TestLegacyMemberOwnershipBackfillsMarkers(t *testing.T) {
 	_, rc, f, _, m := ownershipFixture(t)
 	for _, name := range []string{m.Name, m.Volume} {
-		f.services[name] = &infra.Service{ID: "id-" + name, Hostname: name, Ownership: ownershipEnv(rc.Cluster.Name, m.Name, ownershipTestToken)}
+		f.services[name] = &infra.Service{ID: "id-" + name, Hostname: name, Ownership: engine.OwnershipEnv(rc.Cluster.Name, m.Name, ownershipTestToken)}
 	}
 	if err := verifyMemberServices(t.Context(), rc, m); err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestLegacyMemberOwnershipBackfillsMarkers(t *testing.T) {
 func TestMaskedRuntimeMarkerVerifiesExactVolumeMount(t *testing.T) {
 	_, rc, f, _, m := ownershipFixture(t)
 	env := engine.OwnerVars(ownershipTestToken, rc.Cluster.Name, m.Name, m.Name)
-	env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+	env["KARAKORAM_DATA_DIR"] = f.Layout().VolumePath(m.Volume)
 	f.services[m.Name] = &infra.Service{ID: "runtime", Hostname: m.Name, Masked: true, Ownership: env}
 	f.services[m.Volume] = &infra.Service{ID: "volume", Hostname: m.Volume}
 	if err := verifyMemberServices(t.Context(), rc, m); err != nil {

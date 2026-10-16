@@ -77,7 +77,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Family | Routes or cluster suffixes | Engines |
 | --- | --- | --- |
 | Identity/policy/settings | `/auth/*`, `/accounts`, `/api-tokens`, `/permissions`, `/rbac/policy`, `/rbac/can`, `/settings` | All |
-| Discovery/health | `/providers`, `/providers/{provider}`, `/version`; root `/healthz` | All |
+| Discovery/health | `/providers`, `/providers/{provider}`, `/backends`, `/version`; root `/healthz` | All |
 | Namespaces | `/namespaces`, `/namespaces/{namespace}`, `/token`, `/validate` suffixes | All |
 | Cluster state/connections | `/clusters`, `/clusters/{cluster}`; `/status`, `/members`, `/placement`, `/connection` | All |
 | Lifecycle | `/restart`, `/resume`, `/rotate-tls`, `/members/{member}/replace`, `/system-users`, `/system-users/{user}/rotate` | Provider-supported capabilities |
@@ -96,11 +96,15 @@ Object routes and creation default to **`default`**. Omitting `namespace` on cro
 
 For an explicit nonexistent namespace, authorized callers receive **404** `not_found` with `details.resource: namespace` and `details.name`. Without a permission there, collections remain empty and object requests retain their normal **403**, regardless of existence. Public/authentication routes do not resolve this parameter.
 
-**`GET /namespaces` paginates normally**, after authorization filtering. Namespace creation returns **201** after synchronous validation, then deploys its relay asynchronously. **`DELETE /namespaces/{namespace}` returns 202 without a body or `Karakoram-Operation-Id`**: poll namespace lifecycle/health and events until removal, not `/operations`. Registration, token validation/rotation and guarded deletion belong in [namespaces](namespaces.md). Recovery source namespace fields and source-export permissions belong in [backups](backups.md).
+**`GET /namespaces` paginates normally**, after authorization filtering. Namespace creation accepts required `name`, `projectId` (backend target ID) and write-only `token`, plus optional `description`, `backend` (default `zerops`) and `config` (non-secret string settings). `GET /backends` requires `namespaces/read` on global `*` and lists registered kinds, capabilities, relay requirements and config keys; namespace responses include `backend` and enabled `capabilities`. Zerops is the only registered backend and accepts no config keys: any namespace config key returns **400**. Its API URL is operator-only (`KARAKORAM_ZEROPS_API_URL`) and applies equally to legacy and new namespaces. Backend/target identity is immutable.
+
+Creation returns **201** after synchronous validation, then deploys a relay asynchronously only if the backend requires one (as Zerops does). **`DELETE /namespaces/{namespace}` returns 202 without a body or `Karakoram-Operation-Id`**: poll namespace lifecycle/health and events until removal, not `/operations`. Registration, token validation/rotation and guarded deletion belong in [namespaces](namespaces.md). Recovery source namespace fields and source-export permissions belong in [backups](backups.md).
 
 ## Requests and asynchronous work
 
 Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec: {...}}` as a JSON merge patch. Arrays replace entirely. Name/status/generation/timestamps are server-owned. Unknown fields, wrong types, invalid enums/bounds and trailing JSON produce **400** with `details.field` and `details.reason`. Explicit zero counts/resources are invalid, not defaults. `spec.provider` is required; omitted version/topology/components/resources use that catalog's defaults. Go input fields use pointers: nil requests defaults, a pointer to zero does not.
+
+Cluster create, PUT and PATCH apply engine defaults and validation, then check the namespace backend's static capabilities before saving. A spec requiring an unavailable capability returns **400 `invalid_request`** naming the backend and missing capabilities (for example `publicTcp`); admission does not make a platform API request.
 
 Send the declared Content-Type: usually `application/json`, but cluster PATCH uses `application/merge-patch+json` (`application/json` is also accepted there for older clients). The request-body limit is **2 MiB**, including chunked requests. Responses echo `X-Request-ID`; optionally supply 1–128 characters from `[A-Za-z0-9._:-]`. Invalid/repeated IDs are replaced. Include the ID, never credentials, in error reports.
 

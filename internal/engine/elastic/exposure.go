@@ -6,7 +6,6 @@ package elastic
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -86,6 +85,9 @@ func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bo
 			}
 			continue
 		}
+		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure.Allowlist); err != nil {
+			return true, err
+		}
 		if m.PublicPort == 0 {
 			port, err := p.allocatePublicPort(ctx, rc, s, m)
 			if err != nil {
@@ -117,8 +119,8 @@ func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bo
 			if desired {
 				action = "subdomain-on"
 			}
-			if _, ok := rc.Backend.(infra.SubdomainAccess); !ok {
-				return true, fmt.Errorf("%w: backend does not support public HTTPS", engine.ErrNotSupported)
+			if _, err := engine.PublicHTTPS(rc.Backend); err != nil {
+				return true, err
 			}
 			return true, p.issueAction(ctx, rc, s, &pending{Action: action, Member: m.Name})
 		}

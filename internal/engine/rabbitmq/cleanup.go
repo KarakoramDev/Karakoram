@@ -101,7 +101,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 				return false, e
 			}
 			switch runtime.Status {
-			case "STOPPED", "FAILED", "READY_TO_DEPLOY":
+			case infra.StatusStopped, infra.StatusFailed, infra.StatusReadyToDeploy:
 				// The owned platform runtime cannot serve agent RPCs in these
 				// states. Its observation is sufficient to skip broker shutdown.
 				m.RemoveStep = "cleanup-stopped"
@@ -140,7 +140,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			if e = rc.Backend.DeletePublicPorts(ctx, m.Name); e != nil {
 				return false, e
 			}
-			if sub, ok := rc.Backend.(infra.SubdomainAccess); ok && m.ManagementPublic {
+			if sub, err := engine.PublicHTTPS(rc.Backend); err == nil && m.ManagementPublic {
 				op, e := sub.SetSubdomainAccess(ctx, m.Name, false)
 				if e != nil {
 					return false, e

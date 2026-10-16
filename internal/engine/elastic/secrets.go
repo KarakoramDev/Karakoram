@@ -224,9 +224,6 @@ func (p *Provider) issueLeafs(ctx context.Context, rc *engine.Context, s *state,
 	}
 	return nil
 }
-func ownershipEnv(cluster, member, token string) map[string]string {
-	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
-}
 
 // verifyMemberServices records proven identities, then backfills non-sensitive
 // markers only after both runtime and storage have passed ownership checks.
@@ -272,7 +269,7 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 			// Local Storage may have no environment after a partial import.
 			// A recorded runtime ID alone cannot authorize a new volume;
 			// its marker or readable legacy secret and exact mount must match.
-			if !verified && volume && tok != nil && engine.HasOwnership(runtime, tok.Token, rc.Cluster.Name, m.Name) && runtime.Ownership["KARAKORAM_DATA_DIR"] == "/mnt/"+name {
+			if !verified && volume && tok != nil && engine.HasOwnership(runtime, tok.Token, rc.Cluster.Name, m.Name) && engine.MountsVolume(rc.Backend, runtime, name) {
 				verified = true
 			}
 		}

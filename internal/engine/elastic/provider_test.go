@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -46,6 +47,12 @@ type coreInfra struct {
 }
 
 func (f *coreInfra) Name() string { return "test" }
+func (*coreInfra) Capabilities() infra.Capabilities {
+	return infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true, DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true, DedicatedCPU: true, HorizontalScaling: true}
+}
+func (*coreInfra) Layout() infra.Layout {
+	return infra.Layout{AppDir: path.Join("/", "var", "www"), VolumeRoot: path.Join("/", "mnt"), User: "zerops"}
+}
 func (f *coreInfra) ProjectInfo(context.Context) (infra.Project, error) {
 	return infra.Project{PublicIPv6: "2001:db8::1", PublicIPv4: "192.0.2.1"}, nil
 }
@@ -63,7 +70,7 @@ func (f *coreInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		for key, value := range s.Vars {
 			ownership[key] = value
 		}
-		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: ownership, MinContainers: s.MinContainers, MaxContainers: s.MaxContainers}
+		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Kind: s.Kind, Resources: s.Resources, Ownership: ownership, MinContainers: s.MinContainers, MaxContainers: s.MaxContainers}
 		services[s.Hostname] = s.Hostname
 		f.calls = append(f.calls, "import:"+s.Hostname)
 	}
@@ -92,15 +99,25 @@ func (f *coreInfra) DeleteService(_ context.Context, name string) (infra.Op, err
 	delete(f.nodes, name)
 	return infra.Op{ID: "delete"}, nil
 }
+func (f *coreInfra) DeleteServiceByID(ctx context.Context, name, expectedID string) (infra.Op, error) {
+	service, err := f.GetService(ctx, name)
+	if err != nil || service == nil {
+		return infra.Op{}, err
+	}
+	if service.ID != expectedID {
+		return infra.Op{}, infra.ErrConflict
+	}
+	return f.DeleteService(ctx, name)
+}
 func (f *coreInfra) Deploy(_ context.Context, name string, d infra.Deployment) (infra.Op, error) {
-	if _, err := io.Copy(io.Discard, d.Artifact); err != nil {
+	if _, err := io.Copy(io.Discard, d.Artifact.Reader); err != nil {
 		return infra.Op{}, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.mutations++
 	f.calls = append(f.calls, "deploy:"+name)
-	if strings.Contains(d.ZeropsYAML, "downloads/elasticsearch/") {
+	if strings.Contains(strings.Join(d.Runtime.Prepare, "\n"), "downloads/elasticsearch/") {
 		f.nodes[name] = f.version()
 	}
 	return infra.Op{ID: "deploy"}, nil
@@ -183,7 +200,7 @@ func (f *coreInfra) Containers(_ context.Context, name string) ([]infra.Containe
 	if f.services[name] == nil {
 		return nil, errors.New("service " + name + " not found")
 	}
-	return []infra.Container{{Status: "ACTIVE", PlacementGroup: "group-a"}}, nil
+	return []infra.Container{{Status: infra.ContainerActive, PlacementGroup: "group-a"}}, nil
 }
 func (*coreInfra) Logs(context.Context, string, infra.LogQuery) ([]infra.LogLine, error) {
 	return nil, nil
@@ -657,7 +674,7 @@ func TestInitialProvisioningPendingBootstrapAndSecurity(t *testing.T) {
 		t.Fatal(es.mutations)
 	}
 	for _, imported := range f.imports {
-		if len(imported) != 2 || imported[0].Type != "local-storage:single@1" || imported[1].ZeropsYAML != "" || imported[1].Env["KARAKORAM_AGENT_TOKEN"] == "" {
+		if len(imported) != 2 || imported[0].Kind != infra.KindVolume || imported[1].Kind != infra.KindRuntime || imported[1].Env["KARAKORAM_AGENT_TOKEN"] == "" {
 			t.Fatal(imported)
 		}
 	}
@@ -1253,7 +1270,7 @@ func TestDataSourceValidationAndCrashSafeInitialQueue(t *testing.T) {
 
 func TestOwnershipAndOccupiedNameSafety(t *testing.T) {
 	p, rc, f, _ := coreSetup(t, 1)
-	f.services["demon0v"] = &infra.Service{ID: "unrelated", Hostname: "demon0v", Type: "local-storage:single@1"}
+	f.services["demon0v"] = &infra.Service{ID: "unrelated", Hostname: "demon0v", Kind: infra.KindVolume}
 	s := coreConverge(t, p, rc, f)
 	if s.find("demon1") == nil || f.services["demon0v"].ID != "unrelated" {
 		t.Fatal("adopted unowned existing volume")

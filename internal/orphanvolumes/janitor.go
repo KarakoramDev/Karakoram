@@ -192,15 +192,9 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 		v.NextAttemptAt = j.Now().Add(PollInterval)
 		return j.Store.PutOrphanedVolume(ctx, v)
 	}
-	deleter, ok := backend.(interface {
-		DeleteServiceByID(context.Context, string, string) (infra.Op, error)
-	})
-	if !ok {
-		return j.failed(ctx, v, "namespace backend does not support ID-fenced volume deletion")
-	}
 	v.Attempts++
 	v.LastAttemptAt = j.Now()
-	op, err := deleter.DeleteServiceByID(ctx, v.Hostname, v.ServiceID)
+	op, err := backend.DeleteServiceByID(ctx, v.Hostname, v.ServiceID)
 	if op.ID != "" {
 		v.LastProcessID = op.ID
 	}

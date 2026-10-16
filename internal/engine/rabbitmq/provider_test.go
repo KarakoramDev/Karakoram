@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,7 +23,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 func TestCatalogAndValidation(t *testing.T) {
@@ -239,7 +239,7 @@ func TestDataSourceValidation(t *testing.T) {
 	}
 }
 
-func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
+func TestRuntimeSpecAndMemberConfigTLSModes(t *testing.T) {
 	for _, mode := range []string{"disabled", "preferTLS", "requireTLS"} {
 		for _, publicUI := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/public=%v", mode, publicUI), func(t *testing.T) {
@@ -266,37 +266,39 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 					t.Fatal(err)
 				}
 				m := s.Members[0]
-				text, err := p.zeropsYAML(rc, m, "4.3.5")
+				runtime, err := p.runtimeSpec(rc, m, "4.3.5")
 				if err != nil {
 					t.Fatal(err)
 				}
-				var doc map[string]any
-				if err = yaml.Unmarshal([]byte(text), &doc); err != nil {
-					t.Fatal(err)
+				dataDir := rc.Backend.Layout().VolumePath(m.Volume)
+				wantEnv := map[string]string{
+					"KARAKORAM_URL": p.options.ControlPlaneURL, "KARAKORAM_CLUSTER": rc.Cluster.Name,
+					"KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM,
+					engine.DataDirVariable: dataDir, "KARAKORAM_ENGINE": "rabbitmq",
 				}
-				for _, want := range []string{"temporaryShutdown: true", "/var/www/karakoram agent readiness --engine=rabbitmq --data-dir=/mnt/demom0v", "failureTimeout: 300s", "retryPeriod: 10s", "ubuntu@24.04", "hostname: demom0v", "rabbitmq-server=4.3.5-1", "1:27.3.4.17-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com", "KARAKORAM_URL", "KARAKORAM_CLUSTER", "KARAKORAM_MEMBER", "KARAKORAM_INTERNAL_CA", "KARAKORAM_ENGINE: rabbitmq", "KARAKORAM_DATA_DIR: /mnt/demom0v", "./karakoram agent"} {
-					if !strings.Contains(text, want) {
-						t.Errorf("missing %q in YAML:\n%s", want, text)
+				if runtime.Base != infra.BaseUbuntu2404 || runtime.Volume != m.Volume || !runtime.StopBeforeStart || !slices.Equal(runtime.Args, []string{"agent"}) || !reflect.DeepEqual(runtime.Env, wantEnv) {
+					t.Fatalf("runtime: %+v", runtime)
+				}
+				if runtime.Readiness == nil || !slices.Equal(runtime.Readiness.Args, []string{"agent", "readiness", "--engine=rabbitmq", "--data-dir=" + dataDir}) || runtime.Readiness.FailureTimeout != 300*time.Second || runtime.Readiness.RetryPeriod != 10*time.Second {
+					t.Fatalf("readiness: %+v", runtime.Readiness)
+				}
+				wantPorts := []int{5672, 5671, 15672, 15671, 15692, 4369, 25672, 5551, 5552}
+				if len(runtime.Ports) != len(wantPorts) {
+					t.Fatalf("ports: %+v", runtime.Ports)
+				}
+				for i, port := range runtime.Ports {
+					if port.Port != wantPorts[i] || port.Protocol != "tcp" || port.HTTP != (port.Port == 15672 && publicUI && mode != "requireTLS") {
+						t.Fatalf("port mismatch: %+v", port)
 					}
 				}
-				for _, port := range []int{5672, 5671, 15672, 15671, 15692, 4369, 25672} {
-					if !strings.Contains(text, fmt.Sprintf("port: %d", port)) {
-						t.Errorf("missing port %d", port)
+				for _, want := range []string{"rabbitmq-server=4.3.5-1", "1:27.3.4.17-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com"} {
+					if !strings.Contains(strings.Join(runtime.Prepare, "\n"), want) {
+						t.Errorf("missing %q in prepare: %v", want, runtime.Prepare)
 					}
 				}
-				run := doc["zerops"].([]any)[0].(map[string]any)["run"].(map[string]any)
-				for _, entry := range run["ports"].([]any) {
-					port := entry.(map[string]any)
-					httpSupport, _ := port["httpSupport"].(bool)
-					if httpSupport != (port["port"] == 15672 && publicUI && mode != "requireTLS") {
-						t.Fatalf("httpSupport mismatch: %+v", port)
-					}
-				}
-				prepare := run["prepareCommands"].([]any)
 				install := ""
 				policyIndex, installIndex := -1, -1
-				for i, command := range prepare {
-					text := command.(string)
+				for i, text := range runtime.Prepare {
 					if strings.Contains(text, "policy-rc.d") {
 						policyIndex = i
 					}
@@ -313,11 +315,11 @@ func TestZeropsYAMLAndMemberConfigTLSModes(t *testing.T) {
 						t.Errorf("unpinned Erlang package %s", pkg)
 					}
 				}
-				newer, err := p.zeropsYAML(rc, m, "4.3.6")
+				newer, err := p.runtimeSpec(rc, m, "4.3.6")
 				if err != nil {
 					t.Fatal(err)
 				}
-				if text == newer || !strings.Contains(newer, "rabbitmq-server=4.3.6-1") {
+				if slices.Equal(runtime.Prepare, newer.Prepare) || !strings.Contains(strings.Join(newer.Prepare, "\n"), "rabbitmq-server=4.3.6-1") {
 					t.Fatal("version not embedded in prepare cache key")
 				}
 				cfg, err := p.MemberConfig(context.Background(), rc, m.Name)
@@ -458,5 +460,77 @@ func TestProjectPortReservationsAreStableAcrossClusters(t *testing.T) {
 	again, err := p.allocatePublicPort(ctx, rc, s, m)
 	if err != nil || again != first {
 		t.Fatal("reservation unstable", again, err)
+	}
+}
+
+func TestBackendCapabilityGatesDoNotRetry(t *testing.T) {
+	for _, feature := range []string{"public TCP", "TCP allowlist", "public HTTPS", "disk growth"} {
+		t.Run(feature, func(t *testing.T) {
+			p, rc, f, _ := setup(t)
+			ready(t, p, rc)
+			s := state(t, rc)
+			m := s.Members[0]
+			capabilities := f.Capabilities()
+			f.capabilities = &capabilities
+			before := f.mutations
+			var err error
+			switch feature {
+			case "public TCP", "TCP allowlist":
+				capabilities.PublicTCP = feature != "public TCP"
+				capabilities.TCPAllowlist = feature != "TCP allowlist"
+				rc.Cluster.Spec.Exposure.Public = true
+				rc.Cluster.Spec.Exposure.Allowlist = []string{"192.0.2.0/24"}
+				_, err = p.syncExposure(t.Context(), rc, s)
+				if m.PublicPort != 0 || len(f.publicPorts) != 0 {
+					t.Fatal("unsupported exposure reserved or published a port")
+				}
+			case "public HTTPS":
+				capabilities.PublicHTTPS = false
+				m.EngineOptions = json.RawMessage(`{"managementUI":{"public":true}}`)
+				err = p.submit(t.Context(), rc, s, &pending{Action: "management", Member: m.Name})
+			case "disk growth":
+				capabilities.DiskGrowth = false
+				resources := m.Disk
+				resources.MinDisk++
+				resources.MaxDisk++
+				err = p.submit(t.Context(), rc, s, &pending{Action: "disk", Member: m.Name, Resources: resources})
+			}
+			if !errors.Is(err, engine.ErrNotSupported) || f.mutations != before || s.Pending != nil || s.Retry != nil || len(s.PlatformRetries) != 0 {
+				t.Fatalf("unsupported feature must not mutate or retry: err=%v mutations=%d state=%+v", err, f.mutations-before, s)
+			}
+		})
+	}
+}
+
+func TestUnsupportedManagementCleanupSkipsRouting(t *testing.T) {
+	p, rc, f, _ := setup(t)
+	ready(t, p, rc)
+	s := state(t, rc)
+	m := s.Members[0]
+	m.ManagementPublic = true
+	capabilities := f.Capabilities()
+	capabilities.PublicHTTPS = false
+	f.capabilities = &capabilities
+	before := f.mutations
+	if err := p.submit(t.Context(), rc, s, &pending{Action: "cleanup-management", Member: m.Name}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.observePending(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if m.ManagementPublic || f.mutations != before || s.Pending != nil || s.Retry != nil {
+		t.Fatalf("unsupported routing cleanup did not complete: %+v", s)
+	}
+}
+
+func TestUnsupportedBackendResponseDoesNotRetry(t *testing.T) {
+	p, rc, f, _ := setup(t)
+	ready(t, p, rc)
+	s := state(t, rc)
+	m := s.Members[0]
+	f.failures["resources:"+m.Name] = fmt.Errorf("resource request: %w", infra.ErrUnsupported)
+	err := p.submit(t.Context(), rc, s, &pending{Action: "resources", Member: m.Name, Resources: m.Resources})
+	if !errors.Is(err, infra.ErrUnsupported) || s.Pending != nil || s.Retry != nil || len(s.PlatformRetries) != 0 {
+		t.Fatalf("unsupported backend response scheduled a retry: err=%v state=%+v", err, s)
 	}
 }

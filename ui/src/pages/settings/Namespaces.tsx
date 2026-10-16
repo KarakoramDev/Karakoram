@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, errorMessage, unwrap } from '@/api/client';
-import { useNamespaceDetail, useNamespaces, type Namespace } from '@/api/hooks';
+import { useBackends, useNamespaceDetail, useNamespaces, type Namespace } from '@/api/hooks';
 import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
 import { isNamespaceName } from '@/namespaces/useNamespace';
@@ -15,6 +15,8 @@ import { TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, KV, Loading, Menu, MenuItem, Time, formatRelative, type Tone } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { namespaceHealth } from '@/layout/NamespaceSwitcher';
+import { BackendLabel, NamespaceBackendCell, NamespaceBackendFields, NamespaceCapabilities } from './namespace-backend';
+import { namespaceCreateBody, selectedBackend, type Backend, type NamespaceForm } from './namespace-form';
 
 const PHASE_TONE: Record<Namespace['phase'], Tone> = { Ready: 'ok', Pending: 'progress', Error: 'danger', Deleting: 'warn' };
 const RELAY_TONE: Record<Namespace['relay']['phase'], Tone> = { NotRequired: 'neutral', Pending: 'progress', Deploying: 'progress', Ready: 'ok', Error: 'danger' };
@@ -68,6 +70,7 @@ export function NamespacesPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const namespaces = useNamespaces(auth.can('namespaces', 'read'));
+  const backends = useBackends(auth.can('namespaces', 'read'));
   const [dialog, setDialog] = useState<null | { mode: 'create' } | { mode: 'detail' | 'rotate' | 'describe' | 'remove'; namespace: Namespace }>(null);
   const invalidate = () => queryClient.invalidateQueries({ queryKey: keys.namespaces });
 
@@ -113,6 +116,7 @@ export function NamespacesPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Backend</th>
                   <th>Project</th>
                   <th>Phase</th>
                   <th>Token</th>
@@ -139,6 +143,7 @@ export function NamespacesPage() {
                         </span>
                         {ns.description ? <div className="xs faint">{ns.description}</div> : null}
                       </td>
+                      <NamespaceBackendCell kind={ns.backend} backends={backends.data?.items ?? []} />
                       <td className="small">
                         {ns.projectName || <span className="faint">—</span>}
                         <div className="xs mono faint">{ns.projectId}</div>
@@ -183,14 +188,14 @@ export function NamespacesPage() {
         )}
       </Card>
       <p className="xs faint">
-        Each namespace is one Zerops project with its own project-scoped token. The default namespace is the control plane&apos;s own project and is configured through the service environment; other namespaces reach their clusters through a relay service that
-        Karakoram deploys into the project.
+        Each namespace is a backend target with its own API token. The default namespace is configured through the control-plane environment; backends that require a relay reach their clusters through a service Karakoram deploys into the target.
       </p>
 
       {dialog?.mode === 'create' ? <CreateNamespaceDialog onClose={() => setDialog(null)} /> : null}
       {dialog?.mode === 'detail' ? (
         <NamespaceDetailDialog
           name={dialog.namespace.name}
+          backends={backends.data?.items ?? []}
           onClose={() => setDialog(null)}
           onValidate={canUpdate(dialog.namespace) ? () => validate.mutate(dialog.namespace.name) : undefined}
           validating={validate.isPending}
@@ -206,18 +211,23 @@ export function NamespacesPage() {
   );
 }
 
-function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
+export function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: '', projectId: '', token: '', description: '' });
+  const backends = useBackends();
+  const [form, setForm] = useState<NamespaceForm>({ name: '', projectId: '', token: '', description: '', backend: 'zerops', config: {} });
+  const backend = selectedBackend(backends.data?.items ?? [], form.backend);
   const [error, setError] = useState<{ message: string; details: string[] } | null>(null);
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
-  const valid = isNamespaceName(form.name) && form.name !== 'default' && form.projectId.trim() !== '' && form.token !== '';
+  const valid = !!backend && isNamespaceName(form.name) && form.name !== 'default' && form.projectId.trim() !== '' && form.token !== '';
 
   const create = useMutation({
-    mutationFn: () => unwrap(api.POST('/namespaces', { body: { name: form.name, projectId: form.projectId.trim(), token: form.token, ...(form.description.trim() ? { description: form.description.trim() } : {}) } })),
+    mutationFn: () => {
+      if (!backend) throw new Error('Select a registered backend.');
+      return unwrap(api.POST('/namespaces', { body: namespaceCreateBody(form, backend) }));
+    },
     onSuccess: (ns) => {
-      toast.success(`Namespace ${ns.name} registered; relay deployment started.`);
+      toast.success(backend?.relay ? `Namespace ${ns.name} registered; relay deployment started.` : `Namespace ${ns.name} registered.`);
       void queryClient.invalidateQueries({ queryKey: keys.namespaces });
       onClose();
     },
@@ -253,6 +263,7 @@ function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
           ) : null}
         </Callout>
       ) : null}
+      {backends.isPending ? <Loading /> : backends.error ? <ErrorBlock error={backends.error} retry={() => backends.refetch()} /> : !backends.data.items.length ? <Callout tone="warn">No backends are registered.</Callout> : null}
       <TextField
         label="Name"
         mono
@@ -263,16 +274,16 @@ function CreateNamespaceDialog({ onClose }: { onClose: () => void }) {
         error={form.name && (!isNamespaceName(form.name) || form.name === 'default') ? (form.name === 'default' ? 'default is reserved for the control-plane project.' : 'Use 2–32 lowercase letters, digits or hyphens, starting with a letter and ending with a letter or digit.') : undefined}
         autoFocus
       />
-      <TextField label="Zerops project ID" mono required value={form.projectId} onChange={(e) => set({ projectId: e.target.value })} hint="Each project can belong to only one namespace." autoComplete="off" />
-      <TextField label="Project token" type="password" required value={form.token} onChange={(e) => set({ token: e.target.value })} hint="A project-scoped Zerops access token. Validated against the project before anything is saved; sealed at rest and never returned." autoComplete="new-password" />
+      <NamespaceBackendFields backends={backends.data?.items ?? []} backend={backend} form={form} onChange={set} />
       <TextField label="Description (optional)" value={form.description} onChange={(e) => set({ description: e.target.value })} />
-      <p className="xs faint">After validation, Karakoram deploys a relay service into the project; clusters can be created once the relay reports Ready.</p>
+      {backend?.relay ? <p className="xs faint">After validation, Karakoram deploys a relay service into the {backend.kind === 'zerops' ? 'project' : 'target'}; clusters can be created once the relay reports Ready.</p> : null}
     </Dialog>
   );
 }
 
 function NamespaceDetailDialog({
   name,
+  backends,
   onClose,
   onValidate,
   validating,
@@ -281,6 +292,7 @@ function NamespaceDetailDialog({
   onRemove,
 }: {
   name: string;
+  backends: Backend[];
   onClose: () => void;
   onValidate?: () => void;
   validating: boolean;
@@ -348,6 +360,7 @@ function NamespaceDetailDialog({
           <Section title="Project">
             <KV
               items={[
+                ['Backend', <BackendLabel kind={ns.backend} backends={backends} />],
                 ['Project', ns.projectName || undefined],
                 ['Project ID', <span className="mono">{ns.projectId}</span>],
                 ['Clusters', <Link to={`/clusters?namespace=${encodeURIComponent(ns.name)}`}>{ns.clusterCount}</Link>],
@@ -355,6 +368,9 @@ function NamespaceDetailDialog({
                 ['Updated', <Time iso={ns.updatedAt} />],
               ]}
             />
+          </Section>
+          <Section title="Capabilities">
+            <NamespaceCapabilities capabilities={ns.capabilities} />
           </Section>
           <Section title="Token">
             {ns.token.source === 'env' ? <Callout tone="info">Managed by the control-plane environment. Rotate it by updating the service secret and restarting the control plane.</Callout> : null}

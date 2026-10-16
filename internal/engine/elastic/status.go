@@ -86,7 +86,7 @@ func (p *Provider) observedConnection(ctx context.Context, rc *engine.Context, s
 			}
 		}
 	}
-	if sub, ok := rc.Backend.(infra.SubdomainAccess); ok {
+	if sub, err := engine.PublicHTTPS(rc.Backend); err == nil {
 		for _, m := range s.componentMembers() {
 			if !m.Subdomain {
 				continue
@@ -256,10 +256,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Health = false
 		} else {
 			for _, container := range containers {
-				if !strings.EqualFold(container.Status, "ACTIVE") && !strings.EqualFold(container.Status, "RUNNING") {
+				if !strings.EqualFold(container.Status, infra.ContainerActive) && !strings.EqualFold(container.Status, infra.ContainerRunning) {
 					ms.Health = false
 				}
-				if ms.PlacementGroup == "" {
+				if ms.PlacementGroup == "" && rc.Backend.Capabilities().Placement {
 					ms.PlacementGroup = container.PlacementGroup
 				}
 			}
@@ -372,7 +372,7 @@ func (*Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Plac
 			continue
 		}
 		for _, container := range containers {
-			if container.PlacementGroup != "" {
+			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
 				v.Groups[container.PlacementGroup] = append(v.Groups[container.PlacementGroup], m.Name)
 			}
 		}

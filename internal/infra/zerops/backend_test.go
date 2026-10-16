@@ -74,7 +74,7 @@ func TestImportNoInlineAndAggregatesEveryProcess(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(imported)
 	})
-	op, err := b.ImportServices(context.Background(), []infra.ServiceSpec{{Hostname: "kkv", Type: "local-storage:single@1", Resources: infra.Resources{MinDisk: 1, MaxDisk: 2}}, {Hostname: "kkm", Type: "ubuntu@24.04", Env: map[string]string{"TOKEN": "secret"}, Vars: map[string]string{"KARAKORAM_OWNER": "marker"}, ZeropsYAML: "must not import"}})
+	op, err := b.ImportServices(context.Background(), []infra.ServiceSpec{{Hostname: "kkv", Kind: infra.KindVolume, Resources: infra.Resources{MinDisk: 1, MaxDisk: 2}}, {Hostname: "kkm", Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, Env: map[string]string{"TOKEN": "secret"}, Vars: map[string]string{"KARAKORAM_OWNER": "marker"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -592,7 +592,7 @@ func TestDeployStreamsArtifactAndLifecycle(t *testing.T) {
 		}
 	})
 	for _, reader := range []io.Reader{strings.NewReader("archive"), io.LimitReader(strings.NewReader("archive"), 7)} {
-		if _, err := b.Deploy(context.Background(), "controlplane", infra.Deployment{Artifact: reader, ZeropsYAML: "zerops: []", SetupName: "controlplane", Filename: "test"}); err != nil {
+		if _, err := b.Deploy(context.Background(), "controlplane", infra.Deployment{Artifact: infra.Artifact{Reader: reader, Name: "test", Binary: "karakoram"}, Runtime: infra.RuntimeSpec{Base: infra.BaseUbuntu2404, Args: []string{"agent"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -928,8 +928,7 @@ func TestResourceUpdateRejectionReportsSentValues(t *testing.T) {
 				_, err = b.SetResources(t.Context(), "dbzero", infra.Resources{MinCPU: 2, MaxCPU: 2, StartCPU: &start})
 			}
 			var api *APIError
-			var coded interface{ ErrorCode() string }
-			if !errors.As(err, &api) || !errors.As(err, &coded) || coded.ErrorCode() != "invalidCustomAutoscalingValue" {
+			if !errors.As(err, &api) || api.Code != "invalidCustomAutoscalingValue" || !errors.Is(err, infra.ErrRejected) {
 				t.Fatalf("structured error lost: %v", err)
 			}
 			for _, want := range []string{"Zerops rejected the resource update for dbzero", "invalidCustomAutoscalingValue", "startCpuCoreCount: Value must not be less than minResource.cpuCoreCount", "; attempted " + attemptedResources(sent), "startCpu=1", "ram=0.5-1", "disk=1-4"} {
@@ -1006,7 +1005,7 @@ func TestImportRejectionReportsEffectiveValuesWithoutEnvironment(t *testing.T) {
 	})
 	start := 1.0
 	_, err := b.ImportServices(t.Context(), []infra.ServiceSpec{{
-		Hostname: "dbzero", Type: "ubuntu@24.04", Env: map[string]string{"PASSWORD": "do-not-show-secret"}, Vars: map[string]string{"DATA": "do-not-show-variable"},
+		Hostname: "dbzero", Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, Env: map[string]string{"PASSWORD": "do-not-show-secret"}, Vars: map[string]string{"DATA": "do-not-show-variable"},
 		Resources: infra.Resources{MinCPU: 2, MaxCPU: 2, StartCPU: &start, MinRAM: 0.5, MaxRAM: 1, MinDisk: 1, MaxDisk: 4},
 	}})
 	if err == nil {

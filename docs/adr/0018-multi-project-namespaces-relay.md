@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # 0018 — Multi-project namespaces with outbound relays
 
-Status: Accepted
+Status: Accepted; backend selection and relay requirement generalized by [ADR 0030](0030-backend-neutral-infrastructure-contract.md)
 
 ## Context
 
@@ -13,6 +13,8 @@ Zerops projects have isolated private networks. A project-scoped token permits i
 Represent each project as a **namespace**, with its own project-scoped Full access token and Backend instance. The control plane remains deployed in its own project (ADR 0001), represented by the reserved `default` namespace: private connections remain direct and its token remains environment-managed. Additional namespace tokens are write-only and sealed in SQLite. One project can belong to only one namespace; cluster and backup-storage names are unique within a namespace.
 
 Deploy one outbound relay in each additional project. It runs `karakoram relay`, a subcommand of the same executable, uploaded and deployed like member artifacts. Its private hostname normally defaults to `<control-plane hostname>relay`; names longer than 25 characters use the first sixteen hostname characters, four hexadecimal SHA-256 characters and `relay`. `KARAKORAM_RELAY_HOSTNAME` overrides the default for new enrollments; existing namespaces retain their recorded hostname/SAN. It has one Ubuntu runtime container, private TCP 9443 and no public access. Ownership secrets prevent adoption/deletion of unrelated services. The reconciler redeploys an executable whose digest differs from the control plane's.
+
+ADR 0030 makes the additional-namespace relay conditional on `BackendInfo.Relay`, rather than a requirement of every backend. Zerops keeps `Relay: true` and the behavior described here. A backend with direct management connectivity can omit the relay; `default` and non-relay namespaces report `relay.phase: NotRequired`.
 
 The relay dials the control plane's HTTPS public origin at root `/relay/v1/connect` using HTTP/1.1 WebSocket Upgrade through the L7 balancer. Binary WebSocket messages carry **inner mutually authenticated TLS 1.3**, then **smux protocol v2** multiplexes bidirectional TCP streams. Outer HTTPS verifies the public origin; inner TLS protects tunnel plaintext even across L7 termination and its HTTP forwarding hop. A dedicated installation relay CA issues a hub leaf and namespace-identified client leaves. Admission verifies the CA, namespace identity and enrolled certificate serial; one active session per namespace replaces an older session. Enrollment certificate/key/CA are delivered through Zerops service **env secrets**, never pipeline envVariables or API responses. Client renewal starts within thirty days of expiry.
 

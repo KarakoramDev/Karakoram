@@ -35,6 +35,8 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0027](0027-elastic-stack-components.md) | Version-locked Kibana, Logstash and APM components owned by the cluster |
 | [0028](0028-elasticsearch-security-and-snapshots.md) | TLS/file-realm recovery identity, isolated S3 repositories and destructive snapshot restore |
 | [0029](0029-elastic-licensing.md) | Default Elastic distributions, Basic-tier provisioning and ELv2 managed-service obligations |
+| [0030](0030-backend-neutral-infrastructure-contract.md) | Backend-neutral services, runtime deployment, capabilities and per-namespace backend registry |
+| [0031](0031-engine-component-model.md) | Ordered component definitions, per-component resources and engine-owned lifecycle callbacks |
 
 ## References and verification
 

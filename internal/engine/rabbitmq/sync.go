@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
-	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -105,10 +104,12 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 			continue
 		}
 		if volume {
-			r := rc.Cluster.Spec.Components.Engine.Resources
-			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Volume)})
+			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, rc.Cluster.Spec.Components.Engine.Resources))
 		} else {
-			specs = append(specs, serviceSpec(rc.Cluster, m, tok.Token))
+			specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{
+				Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume,
+				Resources: runtimeResources(rc.Cluster.Spec.Components.Engine.Resources), Containers: 1,
+			}))
 		}
 	}
 	m.Resources = runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
@@ -133,16 +134,11 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 	if err := s.save(rc.Cluster); err != nil {
 		return err
 	}
-	doc, err := p.zeropsYAML(rc, m, version)
+	spec, err := p.runtimeSpec(rc, m, version)
 	if err != nil {
 		return err
 	}
-	artifact, err := rc.Artifact.Open(ctx)
-	if err != nil {
-		return err
-	}
-	defer artifact.Close()
-	op, err := rc.Backend.Deploy(ctx, m.Name, infra.Deployment{Artifact: artifact, ZeropsYAML: doc, SetupName: m.Name, Filename: "karakoram.tar.gz"})
+	op, err := engine.Deploy(ctx, rc, m.Name, spec)
 	s.Pending = &pending{Op: op, Action: action, Member: m.Name, Version: version}
 	if err != nil {
 		return s.failPending(rc, err.Error())

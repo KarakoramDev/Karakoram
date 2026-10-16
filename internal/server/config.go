@@ -19,6 +19,7 @@ import (
 // Config contains endpoint configuration plus bootstrap/recovery/backend credentials.
 // On Zerops, custom ZEROPS_* variables are reserved; use KARAKORAM_ZEROPS_*.
 type Config struct {
+	Backend                                                                                                                             string
 	DataDir, PublicListen, InternalListen, PublicURL, AdvertiseURL, Hostname, AdminPassword, ZeropsToken, ZeropsProjectID, ZeropsAPIURL string
 	RecoveryAccount, RecoveryPassword                                                                                                   string
 }
@@ -38,6 +39,14 @@ func ConfigFromEnv() (Config, error) {
 		public = os.Getenv("zeropsSubdomain")
 	}
 	c := Config{DataDir: envDefault("KARAKORAM_DATA_DIR", "/mnt/karakoramdata"), PublicListen: envDefault("KARAKORAM_LISTEN", ":8080"), InternalListen: envDefault("KARAKORAM_INTERNAL_LISTEN", ":9443"), PublicURL: public, AdvertiseURL: envDefault("KARAKORAM_ADVERTISE_URL", "https://"+net.JoinHostPort(hostname, "9443")), Hostname: hostname, AdminPassword: os.Getenv("KARAKORAM_ADMIN_PASSWORD"), ZeropsToken: os.Getenv("KARAKORAM_ZEROPS_TOKEN"), ZeropsProjectID: envDefault("KARAKORAM_ZEROPS_PROJECT_ID", os.Getenv("projectId")), ZeropsAPIURL: envDefault("KARAKORAM_ZEROPS_API_URL", "https://api.app-prg1.zerops.io/api/rest/public")}
+	c.Backend = envDefault("KARAKORAM_BACKEND", "zerops")
+	registry, err := backendRegistry(c)
+	if err != nil {
+		return Config{}, err
+	}
+	if _, err = c.defaultTarget(registry); err != nil {
+		return Config{}, err
+	}
 	c.RecoveryAccount = envDefault("KARAKORAM_RECOVERY_ACCOUNT", "admin")
 	c.RecoveryPassword = os.Getenv("KARAKORAM_RECOVERY_PASSWORD")
 	return c, c.Validate()
@@ -74,7 +83,11 @@ func (c Config) Validate() error {
 			return errors.New("invalid HTTP listen address")
 		}
 	}
-	for name, raw := range map[string]string{"KARAKORAM_PUBLIC_URL": c.PublicURL, "KARAKORAM_ADVERTISE_URL": c.AdvertiseURL, "KARAKORAM_ZEROPS_API_URL": c.ZeropsAPIURL} {
+	endpoints := map[string]string{"KARAKORAM_PUBLIC_URL": c.PublicURL, "KARAKORAM_ADVERTISE_URL": c.AdvertiseURL}
+	if c.Backend == "" || c.Backend == "zerops" {
+		endpoints["KARAKORAM_ZEROPS_API_URL"] = c.ZeropsAPIURL
+	}
+	for name, raw := range endpoints {
 		u, err := url.Parse(raw)
 		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
 			return fmt.Errorf("%s must be an absolute HTTP(S) URL without credentials/query/fragment", name)
@@ -89,7 +102,7 @@ func (c Config) Validate() error {
 	if len(os.Getenv("KARAKORAM_MASTER_KEY")) < 32 {
 		return errors.New("KARAKORAM_MASTER_KEY must contain at least 32 characters")
 	}
-	if c.ZeropsToken == "" || c.ZeropsProjectID == "" {
+	if (c.Backend == "" || c.Backend == "zerops") && (c.ZeropsToken == "" || c.ZeropsProjectID == "") {
 		return errors.New("KARAKORAM_ZEROPS_TOKEN and KARAKORAM_ZEROPS_PROJECT_ID (or projectId) are required")
 	}
 	return nil

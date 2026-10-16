@@ -1,6 +1,6 @@
 # 0006 — A thin infrastructure Backend and owned Zerops REST client
 
-Status: Accepted
+Status: Accepted; infrastructure contract and factory construction generalized by [ADR 0030](0030-backend-neutral-infrastructure-contract.md)
 
 ## Context
 
@@ -13,6 +13,8 @@ Define `infra.Backend` around required operations: project information; batch im
 Own a thin HTTP REST client in `internal/infra/zerops`, implementing only those endpoints and their wire types. Use `zerops-go` and platform documentation as references, not as the public domain contract or a runtime dependency. Preserve returned Process IDs in reconciliation state and poll `GET /process/{id}`; HTTP acceptance is not completion. `GetService` distinguishes an absent service from an API failure.
 
 Create a Backend instance per namespace with its project-scoped token. The default token comes from runtime environment; additional tokens are sealed in the state store (ADR 0018). Send tokens only in authorization headers, never logs, artifacts or browser responses. Rotation validates the replacement against the same project before persisting it and updating the existing client's token, without restarting its relay. Rotate the default token by changing the service secret and restarting. Scope lookups/mutations to that namespace's project and owned resource identities; never manage the system `core` service. The engine requests intent through Backend types instead of constructing Zerops HTTP calls.
+
+ADR 0030 replaces platform-shaped service/deployment intent and direct per-namespace Zerops construction with neutral types and registered factories. The owned Zerops REST client and non-blocking operation polling remain; Zerops is still the only registered production backend.
 
 ## Consequences
 

@@ -157,7 +157,7 @@ func optionsDescription() map[string]any {
 		"alwaysEnabledPlugins": slices.Clone(alwaysEnabledPlugins),
 		"managementUI": map[string]any{"public": map[string]any{
 			"type": "boolean", "default": false, "unavailableTLSModes": slices.Clone(managementPublicUnavailableTLSModes),
-			"description": "Publishes the RabbitMQ management UI/API through Zerops HTTPS routing with a private plaintext HTTP hop. Uses RabbitMQ credentials and is not limited by the AMQP allowlist.",
+			"description": "Publishes the RabbitMQ management UI/API through backend HTTPS routing with a private plaintext HTTP hop. Uses RabbitMQ credentials and is not limited by the AMQP allowlist.",
 		}},
 	}
 }
@@ -298,7 +298,7 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		return err
 	}
 	if slices.Contains(managementPublicUnavailableTLSModes, s.TLS.Mode) && options.ManagementUI.Public {
-		return invalid("managementUI.public is unavailable with requireTLS: public management requires certificate-verified HTTPS backend routing or TLS TCP passthrough; Zerops subdomains forward plaintext HTTP")
+		return invalid("managementUI.public is unavailable with requireTLS: public management requires certificate-verified HTTPS backend routing or TLS TCP passthrough; public HTTPS routes forward plaintext HTTP")
 	}
 	if err := validateEngineConfig(s.EngineConfig); err != nil {
 		return err

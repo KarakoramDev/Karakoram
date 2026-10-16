@@ -121,8 +121,8 @@ func TestScaleDownOfUnstartedMembersAvoidsBrokerActions(t *testing.T) {
 				m.Stage = stage
 				if stage == "imported" {
 					m.ServiceID, m.VolumeID = m.Name, m.Volume
-					f.services[m.Name] = &infra.Service{ID: m.Name, Hostname: m.Name, Type: "ubuntu@24.04"}
-					f.services[m.Volume] = &infra.Service{ID: m.Volume, Hostname: m.Volume, Type: "local-storage:single@1"}
+					f.services[m.Name] = &infra.Service{ID: m.Name, Hostname: m.Name, Kind: infra.KindRuntime}
+					f.services[m.Volume] = &infra.Service{ID: m.Volume, Hostname: m.Volume, Kind: infra.KindVolume}
 				}
 			}
 			if err := p.ensureSecrets(context.Background(), rc, s); err != nil {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 )
 
 func TestOwnerMarkerBindsEveryIdentityField(t *testing.T) {
@@ -76,7 +77,7 @@ func TestUnverifiedOwnershipHintsOnlyForMaskedLegacyEvidence(t *testing.T) {
 }
 
 type markerBackend struct {
-	infra.Backend
+	*fake.Backend
 	writes   int
 	hostname string
 	vars     map[string]string
@@ -91,15 +92,15 @@ func (b *markerBackend) SetEnvVars(_ context.Context, hostname string, vars map[
 }
 
 func TestEnsureOwnerMarkerWritesOnlyWhenNeeded(t *testing.T) {
-	for _, status := range []string{"", "ACTIVE", "READY_TO_DEPLOY", "STOPPED", "DELETING", "CREATING", "UPDATING"} {
+	for _, status := range []string{"", infra.StatusActive, infra.StatusReadyToDeploy, infra.StatusStopped, infra.StatusDeleting, infra.StatusCreating, "UPDATING"} {
 		t.Run(status, func(t *testing.T) {
-			b := &markerBackend{}
+			b := &markerBackend{Backend: fake.New(fake.Options{})}
 			s := &infra.Service{Hostname: "hostname", Status: status}
 			if err := EnsureOwnerMarker(t.Context(), b, s, "token", "cluster", "member"); err != nil {
 				t.Fatal(err)
 			}
 			want := 1
-			if status == "DELETING" || status == "CREATING" || status == "UPDATING" {
+			if status == infra.StatusDeleting || status == infra.StatusCreating || status == "UPDATING" {
 				want = 0
 			}
 			if b.writes != want {
@@ -120,7 +121,7 @@ func TestEnsureOwnerMarkerWritesOnlyWhenNeeded(t *testing.T) {
 			}
 		})
 	}
-	b := &markerBackend{err: errors.New("write failed")}
+	b := &markerBackend{Backend: fake.New(fake.Options{}), err: errors.New("write failed")}
 	s := &infra.Service{Hostname: "hostname"}
 	if err := EnsureOwnerMarker(t.Context(), b, s, "token", "cluster", "member"); !errors.Is(err, b.err) || s.Ownership[OwnerVariable] != "" {
 		t.Fatal("failed marker write recorded", err)

@@ -1,0 +1,18 @@
+zerops:
+    - deploy:
+        readinessCheck:
+            exec:
+                command: /var/www/karakoram relay readiness
+            failureTimeout: 300s
+            retryPeriod: 10s
+        temporaryShutdown: true
+      run:
+        base: ubuntu@24.04
+        envVariables:
+            KARAKORAM_RELAY_NAMESPACE: demo
+            KARAKORAM_RELAY_URL: https://control.example.com
+        ports:
+            - port: 9443
+              protocol: tcp
+        start: ./karakoram relay
+      setup: demorelay

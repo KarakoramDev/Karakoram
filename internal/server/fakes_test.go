@@ -164,6 +164,15 @@ func (*fakeProvider) MemberLogs(context.Context, *engine.Context, string, string
 type fakeBackend struct{}
 
 func (fakeBackend) Name() string { return "fake" }
+func (fakeBackend) Capabilities() infra.Capabilities {
+	return infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true, DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true, DedicatedCPU: true, HorizontalScaling: true}
+}
+func (fakeBackend) Layout() infra.Layout {
+	return infra.Layout{AppDir: "/var/www", VolumeRoot: "/mnt", User: "zerops"}
+}
+func (fakeBackend) DeleteServiceByID(context.Context, string, string) (infra.Op, error) {
+	return infra.Op{}, nil
+}
 func (fakeBackend) ProjectInfo(context.Context) (infra.Project, error) {
 	return infra.Project{ID: "test"}, nil
 }

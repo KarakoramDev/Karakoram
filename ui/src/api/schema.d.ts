@@ -238,6 +238,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/backends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List available infrastructure backends
+         * @description Requires authentication and namespaces/read on global '*'; unlike namespace listing, this endpoint does not filter items by per-namespace grants.
+         */
+        get: operations["listBackends"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backup-storages": {
         parameters: {
             query?: {
@@ -326,7 +346,7 @@ export type paths = {
         put?: never;
         /**
          * Create and reconcile a cluster
-         * @description Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata.
+         * @description Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
          */
         post: operations["createCluster"];
         delete?: never;
@@ -350,7 +370,10 @@ export type paths = {
         };
         /** Read cluster desired and observed state */
         get: operations["getCluster"];
-        /** Replace the full cluster desired spec */
+        /**
+         * Replace the full cluster desired spec
+         * @description After engine defaults and validation, rejects specs requiring capabilities absent from the namespace backend with 400 invalid_request. Capability admission uses static backend metadata, without a platform API request.
+         */
         put: operations["replaceCluster"];
         post?: never;
         /**
@@ -362,7 +385,7 @@ export type paths = {
         head?: never;
         /**
          * Apply an RFC 7396 cluster merge patch
-         * @description Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation.
+         * @description Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
          */
         patch: operations["patchCluster"];
         trace?: never;
@@ -1563,7 +1586,7 @@ export type paths = {
         put?: never;
         /**
          * Register a project namespace and deploy its relay
-         * @description Requires namespaces/create on '*'. Validates the token and project synchronously, then starts relay deployment asynchronously. Missing fields and invalid name syntax return 400 with field and reason. Reserved default and duplicate names return 409 conflict with reason already_exists. Each project may belong to only one namespace.
+         * @description Requires namespaces/create on '*'. Validates the credential and backend target synchronously, then deploys a relay asynchronously when required by that backend. Missing fields, unknown backend/config keys and invalid name syntax return 400. Reserved default and duplicate names return 409 conflict with reason already_exists. Each backend target may belong to only one namespace.
          */
         post: operations["createNamespace"];
         delete?: never;
@@ -1932,6 +1955,18 @@ export type components = {
         };
         /** @description Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID. */
         APITokenName: string;
+        BackendInfo: {
+            capabilities: components["schemas"]["Capability"][];
+            /** @description Accepted namespace config keys; empty for Zerops because its API URL is operator-only. */
+            configKeys: string[];
+            displayName: string;
+            experimental: boolean;
+            kind: string;
+            relay: boolean;
+        };
+        BackendList: {
+            items: components["schemas"]["BackendInfo"][];
+        };
         Backup: {
             cluster: string;
             /** Format: date-time */
@@ -2051,6 +2086,8 @@ export type components = {
         CanResponse: {
             allowed: boolean;
         };
+        /** @enum {string} */
+        Capability: "publicTcp" | "tcpAllowlist" | "publicHttps" | "diskGrowth" | "volumeQuota" | "placement" | "exec" | "logs" | "metrics" | "scopedTokens" | "dedicatedCpu" | "horizontalScaling" | "envChangeRestarts";
         ChangePasswordRequest: {
             /** Format: password */
             currentPassword: string;
@@ -2690,7 +2727,12 @@ export type components = {
             enabled: boolean | null;
         } | null;
         Namespace: {
+            backend: string;
+            capabilities: components["schemas"]["Capability"][];
             readonly clusterCount: number;
+            config?: {
+                [key: string]: string;
+            };
             /** Format: date-time */
             createdAt: string;
             default: boolean;
@@ -2698,6 +2740,7 @@ export type components = {
             name: components["schemas"]["NamespaceName"];
             /** @enum {string} */
             phase: "Pending" | "Ready" | "Error" | "Deleting";
+            /** @description Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace). */
             projectId: string;
             projectName: string;
             relay: components["schemas"]["RelayStatus"];
@@ -2706,8 +2749,15 @@ export type components = {
             updatedAt: string;
         };
         NamespaceCreate: {
+            /** @default zerops */
+            backend: string;
+            /** @description Non-secret backend settings. Zerops accepts no keys; its API URL is operator-only and cannot be overridden by a namespace. */
+            config?: {
+                [key: string]: string;
+            };
             description?: string;
             name: components["schemas"]["NamespaceName"];
+            /** @description Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace). */
             projectId: string;
             /** Format: password */
             token: string;
@@ -4138,6 +4188,33 @@ export interface operations {
             404: components["responses"]["NotFound"];
             405: components["responses"]["MethodNotAllowed"];
             409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listBackends: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available backend kinds and their capabilities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackendList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            405: components["responses"]["MethodNotAllowed"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];

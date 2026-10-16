@@ -30,6 +30,7 @@ var commandSpecs = append([]commandSpec{
 	{"tokens delete <id>", "deleteAPIToken", 1, false, []queryFlag{}},
 	{"providers list", "listProviders", 0, false, []queryFlag{}},
 	{"providers get <provider>", "getProvider", 1, false, []queryFlag{}},
+	{"backends list", "listBackends", 0, false, []queryFlag{}},
 	{"namespaces list", "listNamespaces", 0, false, []queryFlag{}},
 	{"namespaces get <namespace>", "getNamespace", 1, false, []queryFlag{}},
 	{"namespaces create", "createNamespace", 0, false, []queryFlag{}},

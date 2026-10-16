@@ -71,10 +71,8 @@ func TestCreateThreeMembersBootstrapsOnceAndJoins(t *testing.T) {
 		if len(specs) != 2 {
 			t.Fatalf("runtime + volume import: %+v", specs)
 		}
-		for _, spec := range specs {
-			if spec.ZeropsYAML != "" {
-				t.Fatal("import must not build with an empty artifact")
-			}
+		if specs[0].Kind != infra.KindVolume || specs[1].Kind != infra.KindRuntime || specs[1].Base != infra.BaseUbuntu2404 {
+			t.Fatalf("unexpected import kinds: %+v", specs)
 		}
 	}
 	for range 3 {
@@ -536,7 +534,7 @@ func TestRetainedCleanupResumesExistingVolumeIdentities(t *testing.T) {
 		t.Fatal("resume did not provision exactly the missing runtimes")
 	}
 	for _, imported := range f.imports[importCount:] {
-		if len(imported) != 1 || imported[0].Type != "ubuntu@24.04" {
+		if len(imported) != 1 || imported[0].Kind != infra.KindRuntime || imported[0].Base != infra.BaseUbuntu2404 {
 			t.Fatalf("resume imported a new volume: %+v", imported)
 		}
 	}

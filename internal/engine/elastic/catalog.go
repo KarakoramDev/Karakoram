@@ -92,11 +92,11 @@ func ArtifactURL(component, version string) string {
 	return fmt.Sprintf("https://artifacts.elastic.co/downloads/%s/%s-%s-linux-x86_64.tar.gz", product, product, version)
 }
 
-func prepareCommands(component, version string) []string {
+func prepareCommands(component, version, user string) []string {
 	url := ArtifactURL(component, version)
 	if url == "" {
 		return nil
 	}
 	file := url[strings.LastIndex(url, "/")+1:]
-	return []string{fmt.Sprintf("sudo mkdir -p /opt/elastic && cd /tmp && curl -fsSLO %[1]s && curl -fsSLO %[1]s.sha512 && sha512sum -c %[2]s.sha512 && sudo tar -xzf %[2]s -C /opt/elastic && sudo chown -R zerops:zerops /opt/elastic && rm -f %[2]s %[2]s.sha512", url, file)}
+	return []string{fmt.Sprintf("sudo mkdir -p /opt/elastic && cd /tmp && curl -fsSLO %[1]s && curl -fsSLO %[1]s.sha512 && sha512sum -c %[2]s.sha512 && sudo tar -xzf %[2]s -C /opt/elastic && sudo chown -R %[3]s:%[3]s /opt/elastic && rm -f %[2]s %[2]s.sha512", url, file, user)}
 }

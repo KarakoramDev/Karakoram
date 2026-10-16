@@ -1,0 +1,70 @@
+{
+  "binary": "karakoram",
+  "hostname": "demom0",
+  "runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update",
+      "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg",
+      "curl -fsSL https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA | sudo gpg --dearmor -o /usr/share/keyrings/com.rabbitmq.team.gpg",
+      "printf '%s\\n' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-erlang/ubuntu/noble noble main' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-server/ubuntu/noble noble main' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-erlang/ubuntu/noble noble main' 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-server/ubuntu/noble noble main' | sudo tee /etc/apt/sources.list.d/rabbitmq.list",
+      "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u0026\u0026 sudo chmod 755 /usr/sbin/policy-rc.d",
+      "printf '%s\\n' 'Package: erlang*' 'Pin: version 1:27.3.4.17-1' 'Pin-Priority: 1001' | sudo tee /etc/apt/preferences.d/erlang",
+      "sudo apt-get update",
+      "sudo apt-get install -y --no-install-recommends rabbitmq-server=4.3.6-1 erlang-base=1:27.3.4.17-1 erlang-asn1=1:27.3.4.17-1 erlang-crypto=1:27.3.4.17-1 erlang-eldap=1:27.3.4.17-1 erlang-inets=1:27.3.4.17-1 erlang-mnesia=1:27.3.4.17-1 erlang-os-mon=1:27.3.4.17-1 erlang-parsetools=1:27.3.4.17-1 erlang-public-key=1:27.3.4.17-1 erlang-runtime-tools=1:27.3.4.17-1 erlang-ssl=1:27.3.4.17-1 erlang-syntax-tools=1:27.3.4.17-1 erlang-tools=1:27.3.4.17-1 erlang-xmerl=1:27.3.4.17-1"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/mnt/demom0v",
+      "KARAKORAM_ENGINE": "rabbitmq",
+      "KARAKORAM_INTERNAL_CA": "-----BEGIN CERTIFICATE-----\ndDAtY2FwdHVyZS1jYQ==\n-----END CERTIFICATE-----\n",
+      "KARAKORAM_MEMBER": "demom0",
+      "KARAKORAM_URL": "https://control.example.com"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 5672,
+        "protocol": "tcp"
+      },
+      {
+        "port": 5671,
+        "protocol": "tcp"
+      },
+      {
+        "port": 15672,
+        "protocol": "tcp"
+      },
+      {
+        "port": 15671,
+        "protocol": "tcp"
+      },
+      {
+        "port": 15692,
+        "protocol": "tcp"
+      },
+      {
+        "port": 4369,
+        "protocol": "tcp"
+      },
+      {
+        "port": 25672,
+        "protocol": "tcp"
+      }
+    ],
+    "volume": "demom0v",
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--engine=rabbitmq",
+        "--data-dir=/mnt/demom0v"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

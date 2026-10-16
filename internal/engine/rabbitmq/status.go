@@ -122,7 +122,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Health = false
 		} else {
 			for _, c := range containers {
-				if c.Status != "ACTIVE" && c.Status != "RUNNING" {
+				if c.Status != infra.ContainerActive && c.Status != infra.ContainerRunning {
 					ms.Health = false
 				}
 			}
@@ -152,7 +152,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		allHealthy = allHealthy && ms.Health
 		v.Members = append(v.Members, ms)
 		if m.ManagementPublic {
-			if sub, ok := rc.Backend.(infra.SubdomainAccess); ok {
+			if sub, err := engine.PublicHTTPS(rc.Backend); err == nil {
 				urls, e := sub.SubdomainURLs(ctx, m.Name)
 				if e != nil {
 					return v, e

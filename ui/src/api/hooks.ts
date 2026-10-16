@@ -41,6 +41,15 @@ export function useProviders() {
   });
 }
 
+export function useBackends(enabled = true) {
+  return useQuery({
+    queryKey: keys.backends,
+    queryFn: () => unwrap(api.GET('/backends')),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
 /** Backup storages in one namespace, or in every readable namespace when omitted. */
 export function useBackupStorages(namespace?: string) {
   return useQuery({

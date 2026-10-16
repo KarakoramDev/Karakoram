@@ -6,6 +6,7 @@ package namespaces
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -13,21 +14,19 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 )
 
 func TestTokenValidationRetainsKnownValidity(t *testing.T) {
 	for _, failure := range []error{
-		&zerops.APIError{StatusCode: 500, Code: "platformFailure"},
-		&zerops.APIError{StatusCode: 503, Code: "temporarilyUnavailable"},
-		&zerops.APIError{StatusCode: 429, Code: "rateLimited"},
-		&zerops.APIError{StatusCode: 400, Code: "serviceStackNotFound"},
+		infra.ErrUnavailable,
+		fmt.Errorf("wrapped: %w", infra.ErrUnavailable),
+		&infra.RejectedError{Code: "serviceNotFound"},
 		context.DeadlineExceeded,
 		&net.OpError{Op: "dial", Net: "tcp", Err: errors.New("https://private-token@example.invalid")},
 	} {
 		for _, valid := range []bool{false, true} {
 			n := &domain.Namespace{ProjectID: "project", ProjectName: "Known project", Token: domain.NamespaceTokenStatus{Valid: valid}}
-			applyTokenValidation(n, infra.Project{}, failure, time.Now())
+			applyTokenValidation(n, infra.Project{}, failure, time.Now(), "Zerops")
 			if n.Token.Valid != valid || n.ProjectName != "Known project" || !strings.HasPrefix(n.Token.LastError, "Zerops API temporarily unavailable: ") || !strings.HasSuffix(n.Token.LastError, "; retrying") {
 				t.Fatalf("transient failure changed validity: %+v (%v)", n.Token, failure)
 			}
@@ -37,12 +36,11 @@ func TestTokenValidationRetainsKnownValidity(t *testing.T) {
 		}
 	}
 	for _, failure := range []error{
-		&zerops.APIError{StatusCode: 401},
-		&zerops.APIError{StatusCode: 403},
-		&zerops.APIError{StatusCode: 400, Code: "tokenExpired"},
+		infra.ErrUnauthorized,
+		fmt.Errorf("wrapped: %w", infra.ErrUnauthorized),
 	} {
 		n := &domain.Namespace{Token: domain.NamespaceTokenStatus{Valid: true}}
-		applyTokenValidation(n, infra.Project{}, failure, time.Now())
+		applyTokenValidation(n, infra.Project{}, failure, time.Now(), "Zerops")
 		if n.Token.Valid || !strings.HasPrefix(n.Token.LastError, "Project token access rejected:") {
 			t.Fatalf("authentication rejection not retained: %+v", n.Token)
 		}
@@ -53,8 +51,8 @@ func TestManualAndAutomaticValidationSurvivePlatformOutage(t *testing.T) {
 	r, _, log := setupRegistry(t)
 	ctx := context.Background()
 	createTestNamespace(t, r)
-	r.o.Validate = func(context.Context, zerops.Options) (Backend, infra.Project, error) {
-		return nil, infra.Project{}, &zerops.APIError{StatusCode: 503, Code: "platformUnavailable"}
+	registryFactory(r.o.Backends).validate = func(context.Context, infra.Target) (Backend, infra.Project, error) {
+		return nil, infra.Project{}, infra.ErrUnavailable
 	}
 	for _, name := range []string{"default", "testing"} {
 		n, err := r.Validate(ctx, name)
@@ -90,7 +88,7 @@ type failingProjectBackend struct {
 }
 
 func (b failingProjectBackend) ProjectInfo(context.Context) (infra.Project, error) {
-	return infra.Project{}, &zerops.APIError{StatusCode: 503, Code: "platformUnavailable"}
+	return infra.Project{}, infra.ErrUnavailable
 }
 
 func TestStartupOutageKeepsPersistedTokenValidity(t *testing.T) {
@@ -112,13 +110,13 @@ func TestTokenReplacementOutageDoesNotReplaceCredentials(t *testing.T) {
 	r, _, _ := setupRegistry(t)
 	ctx := context.Background()
 	n := createTestNamespace(t, r)
-	r.o.Validate = func(context.Context, zerops.Options) (Backend, infra.Project, error) {
-		return nil, infra.Project{}, &zerops.APIError{StatusCode: 429, Code: "rateLimited"}
+	registryFactory(r.o.Backends).validate = func(context.Context, infra.Target) (Backend, infra.Project, error) {
+		return nil, infra.Project{}, infra.ErrUnavailable
 	}
 	if _, err := r.RotateToken(ctx, n.Name, "replacement"); err == nil || errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "temporarily unavailable") {
 		t.Fatalf("rotation outage misclassified: %v", err)
 	}
-	if _, err := r.Create(ctx, "another", "another-project", "new-token", ""); err == nil || errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "temporarily unavailable") {
+	if _, err := r.Create(ctx, "another", "another-project", "new-token", "", "zerops", nil); err == nil || errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "temporarily unavailable") {
 		t.Fatalf("registration outage misclassified: %v", err)
 	}
 	token, err := r.o.Store.GetNamespaceTokenForUpdate(ctx, n.Name)

@@ -203,6 +203,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if op == "listNamespaces" && a.format == "table" {
 		return a.namespacesTable(result)
 	}
+	if op == "listBackends" && a.format == "table" {
+		return a.backendsTable(result)
+	}
 	if (op == "getProvider" || op == "listProviders") && a.format == "table" {
 		return a.providersTable(result, op == "listProviders")
 	}

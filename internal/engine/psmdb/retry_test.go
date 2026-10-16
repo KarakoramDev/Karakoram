@@ -16,7 +16,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 )
 
 type retryClock struct{ at time.Time }
@@ -484,7 +483,7 @@ func TestCPUModeCooldownPersistsAndConverges(t *testing.T) {
 			target := &pending{Action: "resources", Member: m.Name, Resources: m.Resources}
 			target.Resources.CPUMode = "SHARED"
 			s.Pending = nil
-			cause := &zerops.APIError{StatusCode: 400, Code: "lastCpuModeChangeTooRecent"}
+			cause := fmt.Errorf("resource update rejected: %w", infra.ErrResourceChangeCooldown)
 			var wait *engine.PlatformRetryWait
 			if err := s.scheduleCPUModeCooldown(rc, target, cause); !errors.As(err, &wait) || !wait.RetryAt.Equal(wantAt) {
 				t.Fatalf("cooldown deadline: %v", err)
@@ -542,7 +541,7 @@ func TestCPUModeCooldownOnReissuedResourceRequest(t *testing.T) {
 	v := &pending{Action: "resources", Member: m.Name, Resources: domain.Resources{CPUMode: "SHARED"}}
 	s.Retry, s.Pending = v, nil
 	s.PlatformRetries = map[string]*platformRetry{platformRetryKey(v): {RetryAfter: clock.at}}
-	rc.Backend = &cooldownInfra{fakeInfra: f.fakeInfra, err: &zerops.APIError{StatusCode: 400, Code: "lastCpuModeChangeTooRecent"}}
+	rc.Backend = &cooldownInfra{fakeInfra: f.fakeInfra, err: fmt.Errorf("resource update rejected: %w", infra.ErrResourceChangeCooldown)}
 	var wait *engine.PlatformRetryWait
 	if _, err := p.retryPending(context.Background(), rc, s); !errors.As(err, &wait) || !wait.RetryAt.Equal(clock.at.Add(time.Hour)) {
 		t.Fatalf("reissued request did not schedule cooldown: %v", err)
@@ -568,7 +567,7 @@ func TestCPUModeInitialResourceRejectionSchedulesCooldown(t *testing.T) {
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
-	rc.Backend = &cooldownInfra{fakeInfra: f.fakeInfra, err: &zerops.APIError{StatusCode: 400, Code: "lastCpuModeChangeTooRecent"}}
+	rc.Backend = &cooldownInfra{fakeInfra: f.fakeInfra, err: fmt.Errorf("resource update rejected: %w", infra.ErrResourceChangeCooldown)}
 	var wait *engine.PlatformRetryWait
 	for range 5 {
 		_, err := p.sync(context.Background(), rc, func(context.Context, *engine.Context, *internalState, *member) (bool, error) {
@@ -594,8 +593,8 @@ func TestCPUModeCooldownDoesNotHideOtherPlatformErrors(t *testing.T) {
 	_, rc, _, _ := retrySetup(t)
 	s := retryState(t, rc)
 	for _, cause := range []error{
-		errors.New("lastCpuModeChangeTooRecent"),
-		&zerops.APIError{StatusCode: 400, Code: "invalidResources"},
+		errors.New("resource update rejected"),
+		&infra.RejectedError{Code: "invalidResources"},
 	} {
 		if err := s.scheduleCPUModeCooldown(rc, &pending{Action: "resources"}, cause); err != nil || s.Retry != nil {
 			t.Fatal("ordinary error was treated as a CPU-mode cooldown", err)

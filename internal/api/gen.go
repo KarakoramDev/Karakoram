@@ -80,6 +80,23 @@ const (
 	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
+// Defines values for Capability.
+const (
+	CapabilityDedicatedCpu      Capability = "dedicatedCpu"
+	CapabilityDiskGrowth        Capability = "diskGrowth"
+	CapabilityEnvChangeRestarts Capability = "envChangeRestarts"
+	CapabilityExec              Capability = "exec"
+	CapabilityHorizontalScaling Capability = "horizontalScaling"
+	CapabilityLogs              Capability = "logs"
+	CapabilityMetrics           Capability = "metrics"
+	CapabilityPlacement         Capability = "placement"
+	CapabilityPublicHttps       Capability = "publicHttps"
+	CapabilityPublicTcp         Capability = "publicTcp"
+	CapabilityScopedTokens      Capability = "scopedTokens"
+	CapabilityTcpAllowlist      Capability = "tcpAllowlist"
+	CapabilityVolumeQuota       Capability = "volumeQuota"
+)
+
 // Defines values for ClusterStatusPhase.
 const (
 	ClusterStatusPhaseCreating     ClusterStatusPhase = "Creating"
@@ -533,6 +550,23 @@ type AgentStatus struct {
 	Version       *string    `json:"version,omitempty"`
 }
 
+// BackendInfo defines model for BackendInfo.
+type BackendInfo struct {
+	Capabilities []Capability `json:"capabilities"`
+
+	// ConfigKeys Accepted namespace config keys; empty for Zerops because its API URL is operator-only.
+	ConfigKeys   []string `json:"configKeys"`
+	DisplayName  string   `json:"displayName"`
+	Experimental bool     `json:"experimental"`
+	Kind         string   `json:"kind"`
+	Relay        bool     `json:"relay"`
+}
+
+// BackendList defines model for BackendList.
+type BackendList struct {
+	Items []BackendInfo `json:"items"`
+}
+
 // Backup defines model for Backup.
 type Backup struct {
 	Cluster       string     `json:"cluster"`
@@ -683,6 +717,9 @@ type CanRequestAction string
 type CanResponse struct {
 	Allowed bool `json:"allowed"`
 }
+
+// Capability defines model for Capability.
+type Capability string
 
 // ChangePasswordRequest defines model for ChangePasswordRequest.
 type ChangePasswordRequest struct {
@@ -1490,16 +1527,21 @@ type MonitoringSpecPatch struct {
 
 // Namespace defines model for Namespace.
 type Namespace struct {
-	ClusterCount *int      `json:"clusterCount,omitempty"`
-	CreatedAt    time.Time `json:"createdAt"`
-	Default      bool      `json:"default"`
-	Description  *string   `json:"description,omitempty"`
+	Backend      string             `json:"backend"`
+	Capabilities []Capability       `json:"capabilities"`
+	ClusterCount *int               `json:"clusterCount,omitempty"`
+	Config       *map[string]string `json:"config,omitempty"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	Default      bool               `json:"default"`
+	Description  *string            `json:"description,omitempty"`
 
 	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
-	Name        NamespaceName  `json:"name"`
-	Phase       NamespacePhase `json:"phase"`
-	ProjectId   string         `json:"projectId"`
-	ProjectName string         `json:"projectName"`
+	Name  NamespaceName  `json:"name"`
+	Phase NamespacePhase `json:"phase"`
+
+	// ProjectId Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace).
+	ProjectId   string `json:"projectId"`
+	ProjectName string `json:"projectName"`
 
 	// Relay Relay health; the default namespace uses direct networking.
 	Relay RelayStatus `json:"relay"`
@@ -1514,12 +1556,18 @@ type NamespacePhase string
 
 // NamespaceCreate defines model for NamespaceCreate.
 type NamespaceCreate struct {
-	Description *string `json:"description,omitempty"`
+	Backend *string `json:"backend,omitempty"`
+
+	// Config Non-secret backend settings. Zerops accepts no keys; its API URL is operator-only and cannot be overridden by a namespace.
+	Config      *map[string]string `json:"config,omitempty"`
+	Description *string            `json:"description,omitempty"`
 
 	// Name Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
-	Name      NamespaceName `json:"name"`
-	ProjectId string        `json:"projectId"`
-	Token     *string       `json:"token,omitempty"`
+	Name NamespaceName `json:"name"`
+
+	// ProjectId Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace).
+	ProjectId string  `json:"projectId"`
+	Token     *string `json:"token,omitempty"`
 }
 
 // NamespaceList defines model for NamespaceList.
@@ -4311,6 +4359,9 @@ type ServerInterface interface {
 	// Rotate refresh credentials and renew the session
 	// (POST /auth/refresh)
 	RefreshSession(w http.ResponseWriter, r *http.Request, params RefreshSessionParams)
+	// List available infrastructure backends
+	// (GET /backends)
+	ListBackends(w http.ResponseWriter, r *http.Request)
 	// List S3 storage configuration without credentials
 	// (GET /backup-storages)
 	ListBackupStorages(w http.ResponseWriter, r *http.Request, params ListBackupStoragesParams)
@@ -5511,6 +5562,28 @@ func (siw *ServerInterfaceWrapper) RefreshSession(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RefreshSession(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBackends operation middleware
+func (siw *ServerInterfaceWrapper) ListBackends(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBackends(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13122,6 +13195,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/auth/oidc/callback", wrapper.OidcCallback)
 	m.HandleFunc("GET "+options.BaseURL+"/auth/oidc/login", wrapper.OidcLogin)
 	m.HandleFunc("POST "+options.BaseURL+"/auth/refresh", wrapper.RefreshSession)
+	m.HandleFunc("GET "+options.BaseURL+"/backends", wrapper.ListBackends)
 	m.HandleFunc("GET "+options.BaseURL+"/backup-storages", wrapper.ListBackupStorages)
 	m.HandleFunc("POST "+options.BaseURL+"/backup-storages", wrapper.CreateBackupStorage)
 	m.HandleFunc("DELETE "+options.BaseURL+"/backup-storages/{storage}", wrapper.DeleteBackupStorage)
@@ -15482,6 +15556,95 @@ func (response RefreshSession415JSONResponse) VisitRefreshSessionResponse(w http
 type RefreshSession500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response RefreshSession500JSONResponse) VisitRefreshSessionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackendsRequestObject struct {
+}
+
+type ListBackendsResponseObject interface {
+	VisitListBackendsResponse(w http.ResponseWriter) error
+}
+
+type ListBackends200JSONResponse BackendList
+
+func (response ListBackends200JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListBackends400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListBackends400JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackends401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListBackends401JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackends403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListBackends403JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackends405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListBackends405JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackends413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListBackends413JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackends415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListBackends415JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackends500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListBackends500JSONResponse) VisitListBackendsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
@@ -27472,6 +27635,9 @@ type StrictServerInterface interface {
 	// Rotate refresh credentials and renew the session
 	// (POST /auth/refresh)
 	RefreshSession(ctx context.Context, request RefreshSessionRequestObject) (RefreshSessionResponseObject, error)
+	// List available infrastructure backends
+	// (GET /backends)
+	ListBackends(ctx context.Context, request ListBackendsRequestObject) (ListBackendsResponseObject, error)
 	// List S3 storage configuration without credentials
 	// (GET /backup-storages)
 	ListBackupStorages(ctx context.Context, request ListBackupStoragesRequestObject) (ListBackupStoragesResponseObject, error)
@@ -28361,6 +28527,30 @@ func (sh *strictHandler) RefreshSession(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshSessionResponseObject); ok {
 		if err := validResponse.VisitRefreshSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBackends operation middleware
+func (sh *strictHandler) ListBackends(w http.ResponseWriter, r *http.Request) {
+	var request ListBackendsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBackends(ctx, request.(ListBackendsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBackends")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBackendsResponseObject); ok {
+		if err := validResponse.VisitListBackendsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

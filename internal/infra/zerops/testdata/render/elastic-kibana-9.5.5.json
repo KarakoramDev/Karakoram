@@ -1,0 +1,44 @@
+{
+  "binary": "karakoram",
+  "hostname": "demokb",
+  "runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo mkdir -p /opt/elastic \u0026\u0026 cd /tmp \u0026\u0026 curl -fsSLO https://artifacts.elastic.co/downloads/kibana/kibana-9.5.5-linux-x86_64.tar.gz \u0026\u0026 curl -fsSLO https://artifacts.elastic.co/downloads/kibana/kibana-9.5.5-linux-x86_64.tar.gz.sha512 \u0026\u0026 sha512sum -c kibana-9.5.5-linux-x86_64.tar.gz.sha512 \u0026\u0026 sudo tar -xzf kibana-9.5.5-linux-x86_64.tar.gz -C /opt/elastic \u0026\u0026 sudo chown -R zerops:zerops /opt/elastic \u0026\u0026 rm -f kibana-9.5.5-linux-x86_64.tar.gz kibana-9.5.5-linux-x86_64.tar.gz.sha512"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/var/www/karakoram-data",
+      "KARAKORAM_ENGINE": "elasticsearch",
+      "KARAKORAM_INTERNAL_CA": "-----BEGIN CERTIFICATE-----\ndDAtY2FwdHVyZS1jYQ==\n-----END CERTIFICATE-----\n",
+      "KARAKORAM_MEMBER": "demokb",
+      "KARAKORAM_URL": "https://control.example.com"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 5601,
+        "protocol": "tcp",
+        "http": true
+      },
+      {
+        "port": 9443,
+        "protocol": "tcp"
+      }
+    ],
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness",
+        "--engine=elasticsearch",
+        "--data-dir=/var/www/karakoram-data",
+        "kibana"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

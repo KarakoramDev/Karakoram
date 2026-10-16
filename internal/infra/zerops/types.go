@@ -23,10 +23,6 @@ func (e *APIError) Error() string {
 	return boundedDiagnostic(fmt.Sprintf("zerops HTTP %d: %s", e.StatusCode, detail))
 }
 
-// ErrorCode allows providers to recognize scheduled platform restrictions
-// without depending on the Zerops transport implementation.
-func (e *APIError) ErrorCode() string { return e.Code }
-
 // Process is a Zerops asynchronous operation, not a service readiness assertion.
 type Process struct {
 	ID             string          `json:"id"`

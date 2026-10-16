@@ -5,9 +5,9 @@
 //
 // ImportServices omits inline pipelines: runtimes are READY_TO_DEPLOY until Deploy
 // uploads a prebuilt gzip-tar artifact and supplies a complete zerops document.
-// ServiceSpec.Env is imported as envSecrets; non-secret runtime variables and
-// volume mounts belong in Deployment.ZeropsYAML. ServiceSpec.ZeropsYAML is not
-// imported because doing so triggers an empty-code build on Zerops.
+// ServiceSpec Kind/Base values select platform types; Env is imported as
+// envSecrets. Deploy renders the neutral RuntimeSpec into zerops.yaml, including
+// non-secret variables, readiness checks and volume mounts.
 //
 // SetResources preserves fetched effective autoscaling values when a bound is
 // zero. Growing persistent storage requires the volume's hostname and max disk;
@@ -40,6 +40,11 @@
 // HTTP 429 and HTTP 5xx. Deploy, upload, lifecycle and routing synchronization are
 // not replayed because they create processes or stream non-repeatable data. No
 // authorization, environment content or credential-bearing URLs are logged.
+// Neutral errors expose authorization, conflicts, rejections and transient outages
+// through errors.Is. NewFactory constructs a factory with the backend's
+// capabilities; registration happens in the server composition root. The API URL
+// is operator-only configuration supplied through the factory's base Options,
+// never through per-target Config.
 //
 // Unit replay fixtures preserve anonymized Zerops API response shapes.
 // The e2e-tagged live smoke test needs ZEROPS_TOKEN and ZEROPS_PROJECT_ID,

@@ -4,7 +4,7 @@ openapi: 3.0.3
 info:
   title: Karakoram API
   version: 1.0.0
-  description: Self-hosted Zerops-native database orchestration across project namespaces. REST contracts for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie sessions are alternatives. Cookie-authenticated unsafe requests require X-Karakoram-CSRF. Secret inputs are write-only; explicit one-time token creation, generated application passwords returned once on user creation, and cluster-credentials reads are the only secret-bearing JSON responses. RBAC uses resource/action/object with explicit deny overriding allow; database roles share database-users authorization. Self-service auth/permissions endpoints require an authenticated identity but do not require administrative account/RBAC permissions. RBAC object kinds are '*' for global routes, cluster for namespace/cluster from the namespace query and cluster path, namespace for the namespace path, and storage for namespace/storage from the namespace query and storage path. Collection routes filter each item by its persisted object; create routes authorize the submitted namespaced object. Namespace creation requires namespaces/create on '*'; namespace lists filter by namespaces/read on each namespace. Namespace actions are read/create/update/delete. Root /healthz and /metrics use explicit operation-level server overrides. Every API response carries X-Request-ID for correlation. Clients may supply a 1–128-character ID using A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Missing, invalid or repeated values are replaced with a generated identifier. This optional transport header is not an operation parameter; generated clients may set it through their request editor. Do not include secrets in request IDs.
+  description: Self-hosted database orchestration across infrastructure backends and target namespaces. REST contracts for server, CLI and UI. API-token bearer authentication and HttpOnly SameSite=Strict cookie sessions are alternatives. Cookie-authenticated unsafe requests require X-Karakoram-CSRF. Secret inputs are write-only; explicit one-time token creation, generated application passwords returned once on user creation, and cluster-credentials reads are the only secret-bearing JSON responses. RBAC uses resource/action/object with explicit deny overriding allow; database roles share database-users authorization. Self-service auth/permissions endpoints require an authenticated identity but do not require administrative account/RBAC permissions. RBAC object kinds are '*' for global routes, cluster for namespace/cluster from the namespace query and cluster path, namespace for the namespace path, and storage for namespace/storage from the namespace query and storage path. Collection routes filter each item by its persisted object; create routes authorize the submitted namespaced object. Namespace creation requires namespaces/create on '*'; namespace lists filter by namespaces/read on each namespace. Namespace actions are read/create/update/delete. Root /healthz and /metrics use explicit operation-level server overrides. Every API response carries X-Request-ID for correlation. Clients may supply a 1–128-character ID using A-Z, a-z, 0-9, dot, underscore, colon or hyphen. Missing, invalid or repeated values are replaced with a generated identifier. This optional transport header is not an operation parameter; generated clients may set it through their request editor. Do not include secrets in request IDs.
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
@@ -1334,6 +1334,34 @@ paths:
                 $ref: '#/components/schemas/Provider'
         '500':
           $ref: '#/components/responses/InternalError'
+  /backends:
+    get:
+      operationId: listBackends
+      tags: [Namespaces]
+      summary: List available infrastructure backends
+      description: Requires authentication and namespaces/read on global '*'; unlike namespace listing, this endpoint does not filter items by per-namespace grants.
+      x-karakoram-rbac: {resource: namespaces, action: read, object: '*'}
+      responses:
+        '200':
+          description: Available backend kinds and their capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackendList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /namespaces:
     get:
       operationId: listNamespaces
@@ -1374,7 +1402,7 @@ paths:
       operationId: createNamespace
       tags: [Namespaces]
       summary: Register a project namespace and deploy its relay
-      description: Requires namespaces/create on '*'. Validates the token and project synchronously, then starts relay deployment asynchronously. Missing fields and invalid name syntax return 400 with field and reason. Reserved default and duplicate names return 409 conflict with reason already_exists. Each project may belong to only one namespace.
+      description: Requires namespaces/create on '*'. Validates the credential and backend target synchronously, then deploys a relay asynchronously when required by that backend. Missing fields, unknown backend/config keys and invalid name syntax return 400. Reserved default and duplicate names return 409 conflict with reason already_exists. Each backend target may belong to only one namespace.
       x-karakoram-rbac: {resource: namespaces, action: create, object: '*'}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -1712,7 +1740,7 @@ paths:
                 $ref: '#/components/schemas/Cluster'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata.
+      description: Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1770,6 +1798,7 @@ paths:
       tags:
         - Clusters
       summary: Replace the full cluster desired spec
+      description: After engine defaults and validation, rejects specs requiring capabilities absent from the namespace backend with 400 invalid_request. Capability admission uses static backend metadata, without a platform API request.
       x-karakoram-rbac:
         resource: clusters
         action: update
@@ -1831,7 +1860,7 @@ paths:
               $ref: '#/components/schemas/ReplaceClusterRequest'
     patch:
       operationId: patchCluster
-      description: Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation.
+      description: Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
       tags:
         - Clusters
       summary: Apply an RFC 7396 cluster merge patch
@@ -6055,12 +6084,23 @@ components:
       type: object
       additionalProperties: false
       properties:
+        backend:
+          type: string
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        config:
+          type: object
+          additionalProperties:
+            type: string
         name:
           $ref: '#/components/schemas/NamespaceName'
         description:
           type: string
         projectId:
           type: string
+          description: Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace).
         projectName:
           type: string
         default:
@@ -6084,6 +6124,8 @@ components:
           format: date-time
       required:
         - name
+        - backend
+        - capabilities
         - projectId
         - projectName
         - default
@@ -6097,11 +6139,20 @@ components:
       type: object
       additionalProperties: false
       properties:
+        backend:
+          type: string
+          default: zerops
+        config:
+          type: object
+          description: Non-secret backend settings. Zerops accepts no keys; its API URL is operator-only and cannot be overridden by a namespace.
+          additionalProperties:
+            type: string
         name:
           $ref: '#/components/schemas/NamespaceName'
         projectId:
           type: string
           minLength: 1
+          description: Backend target ID (Zerops project ID; Dokploy environment or Nomad namespace).
         token:
           type: string
           format: password
@@ -6139,6 +6190,40 @@ components:
         nextCursor:
           type: string
           description: Opaque continuation cursor; absent at the end.
+      required: [items]
+    Capability:
+      type: string
+      enum: [publicTcp, tcpAllowlist, publicHttps, diskGrowth, volumeQuota, placement, exec, logs, metrics, scopedTokens, dedicatedCpu, horizontalScaling, envChangeRestarts]
+    BackendInfo:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+        displayName:
+          type: string
+        experimental:
+          type: boolean
+        relay:
+          type: boolean
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        configKeys:
+          type: array
+          description: Accepted namespace config keys; empty for Zerops because its API URL is operator-only.
+          items:
+            type: string
+      required: [kind, displayName, experimental, relay, capabilities, configKeys]
+    BackendList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackendInfo'
       required: [items]
     Error:
       type: object

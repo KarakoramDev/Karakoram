@@ -11,19 +11,21 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
-// RelayYAML contains public configuration only; enrollment credentials use env secrets.
-func RelayYAML(hostname, publicURL, namespace string) (string, error) {
-	run := map[string]any{"base": "ubuntu@24.04", "ports": []map[string]any{{"port": 9443, "protocol": "tcp"}}, "envVariables": map[string]string{"KARAKORAM_RELAY_URL": publicURL, "KARAKORAM_RELAY_NAMESPACE": namespace}, "start": "./karakoram relay"}
-	doc := map[string]any{"zerops": []map[string]any{{"setup": hostname, "deploy": map[string]any{"temporaryShutdown": true, "readinessCheck": map[string]any{"exec": map[string]string{"command": "/var/www/karakoram relay readiness"}, "failureTimeout": "300s", "retryPeriod": "10s"}}, "run": run}}}
-	data, err := yaml.Marshal(doc)
-	return string(data), err
+// RelayRuntime contains public configuration only; enrollment uses env secrets.
+func RelayRuntime(publicURL, namespace string) infra.RuntimeSpec {
+	return infra.RuntimeSpec{
+		Base: infra.BaseUbuntu2404, Args: []string{"relay"},
+		Ports:           []infra.Port{{Port: 9443, Protocol: "tcp"}},
+		Env:             map[string]string{"KARAKORAM_RELAY_URL": publicURL, "KARAKORAM_RELAY_NAMESPACE": namespace},
+		Readiness:       &infra.Readiness{Args: []string{"relay", "readiness"}, FailureTimeout: 300 * time.Second, RetryPeriod: 10 * time.Second},
+		StopBeforeStart: true,
+	}
 }
 
 // Run reconciles projects independently. One unavailable project cannot stall another.
@@ -142,20 +144,19 @@ func (r *Registry) step(ctx context.Context, name string) {
 		return
 	}
 	if n.Phase != "Deleting" && time.Since(n.Token.LastValidatedAt) >= 5*time.Minute {
-		z := r.o.Zerops
-		z.ProjectID = n.ProjectID
+		token := r.o.DefaultTarget.Token
 		if !n.Default {
-			z.Token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
+			token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
 		}
 		var validation error
 		var project infra.Project
 		if err != nil {
-			validation = &zerops.APIError{Code: "accessDenied", Message: "Stored project credentials are unavailable"}
+			validation = &credentialError{message: "Stored project credentials are unavailable"}
 		} else {
-			_, project, validation = r.o.Validate(ctx, z)
+			_, project, validation = r.o.Backends.Validate(ctx, r.target(n, token))
 		}
 		was := n.Token.Valid
-		applyTokenValidation(n, project, validation, time.Now().UTC())
+		applyTokenValidation(n, project, validation, time.Now().UTC(), r.displayName(n.Backend))
 		if was != n.Token.Valid {
 			if n.Token.Valid {
 				r.event(ctx, n, "NamespaceValidated", "Project token validated")
@@ -164,7 +165,17 @@ func (r *Registry) step(ctx context.Context, name string) {
 			}
 		}
 	}
-	if n.Default {
+	if n.Default || !r.requiresRelay(n.Backend) {
+		if n.Phase == "Deleting" {
+			if err := r.o.Store.DeleteNamespace(ctx, n); err == nil {
+				r.mu.Lock()
+				delete(r.backends, name)
+				r.mu.Unlock()
+				r.event(ctx, n, "NamespaceDeleted", "Namespace deleted")
+			}
+			return
+		}
+		n.Relay.Phase = "NotRequired"
 		updatePhase(n)
 		_ = r.save(ctx, n)
 		return
@@ -274,13 +285,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	}
 	if n.Phase == "Deleting" {
 		if service != nil {
-			deleter, ok := b.(interface {
-				DeleteServiceByID(context.Context, string, string) (infra.Op, error)
-			})
-			if !ok {
-				return errors.New("Relay backend cannot safely delete by service identity")
-			}
-			op, err := deleter.DeleteServiceByID(ctx, n.Relay.Hostname, service.ID)
+			op, err := b.DeleteServiceByID(ctx, n.Relay.Hostname, service.ID)
 			if err != nil {
 				return errors.New("Cannot delete owned relay service")
 			}
@@ -321,7 +326,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	if service == nil {
 		n.DeployedExecutableHash = ""
 		n.SecretsPending = false
-		op, err := b.ImportServices(ctx, []infra.ServiceSpec{{Hostname: n.Relay.Hostname, Type: "ubuntu@24.04", MinContainers: 1, MaxContainers: 1, Resources: domain.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 1, MaxDisk: 3}, Env: secrets, Vars: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}})
+		op, err := b.ImportServices(ctx, []infra.ServiceSpec{{Hostname: n.Relay.Hostname, Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, MinContainers: 1, MaxContainers: 1, Resources: domain.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 1, MaxDisk: 3}, Env: secrets, Vars: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}})
 		if err != nil {
 			return errors.New("Cannot import relay service")
 		}
@@ -344,16 +349,12 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	status := r.Hub.Status(n.Name)
 	mismatch := status.Connected && status.Hello.ExecutableSHA256 != "" && status.Hello.ExecutableSHA256 != r.o.ExecutableHash
 	if n.DeployedExecutableHash != r.o.ExecutableHash || mismatch {
-		config, err := RelayYAML(n.Relay.Hostname, r.o.PublicURL, n.Name)
-		if err != nil {
-			return err
-		}
 		artifact, err := r.o.Artifact.Open(ctx)
 		if err != nil {
 			return errors.New("Cannot open relay executable artifact")
 		}
 		defer artifact.Close()
-		op, err := b.Deploy(ctx, n.Relay.Hostname, infra.Deployment{Artifact: artifact, ZeropsYAML: config, SetupName: n.Relay.Hostname, Filename: "karakoram.tar.gz"})
+		op, err := b.Deploy(ctx, n.Relay.Hostname, infra.Deployment{Artifact: infra.Artifact{Reader: artifact, Name: engine.ArtifactName, Binary: engine.ArtifactBinary}, Runtime: RelayRuntime(r.o.PublicURL, n.Name)})
 		if err != nil {
 			return errors.New("Cannot deploy relay executable")
 		}

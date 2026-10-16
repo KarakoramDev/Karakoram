@@ -78,20 +78,29 @@ func (p *Provider) submit(ctx context.Context, rc *engine.Context, s *internalSt
 	case "resources":
 		op, err = rc.Backend.SetResources(ctx, m.Name, v.Resources)
 	case "disk":
+		if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
+			s.resetPlatformRetry(v)
+			return err
+		}
 		op, err = rc.Backend.SetResources(ctx, m.Volume, domain.Resources{MinDisk: v.Resources.MinDisk, MaxDisk: v.Resources.MaxDisk})
 	case "restart":
 		op, err = rc.Backend.Restart(ctx, m.Name)
 	case "management", "cleanup-management":
-		backend, ok := rc.Backend.(infra.SubdomainAccess)
-		if !ok {
-			return fmt.Errorf("%w: public management requires subdomain access", engine.ErrNotSupported)
-		}
 		o, e := parseOptions(m.EngineOptions)
 		if e != nil {
 			return e
 		}
 		if v.Action == "cleanup-management" {
 			o.ManagementUI.Public = false
+		}
+		backend, e := engine.PublicHTTPS(rc.Backend)
+		if e != nil {
+			if o.ManagementUI.Public {
+				s.resetPlatformRetry(v)
+				return e
+			}
+			// Disabling routing is already complete on a backend without it.
+			break
 		}
 		op, err = backend.SetSubdomainAccess(ctx, m.Name, o.ManagementUI.Public)
 	case "delete-runtime", "cleanup-runtime", "delete-volume", "cleanup-volume":
@@ -112,8 +121,12 @@ func (p *Provider) submit(ctx context.Context, rc *engine.Context, s *internalSt
 	v.Op = op
 	s.Pending = v
 	if err != nil {
-		var coded interface{ ErrorCode() string }
-		if v.Action == "resources" && errors.As(err, &coded) && coded.ErrorCode() == "lastCpuModeChangeTooRecent" {
+		if errors.Is(err, engine.ErrNotSupported) || errors.Is(err, infra.ErrUnsupported) {
+			s.Pending = nil
+			s.resetPlatformRetry(v)
+			return err
+		}
+		if v.Action == "resources" && errors.Is(err, infra.ErrResourceChangeCooldown) {
 			at := now(rc).Add(time.Hour)
 			if !m.CPUModeChangedAt.IsZero() && m.CPUModeChangedAt.Add(time.Hour).After(now(rc)) {
 				at = m.CPUModeChangedAt.Add(time.Hour)

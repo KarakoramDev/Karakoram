@@ -155,7 +155,7 @@ func TestMatchingOwnershipAndRetainedIDsAllowAdoption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.services[m.Name] = &infra.Service{ID: "runtime-id", Hostname: m.Name, Ownership: ownershipEnv(rc.Cluster.Name, m.Name, token.Token)}
+	f.services[m.Name] = &infra.Service{ID: "runtime-id", Hostname: m.Name, Ownership: engine.OwnershipEnv(rc.Cluster.Name, m.Name, token.Token)}
 	f.services[m.Volume] = &infra.Service{ID: "volume-id", Hostname: m.Volume}
 	if err := rc.Store.CreateRetainedVolume(ctx, &domain.RetainedVolume{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Member: m.Name, Hostname: m.Volume, ServiceID: "volume-id"}); err != nil {
 		t.Fatal(err)
@@ -187,10 +187,10 @@ func TestLegacyThreeMemberPlanAdoptsVerifiedDeployedResources(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		env := ownershipEnv(rc.Cluster.Name, m.Name, token.Token)
-		env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+		env := engine.OwnershipEnv(rc.Cluster.Name, m.Name, token.Token)
+		env[engine.DataDirVariable] = rc.Backend.Layout().VolumePath(m.Volume)
 		f.services[m.Name] = &infra.Service{ID: m.Name + "-id", Hostname: m.Name, Ownership: env}
-		// The deployed 8ba371a importer wrote no env to local-storage services.
+		// The legacy importer wrote no env to volume services.
 		f.services[m.Volume] = &infra.Service{ID: m.Volume + "-id", Hostname: m.Volume}
 	}
 	_ = save(rc.Cluster, s)
@@ -223,13 +223,13 @@ func TestLegacyVolumeAdoptionRequiresAuthenticatedRuntimeMount(t *testing.T) {
 			m := s.Members[0]
 			m.Stage = "active"
 			token, _ := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
-			env := ownershipEnv(rc.Cluster.Name, m.Name, token.Token)
-			env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
+			env := engine.OwnershipEnv(rc.Cluster.Name, m.Name, token.Token)
+			env[engine.DataDirVariable] = rc.Backend.Layout().VolumePath(m.Volume)
 			switch variant {
 			case "wrong-token":
 				env["KARAKORAM_AGENT_TOKEN"] = "foreign-token"
 			case "wrong-mount":
-				env["KARAKORAM_DATA_DIR"] = "/mnt/foreign"
+				env[engine.DataDirVariable] = rc.Backend.Layout().VolumePath("foreign")
 			}
 			f.services[m.Name] = &infra.Service{ID: "runtime-id", Hostname: m.Name, Ownership: env}
 			f.services[m.Volume] = &infra.Service{ID: "volume-id", Hostname: m.Volume}

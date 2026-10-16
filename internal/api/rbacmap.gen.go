@@ -97,6 +97,7 @@ var OperationRBAC = map[string]RBACRule{
 	"invalidateElasticAPIKey":        {Resource: "database-users", Action: "delete", ObjectParam: "cluster", Public: false},
 	"listAPITokens":                  {Resource: "api-tokens", Action: "read", ObjectParam: "*", Public: false},
 	"listAccounts":                   {Resource: "accounts", Action: "read", ObjectParam: "*", Public: false},
+	"listBackends":                   {Resource: "namespaces", Action: "read", ObjectParam: "*", Public: false},
 	"listBackupStorages":             {Resource: "backup-storages", Action: "read", ObjectParam: "*", Public: false},
 	"listBackups":                    {Resource: "backups", Action: "read", ObjectParam: "cluster", Public: false},
 	"listClusterMembers":             {Resource: "clusters", Action: "read", ObjectParam: "cluster", Public: false},

@@ -96,7 +96,7 @@ func TestLegacyPlaintextOwnershipBackfillsMemberMarkers(t *testing.T) {
 	}
 	for _, name := range []string{m.Name, m.Volume} {
 		f.services[name].Masked = false
-		f.services[name].Ownership = ownershipEnv(rc.Cluster.Name, m.Name, token.Token)
+		f.services[name].Ownership = engine.OwnershipEnv(rc.Cluster.Name, m.Name, token.Token)
 	}
 	if err := verifyMemberServices(t.Context(), rc, m); err != nil {
 		t.Fatal(err)
@@ -245,7 +245,7 @@ func TestRecordedRuntimeIDCannotBackfillEvidenceForUntaggedVolume(t *testing.T) 
 			m := s.Members[0]
 			runtime := f.services[m.Name]
 			m.ServiceID = runtime.ID
-			runtime.Ownership = map[string]string{"KARAKORAM_DATA_DIR": "/mnt/" + m.Volume}
+			runtime.Ownership = map[string]string{engine.DataDirVariable: rc.Backend.Layout().VolumePath(m.Volume)}
 			if legacy == "wrong-token" {
 				runtime.Masked = false
 				runtime.Ownership["KARAKORAM_CLUSTER"] = rc.Cluster.Name

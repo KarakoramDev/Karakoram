@@ -100,11 +100,11 @@ func TestArtifacts(t *testing.T) {
 				if ArtifactURL(component, v.Version) != url {
 					t.Fatal("artifact URL")
 				}
-				commands := prepareCommands(component, v.Version)
+				commands := prepareCommands(component, v.Version, "elasticuser")
 				if len(commands) != 1 {
 					t.Fatal("command count")
 				}
-				for _, part := range []string{"curl -fsSLO " + url, "curl -fsSLO " + url + ".sha512", "sha512sum -c " + file + ".sha512", "sudo tar -xzf " + file + " -C /opt/elastic", "sudo chown -R zerops:zerops /opt/elastic", "rm -f " + file + " " + file + ".sha512"} {
+				for _, part := range []string{"curl -fsSLO " + url, "curl -fsSLO " + url + ".sha512", "sha512sum -c " + file + ".sha512", "sudo tar -xzf " + file + " -C /opt/elastic", "sudo chown -R elasticuser:elasticuser /opt/elastic", "rm -f " + file + " " + file + ".sha512"} {
 					if !strings.Contains(commands[0], part) {
 						t.Fatalf("missing %q", part)
 					}
@@ -113,7 +113,7 @@ func TestArtifacts(t *testing.T) {
 		}
 	}
 	for _, tt := range []struct{ component, version string }{{"unknown", "9.5.5"}, {"elasticsearch", "9.5.5;false"}} {
-		if ArtifactURL(tt.component, tt.version) != "" || prepareCommands(tt.component, tt.version) != nil {
+		if ArtifactURL(tt.component, tt.version) != "" || prepareCommands(tt.component, tt.version, "elasticuser") != nil {
 			t.Fatal("unsafe artifact input")
 		}
 	}

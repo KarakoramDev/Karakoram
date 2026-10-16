@@ -11,7 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/events"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
 	"github.com/KarakoramDev/Karakoram/internal/orphanvolumes"
@@ -75,7 +75,15 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	backend, err := zerops.New(zerops.Options{Token: c.ZeropsToken, ProjectID: c.ZeropsProjectID, BaseURL: c.ZeropsAPIURL})
+	backends, err := backendRegistry(c)
+	if err != nil {
+		return err
+	}
+	target, err := c.defaultTarget(backends)
+	if err != nil {
+		return err
+	}
+	backend, err := backends.New(target)
 	if err != nil {
 		return err
 	}
@@ -97,7 +105,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		}
 		return nil
 	}
-	namespaceRegistry, err := namespaces.New(ctx, namespaces.Options{Store: st, DefaultBackend: backend, Zerops: zerops.Options{Token: c.ZeropsToken, ProjectID: c.ZeropsProjectID, BaseURL: c.ZeropsAPIURL}, PublicURL: c.PublicURL, AdvertiseURL: c.AdvertiseURL, RelayHostname: relayHostname, Events: recorder, Logger: logger, RelayTargets: relayTargets})
+	namespaceRegistry, err := namespaces.New(ctx, namespaces.Options{Store: st, DefaultBackend: backend, Backends: backends, DefaultTarget: target, PublicURL: c.PublicURL, AdvertiseURL: c.AdvertiseURL, RelayHostname: relayHostname, Events: recorder, Logger: logger, RelayTargets: relayTargets})
 	if err != nil {
 		return err
 	}
@@ -136,7 +144,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		}
 		return out, nil
 	}})
-	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger})
+	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger})
 	if err != nil {
 		return err
 	}
@@ -191,11 +199,17 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 
 // logTokenCapability reports, without blocking startup, whether the Zerops
 // token is in sudo mode. Karakoram works either way; sudo is not recommended.
-func logTokenCapability(ctx context.Context, logger *slog.Logger, backend *zerops.Backend) {
+func logTokenCapability(ctx context.Context, logger *slog.Logger, backend infra.Backend) {
+	probeBackend, ok := backend.(interface {
+		SudoMode(context.Context) (bool, error)
+	})
+	if !ok {
+		return
+	}
 	go func() {
 		probe, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		sudo, err := backend.SudoMode(probe)
+		sudo, err := probeBackend.SudoMode(probe)
 		switch {
 		case err != nil:
 			logger.Info("Zerops token capability check unavailable", "error", err.Error())

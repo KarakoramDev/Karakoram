@@ -1,6 +1,6 @@
 # 0027 — Elastic Stack components belong to the cluster
 
-Status: Accepted
+Status: Accepted; shared component mechanics generalized by [ADR 0031](0031-engine-component-model.md)
 
 ## Context
 
@@ -9,6 +9,8 @@ Kibana, Logstash and APM Server need compatible Elasticsearch versions, trusted 
 ## Decision
 
 Represent optional `kibana`, `logstash` and `apm` under `spec.components.extra`, with per-component resources and replica counts. Zero disables the component. Lock every enabled product to the exact Elasticsearch version; cluster create, upgrade, restore, credential rotation and deletion own their lifecycle. Establish Elasticsearch/security first, then Kibana, Logstash and APM. On upgrade, finish Elasticsearch before components and stop every Kibana instance before changing its version ([Stack installation](https://www.elastic.co/docs/deploy-manage/deploy/self-managed/installing-elasticsearch), [Kibana upgrade](https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster/kibana)).
+
+The ordered `ComponentSet` and stateless lifecycle helper in ADR 0031 now provide shared defaults, validation, topology metadata and import/deploy/readiness/scale/delete transitions. Elasticsearch retains the security, configuration, version compatibility and safety ordering described in this decision.
 
 Use one stateless service per component with N containers and no Local Storage volume, following the router pattern in [ADR 0007](0007-member-deployment.md). All replicas receive the cluster CA and automatically generated backend credentials: a Kibana service-account token and separate scoped Logstash/APM writer users. Share stable Kibana session, saved-object and reporting encryption keys across its replicas, but let instance identities remain unique ([Kibana load balancing](https://www.elastic.co/docs/deploy-manage/production-guidance/kibana-load-balance-traffic)). Browser and APM-agent credentials are separate from component-to-Elasticsearch identities.
 

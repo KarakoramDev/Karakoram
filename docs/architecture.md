@@ -27,11 +27,17 @@ Private networking alone is not an authentication boundary. Agent traffic uses p
 
 ## Namespaces and relay routing
 
-A namespace maps to one existing Zerops project and its project-scoped infrastructure credentials. `default` is the control plane's own project and uses direct private networking. Each additional namespace has a private relay running `karakoram relay`.
+A namespace selects an immutable backend kind and target with its infrastructure credentials. Zerops is the only registered backend today, so targets are existing Zerops projects. `default` is the control plane's own project and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; Zerops retains that requirement.
 
 The relay opens an outbound WebSocket connection through public HTTPS and carries an inner mutually authenticated TLS tunnel. Provider-approved administration traffic and protected agent traffic use namespace-qualified streams; agent configuration pulls retain end-to-end TLS. A namespace token or relay outage interrupts management of that namespace, not every project. The relay is not application networking.
 
 See [Namespaces and relays](namespaces.md), the [relay threat model](security.md#relay-threat-model) and [ADR 0018](adr/0018-multi-project-namespaces-relay.md).
+
+## Infrastructure backends
+
+The server composition root registers compiled-in factories in `infra.Registry`. Each factory constructs and validates a namespace's `Target`; engines use `infra.Backend`, not the platform client. Neutral `ServiceSpec` values distinguish runtimes from independently identified persistent volumes. `Deployment` pairs an executable artifact with a structured `RuntimeSpec`; each backend renders its own manifest and supplies its runtime `Layout`. Operations remain opaque handles polled through `OpStatus`, and errors use neutral classes.
+
+Backend capabilities describe optional public routing, disk growth, quotas, placement, logs and other resource/runtime features. Engine capability gates reject unsupported requests. `GET /api/v1/backends` publishes registered kinds and capabilities; namespace responses identify their backend and enabled capabilities. All backends must pass the shared contract suite. See [ADR 0030](adr/0030-backend-neutral-infrastructure-contract.md); the registry does not imply support for an unregistered platform.
 
 ## Desired state and durable operations
 
@@ -58,6 +64,8 @@ The control plane is single-replica. Local Storage is tied to a single host, and
 ## Engine providers
 
 Providers are compiled into Karakoram, not dynamically installable plugins. Each owns its version catalog, validation/defaults, topology, health observation, lifecycle checkpoints, access APIs and backup semantics. Shared interfaces handle infrastructure, namespaces, secrets, operations and monitoring; capability metadata gates supported UI/API actions. A cluster's provider is immutable.
+
+Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declarations with per-component replicas and resources in `spec.components.extra`. Shared stateless reconciliation handles enable/disable stages through engine callbacks; credentials, application readiness, resizing and stateful safety remain engine-owned. Elasticsearch uses this for Kibana, Logstash and APM. See [ADR 0031](adr/0031-engine-component-model.md).
 
 | Engine | Provider | Runtime and operational details |
 | --- | --- | --- |

@@ -11,6 +11,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
 )
 
@@ -29,7 +30,7 @@ func (s *Server) requireNamespace(ctx context.Context, name string) *response {
 	return nil
 }
 
-func namespaceAPI(n *domain.Namespace, count int) api.Namespace {
+func namespaceAPI(n *domain.Namespace, count int, capabilities infra.Capabilities) api.Namespace {
 	optionalString := func(v string) *string {
 		if v == "" {
 			return nil
@@ -42,7 +43,19 @@ func namespaceAPI(n *domain.Namespace, count int) api.Namespace {
 		}
 		return &v
 	}
-	return api.Namespace{Name: n.Name, Description: optionalString(n.Description), ProjectId: n.ProjectID, ProjectName: n.ProjectName, Default: n.Default, Phase: api.NamespacePhase(n.Phase), ClusterCount: &count, CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt, Token: api.TokenStatus{Source: api.TokenStatusSource(n.Token.Source), Valid: n.Token.Valid, LastValidatedAt: optionalTime(n.Token.LastValidatedAt), LastError: optionalString(n.Token.LastError), RotatedAt: optionalTime(n.Token.RotatedAt)}, Relay: api.RelayStatus{Hostname: optionalString(n.Relay.Hostname), ServiceId: optionalString(n.Relay.ServiceID), Phase: api.RelayStatusPhase(n.Relay.Phase), Connected: n.Relay.Connected, ConnectedSince: optionalTime(n.Relay.ConnectedSince), LastSeenAt: optionalTime(n.Relay.LastSeenAt), Version: optionalString(n.Relay.Version), DesiredVersion: optionalString(n.Relay.DesiredVersion), CertNotAfter: optionalTime(n.Relay.CertNotAfter), Reconnects: n.Relay.Reconnects, LastError: optionalString(n.Relay.LastError)}}
+	caps := []api.Capability{}
+	for _, name := range capabilities.List() {
+		caps = append(caps, api.Capability(name))
+	}
+	backend := n.Backend
+	if backend == "" {
+		backend = "zerops"
+	}
+	var config *map[string]string
+	if n.Config != nil {
+		config = &n.Config
+	}
+	return api.Namespace{Backend: backend, Capabilities: caps, Config: config, Name: n.Name, Description: optionalString(n.Description), ProjectId: n.ProjectID, ProjectName: n.ProjectName, Default: n.Default, Phase: api.NamespacePhase(n.Phase), ClusterCount: &count, CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt, Token: api.TokenStatus{Source: api.TokenStatusSource(n.Token.Source), Valid: n.Token.Valid, LastValidatedAt: optionalTime(n.Token.LastValidatedAt), LastError: optionalString(n.Token.LastError), RotatedAt: optionalTime(n.Token.RotatedAt)}, Relay: api.RelayStatus{Hostname: optionalString(n.Relay.Hostname), ServiceId: optionalString(n.Relay.ServiceID), Phase: api.RelayStatusPhase(n.Relay.Phase), Connected: n.Relay.Connected, ConnectedSince: optionalTime(n.Relay.ConnectedSince), LastSeenAt: optionalTime(n.Relay.LastSeenAt), Version: optionalString(n.Relay.Version), DesiredVersion: optionalString(n.Relay.DesiredVersion), CertNotAfter: optionalTime(n.Relay.CertNotAfter), Reconnects: n.Relay.Reconnects, LastError: optionalString(n.Relay.LastError)}}
 }
 func (s *Server) namespaceRegistry() (*namespaces.Registry, error) {
 	r, ok := s.namespaces.(*namespaces.Registry)
@@ -62,6 +75,8 @@ func (s *Server) namespaceFailure(err error) response {
 		return s.failure(err)
 	}
 	switch {
+	case errors.Is(err, infra.ErrUnsupported), errors.Is(err, infra.ErrRejected):
+		return fail(400, "invalid_request", err.Error())
 	case errors.Is(err, namespaces.ErrInvalid):
 		return fail(422, "invalid_namespace", err.Error())
 	case errors.Is(err, namespaces.ErrConflict):
@@ -75,7 +90,7 @@ func (s *Server) namespaceResponse(ctx context.Context, r *namespaces.Registry, 
 	if err != nil {
 		return s.namespaceFailure(err)
 	}
-	return response{status: status, body: namespaceAPI(n, count), noStore: true}
+	return response{status: status, body: namespaceAPI(n, count, s.namespaceCapabilities(n.Backend)), noStore: true}
 }
 func (s *Server) ListNamespaces(ctx context.Context, request api.ListNamespacesRequestObject) (api.ListNamespacesResponseObject, error) {
 	r, err := s.namespaceRegistry()
@@ -96,7 +111,7 @@ func (s *Server) ListNamespaces(ctx context.Context, request api.ListNamespacesR
 		if err != nil {
 			return s.namespaceFailure(err), nil
 		}
-		items = append(items, namespaceAPI(n, count))
+		items = append(items, namespaceAPI(n, count, s.namespaceCapabilities(n.Backend)))
 	}
 	return listResponse(s, ctx, items, nil), nil
 }
@@ -147,7 +162,11 @@ func (s *Server) namespaceMutation(ctx context.Context, name string, in input) r
 		if b == nil || b.Token == nil {
 			return invalidField("token", domain.ReasonRequired, "token is required")
 		}
-		n, err = r.Create(ctx, b.Name, b.ProjectId, *b.Token, value(b.Description))
+		var config map[string]string
+		if b.Config != nil {
+			config = *b.Config
+		}
+		n, err = r.Create(ctx, b.Name, b.ProjectId, *b.Token, value(b.Description), value(b.Backend), config)
 		status = 201
 	case "UpdateNamespace":
 		b := in.Body.(*api.UpdateNamespaceJSONRequestBody)
@@ -174,3 +193,29 @@ func (s *Server) namespaceMutation(ctx context.Context, name string, in input) r
 	}
 	return s.namespaceResponse(ctx, r, n, status)
 }
+
+func (s *Server) namespaceCapabilities(kind string) infra.Capabilities {
+	if kind == "" {
+		kind = "zerops"
+	}
+	f, err := s.Backends.Get(kind)
+	if err != nil {
+		return infra.Capabilities{}
+	}
+	return f.Info().Capabilities
+}
+
+func (s *Server) ListBackends(ctx context.Context, request api.ListBackendsRequestObject) (api.ListBackendsResponseObject, error) {
+	items := []api.BackendInfo{}
+	for _, info := range s.Backends.List() {
+		caps := []api.Capability{}
+		for _, capability := range info.Capabilities.List() {
+			caps = append(caps, api.Capability(capability))
+		}
+		keys := append([]string{}, info.ConfigKeys...)
+		items = append(items, api.BackendInfo{Kind: info.Kind, DisplayName: info.DisplayName, Experimental: info.Experimental, Relay: info.Relay, Capabilities: caps, ConfigKeys: keys})
+	}
+	return response{status: 200, body: api.BackendList{Items: items}}, nil
+}
+
+func (r response) VisitListBackendsResponse(w http.ResponseWriter) error { return r.write(w) }

@@ -177,9 +177,9 @@ func assertLifecycleCondition(t *testing.T, status domain.ClusterStatus, kind, w
 
 func TestCleanupUnreachableNonRunningRuntime(t *testing.T) {
 	for _, runtime := range []struct{ status, stage string }{
-		{"STOPPED", "ready"},
-		{"FAILED", "deployed"},
-		{"READY_TO_DEPLOY", "joined"},
+		{infra.StatusStopped, "ready"},
+		{infra.StatusFailed, "deployed"},
+		{infra.StatusReadyToDeploy, "joined"},
 	} {
 		for _, keep := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/keepVolumes=%v", runtime.status, keep), func(t *testing.T) {
@@ -257,7 +257,7 @@ func TestCleanupUnreachableNonRunningRuntime(t *testing.T) {
 }
 
 func TestCleanupUnreachableRuntimeWithoutTerminalObservationIsBlocked(t *testing.T) {
-	for _, status := range []string{"", "ACTIVE", "RUNNING", "STARTING", "STOPPING", "UNKNOWN"} {
+	for _, status := range []string{"", infra.StatusActive, "RUNNING", "STARTING", "STOPPING", "UNKNOWN"} {
 		t.Run(status, func(t *testing.T) {
 			p, rc, f, a := setup(t)
 			ready(t, p, rc)
@@ -278,7 +278,7 @@ func TestCleanupNonRunningForeignRuntimeIsRefused(t *testing.T) {
 	ready(t, p, rc)
 	f.services["demom0"].ID = "foreign"
 	f.services["demom0"].Ownership = nil
-	f.services["demom0"].Status = "STOPPED"
+	f.services["demom0"].Status = infra.StatusStopped
 	a.broker("demom0").down = true
 	a.log.clear()
 	before := f.mutations

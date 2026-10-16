@@ -22,12 +22,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 const pbmVersion = "2.16.0-1.noble"
 
-func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (string, error) {
+func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) infra.RuntimeSpec {
 	c := rc.Cluster
 	agentURL := rc.AgentURL
 	if agentURL == "" {
@@ -39,35 +38,33 @@ func (p *Provider) zeropsYAML(rc *engine.Context, m *member, version string) (st
 		shell = "2.8.3.noble"
 	}
 	prepare := []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release", "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb", "sudo dpkg -i /tmp/percona-release.deb", "sudo percona-release enable psmdb-" + series + " release --scheme https", "sudo percona-release enable pbm release --scheme https", "sudo apt-get update", fmt.Sprintf("sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=%[1]s.noble percona-server-mongodb-mongos=%[1]s.noble percona-server-mongodb-tools=%[1]s.noble percona-mongodb-mongosh=%[2]s percona-backup-mongodb=%[3]s", version, shell, pbmVersion)}
-	dir := "/var/www/karakoram-data"
-	if m.Volume != "" {
-		dir = "/mnt/" + m.Volume
-	}
-	run := map[string]any{"base": "ubuntu@24.04", "ports": []map[string]any{{"port": 27017, "protocol": "tcp"}}, "prepareCommands": prepare, "envVariables": map[string]string{"KARAKORAM_URL": agentURL, "KARAKORAM_CLUSTER": c.Name, "KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM, "KARAKORAM_DATA_DIR": dir, "PERCONA_TELEMETRY_DISABLE": "1"}, "start": "./karakoram agent"}
-	if m.Volume != "" {
-		run["volume"] = map[string]string{"hostname": m.Volume}
-	}
-	doc := map[string]any{"zerops": []map[string]any{{"setup": m.Name, "deploy": map[string]any{"temporaryShutdown": true, "readinessCheck": map[string]any{"exec": map[string]string{"command": "/var/www/karakoram agent readiness"}, "failureTimeout": "300s", "retryPeriod": "10s"}}, "run": run}}}
-	b, e := yaml.Marshal(doc)
-	return string(b), e
+	return (engine.AgentRuntime{
+		Cluster: c.Name, Member: m.Name, Volume: m.Volume,
+		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM,
+		Ports: []infra.Port{{Port: 27017, Protocol: "tcp"}}, Prepare: prepare,
+		Env: map[string]string{"PERCONA_TELEMETRY_DISABLE": "1"},
+	}).Spec(rc.Backend.Layout())
 }
 func runtimeResources(r domain.Resources) domain.Resources { r.MinDisk = 1; r.MaxDisk = 3; return r }
-func serviceSpec(c *domain.Cluster, m *member, token string) infra.ServiceSpec {
+func serviceSpec(layout infra.Layout, c *domain.Cluster, m *member, token string) infra.ServiceSpec {
 	comp := component(c.Spec, m)
 	containers := 1
 	if m.Role == agentapi.RoleRouter {
 		containers = comp.Replicas
 	}
-	env := ownershipEnv(c.Name, m.Name, token)
-	if m.Volume != "" {
-		env["KARAKORAM_DATA_DIR"] = "/mnt/" + m.Volume
-	}
-	return infra.ServiceSpec{Hostname: m.Name, Type: "ubuntu@24.04", Resources: runtimeResources(comp.Resources), MinContainers: containers, MaxContainers: containers, Env: env, Vars: engine.OwnerVars(token, c.Name, m.Name, m.Name), Volume: m.Volume}
+	return engine.RuntimeServiceSpec(layout, engine.MemberService{
+		Cluster: c.Name, Member: m.Name, Token: token, Volume: m.Volume,
+		Resources: runtimeResources(comp.Resources), Containers: containers,
+	})
 }
 
-func ownershipEnv(cluster, member, token string) map[string]string {
-	return map[string]string{"KARAKORAM_CLUSTER": cluster, "KARAKORAM_MEMBER": member, "KARAKORAM_AGENT_TOKEN": token}
+func requireRouterScaling(backend infra.Backend, containers int) error {
+	if containers > 1 && !backend.Capabilities().HorizontalScaling {
+		return fmt.Errorf("%w: backend %s cannot scale mongos beyond one container", engine.ErrNotSupported, backend.Name())
+	}
+	return nil
 }
+
 func missing(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound)
 }

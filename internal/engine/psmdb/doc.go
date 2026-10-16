@@ -62,8 +62,8 @@ agents during a periodic configuration pull.
 Creation starts with a stable UID/prefix and topology plan. The next call
 ensures the CA, keyfile, five system-user passwords, hashed/encrypted agent
 tokens and member/agent certificates. A member progresses planned -> imported
--> deployed -> healthy. Runtime and local-storage services are imported
-without inline deployment YAML to avoid Zerops's empty-artifact build;
+-> deployed -> healthy. Runtime and volume services are imported as neutral
+service specifications without inline deployment manifests;
 ownership is proven by recorded service or retained-volume IDs, IDs from the
 member's own import, a non-sensitive KARAKORAM_OWNER marker bound to the token,
 cluster, member and hostname, or readable legacy cluster/member/agent-token
@@ -101,6 +101,11 @@ changes are rejected. Adding shards follows the initial replica-set bootstrap
 and addShard path. Router replica changes use SetContainerCount; CPU/RAM
 updates send complete runtime resources; persistent disk growth targets the
 volume service rather than the ephemeral runtime root disk.
+Runtime deployments describe the release artifact, pinned preparation commands,
+environment, ports, readiness and volume mount independently of the backend.
+Data paths follow the backend layout. Public TCP exposure and allowlists,
+persistent disk growth and multi-container routers require the corresponding
+backend capabilities and return an unsupported-feature error when unavailable.
 
 Version changes use deployed per-member versions rather than assuming an
 accepted deployment changed every process. A member enters upgrade-wait after

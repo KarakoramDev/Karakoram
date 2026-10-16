@@ -49,7 +49,8 @@ func (*Provider) Describe() domain.ProviderInfo {
 		return domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: replicas, Resources: r}, MinReplicas: min, MaxReplicas: max}
 	}
 	for _, topology := range []string{"cluster", "dedicatedMasters"} {
-		comps := map[string]domain.ComponentInfo{"engine": ci("engine", 3, 1, 9), "kibana": ci("kibana", 0, 0, 3), "logstash": ci("logstash", 0, 0, 5), "apm": ci("apm", 0, 0, 3)}
+		comps := stackComponents.Info()
+		comps["engine"] = ci("engine", 3, 1, 9)
 		if topology == "dedicatedMasters" {
 			comps["engine"] = ci("engine", 2, 1, 20)
 			m := ci("master", 3, 3, 5)
@@ -127,21 +128,15 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 	}
 	d, _ := DefaultResources("engine")
 	fillResources(&s.Components.Engine.Resources, d)
-	if s.Components.Extra == nil {
-		s.Components.Extra = map[string]domain.ComponentSpec{}
-	}
-	names := []string{"kibana", "logstash", "apm"}
+	stackComponents.ApplyDefaults(&s.Components)
 	if s.Topology.Type == "dedicatedMasters" {
-		names = append(names, "master")
-	}
-	for _, name := range names {
-		c := s.Components.Extra[name]
-		if name == "master" && c.Replicas == 0 {
+		c := s.Components.Extra["master"]
+		if c.Replicas == 0 {
 			c.Replicas = 3
 		}
-		d, _ := DefaultResources(name)
+		d, _ := DefaultResources("master")
 		fillResources(&c.Resources, d)
-		s.Components.Extra[name] = c
+		s.Components.Extra["master"] = c
 	}
 	if s.TLS.Mode == "" {
 		s.TLS.Mode = "requireTLS"
@@ -188,6 +183,15 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.Components.ConfigServer.Replicas != 0 || s.Components.Router.Replicas != 0 || s.Topology.Shards != 0 {
 		return invalid("MongoDB components and shards are not supported")
 	}
+	optional := domain.Components{Extra: make(map[string]domain.ComponentSpec, len(s.Components.Extra))}
+	for name, c := range s.Components.Extra {
+		if name != "master" {
+			optional.Extra[name] = c
+		}
+	}
+	if err := stackComponents.Validate(optional); err != nil {
+		return err
+	}
 	comps := map[string]domain.ComponentSpec{"engine": s.Components.Engine}
 	for name, c := range s.Components.Extra {
 		switch name {
@@ -198,18 +202,8 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 			if c.Replicas != 3 && c.Replicas != 5 {
 				return invalid("dedicated masters require 3 or 5 replicas")
 			}
-		case "kibana", "apm":
-			if c.Replicas < 0 || c.Replicas > 3 {
-				return invalid("%s replicas must be 0..3", name)
-			}
-		case "logstash":
-			if c.Replicas < 0 || c.Replicas > 5 {
-				return invalid("logstash replicas must be 0..5")
-			}
-		default:
-			return invalid("unknown component %q", name)
+			comps[name] = c
 		}
-		comps[name] = c
 	}
 	if s.Topology.Type == "dedicatedMasters" && s.Components.Extra["master"].Replicas != 3 && s.Components.Extra["master"].Replicas != 5 {
 		return invalid("dedicated masters require 3 or 5 replicas")

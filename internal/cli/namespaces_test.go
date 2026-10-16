@@ -190,14 +190,14 @@ func TestSetContextNamespace(t *testing.T) {
 func TestNamespaceStatusTable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"items":[{"name":"dev","projectId":"proj-test","default":false,"phase":"Ready","token":{"valid":true},"relay":{"phase":"Ready","connected":true},"clusterCount":3}]}`)
+		fmt.Fprint(w, `{"items":[{"name":"dev","backend":"zerops","projectId":"proj-test","default":false,"phase":"Ready","token":{"valid":true},"relay":{"phase":"Ready","connected":true},"clusterCount":3}]}`)
 	}))
 	defer server.Close()
 	out, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "namespaces", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, heading := range []string{"NAME", "PROJECT", "DEFAULT", "PHASE", "TOKEN VALID", "RELAY PHASE", "CONNECTED", "CLUSTERS"} {
+	for _, heading := range []string{"NAME", "BACKEND", "PROJECT", "DEFAULT", "PHASE", "TOKEN VALID", "RELAY PHASE", "CONNECTED", "CLUSTERS", "zerops"} {
 		if !strings.Contains(out, heading) {
 			t.Errorf("missing %s", heading)
 		}
@@ -277,6 +277,58 @@ func TestNamespaceOperationGetAndWaitUseGlobalID(t *testing.T) {
 	for _, command := range []string{"get", "wait"} {
 		if _, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "-n", "dev", "operations", command, "one"); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestNamespaceBackendAndConfigFlags(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var body struct {
+			Backend string            `json:"backend"`
+			Config  map[string]string `json:"config"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Backend != "nomad" || body.Config["region"] != "example" || body.Config["url"] != "https://example.com?a=b" {
+			t.Fatalf("backend inputs: %+v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"name":"dev"}`)
+	}))
+	defer server.Close()
+	args := []string{"namespaces", "create", "--name", "dev", "--project-id", "target", "--backend", "nomad", "--config", "region=example", "--config", "url=https://example.com?a=b", "--token-file", "-"}
+	if _, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "credential", args...); err != nil {
+		t.Fatal(err)
+	}
+	for _, config := range []string{"invalid", "=value"} {
+		if _, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "credential", "namespaces", "create", "--name", "dev", "--project-id", "target", "--config", config, "--token-file", "-"); err == nil {
+			t.Fatal("invalid backend config accepted", config)
+		}
+	}
+	if requests != 1 {
+		t.Fatal("invalid configuration made requests", requests)
+	}
+}
+
+func TestBackendsList(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/backends" {
+			t.Errorf("backend path: %s", r.URL)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[{"kind":"zerops","displayName":"Zerops","experimental":false,"relay":true,"capabilities":["publicTcp"],"configKeys":["apiUrl"]}]}`)
+	}))
+	defer server.Close()
+	out, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "backends", "list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"KIND", "NAME", "EXPERIMENTAL", "RELAY", "CAPABILITIES", "CONFIG KEYS", "zerops", "publicTcp", "apiUrl"} {
+		if !strings.Contains(out, text) {
+			t.Errorf("missing %q in %s", text, out)
 		}
 	}
 }

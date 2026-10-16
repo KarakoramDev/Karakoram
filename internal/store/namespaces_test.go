@@ -227,3 +227,55 @@ func TestNamespaceLifecycleReadsIgnorePinnedReaderSnapshot(t *testing.T) {
 		t.Fatal("relay provisioning trusted stale enrollment credentials", err)
 	}
 }
+
+func TestLegacyNamespaceDefaultsToZerops(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	record := `{"name":"legacy","projectId":"project","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","phase":"Ready"}`
+	if _, err := s.writer.ExecContext(ctx, "INSERT INTO namespaces(name,data,updated_at) VALUES(?,?,?)", "legacy", record, "2026-01-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.GetNamespace(ctx, "legacy")
+	if err != nil || n.Backend != "zerops" {
+		t.Fatalf("legacy namespace: %+v %v", n, err)
+	}
+	all, err := s.ListNamespaces(ctx)
+	if err != nil || len(all) != 1 || all[0].Backend != "zerops" {
+		t.Fatalf("legacy listing: %+v %v", all, err)
+	}
+	if err := s.UpdateNamespace(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNamespaceBackendCredentialsAndImmutability(t *testing.T) {
+	s, _ := testStore(t)
+	ctx := t.Context()
+	n := &domain.Namespace{Name: "custom", Backend: "nomad", Config: map[string]string{"region": "example"}, ProjectID: "target", Phase: "Ready", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := s.CreateNamespaceCredentials(ctx, n, "credential", nil); err != nil {
+		t.Fatal(err)
+	}
+	token, err := s.GetNamespaceToken(ctx, n.Name)
+	if err != nil || token != "credential" {
+		t.Fatalf("credential: %q %v", token, err)
+	}
+	var sealed string
+	if err := s.reader.QueryRowContext(ctx, "SELECT secret FROM records WHERE kind='namespace-secret' AND scope=? AND key=?", n.Name, "nomad-token").Scan(&sealed); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := s.sealer.OpenFor("namespace/custom/nomad-token", sealed)
+	if err != nil || string(plain) != token {
+		t.Fatal("credential AAD", err)
+	}
+	n.Backend = "other"
+	if err := s.UpdateNamespace(ctx, n); !errors.Is(err, ErrStale) {
+		t.Fatal("backend mutation accepted", err)
+	}
+	n.Backend = "nomad"
+	if err := s.DeleteNamespaceToken(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetNamespaceTokenForUpdate(ctx, n.Name); !errors.Is(err, ErrNotFound) {
+		t.Fatal("credential survived deletion", err)
+	}
+}

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 const diagnosticLimit = 1024
@@ -205,14 +207,6 @@ func (e *resourceUpdateError) Error() string {
 
 func (e *resourceUpdateError) Unwrap() error { return e.cause }
 
-func (e *resourceUpdateError) ErrorCode() string {
-	var coded interface{ ErrorCode() string }
-	if errors.As(e.cause, &coded) {
-		return coded.ErrorCode()
-	}
-	return ""
-}
-
 func rejectedUpdate(err error, action, hostname, attempted string) error {
 	var api *APIError
 	if err == nil || !errors.As(err, &api) {
@@ -276,11 +270,40 @@ func IsAuthenticationError(err error) bool {
 	return false
 }
 
-// SafeErrorDetail does not expose arbitrary transport errors (which can contain URLs).
-func SafeErrorDetail(err error) string {
-	var api *APIError
-	if errors.As(err, &api) {
-		return api.Error()
+// Is exposes stable backend-neutral classifications without losing API details.
+func (e *APIError) Is(target error) bool {
+	switch target {
+	case infra.ErrUnauthorized:
+		return IsAuthenticationError(e)
+	case infra.ErrNotFound:
+		return e.StatusCode == http.StatusNotFound || e.Code == "serviceStackNotFound"
+	case infra.ErrConflict:
+		return e.StatusCode == http.StatusConflict
+	case infra.ErrUnavailable:
+		return e.StatusCode == http.StatusTooManyRequests || (e.StatusCode >= 500 && e.StatusCode < 600)
+	case infra.ErrResourceChangeCooldown:
+		return e.Code == "lastCpuModeChangeTooRecent"
+	case infra.ErrRejected:
+		return e.Code == "lastCpuModeChangeTooRecent" || (e.StatusCode >= 400 && e.StatusCode < 500 && !IsAuthenticationError(e) && e.StatusCode != 404 && e.StatusCode != 409 && e.StatusCode != 429 && e.Code != "serviceStackNotFound")
 	}
-	return "network request or platform response failed"
+	return false
 }
+
+// SafeDetail returns the bounded diagnostic summary.
+func (e *APIError) SafeDetail() string { return e.Error() }
+
+type classifiedError struct {
+	cause error
+	class error
+}
+
+func (e *classifiedError) Error() string        { return e.cause.Error() }
+func (e *classifiedError) Unwrap() error        { return e.cause }
+func (e *classifiedError) Is(target error) bool { return target == e.class }
+func (e *classifiedError) SafeDetail() string {
+	if e.class == infra.ErrUnavailable {
+		return "network request or platform response failed"
+	}
+	return e.class.Error()
+}
+func unavailable(err error) error { return &classifiedError{cause: err, class: infra.ErrUnavailable} }

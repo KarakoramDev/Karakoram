@@ -18,13 +18,15 @@ func (a *app) namespaceFlags(c *cobra.Command, op string) {
 	switch op {
 	case "createNamespace":
 		c.Flags().String("name", "", "Namespace name")
-		c.Flags().String("project-id", "", "Zerops project ID")
+		c.Flags().String("project-id", "", "Backend target ID (Zerops project ID)")
+		c.Flags().String("backend", "zerops", "Infrastructure backend kind")
+		c.Flags().StringArray("config", nil, "Backend setting key=value (repeatable)")
 		c.Flags().String("description", "", "Namespace description")
-		c.Flags().String("token-file", "", "Zerops token file ('-' reads stdin)")
+		c.Flags().String("token-file", "", "Backend credential file ('-' reads stdin)")
 	case "updateNamespace":
 		c.Flags().String("description", "", "Namespace description")
 	case "rotateNamespaceToken":
-		c.Flags().String("token-file", "", "Zerops token file ('-' reads stdin)")
+		c.Flags().String("token-file", "", "Backend credential file ('-' reads stdin)")
 	}
 }
 
@@ -58,6 +60,20 @@ func (a *app) namespaceBody(cmd *cobra.Command, op string) (any, error) {
 			}
 			description, _ := cmd.Flags().GetString("description")
 			body["name"], body["projectId"], body["description"] = name, project, description
+			backend, _ := cmd.Flags().GetString("backend")
+			settings, _ := cmd.Flags().GetStringArray("config")
+			config := make(map[string]string, len(settings))
+			for _, setting := range settings {
+				key, value, ok := strings.Cut(setting, "=")
+				if !ok || key == "" {
+					return nil, usageError("--config must be key=value")
+				}
+				config[key] = value
+			}
+			body["backend"] = backend
+			if len(config) > 0 {
+				body["config"] = config
+			}
 		}
 		return body, nil
 	case "updateNamespace":
@@ -107,9 +123,9 @@ func (a *app) namespacesTable(v any) error {
 		return err
 	}
 	w := tabwriter.NewWriter(a.opts.Out, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tPROJECT\tDEFAULT\tPHASE\tTOKEN VALID\tRELAY PHASE\tCONNECTED\tCLUSTERS")
+	fmt.Fprintln(w, "NAME\tBACKEND\tPROJECT\tDEFAULT\tPHASE\tTOKEN VALID\tRELAY PHASE\tCONNECTED\tCLUSTERS")
 	for _, row := range rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", cell(nested(row, "name")), cell(nested(row, "projectId")), cell(nested(row, "default")), cell(nested(row, "phase")), cell(nested(row, "token", "valid")), cell(nested(row, "relay", "phase")), cell(nested(row, "relay", "connected")), cell(nested(row, "clusterCount")))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", cell(nested(row, "name")), cell(nested(row, "backend")), cell(nested(row, "projectId")), cell(nested(row, "default")), cell(nested(row, "phase")), cell(nested(row, "token", "valid")), cell(nested(row, "relay", "phase")), cell(nested(row, "relay", "connected")), cell(nested(row, "clusterCount")))
 	}
 	return w.Flush()
 }
@@ -154,4 +170,17 @@ func (a *app) addConfig(root *cobra.Command) {
 	}
 	group.AddCommand(set)
 	root.AddCommand(group)
+}
+
+func (a *app) backendsTable(v any) error {
+	rows, ok := nested(v, "items").([]any)
+	if !ok {
+		return fmt.Errorf("unexpected backend list response")
+	}
+	w := tabwriter.NewWriter(a.opts.Out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "KIND\tNAME\tEXPERIMENTAL\tRELAY\tCAPABILITIES\tCONFIG KEYS")
+	for _, row := range rows {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", cell(nested(row, "kind")), cell(nested(row, "displayName")), cell(nested(row, "experimental")), cell(nested(row, "relay")), cell(nested(row, "capabilities")), cell(nested(row, "configKeys")))
+	}
+	return w.Flush()
 }

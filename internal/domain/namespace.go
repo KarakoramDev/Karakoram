@@ -9,6 +9,8 @@ import "time"
 type Namespace struct {
 	Name                   string               `json:"name"`
 	Description            string               `json:"description,omitempty"`
+	Backend                string               `json:"backend,omitempty"`
+	Config                 map[string]string    `json:"config,omitempty"`
 	ProjectID              string               `json:"projectId"`
 	ProjectName            string               `json:"projectName"`
 	Default                bool                 `json:"default"`

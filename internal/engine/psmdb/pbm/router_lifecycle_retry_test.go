@@ -44,9 +44,9 @@ func (b *retryRouterBackend) Start(context.Context, string) (infra.Op, error) {
 	return b.issue("start")
 }
 func (b *retryRouterBackend) reached(action string) {
-	b.state = "ACTIVE"
+	b.state = infra.StatusActive
 	if action == "stop" {
-		b.state = "STOPPED"
+		b.state = infra.StatusStopped
 	}
 }
 func (b *retryRouterBackend) OpStatus(_ context.Context, op infra.Op) (infra.OpState, error) {
@@ -67,7 +67,7 @@ func (b *retryRouterBackend) GetService(context.Context, string) (*infra.Service
 }
 
 func newRetryRouterBackend(action, failure string, alreadyReached bool) *retryRouterBackend {
-	return &retryRouterBackend{state: "ACTIVE", failAction: action, failure: failure,
+	return &retryRouterBackend{state: infra.StatusActive, failAction: action, failure: failure,
 		alreadyReached: alreadyReached, attempts: map[string]int{}, processes: map[string]string{}}
 }
 
@@ -168,7 +168,7 @@ func TestRestoreRouterFailedProcessRetryCrashResume(t *testing.T) {
 						}
 					}
 					r, err := st.GetRestore(ctx, domain.ClusterRef{Name: "target"}, "restore")
-					if err != nil || !retried || !done || r.Phase != domain.PhaseSucceeded || backend.state != "ACTIVE" || agent.starts != 1 {
+					if err != nil || !retried || !done || r.Phase != domain.PhaseSucceeded || backend.state != infra.StatusActive || agent.starts != 1 {
 						t.Fatalf("restore did not recover: restore=%+v done=%t retried=%t starts=%d error=%v", r, done, retried, agent.starts, err)
 					}
 				})
@@ -183,9 +183,9 @@ func TestRouterRetryLostActionCheckpointObservesCompletion(t *testing.T) {
 			env, _, _, _ := setup(t)
 			env.Routers = []string{"routers"}
 			backend := newRetryRouterBackend(action, "FAILED", false)
-			backend.state = "STOPPED"
+			backend.state = infra.StatusStopped
 			if action == "stop" {
-				backend.state = "ACTIVE"
+				backend.state = infra.StatusActive
 			}
 			clock := &routerRetryClock{at: time.Date(2024, 1, 6, 12, 0, 0, 0, time.UTC)}
 			env.RC.Backend, env.RC.Clock = backend, clock
@@ -215,7 +215,7 @@ func TestRouterRetryBackoffEscalatesAndCaps(t *testing.T) {
 	env, _, _, _ := setup(t)
 	env.Routers = []string{"routers"}
 	backend := newRetryRouterBackend("start", "CANCELLED", false)
-	backend.state, backend.alwaysFail = "STOPPED", true
+	backend.state, backend.alwaysFail = infra.StatusStopped, true
 	clock := &routerRetryClock{at: time.Date(2024, 1, 6, 12, 0, 0, 0, time.UTC)}
 	env.RC.Backend, env.RC.Clock = backend, clock
 	cp := checkpoint{Step: "routers-on"}

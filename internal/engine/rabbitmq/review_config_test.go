@@ -18,7 +18,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 func TestManagedListenerAliasesAndShellSubstitutionAreRejected(t *testing.T) {
@@ -82,28 +81,22 @@ func TestStreamListenerPortsFollowTLSModeAndRemainPrivate(t *testing.T) {
 				if spec.StreamPort != plain || spec.StreamTLSPort != secure {
 					t.Fatalf("stream listener TLS mismatch: %+v", spec)
 				}
-				text, err := p.zeropsYAML(rc, m, rc.Cluster.Spec.Version)
+				runtime, err := p.runtimeSpec(rc, m, rc.Cluster.Spec.Version)
 				if err != nil {
 					t.Fatal(err)
 				}
-				var doc map[string]any
-				if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
-					t.Fatal(err)
-				}
-				ports := doc["zerops"].([]any)[0].(map[string]any)["run"].(map[string]any)["ports"].([]any)
 				for _, want := range []int{5551, 5552} {
 					found := false
-					for _, raw := range ports {
-						port := raw.(map[string]any)
-						if port["port"] == want {
+					for _, port := range runtime.Ports {
+						if port.Port == want {
 							found = true
-							if port["protocol"] != "tcp" || port["httpSupport"] == true {
+							if port.Protocol != "tcp" || port.HTTP {
 								t.Fatal("stream listener incorrectly declares public HTTP support", port)
 							}
 						}
 					}
 					if found != enabled {
-						t.Fatalf("stream port %d declaration mismatch: enabled=%v yaml=%s", want, enabled, text)
+						t.Fatalf("stream port %d declaration mismatch: enabled=%v runtime=%+v", want, enabled, runtime)
 					}
 					if slices.Contains(p.RelayTargets(rc.Cluster), net.JoinHostPort(m.Name, strconv.Itoa(want))) {
 						t.Fatalf("private stream listener exposed through control-plane relay: %d", want)

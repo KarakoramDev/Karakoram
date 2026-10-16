@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func TestResourceChangesRespectDisruptionBoundaries(t *testing.T) {
@@ -85,11 +86,6 @@ func TestResourceChangesRespectDisruptionBoundaries(t *testing.T) {
 	}
 }
 
-type cpuModeCooldownError struct{}
-
-func (cpuModeCooldownError) Error() string     { return "CPU mode was changed too recently" }
-func (cpuModeCooldownError) ErrorCode() string { return "lastCpuModeChangeTooRecent" }
-
 func TestCPUModeCooldownPersistsAndResumesSafely(t *testing.T) {
 	for _, knownChange := range []bool{false, true} {
 		t.Run(fmt.Sprintf("knownChange=%v", knownChange), func(t *testing.T) {
@@ -107,7 +103,7 @@ func TestCPUModeCooldownPersistsAndResumesSafely(t *testing.T) {
 			}
 			a.log.clear()
 			rc.Cluster.Spec.Components.Engine.Resources.CPUMode = "DEDICATED"
-			f.failures["resources:demom0"] = cpuModeCooldownError{}
+			f.failures["resources:demom0"] = fmt.Errorf("resource request: %w", infra.ErrResourceChangeCooldown)
 			var waiting *engine.PlatformRetryWait
 			for range 20 {
 				_, err := p.Sync(context.Background(), rc)
@@ -166,12 +162,12 @@ func TestCPUModeCooldownPersistsAndResumesSafely(t *testing.T) {
 	}
 }
 
-func TestCPUModeErrorCodeDoesNotMaskOtherResourceFailures(t *testing.T) {
+func TestCPUModeErrorTextDoesNotMaskOtherResourceFailures(t *testing.T) {
 	p, rc, f, _ := setup(t)
 	ready(t, p, rc)
 	rc.Cluster.Spec.Components.Engine.Resources.MinRAM = 2
 	rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 2
-	f.failures["resources:demom0"] = errors.New("lastCpuModeChangeTooRecent")
+	f.failures["resources:demom0"] = errors.New(infra.ErrResourceChangeCooldown.Error())
 	_, err := p.Sync(context.Background(), rc)
 	if err == nil {
 		t.Fatal("resource rejection hidden")
@@ -179,7 +175,7 @@ func TestCPUModeErrorCodeDoesNotMaskOtherResourceFailures(t *testing.T) {
 	s := state(t, rc)
 	r := s.PlatformRetries["demom0/resources"]
 	if r == nil || r.CPUModeCooldown || r.Failures != 1 || !r.RetryAfter.Equal(rc.Clock.Now().Add(30*time.Second)) {
-		t.Fatalf("uncoded error misclassified as CPU cooldown: %+v", r)
+		t.Fatalf("unclassified error misclassified as CPU cooldown: %+v", r)
 	}
 	if s.Members[0].Resources != runtimeResources(domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 5, MaxDisk: 5}) {
 		t.Fatal("failed resource request changed applied snapshot")

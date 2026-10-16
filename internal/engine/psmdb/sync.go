@@ -146,16 +146,7 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalSt
 	if e := save(rc.Cluster, s); e != nil {
 		return e
 	}
-	doc, e := p.zeropsYAML(rc, m, version)
-	if e != nil {
-		return e
-	}
-	artifact, e := rc.Artifact.Open(ctx)
-	if e != nil {
-		return e
-	}
-	defer artifact.Close()
-	op, e := rc.Backend.Deploy(ctx, m.Name, infra.Deployment{Artifact: artifact, ZeropsYAML: doc, SetupName: m.Name, Filename: "karakoram.tar.gz"})
+	op, e := engine.Deploy(ctx, rc, m.Name, p.runtimeSpec(rc, m, version))
 	if e != nil {
 		return e
 	}
@@ -181,7 +172,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		}
 		if v == nil {
 			r := component(rc.Cluster.Spec, m).Resources
-			specs = append(specs, infra.ServiceSpec{Hostname: m.Volume, Type: "local-storage:single@1", Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: ownershipEnv(rc.Cluster.Name, m.Name, tok.Token), Vars: engine.OwnerVars(tok.Token, rc.Cluster.Name, m.Name, m.Volume)})
+			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, r))
 		} else {
 			if err := verifyServiceOwnership(ctx, rc, m, v, true); err != nil {
 				return err
@@ -195,7 +186,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		return e
 	}
 	if runtime == nil {
-		specs = append(specs, serviceSpec(rc.Cluster, m, tok.Token))
+		specs = append(specs, serviceSpec(rc.Backend.Layout(), rc.Cluster, m, tok.Token))
 	} else {
 		if err := verifyServiceOwnership(ctx, rc, m, runtime, false); err != nil {
 			return err
@@ -271,6 +262,16 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	prepareDisruption func(context.Context, *engine.Context, *internalState, *member) (bool, error),
 	replication func(context.Context, *engine.Context, *internalState, *member) (mongoadmin.Status, error),
 ) (result engine.Result, err error) {
+	if rc.Cluster.Spec.Exposure.Public {
+		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure.Allowlist); err != nil {
+			return result, err
+		}
+	}
+	if rc.Cluster.Spec.Topology.Type == "sharded" {
+		if err := requireRouterScaling(rc.Backend, rc.Cluster.Spec.Components.Router.Replicas); err != nil {
+			return result, err
+		}
+	}
 	s, e := load(rc.Cluster)
 	if e != nil {
 		return result, e
@@ -702,6 +703,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 		if m.Volume != "" && (m.Disk.MinDisk != comp.Resources.MinDisk || m.Disk.MaxDisk != comp.Resources.MaxDisk) {
+			if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
+				return result, err
+			}
 			r := domain.Resources{MinDisk: comp.Resources.MinDisk, MaxDisk: comp.Resources.MaxDisk}
 			op, e := rc.Backend.SetResources(ctx, m.Volume, r)
 			if e != nil {
@@ -711,6 +715,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 		if m.Role == agentapi.RoleRouter && m.Containers != comp.Replicas {
+			if err := requireRouterScaling(rc.Backend, comp.Replicas); err != nil {
+				return result, err
+			}
 			op, e := rc.Backend.SetContainerCount(ctx, m.Name, comp.Replicas, comp.Replicas)
 			if e != nil {
 				return result, e
@@ -785,6 +792,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			continue
 		}
 		if ex.Public {
+			if err := engine.RequirePublicTCP(rc.Backend, ex.Allowlist); err != nil {
+				return result, err
+			}
 			port, err := p.allocatePublicPort(ctx, rc, s, m)
 			if err != nil {
 				return result, err

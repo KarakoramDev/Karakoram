@@ -1,0 +1,43 @@
+{
+  "binary": "karakoram",
+  "hostname": "demor",
+  "runtime": {
+    "base": "ubuntu-24.04",
+    "prepare": [
+      "sudo apt-get update",
+      "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release",
+      "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb",
+      "sudo dpkg -i /tmp/percona-release.deb",
+      "sudo percona-release enable psmdb-80 release --scheme https",
+      "sudo percona-release enable pbm release --scheme https",
+      "sudo apt-get update",
+      "sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=8.0.32-14.noble percona-server-mongodb-mongos=8.0.32-14.noble percona-server-mongodb-tools=8.0.32-14.noble percona-mongodb-mongosh=2.10.0.noble percona-backup-mongodb=2.16.0-1.noble"
+    ],
+    "env": {
+      "KARAKORAM_CLUSTER": "demo",
+      "KARAKORAM_DATA_DIR": "/var/www/karakoram-data",
+      "KARAKORAM_INTERNAL_CA": "-----BEGIN CERTIFICATE-----\ndDAtY2FwdHVyZS1jYQ==\n-----END CERTIFICATE-----\n",
+      "KARAKORAM_MEMBER": "demor",
+      "KARAKORAM_URL": "https://control.example.com",
+      "PERCONA_TELEMETRY_DISABLE": "1"
+    },
+    "args": [
+      "agent"
+    ],
+    "ports": [
+      {
+        "port": 27017,
+        "protocol": "tcp"
+      }
+    ],
+    "readiness": {
+      "args": [
+        "agent",
+        "readiness"
+      ],
+      "failureTimeout": 300000000000,
+      "retryPeriod": 10000000000
+    },
+    "stopBeforeStart": true
+  }
+}

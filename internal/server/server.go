@@ -27,6 +27,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/events"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/store"
@@ -39,6 +40,7 @@ type Options struct {
 	Auth         *auth.Service
 	RBAC         *rbac.Enforcer
 	Registry     *engine.Registry
+	Backends     *infra.Registry
 	Context      engine.Context
 	Trigger      interface{ Trigger(domain.ClusterRef) }
 	Hub          *events.Hub
@@ -62,6 +64,13 @@ func New(o Options) (*Server, error) {
 	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
+	}
+	if o.Backends == nil {
+		var err error
+		o.Backends, err = backendRegistry(Config{})
+		if err != nil {
+			return nil, err
+		}
 	}
 	if o.Namespaces == nil {
 		o.Namespaces = engine.StaticNamespaces{DefaultBackend: o.Context.Backend, DefaultAgentURL: o.Context.AgentURL}

@@ -135,8 +135,16 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 	case "resources":
 		op, err = rc.Backend.SetResources(ctx, m.Name, v.Resources)
 	case "disk":
+		if m.Disk.MinDisk != v.Resources.MinDisk || m.Disk.MaxDisk != v.Resources.MaxDisk {
+			if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
+				return true, err
+			}
+		}
 		op, err = rc.Backend.SetResources(ctx, m.Volume, domain.Resources{MinDisk: v.Resources.MinDisk, MaxDisk: v.Resources.MaxDisk})
 	case "containers":
+		if err := requireRouterScaling(rc.Backend, v.Containers); err != nil {
+			return true, err
+		}
 		op, err = rc.Backend.SetContainerCount(ctx, m.Name, v.Containers, v.Containers)
 	case "delete-runtime", "delete-volume", "cleanup-runtime", "cleanup-volume":
 		name := m.Name
@@ -154,6 +162,9 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 		return true, fmt.Errorf("unsupported platform retry action %q", v.Action)
 	}
 	if err != nil {
+		if errors.Is(err, engine.ErrNotSupported) || errors.Is(err, infra.ErrUnsupported) {
+			return true, err
+		}
 		if wait := s.scheduleCPUModeCooldown(rc, v, err); wait != nil {
 			return true, wait
 		}
@@ -188,11 +199,7 @@ func (s *internalState) platformFailureMessage() string {
 // platform rate-limit retry. For pre-existing state without it, conservatively
 // wait one hour from the rejection rather than hot-looping.
 func (s *internalState) scheduleCPUModeCooldown(rc *engine.Context, v *pending, err error) error {
-	var coded interface {
-		error
-		ErrorCode() string
-	}
-	if v.Action != "resources" || !errors.As(err, &coded) || coded.ErrorCode() != "lastCpuModeChangeTooRecent" {
+	if v.Action != "resources" || !errors.Is(err, infra.ErrResourceChangeCooldown) {
 		return nil
 	}
 	at := now(rc).Add(time.Hour)

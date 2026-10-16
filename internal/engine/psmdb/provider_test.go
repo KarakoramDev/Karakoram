@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -24,7 +25,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"gopkg.in/yaml.v3"
 )
 
 type fakeInfra struct {
@@ -45,6 +45,14 @@ func (f *fakeInfra) ListPublicPorts(context.Context) ([]infra.PublicPortRoute, e
 }
 
 func (f *fakeInfra) Name() string { return "test" }
+func (*fakeInfra) Capabilities() infra.Capabilities {
+	return infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true,
+		DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true,
+		DedicatedCPU: true, HorizontalScaling: true}
+}
+func (*fakeInfra) Layout() infra.Layout {
+	return infra.Layout{AppDir: filepath.Join("/", "var", "www"), VolumeRoot: filepath.Join("/", "mnt"), User: "zerops"}
+}
 func (f *fakeInfra) ProjectInfo(context.Context) (infra.Project, error) {
 	return infra.Project{PublicIPv6: "2001:db8::1"}, nil
 }
@@ -60,7 +68,7 @@ func (f *fakeInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		for key, value := range s.Vars {
 			ownership[key] = value
 		}
-		f.services[s.Hostname] = &infra.Service{Hostname: s.Hostname, ID: s.Hostname, Type: s.Type, Resources: s.Resources, Ownership: ownership}
+		f.services[s.Hostname] = &infra.Service{Hostname: s.Hostname, ID: s.Hostname, Kind: s.Kind, Resources: s.Resources, Ownership: ownership}
 		ids[s.Hostname] = s.Hostname
 	}
 	return infra.Op{ID: "import", Services: ids}, nil
@@ -80,12 +88,20 @@ func (f *fakeInfra) DeleteService(_ context.Context, n string) (infra.Op, error)
 	delete(f.services, n)
 	return infra.Op{ID: "delete"}, nil
 }
+func (f *fakeInfra) DeleteServiceByID(ctx context.Context, name, expectedID string) (infra.Op, error) {
+	if service := f.services[name]; service == nil {
+		return infra.Op{}, nil
+	} else if service.ID != expectedID {
+		return infra.Op{}, infra.ErrConflict
+	}
+	return f.DeleteService(ctx, name)
+}
 func (f *fakeInfra) Deploy(_ context.Context, _ string, d infra.Deployment) (infra.Op, error) {
 	f.mutations++
-	if _, e := io.ReadAll(d.Artifact); e != nil {
+	if _, e := io.ReadAll(d.Artifact.Reader); e != nil {
 		return infra.Op{}, e
 	}
-	d.Artifact = nil
+	d.Artifact.Reader = nil
 	f.deployments = append(f.deployments, d)
 	return infra.Op{ID: "deploy"}, nil
 }
@@ -133,7 +149,7 @@ func (f *fakeInfra) DeletePublicPorts(_ context.Context, name string) error {
 	return nil
 }
 func (*fakeInfra) Containers(context.Context, string) ([]infra.Container, error) {
-	return []infra.Container{{Status: "ACTIVE"}}, nil
+	return []infra.Container{{Status: infra.ContainerActive}}, nil
 }
 func (*fakeInfra) Logs(context.Context, string, infra.LogQuery) ([]infra.LogLine, error) {
 	return nil, nil
@@ -279,7 +295,7 @@ func TestPlanNamingMonotonicAndShards(t *testing.T) {
 		t.Fatal("stable plan changed")
 	}
 }
-func TestZeropsYAMLAndConfig(t *testing.T) {
+func TestRuntimeSpecAndConfig(t *testing.T) {
 	p, rc, _, _ := setup(t)
 	s, _ := load(rc.Cluster)
 	plan(rc.Cluster, s)
@@ -290,17 +306,27 @@ func TestZeropsYAMLAndConfig(t *testing.T) {
 	if e := save(rc.Cluster, s); e != nil {
 		t.Fatal(e)
 	}
-	text, e := p.zeropsYAML(rc, m, "8.0.29-13")
-	if e != nil {
-		t.Fatal(e)
+	spec := p.runtimeSpec(rc, m, "8.0.29-13")
+	if spec.Base != infra.BaseUbuntu2404 || !reflect.DeepEqual(spec.Ports, []infra.Port{{Port: 27017, Protocol: "tcp"}}) ||
+		!reflect.DeepEqual(spec.Args, []string{"agent"}) || spec.Volume != m.Volume || !spec.StopBeforeStart {
+		t.Fatalf("unexpected runtime: %+v", spec)
 	}
-	var doc map[string]any
-	if e = yaml.Unmarshal([]byte(text), &doc); e != nil {
-		t.Fatal(e)
+	if spec.Readiness == nil || !reflect.DeepEqual(spec.Readiness.Args, []string{"agent", "readiness"}) ||
+		spec.Readiness.FailureTimeout != 300*time.Second || spec.Readiness.RetryPeriod != 10*time.Second {
+		t.Fatalf("unexpected readiness: %+v", spec.Readiness)
 	}
-	for _, want := range []string{"temporaryShutdown: true", "/var/www/karakoram agent readiness", "failureTimeout: 300s", "retryPeriod: 10s", "ubuntu@24.04", "hostname: demom0v", "PERCONA_TELEMETRY_DISABLE=1", "--scheme https", "percona-server-mongodb-server=8.0.29-13.noble", "percona-backup-mongodb=2.16.0-1.noble", "KARAKORAM_URL", "./karakoram agent"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("missing %q in %s", want, text)
+	wantEnv := map[string]string{
+		"KARAKORAM_URL": p.options.ControlPlaneURL, "KARAKORAM_CLUSTER": rc.Cluster.Name,
+		"KARAKORAM_MEMBER": m.Name, "KARAKORAM_INTERNAL_CA": p.options.InternalCAPEM,
+		engine.DataDirVariable: rc.Backend.Layout().DataDir(m.Volume), "PERCONA_TELEMETRY_DISABLE": "1",
+	}
+	if !reflect.DeepEqual(spec.Env, wantEnv) {
+		t.Fatalf("runtime env = %v, want %v", spec.Env, wantEnv)
+	}
+	prepare := strings.Join(spec.Prepare, "\n")
+	for _, want := range []string{"sudo apt-get update", "--scheme https", "PERCONA_TELEMETRY_DISABLE=1", "percona-server-mongodb-server=8.0.29-13.noble", "percona-server-mongodb-mongos=8.0.29-13.noble", "percona-server-mongodb-tools=8.0.29-13.noble", "percona-mongodb-mongosh=2.10.0.noble", "percona-backup-mongodb=2.16.0-1.noble"} {
+		if !strings.Contains(prepare, want) {
+			t.Errorf("missing %q in prepare commands %s", want, prepare)
 		}
 	}
 	cfg, e := p.MemberConfig(context.Background(), rc, m.Name)
@@ -362,8 +388,14 @@ func TestSyncInitialStateMachineAndPending(t *testing.T) {
 			if e != nil || token.Hash != secrets.Hash(token.Token) {
 				t.Fatal(token, e)
 			}
-			if f.imports[0][1].ZeropsYAML != "" {
-				t.Fatal("inline YAML would trigger empty-artifact build")
+			if f.imports[0][0].Kind != infra.KindVolume || f.imports[0][0].Base != "" ||
+				f.imports[0][1].Kind != infra.KindRuntime || f.imports[0][1].Base != infra.BaseUbuntu2404 {
+				t.Fatal("imports must describe neutral volume and runtime services")
+			}
+			deployment := f.deployments[0]
+			if deployment.Artifact.Name != engine.ArtifactName || deployment.Artifact.Binary != engine.ArtifactBinary ||
+				!reflect.DeepEqual(deployment.Runtime, p.runtimeSpec(rc, s.Members[0], rc.Cluster.Spec.Version)) {
+				t.Fatalf("unexpected deployment: %+v", deployment)
 			}
 			return
 		}
@@ -746,4 +778,81 @@ func TestStatusReportsAgentResourcesWithAutoscalingFallback(t *testing.T) {
 	if m := member(); m.Autoscaling != nil || m.Resources != nil {
 		t.Fatal("unknown platform configuration and agent reading must remain unknown", m)
 	}
+}
+
+type capabilityInfra struct {
+	*fakeInfra
+	capabilities infra.Capabilities
+}
+
+func (f *capabilityInfra) Capabilities() infra.Capabilities { return f.capabilities }
+
+func TestUnsupportedBackendCapabilities(t *testing.T) {
+	for _, feature := range []string{"public TCP", "TCP allowlist", "router scaling"} {
+		t.Run(feature, func(t *testing.T) {
+			p, rc, f, _ := setup(t)
+			caps := f.Capabilities()
+			switch feature {
+			case "public TCP":
+				rc.Cluster.Spec.Exposure.Public = true
+				caps.PublicTCP = false
+			case "TCP allowlist":
+				rc.Cluster.Spec.Exposure.Public = true
+				rc.Cluster.Spec.Exposure.Allowlist = []string{"192.0.2.0/24"}
+				caps.TCPAllowlist = false
+			case "router scaling":
+				rc.Cluster.Spec.Topology.Type = "sharded"
+				rc.Cluster.Spec.Components.Router.Replicas = 2
+				caps.HorizontalScaling = false
+			}
+			rc.Backend = &capabilityInfra{fakeInfra: f, capabilities: caps}
+			if _, err := p.Sync(t.Context(), rc); !errors.Is(err, engine.ErrNotSupported) || !strings.Contains(err.Error(), "backend") {
+				t.Fatalf("expected clear unsupported-feature error, got %v", err)
+			}
+			if f.mutations != 0 || len(f.exposed) != 0 {
+				t.Fatal("unsupported configuration reached the backend")
+			}
+		})
+	}
+	t.Run("disk growth", func(t *testing.T) {
+		p, rc, f, clock := retrySetup(t)
+		s := syncToPending(t, p, rc, "deploy")
+		m := s.Members[0]
+		v := &pending{Action: "disk", Member: m.Name, Resources: m.Disk}
+		v.Resources.MinDisk++
+		v.Resources.MaxDisk++
+		s.Retry, s.Pending = v, nil
+		s.PlatformRetries = map[string]*platformRetry{platformRetryKey(v): {RetryAfter: clock.at}}
+		caps := f.Capabilities()
+		caps.DiskGrowth = false
+		rc.Backend = &capabilityInfra{fakeInfra: f.fakeInfra, capabilities: caps}
+		before := f.mutations
+		if _, err := p.retryPending(t.Context(), rc, s); !errors.Is(err, engine.ErrNotSupported) {
+			t.Fatalf("expected unsupported disk growth, got %v", err)
+		}
+		if f.mutations != before || s.Pending != nil || s.PlatformRetries[platformRetryKey(v)].Failures != 0 {
+			t.Fatal("unsupported disk growth mutated infrastructure or scheduled a retry")
+		}
+	})
+	t.Run("router scaling retry", func(t *testing.T) {
+		p, rc, f, clock := retrySetup(t)
+		s := syncToPending(t, p, rc, "deploy")
+		m := s.Members[0]
+		v := &pending{Action: "containers", Member: m.Name, Containers: 2}
+		s.Retry, s.Pending = v, nil
+		s.PlatformRetries = map[string]*platformRetry{platformRetryKey(v): {RetryAfter: clock.at}}
+		caps := f.Capabilities()
+		caps.HorizontalScaling = false
+		rc.Backend = &capabilityInfra{fakeInfra: f.fakeInfra, capabilities: caps}
+		before := f.mutations
+		if _, err := p.retryPending(t.Context(), rc, s); !errors.Is(err, engine.ErrNotSupported) {
+			t.Fatalf("expected unsupported router scaling, got %v", err)
+		}
+		if f.mutations != before || s.Pending != nil || s.PlatformRetries[platformRetryKey(v)].Failures != 0 {
+			t.Fatal("unsupported router scaling mutated infrastructure or scheduled a retry")
+		}
+		if err := requireRouterScaling(rc.Backend, 1); err != nil {
+			t.Fatalf("single router must not require horizontal scaling: %v", err)
+		}
+	})
 }

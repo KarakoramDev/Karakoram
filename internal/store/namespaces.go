@@ -36,6 +36,7 @@ func getNamespace(ctx context.Context, db *sql.DB, name string) (*domain.Namespa
 	if err := json.Unmarshal(data, &n); err != nil {
 		return nil, err
 	}
+	normalizeNamespace(&n)
 	return &n, nil
 }
 func (s *Store) ListNamespaces(ctx context.Context) ([]domain.Namespace, error) {
@@ -63,6 +64,7 @@ func listNamespaces(ctx context.Context, db *sql.DB) ([]domain.Namespace, error)
 		if err = json.Unmarshal(data, &n); err != nil {
 			return nil, err
 		}
+		normalizeNamespace(&n)
 		out = append(out, n)
 	}
 	return out, rows.Err()
@@ -72,6 +74,7 @@ func listNamespaces(ctx context.Context, db *sql.DB) ([]domain.Namespace, error)
 var ErrStale = fmt.Errorf("%w: stale namespace registration", ErrConflict)
 
 func writeNamespace(ctx context.Context, db executor, n *domain.Namespace, create bool) error {
+	normalizeNamespace(n)
 	data, err := json.Marshal(n)
 	if err != nil {
 		return err
@@ -84,7 +87,7 @@ func writeNamespace(ctx context.Context, db executor, n *domain.Namespace, creat
 		}
 		return err
 	}
-	result, err := db.ExecContext(ctx, "UPDATE namespaces SET data=?,updated_at=? WHERE name=? AND json_extract(data,'$.createdAt')=? AND (json_extract(data,'$.phase')!='Deleting' OR ?='Deleting')", data, n.UpdatedAt.UTC().Format(time.RFC3339Nano), n.Name, n.CreatedAt.Format(time.RFC3339Nano), n.Phase)
+	result, err := db.ExecContext(ctx, "UPDATE namespaces SET data=?,updated_at=? WHERE name=? AND json_extract(data,'$.createdAt')=? AND (json_extract(data,'$.phase')!='Deleting' OR ?='Deleting') AND COALESCE(NULLIF(json_extract(data,'$.backend'),''),'zerops')=?", data, n.UpdatedAt.UTC().Format(time.RFC3339Nano), n.Name, n.CreatedAt.Format(time.RFC3339Nano), n.Phase, n.Backend)
 	if err != nil {
 		return typed(err)
 	}
@@ -127,7 +130,7 @@ func (s *Store) writeNamespaceCredentials(ctx context.Context, n *domain.Namespa
 	if err = writeNamespace(ctx, tx, n, create); err != nil {
 		return err
 	}
-	for kind, value := range map[string][]byte{"zerops-token": []byte(token), "relay-key": key} {
+	for kind, value := range map[string][]byte{namespaceTokenKey(n): []byte(token), "relay-key": key} {
 		if value == nil {
 			continue
 		}
@@ -182,17 +185,25 @@ func (s *Store) namespaceSecretForUpdate(ctx context.Context, name, kind string)
 	return s.sealer.OpenFor("namespace/"+name+"/"+kind, sealed)
 }
 func (s *Store) GetNamespaceToken(ctx context.Context, name string) (string, error) {
-	v, err := s.namespaceSecret(ctx, name, "zerops-token")
+	n, err := s.GetNamespace(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	v, err := s.namespaceSecret(ctx, name, namespaceTokenKey(n))
 	return string(v), err
 }
 
 // GetNamespaceTokenForUpdate reads current credentials for lifecycle operations.
 func (s *Store) GetNamespaceTokenForUpdate(ctx context.Context, name string) (string, error) {
-	v, err := s.namespaceSecretForUpdate(ctx, name, "zerops-token")
+	n, err := s.GetNamespaceForUpdate(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	v, err := s.namespaceSecretForUpdate(ctx, name, namespaceTokenKey(n))
 	return string(v), err
 }
 func (s *Store) DeleteNamespaceToken(ctx context.Context, n *domain.Namespace) error {
-	result, err := s.writer.ExecContext(ctx, "DELETE FROM records WHERE kind='namespace-secret' AND scope=? AND key='zerops-token' AND EXISTS (SELECT 1 FROM namespaces WHERE name=? AND json_extract(data,'$.createdAt')=?)", n.Name, n.Name, n.CreatedAt.Format(time.RFC3339Nano))
+	result, err := s.writer.ExecContext(ctx, "DELETE FROM records WHERE kind='namespace-secret' AND scope=? AND key=? AND EXISTS (SELECT 1 FROM namespaces WHERE name=? AND json_extract(data,'$.createdAt')=?)", n.Name, namespaceTokenKey(n), n.Name, n.CreatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		return err
 	}
@@ -242,4 +253,18 @@ func (s *Store) PutRelayPKI(ctx context.Context, p *RelayPKI) error {
 		return err
 	}
 	return s.SetSetting(ctx, "server/relay-pki", raw)
+}
+
+func normalizeNamespace(n *domain.Namespace) {
+	if n.Backend == "" {
+		n.Backend = "zerops"
+	}
+}
+
+func namespaceTokenKey(n *domain.Namespace) string {
+	kind := n.Backend
+	if kind == "" {
+		kind = "zerops"
+	}
+	return kind + "-token"
 }

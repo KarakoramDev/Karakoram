@@ -1,0 +1,33 @@
+# 0031 — Declarative engine components with engine-owned safety
+
+Status: Accepted; generalizes the component lifecycle in [ADR 0027](0027-elastic-stack-components.md)
+
+## Context
+
+Kibana, Logstash and APM Server share optional-component mechanics: independent resource bounds, zero replicas to disable, import/deploy/readiness stages and stateless container scaling. Repeating those mechanics in every engine would couple future multi-service stacks to copied lifecycle code. Their application configuration, credentials, version compatibility and safe ordering remain engine-specific; a generic application graph or a second infrastructure controller is not required.
+
+## Decision
+
+Define the component model in `internal/engine/component.go`, above the backend-neutral infrastructure contract in [ADR 0030](0030-backend-neutral-infrastructure-contract.md):
+
+- `ComponentDef` declares a name, display name, statefulness, default `ComponentSpec`, enabled replica bounds, required components, public HTTPS eligibility and optional resource validation. `ComponentSet` is an ordered catalog: dependencies are declared first, and plans and enabled-name lists preserve declaration order. Eligibility does not request public exposure.
+- Store desired replicas and resources in the existing `ClusterSpec.Components.Extra` map (`spec.components.extra`), with no API schema or persisted-state shape change. `ApplyDefaults`, `Validate`, `Enabled` and `Info` provide shared defaulting, validation and topology metadata. Replica defaults apply only to absent entries; a present zero replica count explicitly disables the component, even when its default is nonzero. Missing resource fields are defaulted for both enabled and disabled entries. Unknown names are rejected. Enabled components must satisfy dependencies and replica bounds; resource bounds are validated even on explicitly disabled entries. Catalog minima remain zero for optional components; when the enabled minimum exceeds one, `AllowedReplicas` enumerates zero and the enabled range.
+- `ComponentSet.Plan` compares observed replica **and resource** values with defaulted desired values and emits `ComponentChange` entries for enable, disable, scale and resize. It describes intent, not execution or durable operation state; an enabled component may need both scale and resize. Engines supply actual applied observations rather than inferring them from defaults.
+- `ReconcileStatelessComponent` drives import, deploy, application readiness, replica scaling and optional resource resizing through `ComponentCallbacks`, or deletion when disabled. Each pass invokes at most one callback, and a readiness pass always ends after its callback. `ComponentRuntime` supplies applied replicas/resources and the backend's horizontal-scaling capability; multiple desired replicas are rejected before import or scale when unsupported. Callbacks retain the engine's durable stages, operation handles, ownership checks and readiness decisions. Optional `Resize` runs only once joined, after replica scaling, when applied resources differ from desired. Engines may retain separate resource reconciliation by omitting it. Stateful definitions participate in defaults, validation and planning, but the stateless helper rejects them: their volume lifecycle and safety remain engine-owned.
+
+Elasticsearch declares Kibana, Logstash and APM in `internal/engine/elastic/components.go` and uses the shared defaults, validation, topology metadata and stateless lifecycle helper. Each optional component has one service identity with independently sized resources and a desired container count; zero replicas removes that component through the engine's deletion path. Re-enabling during deletion finishes removing the old identity before re-importing. Elasticsearch keeps its existing resource loop after component reconciliation, node scaling and configuration checks, rather than moving resizing earlier through the optional callback. Elasticsearch security, credentials, configuration publication, version locking and upgrade/restore ordering remain governed by ADR 0027. Data nodes and dedicated masters retain their engine-specific stateful lifecycle; this does not generalize shard movement or quorum decisions.
+
+Providers also declare spec-dependent admission requirements through `CapabilityRequirer`: multiple MongoDB routers in sharded topology and multiple Elasticsearch stateless-component replicas require horizontal scaling; public RabbitMQ management UI and public Kibana/APM require public HTTPS. `CheckCapabilities` combines those with engine-neutral public TCP, allowlist and dedicated-CPU requirements. Unsupported backend operations remain terminal capability errors rather than entering platform retries.
+
+A future Supabase engine could declare an ordered `ComponentSet` for `auth`, `rest`, `realtime`, `storage` and `studio`, with per-component defaults, dependencies and resources in `Components.Extra`. It would implement its own configuration, credentials, compatibility and readiness callbacks, use the stateless helper only for stateless services, and own any stateful volume transitions. This is an extension path, not a registered Supabase provider or a claim that those services are implemented.
+
+## Consequences
+
+Optional-component mechanics are reusable without changing the public cluster model or teaching backends about individual products. Resource choices and enable/disable transitions remain visible per component. Engines keep durable state and safety authority rather than delegating them to a generic graph controller. Definitions are immutable after construction; ordered catalogs are deliberately simpler than automatic dependency sorting. The model does not provide independently versioned, cross-cluster or shared components.
+
+## Alternatives considered
+
+- **Copy each engine's component loops:** initially small, but duplicates defaults, validation and lifecycle transitions and makes their behavior diverge.
+- **One generic application/dependency controller:** adds ownership, scheduling and safety semantics beyond the current optional-service requirement. Keep explicit engine ordering and callbacks.
+- **New top-level API fields for every component:** grows the shared schema for engine-specific names; the existing extra-component map already represents the desired replicas and resources.
+- **Run all components through the stateless helper:** would hide persistent-volume and application-safety obligations. Reject stateful definitions there instead.

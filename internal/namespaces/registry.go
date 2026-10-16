@@ -28,7 +28,6 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
-	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/KarakoramDev/Karakoram/internal/version"
@@ -41,33 +40,29 @@ var ErrNotFound = store.ErrNotFound
 // PlatformUnavailableError exposes a safe validation diagnostic without
 // misclassifying a platform failure as invalid namespace credentials.
 type PlatformUnavailableError struct {
-	cause error
+	cause       error
+	displayName string
 }
 
 func (e *PlatformUnavailableError) Error() string {
-	return temporaryPlatformError(e.cause)
+	return temporaryPlatformError(e.displayName, e.cause)
 }
 
-type Backend interface {
-	infra.Backend
-	SetToken(string)
-}
+type Backend = infra.Backend
 type EventRecorder interface {
 	Record(context.Context, domain.Event) error
 }
 type Options struct {
 	Store                                  *store.Store
 	DefaultBackend                         Backend
-	Zerops                                 zerops.Options
+	Backends                               *infra.Registry
+	DefaultTarget                          infra.Target
 	PublicURL, AdvertiseURL, RelayHostname string
 	Events                                 EventRecorder
 	Logger                                 *slog.Logger
 	Artifact                               engine.ArtifactSource
 	ExecutableHash                         string
 	RelayTargets                           func(*domain.Cluster) []string
-	// Validate returns an isolated client; it must verify identity and service permissions.
-	Validate   func(context.Context, zerops.Options) (Backend, infra.Project, error)
-	NewBackend func(zerops.Options) (Backend, error)
 }
 type sessionNotice struct {
 	ns    string
@@ -101,8 +96,8 @@ func RelayHostname(hostname string) string {
 var _ engine.Namespaces = (*Registry)(nil)
 
 func New(ctx context.Context, o Options) (*Registry, error) {
-	if o.Store == nil || o.DefaultBackend == nil {
-		return nil, errors.New("namespace store and default backend are required")
+	if o.Store == nil || o.DefaultBackend == nil || o.Backends == nil {
+		return nil, errors.New("namespace store, backend registry and default backend are required")
 	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
@@ -110,13 +105,11 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 	if o.Artifact == nil {
 		o.Artifact = engine.ExecutableArtifact{}
 	}
-	if o.Validate == nil {
-		o.Validate = func(ctx context.Context, z zerops.Options) (Backend, infra.Project, error) {
-			return zerops.ValidateProject(ctx, z)
-		}
+	if o.DefaultTarget.Kind == "" {
+		o.DefaultTarget.Kind = "zerops"
 	}
-	if o.NewBackend == nil {
-		o.NewBackend = func(z zerops.Options) (Backend, error) { return zerops.New(z) }
+	if _, err := o.Backends.Get(o.DefaultTarget.Kind); err != nil {
+		return nil, err
 	}
 	if o.ExecutableHash == "" {
 		path, err := os.Executable()
@@ -187,13 +180,15 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 		r.Hub.Close()
 		return nil, err
 	}
-	n.ProjectID = o.Zerops.ProjectID
+	n.ProjectID = o.DefaultTarget.ID
+	n.Backend = o.DefaultTarget.Kind
+	n.Config = cloneConfig(o.DefaultTarget.Config)
 	n.Default = true
 	n.Token.Source = "env"
 	n.Relay.Phase = "NotRequired"
 	n.UpdatedAt = now
 	project, validation := o.DefaultBackend.ProjectInfo(ctx)
-	applyTokenValidation(n, project, validation, now)
+	applyTokenValidation(n, project, validation, now, r.displayName(n.Backend))
 	updatePhase(n)
 	if createDefault {
 		err = o.Store.CreateNamespace(ctx, n)
@@ -215,7 +210,11 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 		if n.Default {
 			continue
 		}
-		n.Relay.DesiredVersion = version.Version
+		if r.requiresRelay(n.Backend) {
+			n.Relay.DesiredVersion = version.Version
+		} else {
+			n.Relay.Phase = "NotRequired"
+		}
 		if e := o.Store.UpdateNamespace(ctx, &n); e != nil {
 			if errors.Is(e, store.ErrStale) {
 				o.Logger.Debug("Dropping stale namespace startup state", "namespace", n.Name)
@@ -224,16 +223,14 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 			r.Hub.Close()
 			return nil, e
 		}
-		if n.Phase != "Deleting" {
+		if n.Phase != "Deleting" && r.requiresRelay(n.Backend) {
 			r.enroll(&n)
 		}
 		token, e := o.Store.GetNamespaceTokenForUpdate(ctx, n.Name)
-		z := o.Zerops
-		z.Token = token
-		z.ProjectID = n.ProjectID
+		target := r.target(&n, token)
 		var b Backend
 		if e == nil {
-			b, e = o.NewBackend(z)
+			b, e = o.Backends.New(target)
 		}
 		if e != nil {
 			n.Token.Valid = false
@@ -281,7 +278,7 @@ func (r *Registry) save(ctx context.Context, n *domain.Namespace) error {
 	if errors.Is(err, store.ErrStale) {
 		r.o.Logger.Debug("Dropping stale namespace state", "namespace", n.Name)
 	}
-	if err == nil && !n.Default {
+	if err == nil && !n.Default && r.requiresRelay(n.Backend) {
 		if n.Phase == "Deleting" {
 			r.Hub.Revoke(n.Name)
 		} else {
@@ -298,26 +295,26 @@ func (r *Registry) trigger() {
 }
 
 // A failed API request is not evidence that a previously accepted token expired.
-func applyTokenValidation(n *domain.Namespace, project infra.Project, validation error, now time.Time) {
+func applyTokenValidation(n *domain.Namespace, project infra.Project, validation error, now time.Time, displayName string) {
 	n.Token.LastValidatedAt = now
 	if validation == nil && project.ID != n.ProjectID {
-		validation = &zerops.APIError{Code: "accessDenied", Message: "Authenticated project does not match the configured project"}
+		validation = &credentialError{message: "Authenticated project does not match the configured project"}
 	}
 	switch {
 	case validation == nil:
 		n.Token.Valid = true
 		n.Token.LastError = ""
 		n.ProjectName = project.Name
-	case zerops.IsAuthenticationError(validation):
+	case errors.Is(validation, infra.ErrUnauthorized):
 		n.Token.Valid = false
-		n.Token.LastError = "Project token access rejected: " + zerops.SafeErrorDetail(validation)
+		n.Token.LastError = "Project token access rejected: " + infra.SafeDetail(validation)
 	default:
-		n.Token.LastError = temporaryPlatformError(validation)
+		n.Token.LastError = temporaryPlatformError(displayName, validation)
 	}
 }
 
-func temporaryPlatformError(err error) string {
-	return "Zerops API temporarily unavailable: " + zerops.SafeErrorDetail(err) + "; retrying"
+func temporaryPlatformError(displayName string, err error) string {
+	return displayName + " API temporarily unavailable: " + infra.SafeDetail(err) + "; retrying"
 }
 
 func updatePhase(n *domain.Namespace) {
@@ -326,7 +323,7 @@ func updatePhase(n *domain.Namespace) {
 	}
 	if !n.Token.Valid {
 		n.Phase = "Error"
-	} else if n.Default || n.Relay.Connected {
+	} else if n.Default || n.Relay.Phase == "NotRequired" || n.Relay.Connected {
 		n.Phase = "Ready"
 	} else if n.Relay.Phase == "Error" {
 		n.Phase = "Error"
@@ -340,7 +337,16 @@ func (r *Registry) List(ctx context.Context) ([]domain.Namespace, error) {
 func (r *Registry) Get(ctx context.Context, name string) (*domain.Namespace, error) {
 	return r.o.Store.GetNamespace(ctx, name)
 }
-func (r *Registry) Create(ctx context.Context, name, projectID, token, description string) (*domain.Namespace, error) {
+func (r *Registry) Create(ctx context.Context, name, projectID, token, description, kind string, config map[string]string) (*domain.Namespace, error) {
+	if kind == "" {
+		kind = "zerops"
+	}
+	factory, err := r.o.Backends.Get(kind)
+	if err != nil {
+		return nil, err
+	}
+	info := factory.Info()
+	target := r.target(&domain.Namespace{Backend: kind, ProjectID: projectID, Config: config}, token)
 	if name == "" {
 		e := domain.InvalidField("name", domain.ReasonRequired, "name is required")
 		e.Err = ErrInvalid
@@ -361,7 +367,7 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 			return nil, e
 		}
 	}
-	if !relayHostnamePattern.MatchString(r.o.RelayHostname) || r.o.RelayHostname == "core" {
+	if info.Relay && (!relayHostnamePattern.MatchString(r.o.RelayHostname) || r.o.RelayHostname == "core") {
 		return nil, fmt.Errorf("%w: invalid relay hostname", ErrInvalid)
 	}
 	r.createMu.Lock()
@@ -377,26 +383,28 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 		if n.Name == name {
 			return nil, domain.Conflict("namespace", name, domain.ReasonAlreadyExists, ErrConflict, "namespace %q already exists", name)
 		}
-		if n.ProjectID == projectID {
+		if n.Backend == kind && n.ProjectID == projectID {
 			return nil, fmt.Errorf("%w: project is already registered", ErrInvalid)
 		}
 	}
-	z := r.o.Zerops
-	z.ProjectID = projectID
-	z.Token = token
-	b, p, err := r.o.Validate(ctx, z)
+	b, p, err := r.o.Backends.Validate(ctx, target)
 	if err != nil {
-		if zerops.IsAuthenticationError(err) {
-			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
+		if errors.Is(err, infra.ErrRejected) || errors.Is(err, infra.ErrUnsupported) {
+			return nil, err
 		}
-		return nil, &PlatformUnavailableError{cause: err}
+		if errors.Is(err, infra.ErrUnauthorized) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, infra.SafeDetail(err))
+		}
+		return nil, &PlatformUnavailableError{cause: err, displayName: info.DisplayName}
 	}
-	service, err := b.GetService(ctx, r.o.RelayHostname)
-	if err != nil {
-		return nil, errors.New("cannot inspect relay hostname")
-	}
-	if service != nil {
-		return nil, fmt.Errorf("%w: relay hostname is already used by a service this namespace does not own", ErrInvalid)
+	if info.Relay {
+		service, err := b.GetService(ctx, r.o.RelayHostname)
+		if err != nil {
+			return nil, errors.New("cannot inspect relay hostname")
+		}
+		if service != nil {
+			return nil, fmt.Errorf("%w: relay hostname is already used by a service this namespace does not own", ErrInvalid)
+		}
 	}
 	now := time.Now().UTC()
 	marker := make([]byte, 32)
@@ -404,18 +412,29 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 		return nil, err
 	}
 	n := &domain.Namespace{Name: name, Description: description, ProjectID: projectID, ProjectName: p.Name, Phase: "Pending", CreatedAt: now, UpdatedAt: now, Token: domain.NamespaceTokenStatus{Source: "stored", Valid: true, LastValidatedAt: now}, Relay: domain.NamespaceRelayStatus{Hostname: r.o.RelayHostname, Phase: "Pending", DesiredVersion: version.Version}, OwnershipMarker: hex.EncodeToString(marker)}
-	key, err := r.issue(n)
-	if err != nil {
-		return nil, err
+	n.Backend, n.Config = kind, target.Config
+	var key []byte
+	if info.Relay {
+		key, err = r.issue(n)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		n.Relay = domain.NamespaceRelayStatus{Phase: "NotRequired"}
+		updatePhase(n)
 	}
 	if err = r.o.Store.CreateNamespaceCredentials(ctx, n, token, key); err != nil {
 		return nil, err
 	}
-	r.enroll(n)
+	if info.Relay {
+		r.enroll(n)
+	}
 	r.mu.Lock()
 	r.backends[name] = b
 	r.mu.Unlock()
-	r.event(ctx, n, "RelayEnrolled", "Relay credentials enrolled")
+	if info.Relay {
+		r.event(ctx, n, "RelayEnrolled", "Relay credentials enrolled")
+	}
 	r.trigger()
 	return n, nil
 }
@@ -445,15 +464,15 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	if n.Default {
 		return nil, fmt.Errorf("%w: default token is environment-managed; update the service secret and restart", ErrConflict)
 	}
-	z := r.o.Zerops
-	z.Token = token
-	z.ProjectID = n.ProjectID
-	replacement, p, err := r.o.Validate(ctx, z)
+	replacement, p, err := r.o.Backends.Validate(ctx, r.target(n, token))
 	if err != nil {
-		if zerops.IsAuthenticationError(err) {
-			return nil, fmt.Errorf("%w: %s", ErrInvalid, zerops.SafeErrorDetail(err))
+		if errors.Is(err, infra.ErrRejected) || errors.Is(err, infra.ErrUnsupported) {
+			return nil, err
 		}
-		return nil, &PlatformUnavailableError{cause: err}
+		if errors.Is(err, infra.ErrUnauthorized) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, infra.SafeDetail(err))
+		}
+		return nil, &PlatformUnavailableError{cause: err, displayName: r.displayName(n.Backend)}
 	}
 	now := time.Now().UTC()
 	n.Token.Valid = true
@@ -469,7 +488,7 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 		}
 		return nil, err
 	}
-	if b := r.backend(name); b != nil {
+	if b, ok := r.backend(name).(infra.CredentialRotator); ok {
 		b.SetToken(token)
 	} else {
 		r.mu.Lock()
@@ -490,16 +509,15 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 	if n.Phase == "Deleting" {
 		return nil, ErrConflict
 	}
-	z := r.o.Zerops
-	z.ProjectID = n.ProjectID
+	token := r.o.DefaultTarget.Token
 	if !n.Default {
-		z.Token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
+		token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
 		if err != nil {
 			return nil, err
 		}
 	}
-	_, p, validation := r.o.Validate(ctx, z)
-	applyTokenValidation(n, p, validation, time.Now().UTC())
+	_, p, validation := r.o.Backends.Validate(ctx, r.target(n, token))
+	applyTokenValidation(n, p, validation, time.Now().UTC(), r.displayName(n.Backend))
 	updatePhase(n)
 	if err = r.save(ctx, n); err != nil {
 		return nil, err
@@ -560,6 +578,9 @@ func (r *Registry) Dialer(ns string) engine.ContextDialer {
 	if ns == "" || ns == domain.DefaultNamespace {
 		return nil
 	}
+	if n, err := r.Get(context.Background(), ns); err == nil && !r.requiresRelay(n.Backend) {
+		return nil
+	}
 	return hubDialer{r.Hub, ns}
 }
 func (r *Registry) AgentURL(ns string) string {
@@ -569,6 +590,9 @@ func (r *Registry) AgentURL(ns string) string {
 	n, err := r.Get(context.Background(), ns)
 	if err != nil {
 		return ""
+	}
+	if !r.requiresRelay(n.Backend) {
+		return r.o.AdvertiseURL
 	}
 	return "https://" + n.Relay.Hostname + ":9443"
 }
@@ -583,7 +607,7 @@ func (r *Registry) Authorize(ctx context.Context, ns string, cert *x509.Certific
 }
 func (r *Registry) authorizeStored(ctx context.Context, ns string, cert *x509.Certificate) error {
 	n, err := r.Get(ctx, ns)
-	if err != nil || n.Default || n.Phase == "Deleting" || cert == nil {
+	if err != nil || n.Default || !r.requiresRelay(n.Backend) || n.Phase == "Deleting" || cert == nil {
 		return errors.New("relay namespace is not enrolled")
 	}
 	if !acceptsSerial(n, cert.SerialNumber.String()) {
@@ -653,3 +677,37 @@ func (r *Registry) issue(n *domain.Namespace) ([]byte, error) {
 	return key, nil
 }
 func (r *Registry) Close() error { return r.Hub.Close() }
+
+func cloneConfig(config map[string]string) map[string]string {
+	if config == nil {
+		return nil
+	}
+	out := make(map[string]string, len(config))
+	for key, value := range config {
+		out[key] = value
+	}
+	return out
+}
+
+func (r *Registry) target(n *domain.Namespace, token string) infra.Target {
+	return infra.Target{Kind: n.Backend, ID: n.ProjectID, Token: token, Config: cloneConfig(n.Config)}
+}
+
+func (r *Registry) requiresRelay(kind string) bool {
+	f, err := r.o.Backends.Get(kind)
+	return err == nil && f.Info().Relay
+}
+
+func (r *Registry) displayName(kind string) string {
+	f, err := r.o.Backends.Get(kind)
+	if err == nil {
+		return f.Info().DisplayName
+	}
+	return kind
+}
+
+type credentialError struct{ message string }
+
+func (e *credentialError) Error() string        { return e.message }
+func (e *credentialError) Is(target error) bool { return target == infra.ErrUnauthorized }
+func (e *credentialError) SafeDetail() string   { return e.message }

@@ -29,7 +29,7 @@ func (f *partialImportInfra) ImportServices(ctx context.Context, specs []infra.S
 		service.ID = spec.Hostname + "-id"
 		// Model services imported before non-sensitive markers were written.
 		delete(service.Ownership, engine.OwnerVariable)
-		if spec.Type == "local-storage:single@1" {
+		if spec.Kind == infra.KindVolume {
 			service.Ownership = nil
 		}
 	}
@@ -55,7 +55,7 @@ func failedMemberImport(t *testing.T) (*Provider, *engine.Context, *fakeInfra) {
 	if m.Stage != "planned" || m.ServiceID != "" || m.VolumeID != "" || s.Pending != nil || s.Retry != nil {
 		t.Fatal("unexpected partial import checkpoint", m, s.Pending, s.Retry)
 	}
-	if f.services[m.Name].Ownership["KARAKORAM_DATA_DIR"] != "/mnt/"+m.Volume || len(f.services[m.Volume].Ownership) != 0 {
+	if !engine.MountsVolume(rc.Backend, f.services[m.Name], m.Volume) || len(f.services[m.Volume].Ownership) != 0 {
 		t.Fatal("missing runtime mount evidence or untagged volume")
 	}
 	return p, rc, f
@@ -162,7 +162,7 @@ func TestUntaggedVolumeRequiresTokenVerifiedRuntimeMount(t *testing.T) {
 				case "missing-mount":
 					delete(runtime.Ownership, "KARAKORAM_DATA_DIR")
 				case "wrong-mount":
-					runtime.Ownership["KARAKORAM_DATA_DIR"] = "/mnt/other"
+					runtime.Ownership[engine.DataDirVariable] = rc.Backend.Layout().VolumePath("other")
 				case "mount-prefix":
 					runtime.Ownership["KARAKORAM_DATA_DIR"] += "/data"
 				case "recorded-runtime-only":
