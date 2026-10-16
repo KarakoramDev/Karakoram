@@ -8517,6 +8517,8 @@ components:
           type: string
         message:
           type: string
+        details:
+          $ref: '#/components/schemas/EventDetails'
         actor:
           type: string
           description: Human-readable account, issuer-scoped OIDC account, account plus API token name/ID, or system actor. Historical events may have no recorded actor.
@@ -8536,6 +8538,33 @@ components:
         - type
         - message
         - createdAt
+    EventDetails:
+      type: object
+      additionalProperties: true
+      description: Structured audit context, returned only with audit:read on the event object. Spec changes use dotted JSON paths and array selectors by name or id. Missing before or after means unset unless truncated is true. Sensitive values are only (changed), (set), or (unset), never secret material or its length. Non-sensitive values exceeding 1 KiB of encoded JSON become byte-count markers. Spec details are bounded to 32 KiB; large change sets retain paths without values, and may omit trailing paths.
+      properties:
+        truncated:
+          type: boolean
+          description: Some values or changes were shortened or omitted to bound the structured audit record.
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventChange'
+    EventChange:
+      type: object
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+        before: {}
+        after: {}
+        sensitive:
+          type: boolean
+        truncated:
+          type: boolean
+          description: Values were replaced with byte-count markers, omitted, or the path was shortened. Missing values do not imply unset for this change.
+      required:
+        - path
     MetricPoint:
       type: object
       additionalProperties: false

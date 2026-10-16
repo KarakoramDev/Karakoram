@@ -83,6 +83,7 @@ type response struct {
 	serve       func(http.ResponseWriter) error
 	noStore     bool
 	operationID string
+	auditEvent  *domain.Event
 }
 
 func (r response) write(w http.ResponseWriter) error {

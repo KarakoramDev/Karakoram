@@ -292,7 +292,13 @@ func eventAPI(e domain.Event) api.Event {
 	if e.Namespace != "" {
 		namespace = &e.Namespace
 	}
-	return api.Event{Namespace: namespace, Id: e.ID, Cluster: optionalString(e.Cluster), OperationId: optionalString(e.Operation), Type: e.Type, Reason: optionalString(e.Reason), Message: e.Message, Actor: optionalString(e.Actor), Resource: optionalString(e.Resource), Target: optionalString(e.Target), CreatedAt: e.CreatedAt}
+	var details *api.EventDetails
+	if len(e.Details) != 0 {
+		if json.Unmarshal(e.Details, &details) != nil {
+			details = nil
+		}
+	}
+	return api.Event{Namespace: namespace, Id: e.ID, Cluster: optionalString(e.Cluster), OperationId: optionalString(e.Operation), Type: e.Type, Reason: optionalString(e.Reason), Message: e.Message, Details: details, Actor: optionalString(e.Actor), Resource: optionalString(e.Resource), Target: optionalString(e.Target), CreatedAt: e.CreatedAt}
 }
 func rolesDomain(a []api.RoleReference) []domain.RoleRef {
 	out := make([]domain.RoleRef, 0, len(a))

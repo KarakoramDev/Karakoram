@@ -38,6 +38,22 @@ func (s *Server) eventAllowed(ctx context.Context, e domain.Event) bool {
 	q := request(ctx).URL.Query()
 	return permission && (q.Get("namespace") == "" || q.Get("namespace") == namespace) && (q.Get("cluster") == "" || q.Get("cluster") == e.Cluster) && (q.Get("type") == "" || q.Get("type") == e.Type) && (q.Get("operationId") == "" || q.Get("operationId") == e.Operation) && (q.Get("actor") == "" || q.Get("actor") == e.Actor) && (q.Get("resource") == "" || q.Get("resource") == e.Resource)
 }
+
+// eventResponse applies audit visibility at serialization, including each SSE
+// delivery after revalidation; events:read alone never reveals structured data.
+func (s *Server) eventResponse(ctx context.Context, e domain.Event) api.Event {
+	object := "*"
+	if e.Cluster != "" {
+		object = clusterObject(domain.NormalizedNamespace(e.Namespace), e.Cluster)
+	} else if e.Namespace != "" {
+		object = e.Namespace
+	}
+	if !s.allowed(ctx, "audit", "read", object) {
+		e.Details = nil
+	}
+	return eventAPI(e)
+}
+
 func (s *Server) observability(ctx context.Context, name string, in input) response {
 	q := request(ctx).URL.Query()
 	if failure := s.validateObservationFilters(ctx, name); failure != nil {
@@ -139,7 +155,7 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 					out.NextCursor = &cursor
 					return ok(out)
 				}
-				out.Items = append(out.Items, eventAPI(e))
+				out.Items = append(out.Items, s.eventResponse(ctx, e))
 			}
 			if len(items) < 1000 {
 				return ok(out)
@@ -282,7 +298,7 @@ func (s *Server) stream(ctx context.Context) response {
 			if !s.eventAllowed(ctx, e) {
 				return nil
 			}
-			data, err := json.Marshal(eventAPI(e))
+			data, err := json.Marshal(s.eventResponse(ctx, e))
 			if err != nil {
 				return err
 			}

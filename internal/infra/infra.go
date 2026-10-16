@@ -112,6 +112,10 @@ type Op struct {
 	ID        string `json:"id"`
 	Kind      string `json:"kind,omitempty"`
 	ServiceID string `json:"serviceId,omitempty"`
+	// Hostname and AttemptedResources retain only safe resource diagnostics for
+	// failures observed after the request or a control-plane restart.
+	Hostname           string `json:"hostname,omitempty"`
+	AttemptedResources string `json:"attemptedResources,omitempty"`
 	// Services maps hostnames to the service IDs an import created. They are
 	// authoritative ownership evidence: the IDs come from Karakoram's own request.
 	Services map[string]string `json:"services,omitempty"`

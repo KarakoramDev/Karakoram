@@ -316,6 +316,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		op := domain.Operation{Kind: kind, Actor: principal(ctx).Actor()}
 		ctx = store.WithOperation(ctx, &op)
+		audit := &store.SpecUpdateAudit{Build: func(before, after domain.ClusterSpec, generation int64, secrets []store.SpecSecretChange) domain.Event {
+			e := clusterSpecAuditEvent(c.Name, generation, before, after, secrets)
+			e.Namespace, e.Actor, e.Operation = c.Namespace, principal(ctx).Actor(), op.ID
+			return e
+		}}
+		ctx = store.WithSpecUpdateAudit(ctx, audit)
 		if err = s.Store.UpdateClusterSpecWithSecrets(ctx, clusterRef(ctx, c.Name), next.Spec, values); err != nil {
 			return s.failure(err)
 		}
@@ -325,7 +331,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		s.trigger(ctx, clusterRef(ctx, c.Name))
 		updated.OperationID = op.ID
-		return response{status: 200, body: s.clusterAPI(*updated), operationID: op.ID}
+		return response{status: 200, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
 	case "DeleteCluster":
 		q := request(ctx).URL.Query()
 		opts := domain.DeleteOptions{KeepVolumes: q.Get("keepVolumes") == "true", KeepBackups: q.Get("keepBackups") == "true"}

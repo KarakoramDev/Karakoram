@@ -48,11 +48,14 @@ func appendEvent(ctx context.Context, db executor, event *domain.Event) error {
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now().UTC()
 	}
-	data, err := json.Marshal(event)
+	// Details live separately so old event payloads retain their existing shape.
+	payload := *event
+	payload.Details = nil
+	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	r, err := db.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,actor,resource,data,created) VALUES(?,?,?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, event.Actor, event.Resource, data, event.CreatedAt.UnixNano())
+	r, err := db.ExecContext(ctx, "INSERT INTO events(namespace,cluster,type,actor,resource,data,created,details) VALUES(?,?,?,?,?,?,?,?)", event.Namespace, event.Cluster, event.Type, event.Actor, event.Resource, data, event.CreatedAt.UnixNano(), []byte(event.Details))
 	if err != nil {
 		return err
 	}
@@ -62,7 +65,7 @@ func appendEvent(ctx context.Context, db executor, event *domain.Event) error {
 
 // ListEvents returns one ordered event page (see EventFilter).
 func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Event, error) {
-	q := "SELECT id,namespace,data FROM events WHERE id>?"
+	q := "SELECT id,namespace,data,details FROM events WHERE id>?"
 	args := []any{filter.SinceID}
 	if filter.Descending && filter.BeforeID > 0 {
 		q += " AND id<?"
@@ -109,15 +112,16 @@ func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Ev
 	out := make([]domain.Event, 0)
 	for rows.Next() {
 		var id int64
-		var data []byte
+		var data, details []byte
 		var namespace string
 		var v domain.Event
-		if err = rows.Scan(&id, &namespace, &data); err != nil {
+		if err = rows.Scan(&id, &namespace, &data, &details); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
+		v.Details = json.RawMessage(details)
 		v.ID = id
 		v.Namespace = namespace
 		out = append(out, v)

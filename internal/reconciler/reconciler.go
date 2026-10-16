@@ -173,6 +173,9 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	defer timer.Stop()
 	backoff := m.opts.BackoffMin
 	retrying := false
+	// Identical attributed failures share one event until success or a changed
+	// message, actor or operation; scheduled waits do not reset suppression.
+	lastFailure := [3]string{}
 	for {
 		triggers := w.trigger
 		if retrying {
@@ -204,14 +207,20 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 				return
 			}
 			m.opts.Context.Logger.Error("reconcile cluster", "cluster", name, "error", err)
-			event := domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Type: "Warning", Reason: "ReconcileError", Message: err.Error(), Actor: "reconciler"}
+			message := boundedMessage(err.Error(), 1024)
+			event := domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Type: "Warning", Reason: "ReconcileError", Message: message, Actor: "reconciler"}
 			var cause *attributedError
 			if errors.As(err, &cause) {
 				event.Actor = cause.actor
 				event.Operation = cause.operation
 			}
-			if eventErr := m.record(ctx, event); eventErr != nil {
-				m.opts.Context.Logger.Error("record reconcile error", "error", eventErr)
+			failureKey := [3]string{message, event.Actor, event.Operation}
+			if failureKey != lastFailure {
+				if eventErr := m.record(ctx, event); eventErr != nil {
+					m.opts.Context.Logger.Error("record reconcile error", "error", eventErr)
+				} else {
+					lastFailure = failureKey
+				}
 			}
 			delay = backoff
 			if backoff < m.opts.BackoffMax/2 {
@@ -220,6 +229,7 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 				backoff = m.opts.BackoffMax
 			}
 		} else {
+			lastFailure = [3]string{}
 			backoff = m.opts.BackoffMin
 			if delay <= 0 {
 				delay = m.opts.ResyncInterval
@@ -235,6 +245,7 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	}
 }
 func (m *Manager) record(ctx context.Context, event domain.Event) error {
+	event.Message = boundedMessage(event.Message, 1024)
 	if event.Actor == "" {
 		event.Actor = store.Actor(ctx)
 	}
@@ -261,6 +272,7 @@ func (m *Manager) Record(ctx context.Context, event domain.Event) error {
 	return m.record(ctx, event)
 }
 func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.Phase) error {
+	c.Status.Message = boundedMessage(c.Status.Message, 512)
 	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 		return err
 	}
@@ -502,6 +514,10 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		}
 	}
+	failure := errors.Join(syncErr, statusErr, result.ConvergenceError)
+	if failure != nil && scheduledPlatformWait(failure) == nil {
+		rc.Cluster.Status.Message = boundedMessage(fmt.Sprintf("%s: reconcile failed: %s", rc.Cluster.Status.Phase, failure), 512)
+	}
 	return result, errors.Join(syncErr, statusErr)
 }
 
@@ -652,6 +668,9 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	}
 	// Persist even on provider error, atomically with the state referenced by
 	// the checkpoint, so a completed external step is never forgotten.
+	c.Status.Message = boundedMessage(c.Status.Message, 512)
+	op.Message = boundedMessage(op.Message, 1024)
+	op.LastError = boundedMessage(op.LastError, 1024)
 	if err := m.opts.Store.UpdateOperationAndClusterState(ctx, op, c); err != nil {
 		return 0, err
 	}

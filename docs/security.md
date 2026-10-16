@@ -197,6 +197,21 @@ Every successful management mutation and credential reveal appends a durable eve
 
 Cluster-management events retain `namespace` and `cluster`, with resource `clusters` and target equal to the cluster name; list/stream access requires `events:read` or `audit:read` on `<namespace>/<cluster>`. Orphan-volume janitor events retain the original namespace/cluster scope but use resource `orphaned-volumes` and target equal to the volume hostname. Namespace mutations and relay lifecycle events leave `cluster` empty, retain the namespace and require **`audit:read` on `<namespace>`**. Global installation audit leaves both namespace and cluster empty and requires **`audit:read` on `*`**. Thus `p, user:alice, audit, read, dev/**` grants namespace-level and cluster audit in dev, not global audit or other namespaces. Administrative wildcard grants include audit access; built-in viewer/operator event access does not expose noncluster account, RBAC, settings, token, authentication or namespace audit. Optional namespace/actor/resource filters are intersections, not authorization bypasses.
 
+`ClusterSpecChangeRequested` records include a field-level comparison in optional
+`details.changes`. The API removes the entire `details` object from list and
+stream responses unless the reader has `audit:read` on the event's scope;
+`events:read` can expose the cluster event and its summary without granting the
+structured comparison. Secret-bearing changes are marked `sensitive: true` and
+their values are replaced by the literal strings `(changed)`, `(set)` or
+`(unset)` in both the comparison and message, never persisted as secret values.
+Pipeline configuration/source strings are always masked as sensitive content.
+Missing `before`/`after` properties normally indicate an absent field, not JSON
+`null`; when a change has `truncated: true`, missing values mean omitted content
+and must not be interpreted as unset. Large nonsecret values and oversized detail
+payloads are bounded after redaction; sensitive value lengths are never exposed.
+The global and cluster Events views mark sensitive and truncated rows explicitly
+and warn when `details.truncated` indicates an incomplete comparison.
+
 Audit records are append-only through the event API, stored in the same SQLite WAL history and retained **indefinitely** like existing cluster events; there is no separate audit retention interval or automatic age/count pruning. This provides restart durability, not cryptographic integrity, external immutability or a complete forensic archive against control-plane/root compromise. Protect and consistently back up the state database, and monitor its growth.
 
 A remote mutation and its local event append cannot be one atomic transaction. A crash or persistence failure after a remote action can leave an action without its audit record; an audit failure must not be read as proof that no remote change occurred. SQLite durability also depends on the storage and consistent backups. Use operation/resource status and external evidence to resolve ambiguous outcomes; do not retry a destructive mutation merely because an event is absent.

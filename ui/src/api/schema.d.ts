@@ -2502,6 +2502,7 @@ export type components = {
             cluster?: string;
             /** Format: date-time */
             createdAt: string;
+            details?: components["schemas"]["EventDetails"];
             /** Format: int64 */
             id: number;
             message: string;
@@ -2515,6 +2516,22 @@ export type components = {
             target?: string;
             /** @description Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types. */
             type: string;
+        };
+        EventChange: {
+            after?: unknown;
+            before?: unknown;
+            path: string;
+            sensitive?: boolean;
+            /** @description Values were replaced with byte-count markers, omitted, or the path was shortened. Missing values do not imply unset for this change. */
+            truncated?: boolean;
+        };
+        /** @description Structured audit context, returned only with audit:read on the event object. Spec changes use dotted JSON paths and array selectors by name or id. Missing before or after means unset unless truncated is true. Sensitive values are only (changed), (set), or (unset), never secret material or its length. Non-sensitive values exceeding 1 KiB of encoded JSON become byte-count markers. Spec details are bounded to 32 KiB; large change sets retain paths without values, and may omit trailing paths. */
+        EventDetails: {
+            changes?: components["schemas"]["EventChange"][];
+            /** @description Some values or changes were shortened or omitted to bound the structured audit record. */
+            truncated?: boolean;
+        } & {
+            [key: string]: unknown;
         };
         EventList: {
             items: components["schemas"]["Event"][];

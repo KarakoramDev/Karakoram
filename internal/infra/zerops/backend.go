@@ -264,9 +264,48 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 	if err != nil {
 		return infra.Op{}, errors.New("zerops: cannot encode import YAML")
 	}
+	var hostnames, attempts []string
+	for _, s := range doc.Services {
+		if len(attempts) == 2 {
+			hostnames = append(hostnames, "...")
+			break
+		}
+		hostnames = append(hostnames, s.Hostname)
+		config := make(map[string]json.RawMessage)
+		v := make(map[string]json.RawMessage)
+		for key, value := range map[string]any{
+			"cpuMode": s.Vertical.CPUMode, "startCpuCoreCount": s.Vertical.StartCPU,
+			"minResource": map[string]float64{"cpuCoreCount": s.Vertical.MinCPU, "memoryGBytes": s.Vertical.MinRAM, "diskGBytes": s.Vertical.MinDisk},
+			"maxResource": map[string]float64{"cpuCoreCount": s.Vertical.MaxCPU, "memoryGBytes": s.Vertical.MaxRAM, "diskGBytes": s.Vertical.MaxDisk},
+		} {
+			putJSON(v, key, value)
+		}
+		// Import omits zero bounds; distinguish them from values sent as zero.
+		for _, key := range []string{"minResource", "maxResource"} {
+			bounds, _ := decodeObject(v[key])
+			for name, value := range bounds {
+				if string(value) == "0" {
+					delete(bounds, name)
+				}
+			}
+			putJSON(v, key, bounds)
+		}
+		putJSON(config, "verticalAutoscaling", v)
+		h := make(map[string]int)
+		if s.MinContainers != 0 {
+			h["minContainerCount"] = s.MinContainers
+		}
+		if s.MaxContainers != 0 {
+			h["maxContainerCount"] = s.MaxContainers
+		}
+		putJSON(config, "horizontalAutoscaling", h)
+		attempts = append(attempts, s.Hostname+" "+attemptedResources(config))
+	}
+	hostname := strings.Join(hostnames, ", ")
+	attempted := truncateDiagnostic(strings.Join(attempts, "; "), 384)
 	result, err := b.client.ImportServices(ctx, string(data))
 	if err != nil {
-		return infra.Op{}, err
+		return infra.Op{}, rejectedUpdate(err, "service import", hostname, attempted)
 	}
 	var ids []string
 	created := make(map[string]string, len(result.ServiceStacks))
@@ -285,7 +324,7 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 	ids = slices.Compact(slices.Sorted(slices.Values(ids)))
 	// JSON IDs are durable and unambiguous; no in-memory operation registry needed.
 	encoded, _ := json.Marshal(ids)
-	op := infra.Op{ID: "multi:" + string(encoded), Kind: "import"}
+	op := infra.Op{ID: "multi:" + string(encoded), Kind: "import", Hostname: hostname, AttemptedResources: attempted}
 	if len(created) > 0 {
 		op.Services = created
 	}
@@ -691,7 +730,10 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 		putJSON(config, "horizontalAutoscaling", h)
 	}
 	p, err := b.client.Autoscaling(ctx, s.ID, config)
-	return processOp(p, "autoscaling", s.ID), err
+	attempted := attemptedResources(config)
+	op := processOp(p, "autoscaling", s.ID)
+	op.Hostname, op.AttemptedResources = name, attempted
+	return op, rejectedUpdate(err, "resource update", name, attempted)
 }
 
 // SetResources fetches current effective configuration and preserves every field
@@ -961,6 +1003,29 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 					msg = detail
 				}
 			}
+			if op.Kind == "autoscaling" || op.Kind == "import" {
+				hostname := op.Hostname
+				serviceID := p.ServiceStackID
+				if serviceID == "" {
+					serviceID = op.ServiceID
+				}
+				for name, id := range op.Services {
+					if id == serviceID {
+						hostname = name
+						break
+					}
+				}
+				if hostname == "" && serviceID != "" {
+					if s, err := b.client.GetService(ctx, serviceID); err == nil && hostnamePattern.MatchString(s.Name) {
+						hostname = s.Name
+					}
+				}
+				action := "resource update"
+				if op.Kind == "import" {
+					action = "service import"
+				}
+				msg = rejectedUpdateMessage(action, hostname, msg, op.AttemptedResources)
+			}
 			return infra.OpState{Done: true, Failed: true, Status: p.Status, Message: msg}, nil
 		default:
 			state.Done = false
@@ -987,7 +1052,10 @@ func (b *Backend) waitOp(ctx context.Context, op infra.Op) error {
 			return err
 		}
 		if state.Failed {
-			return fmt.Errorf("zerops: process %s: %s", state.Status, state.Message)
+			if op.Kind == "autoscaling" || op.Kind == "import" {
+				return errors.New(state.Message)
+			}
+			return errors.New(boundedDiagnostic(fmt.Sprintf("zerops: process %s: %s", state.Status, state.Message)))
 		}
 		if state.Done {
 			return nil

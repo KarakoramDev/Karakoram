@@ -129,6 +129,29 @@ karactl -n dev events list --actor alice --resource namespaces
 
 Actor/resource filters are exact, case-sensitive AND matches, also intersected with `--namespace/-n`; omit a flag to leave that field unrestricted and preserve the filters when passing `--cursor`. Copy the full actor value, including OIDC issuer or token metadata, when filtering those actions. `events watch` supports the same actor/resource filters alongside namespace/cluster/type/operation/replay filters. In the global UI, audit-authorized users can apply Actor/Resource filters and inspect Resource/Target together with the namespace switcher; cluster-detail views stay cluster-scoped. Namespace-level audit records require `audit:read` on the namespace; global installation records require it on `*`. A grant such as `dev/**` does not expose another namespace or otherwise unauthorized clusters.
 
+For cluster specification updates, `reason: ClusterSpecChangeRequested` identifies
+the requested field changes, not proof that reconciliation has completed. Messages
+use dotted paths such as `components.engine.resources.maxCpu` and identify
+schedules and other named-array entries by name or ID rather than array position,
+for example `backup.schedules[nightly].retainCount`.
+For example, `Cluster spec changed for demo (generation 3):
+components.engine.resources.maxCpu: 1 → 2` summarizes the change. Larger diffs
+show up to the first three changes followed by `and N more`; a no-op request reports
+`Cluster spec change requested for demo: no changes`.
+
+With `audit:read` on the cluster's `<namespace>/<cluster>` object, expand
+**Changed fields** in either Events view to compare the returned paths' **Before**
+and **After** values. The API list and stream expose the same structured
+`details.changes` array only to audit-authorized readers; `events:read` alone
+does not return `details`. Missing values normally display as `(unset)`, distinct
+from JSON `null`. A **Truncated** row displays omitted values as `(omitted)`,
+not `(unset)`; a truncation warning means values or additional paths may be
+missing. Oversized values can instead appear as `(N bytes)`. Sensitive entries
+are marked **Sensitive** and contain only the
+literal markers `(changed)`, `(set)` or `(unset)`, never the secret value.
+Use `karactl -n dev events list --cluster demo -o json` to inspect the structured
+comparison, then check cluster status and Operations for convergence.
+
 Successful mutations and credential reveals are audited without request/response bodies or secret values; login/OIDC success/failure and logout are also recorded. Audit and cluster events share **indefinite SQLite retention**, without automatic age/count pruning. Monitor state-database disk use and preserve consistent off-platform state backups. The event API is append-only, not a tamper-proof remote audit sink. A remote mutation and local event persistence cannot commit atomically: an absent event or failed request is not sufficient evidence that the remote action did not happen. Inspect operation/resource status before retrying.
 
 See [security](security.md#audit-attribution-and-durability) and [API filter/transport semantics](user-guide/api.md#pagination-and-events).

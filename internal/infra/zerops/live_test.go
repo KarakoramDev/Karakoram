@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -125,7 +126,7 @@ func TestLiveSmoke(t *testing.T) {
 	t.Log("static artifact deployed and absolute readiness passed")
 	op, err = b.SetResources(ctx, name, infra.Resources{MinRAM: 0.25, MaxRAM: 0.5, MaxDisk: 2})
 	if err != nil {
-		if api, ok := err.(*APIError); ok {
+		if api := (*APIError)(nil); errors.As(err, &api) {
 			t.Fatalf("runtime autoscaling rejected: %s; validation details: %s", api.Message, api.Meta)
 		}
 		t.Fatal(err)
@@ -135,7 +136,7 @@ func TestLiveSmoke(t *testing.T) {
 	}
 	op, err = b.SetContainerCount(ctx, name, 1, 1)
 	if err != nil {
-		if api, ok := err.(*APIError); ok {
+		if api := (*APIError)(nil); errors.As(err, &api) {
 			t.Fatalf("horizontal autoscaling rejected: %s; validation details: %s", api.Message, api.Meta)
 		}
 		t.Fatal(err)
@@ -145,7 +146,7 @@ func TestLiveSmoke(t *testing.T) {
 	}
 	op, err = b.SetResources(ctx, volume, infra.Resources{MinDisk: 5, MaxDisk: 6})
 	if err != nil {
-		if api, ok := err.(*APIError); ok {
+		if api := (*APIError)(nil); errors.As(err, &api) {
 			t.Fatalf("volume autoscaling rejected: %s; validation details: %s", api.Message, api.Meta)
 		}
 		t.Fatal(err)

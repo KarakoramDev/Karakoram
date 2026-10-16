@@ -20,6 +20,9 @@ const diagnosticLimit = 1024
 var diagnosticURL = regexp.MustCompile(`(?i)(?:https?|mongodb(?:\+srv)?|s3)://\S+`)
 var diagnosticOpaque = regexp.MustCompile(`[A-Za-z0-9_+/=-]{48,}`)
 var diagnosticCode = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]{0,79}$`)
+var diagnosticResourceField = regexp.MustCompile(`^(?:(?:verticalAutoscaling\.)?(?:cpuMode|startCpuCoreCount|(?:minResource|maxResource|minFreeResource)\.(?:cpuCoreCount|memoryGBytes|diskGBytes))|(?:horizontalAutoscaling\.)?(?:minContainerCount|maxContainerCount))$`)
+var diagnosticValidationMessage = regexp.MustCompile(`^Value must [A-Za-z0-9 \[\]().,_]+$`)
+var diagnosticValidationOpaque = regexp.MustCompile(`[A-Za-z0-9_]{20,}`)
 
 func sensitiveDiagnostic(s string) bool {
 	s = strings.ToLower(s)
@@ -31,11 +34,13 @@ func sensitiveDiagnostic(s string) bool {
 	return false
 }
 
-func boundedDiagnostic(s string) string {
-	if len(s) <= diagnosticLimit {
+func boundedDiagnostic(s string) string { return truncateDiagnostic(s, diagnosticLimit) }
+
+func truncateDiagnostic(s string, limit int) string {
+	if len(s) <= limit {
 		return s
 	}
-	s = s[:diagnosticLimit-3]
+	s = s[:limit-3]
 	for !utf8.ValidString(s) {
 		s = s[:len(s)-1]
 	}
@@ -88,8 +93,13 @@ func errorSummary(code, message string, meta json.RawMessage, token string) stri
 					walk(child, path, metadata, depth+1)
 				}
 			case map[string]any:
-				if field, ok := v["field"].(string); ok && sensitiveDiagnostic(field) {
+				if diagnosticResourceField.MatchString(path) {
 					return
+				}
+				for _, key := range []string{"field", "parameter"} {
+					if field, ok := v[key].(string); ok && sensitiveDiagnostic(field) {
+						return
+					}
 				}
 				keys := make([]string, 0, len(v))
 				for key := range v {
@@ -103,9 +113,25 @@ func errorSummary(code, message string, meta json.RawMessage, token string) stri
 					switch key {
 					case "meta", "metadata":
 						walk(v[key], path, true, depth+1)
-					case "code", "error", "message", "reason", "field":
+					case "code", "error", "message", "reason", "field", "parameter":
 						walk(v[key], key, metadata, depth+1)
-					case "minDisk", "maxDisk", "min", "max", "minFreeResource.memoryGBytes":
+					case "minDisk", "maxDisk", "min", "max", "value", "provided", "actual":
+						if key == "value" || key == "provided" || key == "actual" {
+							switch v[key].(type) {
+							case float64, bool:
+							case string:
+								if text := v[key].(string); text != "SHARED" && text != "DEDICATED" {
+									continue
+								}
+								field, _ := v["field"].(string)
+								parameter, _ := v["parameter"].(string)
+								if !diagnosticResourceField.MatchString(field) && !diagnosticResourceField.MatchString(parameter) {
+									continue
+								}
+							default:
+								continue
+							}
+						}
 						if metadata {
 							name := key
 							if path != "" {
@@ -113,9 +139,22 @@ func errorSummary(code, message string, meta json.RawMessage, token string) stri
 							}
 							walk(v[key], name, true, depth+1)
 						}
+					default:
+						if metadata && diagnosticResourceField.MatchString(key) {
+							walk(v[key], key, true, depth+1)
+						}
 					}
 				}
 			case string:
+				if metadata && (path == "code" || path == "error" || path == "message") {
+					text := strings.TrimSpace(v)
+					if strings.EqualFold(text, strings.TrimSpace(code)) || strings.EqualFold(text, strings.TrimSpace(message)) {
+						return
+					}
+				}
+				if diagnosticResourceField.MatchString(path) && (len(v) > 256 || !diagnosticValidationMessage.MatchString(v) || diagnosticValidationOpaque.MatchString(v)) {
+					return
+				}
 				if strings.EqualFold(strings.Trim(v, " ."), "See metadata") {
 					return
 				}
@@ -151,6 +190,74 @@ func processErrorSummary(raw json.RawMessage, token string) string {
 		return summary
 	}
 	return "Platform process failed; inspect Zerops process logs"
+}
+
+type resourceUpdateError struct {
+	cause     error
+	action    string
+	hostname  string
+	attempted string
+}
+
+func (e *resourceUpdateError) Error() string {
+	return rejectedUpdateMessage(e.action, e.hostname, e.cause.Error(), e.attempted)
+}
+
+func (e *resourceUpdateError) Unwrap() error { return e.cause }
+
+func (e *resourceUpdateError) ErrorCode() string {
+	var coded interface{ ErrorCode() string }
+	if errors.As(e.cause, &coded) {
+		return coded.ErrorCode()
+	}
+	return ""
+}
+
+func rejectedUpdate(err error, action, hostname, attempted string) error {
+	var api *APIError
+	if err == nil || !errors.As(err, &api) {
+		return err
+	}
+	return &resourceUpdateError{cause: err, action: action, hostname: hostname, attempted: attempted}
+}
+
+func rejectedUpdateMessage(action, hostname, detail, attempted string) string {
+	prefix := "Zerops rejected the " + action
+	if hostname != "" {
+		prefix += " for " + hostname
+	}
+	suffix := ""
+	if attempted != "" {
+		suffix = "; attempted " + truncateDiagnostic(attempted, 384)
+	}
+	return prefix + ": " + truncateDiagnostic(detail, diagnosticLimit-len(prefix)-2-len(suffix)) + suffix
+}
+
+// attemptedResources reads only resource scalars from the final request, never
+// arbitrary configuration, environment values or platform identifiers.
+func attemptedResources(config map[string]json.RawMessage) string {
+	v, _ := decodeObject(config["verticalAutoscaling"])
+	h, _ := decodeObject(config["horizontalAutoscaling"])
+	low, _ := decodeObject(v["minResource"])
+	high, _ := decodeObject(v["maxResource"])
+	scalar := func(m map[string]json.RawMessage, key string) string {
+		var n json.Number
+		if json.Unmarshal(m[key], &n) == nil && len(n.String()) <= 24 {
+			if _, err := n.Float64(); err == nil {
+				return n.String()
+			}
+		}
+		return "unset"
+	}
+	mode := "unset"
+	var value string
+	if json.Unmarshal(v["cpuMode"], &value) == nil && (value == "SHARED" || value == "DEDICATED") {
+		mode = value
+	}
+	return fmt.Sprintf("cpuMode=%s cpu=%s-%s startCpu=%s ram=%s-%s disk=%s-%s containers=%s-%s",
+		mode, scalar(low, "cpuCoreCount"), scalar(high, "cpuCoreCount"), scalar(v, "startCpuCoreCount"),
+		scalar(low, "memoryGBytes"), scalar(high, "memoryGBytes"), scalar(low, "diskGBytes"), scalar(high, "diskGBytes"),
+		scalar(h, "minContainerCount"), scalar(h, "maxContainerCount"))
 }
 
 // IsAuthenticationError identifies an explicit rejection, never an outage.

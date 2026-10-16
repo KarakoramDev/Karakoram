@@ -9,12 +9,24 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
 
 type operationEventKey struct{}
+
+func boundedMessage(message string, limit int) string {
+	if len(message) <= limit {
+		return message
+	}
+	message = message[:limit-3]
+	for !utf8.ValidString(message) {
+		message = message[:len(message)-1]
+	}
+	return message + "..."
+}
 
 // failureCleanupStep keeps cleanup ownership durable without changing the
 // provider's checkpoint. LastError carries the original terminal reason.
@@ -74,7 +86,7 @@ func (m *Manager) operationTimeout(op *domain.Operation) time.Duration {
 
 func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 	if err != nil {
-		op.Message = err.Error()
+		op.Message = boundedMessage(err.Error(), 1024)
 		op.LastError = op.Message
 		if scheduledPlatformWait(err) == nil {
 			op.Failures++
@@ -99,6 +111,7 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 	if !expired && !permanent {
 		op.Message = fmt.Sprintf("%s exhausted its retry budget (%d failures): %s", op.Kind, op.Failures, last)
 	}
+	op.Message = boundedMessage(op.Message, 1024)
 	op.Phase = domain.PhaseFailed
 	now := m.opts.Context.Clock.Now()
 	op.CompletedAt = &now

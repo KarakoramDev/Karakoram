@@ -137,6 +137,12 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 		return err
 	}
 	defer tx.Rollback()
+	// Capture under the writer transaction: a prior handler read is not a
+	// conditional write snapshot and may have been superseded by another edit.
+	before, err := specAuditBefore(ctx, tx, ref)
+	if err != nil {
+		return err
+	}
 	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(result, err); err != nil {
 		return err
@@ -144,7 +150,7 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 	if err = acceptClusterOperation(ctx, tx, ref); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return commitSpecAudit(ctx, tx, ref, before, spec, nil)
 }
 func affected(result sql.Result, err error) error {
 	if err != nil {

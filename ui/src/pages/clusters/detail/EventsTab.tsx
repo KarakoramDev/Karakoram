@@ -16,6 +16,7 @@ import { Badge, Card, ErrorBlock, Loading, Time } from '@/components/ui/Primitiv
 import { useClusterContext } from './ClusterDetail';
 import { clusterPath } from '../cluster-path';
 import { EventFilters, useEventFilters } from '@/components/EventFilters';
+import { EventChanges } from '@/components/EventChanges';
 import { defaultLogProcess, providerProcesses } from '@/engines';
 
 type KEvent = Schemas['Event'];
@@ -54,6 +55,7 @@ export function EventTable({ items, showCluster, showNamespace, showResource }: 
               <td className="small">
                 {e.message}
                 {e.reason ? <span className="faint"> ({e.reason})</span> : null}
+                <EventChanges details={e.details} />
                 <details><summary>Event details</summary><pre className="code" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxWidth: '40rem' }}>{JSON.stringify(e, null, 2)}</pre></details>
               </td>
               <td className="small mono">{e.actor || '—'}</td>

@@ -1257,8 +1257,11 @@ type Event struct {
 	Actor     *string   `json:"actor,omitempty"`
 	Cluster   *string   `json:"cluster,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
-	Id        int64     `json:"id"`
-	Message   string    `json:"message"`
+
+	// Details Structured audit context, returned only with audit:read on the event object. Spec changes use dotted JSON paths and array selectors by name or id. Missing before or after means unset unless truncated is true. Sensitive values are only (changed), (set), or (unset), never secret material or its length. Non-sensitive values exceeding 1 KiB of encoded JSON become byte-count markers. Spec details are bounded to 32 KiB; large change sets retain paths without values, and may omit trailing paths.
+	Details *EventDetails `json:"details,omitempty"`
+	Id      int64         `json:"id"`
+	Message string        `json:"message"`
 
 	// Namespace Namespace of cluster and namespace-level entries; absent for global audit entries.
 	Namespace   *NamespaceName `json:"namespace,omitempty"`
@@ -1273,6 +1276,26 @@ type Event struct {
 
 	// Type Stored event category, normally Normal, Warning or Audit. SSE event: uses this value verbatim. Lifecycle detail (for example OperationFailed, ClusterReady or LoginSucceeded) is in reason. Clients must tolerate additional stored types.
 	Type string `json:"type"`
+}
+
+// EventChange defines model for EventChange.
+type EventChange struct {
+	After     *interface{} `json:"after,omitempty"`
+	Before    *interface{} `json:"before,omitempty"`
+	Path      string       `json:"path"`
+	Sensitive *bool        `json:"sensitive,omitempty"`
+
+	// Truncated Values were replaced with byte-count markers, omitted, or the path was shortened. Missing values do not imply unset for this change.
+	Truncated *bool `json:"truncated,omitempty"`
+}
+
+// EventDetails Structured audit context, returned only with audit:read on the event object. Spec changes use dotted JSON paths and array selectors by name or id. Missing before or after means unset unless truncated is true. Sensitive values are only (changed), (set), or (unset), never secret material or its length. Non-sensitive values exceeding 1 KiB of encoded JSON become byte-count markers. Spec details are bounded to 32 KiB; large change sets retain paths without values, and may omit trailing paths.
+type EventDetails struct {
+	Changes *[]EventChange `json:"changes,omitempty"`
+
+	// Truncated Some values or changes were shortened or omitted to bound the structured audit record.
+	Truncated            *bool                  `json:"truncated,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // EventList defines model for EventList.
@@ -4024,6 +4047,89 @@ type ReplaceRBACPolicyJSONRequestBody = RBACPolicy
 
 // ReplaceSettingsJSONRequestBody defines body for ReplaceSettings for application/json ContentType.
 type ReplaceSettingsJSONRequestBody = Settings
+
+// Getter for additional properties for EventDetails. Returns the specified
+// element and whether it was found
+func (a EventDetails) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for EventDetails
+func (a *EventDetails) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for EventDetails to handle AdditionalProperties
+func (a *EventDetails) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["changes"]; found {
+		err = json.Unmarshal(raw, &a.Changes)
+		if err != nil {
+			return fmt.Errorf("error reading 'changes': %w", err)
+		}
+		delete(object, "changes")
+	}
+
+	if raw, found := object["truncated"]; found {
+		err = json.Unmarshal(raw, &a.Truncated)
+		if err != nil {
+			return fmt.Errorf("error reading 'truncated': %w", err)
+		}
+		delete(object, "truncated")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for EventDetails to handle AdditionalProperties
+func (a EventDetails) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Changes != nil {
+		object["changes"], err = json.Marshal(a.Changes)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'changes': %w", err)
+		}
+	}
+
+	if a.Truncated != nil {
+		object["truncated"], err = json.Marshal(a.Truncated)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'truncated': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
 
 // AsRestoreSource0 returns the union data inside the RestoreSource as a RestoreSource0
 func (t RestoreSource) AsRestoreSource0() (RestoreSource0, error) {

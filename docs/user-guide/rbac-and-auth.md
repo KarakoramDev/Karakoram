@@ -65,6 +65,17 @@ The five-field `p` form defaults to allow; the optional sixth field is effect. S
 
 Resources: `namespaces`, `clusters`, `cluster-credentials`, `database-users`, `backups`, `restores`, `backup-storages`, `operations`, `events`, `audit`, `monitoring`, `accounts`, `api-tokens`, `rbac`, `settings`, `providers`. Database role CRUD shares `database-users`; there is no separate `database-roles` policy resource. Actions are `create`, `read`, `update`, `delete`, source backup **`export`**, or a glob such as `*`, as appropriate for each operation. Credential reveal is **`cluster-credentials, read`**, not `read-credentials` on clusters. Namespace token rotation/validation use `namespaces/update`. Audit reads use the affected `<namespace>/<cluster>`, bare namespace for namespace-level records, and global `*` for installation records. Actor/resource/namespace filters do not widen visibility. The annotations in [OpenAPI](../../api/openapi.yaml) define the route mapping.
 
+Cluster event visibility and structured audit details are separate permissions:
+`events:read` or `audit:read` on `<namespace>/<cluster>` allows reading the event,
+but only **`audit:read`** returns the optional `details` object in event lists and
+streams. In particular, `ClusterSpecChangeRequested` includes field comparisons
+in `details.changes` for audit readers. Viewer/operator event access alone does
+not include them. Sensitive fields remain masked as `(changed)`, `(set)` or
+`(unset)` even for audit readers; this permission never reveals secret values.
+Size limits can also produce `truncated` detail/row flags: those indicate an
+incomplete comparison, not additional authorization or proof that an omitted
+value was unset. Pipeline configuration/source strings remain masked.
+
 Example additions to the existing policy:
 
 ```csv

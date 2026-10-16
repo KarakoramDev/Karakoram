@@ -56,10 +56,12 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 			e.Reason = "ClusterCloneRequested"
 		}
 	case "ReplaceCluster", "PatchCluster":
-		e.Reason = "ClusterSpecChangeRequested"
-		if c, ok := result.body.(api.Cluster); ok {
-			e.Message = fmt.Sprintf("Cluster spec change requested for %s (generation=%d, version=%s, engineReplicas=%d)", c.Name, c.Generation, c.Spec.Version, c.Spec.Components.Engine.Replicas)
+		// The desired-state transaction already persisted this event with its
+		// pre-write snapshot; only publish after that transaction committed.
+		if result.auditEvent != nil {
+			s.Hub.Publish(*result.auditEvent)
 		}
+		return nil
 	case "DeleteCluster":
 		e.Reason = "ClusterDeleteRequested"
 		q := request(ctx).URL.Query()

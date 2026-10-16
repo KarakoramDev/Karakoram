@@ -366,6 +366,50 @@ Events are listed oldest-first by default, so following `nextCursor` replays his
 
 Events expose `actor`, optional string **`resource`**/**`target`**, and `namespace` for namespace-scoped activity (omitted for global installation activity). Cluster-management events use `resource: "clusters"`, `target` equal to the cluster name, and retain `cluster`. Orphan-volume janitor events retain the original namespace/cluster but use resource `orphaned-volumes` and target equal to the volume hostname. Namespace-management and relay lifecycle records omit `cluster`, retain `namespace` and use resource `namespaces`. Other audit records use the affected resource (for example `accounts`, `rbac`, `settings`, `api-tokens`, `auth` or `backup-storages`) and target. Older events may omit attribution/resource/target. Every successful mutation and credential reveal is audited using safe action metadata, not request/response bodies or secrets. Login/OIDC success/failure and logout have authentication-owned events. All audit activity shares the durable event history and indefinite retention described in [security](../security.md#audit-attribution-and-durability).
 
+Events may additionally include an optional **`details`** object. For
+`reason: "ClusterSpecChangeRequested"`, its **`changes`** array contains
+`{path: string, before?: any, after?: any, sensitive?: boolean, truncated?: boolean}`
+entries. The `details` object can also contain `truncated?: boolean`:
+
+```json
+{
+  "details": {
+    "changes": [
+      {"path": "components.engine.resources.maxCpu", "before": 1, "after": 2}
+    ]
+  }
+}
+```
+
+Paths are dotted field paths; schedules and other named arrays are compared by
+entry name or ID rather than position, for example
+`backup.schedules[nightly].retainCount`. `before` and `after` are JSON values; an
+omitted property normally means that field was absent, rendered as `(unset)` in
+the UI, while explicit JSON `null` remains `null`. For `sensitive: true`, values
+are the literal strings `(changed)`, `(set)` or `(unset)` instead of secret
+material. Pipeline configuration/source strings are always masked.
+
+Structured values whose encoded JSON exceeds 1 KiB are replaced with `(N bytes)`
+after redaction and marked `truncated: true`; sensitive value lengths are never
+disclosed. Structured details are capped at 32 KiB: values can be omitted with
+per-change and top-level `truncated: true`, and only an ordered prefix of paths
+may remain if paths alone exceed the cap. Individual oversized paths can also be
+shortened. **A missing `before` or `after` on a truncated change means omitted
+content, not unset**; the UI renders `(omitted)` and marks the row **Truncated**.
+`details.truncated: true` warns that the comparison may lack values or paths.
+**Both list and stream omit the entire `details` object unless the principal has
+`audit:read` for the event's scope** (for cluster changes,
+`<namespace>/<cluster>`); `events:read` alone is not sufficient.
+
+The human-readable message remains available and summarizes up to the first three
+changes, with `and N more` when additional changes are omitted. Summaries are
+bounded to 512 bytes and individual displayed values to 64 bytes. A no-op uses
+`Cluster spec change requested for demo: no changes`. Clients that need a
+structured field comparison should use `details.changes` rather than parse the
+message, and must check its truncation flags before treating it as complete;
+older events can lack `details`. A requested spec change does not imply that its
+generation has converged.
+
 Invalid `limit`, `cursor` and `order` errors name the parameter and accepted values. Do not construct list cursors yourself: return the server's cursor unchanged. Events additionally accept nonnegative numeric event IDs for replay.
 
 Cluster metrics use positive Go-style durations (`30s`, `5m`, `1h`, `24h`), not `7d`: `range` is at most **24h**, and `step` must not exceed that range. When omitted, range defaults to `1h` and step to `30s` (bounded to a shorter explicitly requested range).

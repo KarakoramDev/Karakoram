@@ -123,11 +123,17 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 		return err
 	}
 	defer tx.Rollback()
+	before, err := specAuditBefore(ctx, tx, ref)
+	if err != nil {
+		return err
+	}
+	var secretChanges []SpecSecretChange
 	changed := false
 	for key, value := range values {
 		var ciphertext string
 		err := tx.QueryRowContext(ctx, "SELECT secret FROM records WHERE kind='secret' AND scope=? AND key=?", name, key).Scan(&ciphertext)
 		if errors.Is(err, sql.ErrNoRows) {
+			secretChanges = append(secretChanges, SpecSecretChange{Key: key})
 			changed = true
 			continue
 		}
@@ -139,6 +145,7 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 			return err
 		}
 		if !bytes.Equal(plaintext, value) {
+			secretChanges = append(secretChanges, SpecSecretChange{Key: key, WasSet: true})
 			changed = true
 		}
 	}
@@ -152,5 +159,5 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 	if err = acceptClusterOperation(ctx, tx, ref); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return commitSpecAudit(ctx, tx, ref, before, spec, secretChanges)
 }

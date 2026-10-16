@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -843,5 +844,216 @@ func TestNamespaceDependenciesResolvedBeforeProviderCalls(t *testing.T) {
 	}
 	if _, err := m.reconcile(ctx, c.Ref()); !errors.Is(err, errClusterGone) {
 		t.Fatal(err)
+	}
+}
+
+func TestReconcileFailureStatusAndOperationClearAfterSuccess(t *testing.T) {
+	failure := errors.New("Zerops rejected the resource update for dbzero: invalidCustomAutoscalingValue (startCpuCoreCount: Value must not be less than minResource.cpuCoreCount); attempted cpuMode=SHARED cpu=2-2 startCpu=1 ram=0.5-1 disk=1-4 containers=1-1")
+	failing := true
+	p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+	p.syncFn = func(*engine.Context) (engine.Result, error) {
+		if failing {
+			return engine.Result{}, failure
+		}
+		return engine.Result{}, nil
+	}
+	p.statusFn = func(*engine.Context) (domain.ClusterStatus, error) {
+		return domain.ClusterStatus{Phase: domain.PhaseReady}, nil
+	}
+	m, s := newTestManager(t, p)
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}}
+	op := &domain.Operation{Kind: domain.OperationUpdate}
+	if err := s.CreateCluster(store.WithOperation(t.Context(), op), c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(t.Context(), c.Ref()); !errors.Is(err, failure) {
+		t.Fatalf("reconcile cause lost: %v", err)
+	}
+	got, err := s.GetCluster(t.Context(), c.Ref())
+	if err != nil || !strings.Contains(got.Status.Message, "Ready: reconcile failed: "+failure.Error()) || got.Status.ObservedGeneration == got.Generation {
+		t.Fatalf("failure status: %+v %v", got, err)
+	}
+	tracked, err := s.GetOperation(t.Context(), op.ID)
+	if err != nil || tracked.Phase != domain.PhaseRunning || tracked.LastError != failure.Error() || tracked.Message != got.Status.Message {
+		t.Fatalf("waiting operation lost rejection: %+v %v", tracked, err)
+	}
+	failing = false
+	if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetCluster(t.Context(), c.Ref())
+	if err != nil || got.Status.Message != "" || got.Status.ObservedGeneration != got.Generation {
+		t.Fatalf("failure status not cleared: %+v %v", got, err)
+	}
+	tracked, err = s.GetOperation(t.Context(), op.ID)
+	if err != nil || tracked.Phase != domain.PhaseSucceeded || strings.Contains(tracked.Message, "rejected") {
+		t.Fatalf("operation did not converge: %+v %v", tracked, err)
+	}
+}
+
+func TestWorkerDeduplicatesConsecutiveReconcileErrors(t *testing.T) {
+	var stage, calls atomic.Int32
+	first := "Zerops rejected the resource update for dbzero: invalidCustomAutoscalingValue; attempted cpuMode=SHARED cpu=2-2 startCpu=1"
+	second := "Zerops rejected the resource update for dbone: invalidCustomAutoscalingValue; attempted cpuMode=SHARED cpu=3-3 startCpu=1"
+	p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+	p.syncFn = func(*engine.Context) (engine.Result, error) {
+		calls.Add(1)
+		switch stage.Load() {
+		case 0, 3:
+			return engine.Result{}, errors.New(first)
+		case 1:
+			return engine.Result{}, errors.New(second)
+		default:
+			return engine.Result{}, nil
+		}
+	}
+	p.statusFn = func(*engine.Context) (domain.ClusterStatus, error) {
+		return domain.ClusterStatus{Phase: domain.PhaseReady}, nil
+	}
+	m, s := newTestManager(t, p)
+	createOperationCluster(t, s)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- m.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}()
+	counts := func() map[string]int {
+		events, err := s.ListEvents(t.Context(), store.EventFilter{Cluster: "demo", Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := map[string]int{}
+		for _, event := range events {
+			if event.Reason == "ReconcileError" {
+				count[event.Message]++
+			}
+		}
+		return count
+	}
+	eventually(t, func() bool {
+		c, err := s.GetCluster(t.Context(), domain.ClusterRef{Name: "demo"})
+		return calls.Load() >= 4 && err == nil && strings.Contains(c.Status.Message, first) && counts()[first] == 1
+	})
+	before := calls.Load()
+	stage.Store(1)
+	eventually(t, func() bool { return calls.Load() >= before+4 && counts()[second] == 1 })
+	if got := counts(); got[first] != 1 || got[second] != 1 {
+		t.Fatalf("identical failures repeated: %v", got)
+	}
+	before = calls.Load()
+	stage.Store(2)
+	eventually(t, func() bool {
+		c, err := s.GetCluster(t.Context(), domain.ClusterRef{Name: "demo"})
+		return calls.Load() >= before+2 && err == nil && c.Status.Message == ""
+	})
+	stage.Store(3)
+	m.Trigger(domain.ClusterRef{Name: "demo"})
+	eventually(t, func() bool { return counts()[first] == 2 })
+	if got := counts(); got[first] != 2 || got[second] != 1 {
+		t.Fatalf("success did not reset failure suppression: %v", got)
+	}
+}
+
+func TestReconcileFailureMessagesAreUTF8Bounded(t *testing.T) {
+	failure := errors.New("Zerops rejected the resource update for dbzero: invalidCustomAutoscalingValue; " + strings.Repeat("界 ", 1000))
+	p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+	p.syncFn = func(*engine.Context) (engine.Result, error) { return engine.Result{}, failure }
+	p.statusFn = func(*engine.Context) (domain.ClusterStatus, error) {
+		return domain.ClusterStatus{Phase: domain.PhaseReady}, nil
+	}
+	m, s := newTestManager(t, p)
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}}
+	op := &domain.Operation{Kind: domain.OperationUpdate}
+	if err := s.CreateCluster(store.WithOperation(t.Context(), op), c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(t.Context(), c.Ref()); err == nil {
+		t.Fatal("missing reconcile error")
+	}
+	got, err := s.GetCluster(t.Context(), c.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracked, err := s.GetOperation(t.Context(), op.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		message string
+		limit   int
+	}{{got.Status.Message, 512}, {tracked.Message, 1024}, {tracked.LastError, 1024}} {
+		if len(tc.message) > tc.limit || !utf8.ValidString(tc.message) || !strings.HasSuffix(tc.message, "...") || !strings.Contains(tc.message, "invalidCustomAutoscalingValue") {
+			t.Fatalf("unbounded or incomplete diagnostic (%d): %s", len(tc.message), tc.message)
+		}
+	}
+	if err := m.record(t.Context(), domain.Event{Cluster: c.Name, Type: "Warning", Reason: "ReconcileError", Message: failure.Error(), Actor: "reconciler"}); err != nil {
+		t.Fatal(err)
+	}
+	events, err := s.ListEvents(t.Context(), store.EventFilter{Cluster: c.Name, Type: "Warning"})
+	if err != nil || len(events) != 1 || len(events[0].Message) > 1024 || !utf8.ValidString(events[0].Message) || !strings.HasSuffix(events[0].Message, "...") {
+		t.Fatalf("unbounded event: %+v %v", events, err)
+	}
+}
+
+func TestReconcileErrorDeduplicationPreservesAttribution(t *testing.T) {
+	var calls atomic.Int32
+	failure := "Zerops rejected the resource update for dbzero: invalidCustomAutoscalingValue"
+	p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+	p.syncFn = func(*engine.Context) (engine.Result, error) {
+		calls.Add(1)
+		return engine.Result{}, errors.New(failure)
+	}
+	m, s := newTestManager(t, p)
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake", Version: "first"}}
+	if err := s.CreateCluster(store.WithActor(t.Context(), "first-actor"), c); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- m.Run(ctx) }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	}()
+	assertFailure := func(actor, operation string) {
+		t.Helper()
+		before := calls.Load()
+		eventually(t, func() bool {
+			events, err := s.ListEvents(t.Context(), store.EventFilter{Cluster: c.Name, Limit: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			count := 0
+			for _, event := range events {
+				if event.Reason == "ReconcileError" && event.Actor == actor && event.Operation == operation && event.Message == failure {
+					count++
+				}
+			}
+			if count > 1 {
+				t.Fatalf("identical attributed failure repeated: actor=%s operation=%s count=%d", actor, operation, count)
+			}
+			return count == 1 && calls.Load() >= before+4
+		})
+	}
+	assertFailure("first-actor", "")
+	c.Spec.Version = "second"
+	if err := s.UpdateClusterSpec(store.WithActor(t.Context(), "second-actor"), c.Ref(), c.Spec); err != nil {
+		t.Fatal(err)
+	}
+	assertFailure("second-actor", "")
+	for _, version := range []string{"third", "fourth"} {
+		c.Spec.Version = version
+		op := &domain.Operation{Kind: domain.OperationUpdate}
+		changeCtx := store.WithOperation(store.WithActor(t.Context(), "second-actor"), op)
+		if err := s.UpdateClusterSpec(changeCtx, c.Ref(), c.Spec); err != nil {
+			t.Fatal(err)
+		}
+		assertFailure("second-actor", op.ID)
 	}
 }

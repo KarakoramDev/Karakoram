@@ -6,6 +6,7 @@ package zerops
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -673,5 +674,138 @@ func TestSubdomainURLsEffectiveHTTPPorts(t *testing.T) {
 				t.Fatalf("URLs %v err %v project GETs %d", urls, err, projectGETs)
 			}
 		})
+	}
+}
+
+func resourceDiagnosticService() ServiceStack {
+	return ServiceStack{ID: "service", Name: "dbzero", CurrentAutoscaling: map[string]json.RawMessage{
+		"verticalAutoscaling":   json.RawMessage(`{"cpuMode":"SHARED","startCpuCoreCount":1,"minResource":{"cpuCoreCount":1,"memoryGBytes":0.5,"diskGBytes":1},"maxResource":{"cpuCoreCount":1,"memoryGBytes":1,"diskGBytes":4}}`),
+		"horizontalAutoscaling": json.RawMessage(`{"minContainerCount":1,"maxContainerCount":1}`),
+	}}
+}
+
+func TestResourceUpdateRejectionReportsSentValues(t *testing.T) {
+	for _, containers := range []bool{false, true} {
+		t.Run(map[bool]string{false: "resources", true: "containers"}[containers], func(t *testing.T) {
+			var sent map[string]json.RawMessage
+			b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/service-stack"):
+					_ = json.NewEncoder(w).Encode(map[string]any{"list": []ServiceStack{resourceDiagnosticService()}})
+				case r.Method == http.MethodGet:
+					_ = json.NewEncoder(w).Encode(resourceDiagnosticService())
+				case strings.HasSuffix(r.URL.Path, "/autoscaling"):
+					var body struct {
+						Custom map[string]json.RawMessage `json:"customAutoscaling"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					sent = body.Custom
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write(validationFixture(t, "startCpuBelowMin"))
+				default:
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+				}
+			})
+			var err error
+			if containers {
+				_, err = b.SetContainerCount(t.Context(), "dbzero", 2, 3)
+			} else {
+				start := 1.0
+				_, err = b.SetResources(t.Context(), "dbzero", infra.Resources{MinCPU: 2, MaxCPU: 2, StartCPU: &start})
+			}
+			var api *APIError
+			var coded interface{ ErrorCode() string }
+			if !errors.As(err, &api) || !errors.As(err, &coded) || coded.ErrorCode() != "invalidCustomAutoscalingValue" {
+				t.Fatalf("structured error lost: %v", err)
+			}
+			for _, want := range []string{"Zerops rejected the resource update for dbzero", "invalidCustomAutoscalingValue", "startCpuCoreCount: Value must not be less than minResource.cpuCoreCount", "; attempted " + attemptedResources(sent), "startCpu=1", "ram=0.5-1", "disk=1-4"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("missing %q in %s", want, err)
+				}
+			}
+			want := "cpu=2-2"
+			if containers {
+				want = "containers=2-3"
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("missing sent bounds %q in %s", want, err)
+			}
+		})
+	}
+}
+
+func TestAutoscalingProcessFailureRetainsRequestDiagnostics(t *testing.T) {
+	var failed struct{ Error json.RawMessage }
+	if err := json.Unmarshal(validationFixture(t, "startCpuBelowMin"), &failed); err != nil {
+		t.Fatal(err)
+	}
+	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/service-stack"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"list": []ServiceStack{resourceDiagnosticService()}})
+		case strings.HasPrefix(r.URL.Path, "/process/"):
+			_ = json.NewEncoder(w).Encode(Process{ID: "update", Status: "FAILED", Error: failed.Error})
+		case r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode(resourceDiagnosticService())
+		case strings.HasSuffix(r.URL.Path, "/autoscaling"):
+			_ = json.NewEncoder(w).Encode(map[string]Process{"process": {ID: "update", Status: "PENDING"}})
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	})
+	start := 1.0
+	op, err := b.SetResources(t.Context(), "dbzero", infra.Resources{MinCPU: 2, MaxCPU: 2, StartCPU: &start})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var durable infra.Op
+	if err := json.Unmarshal(raw, &durable); err != nil {
+		t.Fatal(err)
+	}
+	state, err := b.OpStatus(t.Context(), durable)
+	if err != nil || !state.Failed {
+		t.Fatalf("process state: %+v %v", state, err)
+	}
+	for _, want := range []string{"for dbzero", "invalidCustomAutoscalingValue", "startCpuCoreCount: Value must not be less", "cpu=2-2 startCpu=1", "containers=1-1"} {
+		if !strings.Contains(state.Message, want) {
+			t.Fatalf("missing %q in %s", want, state.Message)
+		}
+	}
+	if err := b.waitOp(t.Context(), durable); err == nil || !strings.Contains(err.Error(), state.Message) {
+		t.Fatalf("wait lost process diagnostic: %v", err)
+	}
+	// Operations persisted before request diagnostics can still resolve the host.
+	legacy, err := b.OpStatus(t.Context(), infra.Op{ID: "update", Kind: "autoscaling", ServiceID: "service"})
+	if err != nil || !strings.Contains(legacy.Message, "for dbzero") {
+		t.Fatalf("legacy process host missing: %+v %v", legacy, err)
+	}
+}
+
+func TestImportRejectionReportsEffectiveValuesWithoutEnvironment(t *testing.T) {
+	b := newTestBackend(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write(validationFixture(t, "startCpuBelowMin"))
+	})
+	start := 1.0
+	_, err := b.ImportServices(t.Context(), []infra.ServiceSpec{{
+		Hostname: "dbzero", Type: "ubuntu@24.04", Env: map[string]string{"PASSWORD": "do-not-show-secret"}, Vars: map[string]string{"DATA": "do-not-show-variable"},
+		Resources: infra.Resources{MinCPU: 2, MaxCPU: 2, StartCPU: &start, MinRAM: 0.5, MaxRAM: 1, MinDisk: 1, MaxDisk: 4},
+	}})
+	if err == nil {
+		t.Fatal("missing import rejection")
+	}
+	for _, want := range []string{"Zerops rejected the service import for dbzero", "invalidCustomAutoscalingValue", "attempted dbzero cpuMode=SHARED cpu=2-2 startCpu=1 ram=0.5-1 disk=1-4 containers=1-1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing %q in %s", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "do-not-show") || strings.Contains(err.Error(), "PASSWORD") {
+		t.Fatalf("environment leaked: %s", err)
 	}
 }

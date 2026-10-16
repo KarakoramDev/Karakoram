@@ -484,17 +484,18 @@ type Operation struct {
 
 // Event is a durable audit and lifecycle notification.
 type Event struct {
-	Namespace string    `json:"namespace,omitempty"`
-	ID        int64     `json:"id"`
-	Cluster   string    `json:"cluster,omitempty"`
-	Resource  string    `json:"resource,omitempty"`
-	Target    string    `json:"target,omitempty"`
-	Operation string    `json:"operation,omitempty"`
-	Type      string    `json:"type"`
-	Reason    string    `json:"reason"`
-	Message   string    `json:"message"`
-	Actor     string    `json:"actor,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	Namespace string          `json:"namespace,omitempty"`
+	ID        int64           `json:"id"`
+	Cluster   string          `json:"cluster,omitempty"`
+	Resource  string          `json:"resource,omitempty"`
+	Target    string          `json:"target,omitempty"`
+	Operation string          `json:"operation,omitempty"`
+	Type      string          `json:"type"`
+	Reason    string          `json:"reason"`
+	Message   string          `json:"message"`
+	Details   json.RawMessage `json:"details,omitempty"`
+	Actor     string          `json:"actor,omitempty"`
+	CreatedAt time.Time       `json:"createdAt"`
 }
 
 // Account describes a local identity without exposing its password hash.
