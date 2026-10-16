@@ -248,7 +248,7 @@ export function OptionsSection({ spec, onChange, persisted }: WizardSectionProps
           onChange={(e) => set((o) => ({ ...o, logstash: { ...o.logstash, persistentQueue: e.target.checked } }))}
         />
         {logstash ? <PipelinesEditor value={options.logstash.pipelines} onChange={(pipelines) => set((o) => ({ ...o, logstash: { ...o.logstash, pipelines } }))} /> : null}
-        <a className="small" href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/stack.md" target="_blank" rel="noreferrer">Elastic Stack options guide</a>
+        <a className="small" href="https://karakoram.dev/docs/elasticsearch/stack/" target="_blank" rel="noreferrer">Elastic Stack options guide</a>
       </div>
     </fieldset>
   );

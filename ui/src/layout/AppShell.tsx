@@ -75,7 +75,7 @@ export function AppShell() {
             <span>Settings</span>
           </NavLink>
           <a href="/api/v1/openapi.yaml" className="nav-link" title="API specification"><span>API specification</span></a>
-          <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/api.md" className="nav-link" target="_blank" rel="noreferrer"><span>API guide ↗</span></a>
+          <a href="https://karakoram.dev/docs/api/" className="nav-link" target="_blank" rel="noreferrer"><span>API guide ↗</span></a>
         </nav>
         <div className="sidebar-foot">
           <div className="user-chip" title={auth.user?.subject}>

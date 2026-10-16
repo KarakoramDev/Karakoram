@@ -57,7 +57,7 @@ export default function RabbitMQAccessTab() {
   const canCreate = can('create', 'database-users');
   const canUpdate = can('update', 'database-users');
   const canDelete = can('delete', 'database-users');
-  const actions = (edit: AccessEdit, protectedUser = false) => protectedUser ? <span className="stack"><Badge plain>System user</Badge><span className="small muted">{SYSTEM_USER_EXPLANATION} <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/rabbitmq/access-and-tls.md" target="_blank" rel="noreferrer">RabbitMQ access guide ↗</a></span></span> : (
+  const actions = (edit: AccessEdit, protectedUser = false) => protectedUser ? <span className="stack"><Badge plain>System user</Badge><span className="small muted">{SYSTEM_USER_EXPLANATION} <a href="https://karakoram.dev/docs/rabbitmq/access-and-tls/" target="_blank" rel="noreferrer">RabbitMQ access guide ↗</a></span></span> : (
     <span className="row">
       {canUpdate ? <Button size="sm" onClick={() => setEditor(edit)}>Edit</Button> : null}
       {canDelete ? <Button size="sm" variant="ghost" onClick={() => setRemove(edit)}>Delete…</Button> : null}

@@ -58,7 +58,7 @@ test('wizard schedule editor discloses definitions-only backup limits only for R
     if (name === 'rabbitmq') {
       assert.match(markup, backupWarning);
       assert.match(markup, backupSensitivity);
-      assert.match(markup, /rabbitmq.md#definitions-backups-and-cleanup/);
+      assert.match(markup, /karakoram\.dev\/docs\/rabbitmq\/backups\//);
     } else assert.doesNotMatch(markup, /Definitions backups only|point-in-time restore/);
   }
 });
