@@ -56,13 +56,15 @@ PROJECT_ID='your-project-id'
 zcli project service-import deploy/zerops/import-local.yaml -P "$PROJECT_ID"
 ```
 
-In the Zerops dashboard, set the new **karakoram** service's secret `KARAKORAM_ZEROPS_TOKEN` to your project token. Preserve the generated `KARAKORAM_MASTER_KEY` and `KARAKORAM_ADMIN_PASSWORD`; never commit or print secrets. Deploy from the checkout root:
+In the Zerops dashboard, set the new **karakoram** service's secret `KARAKORAM_ZEROPS_TOKEN` to your project token. Preserve the generated `KARAKORAM_MASTER_KEY` and `KARAKORAM_ADMIN_PASSWORD`; never commit or print secrets. Deploy the pinned, signed prebuilt release from the checkout root (no Go/Node build needed):
 
 ```sh
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
-  --zerops-yaml-path zerops.yaml --no-git --disable-logs
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 zcli service enable-subdomain karakoram -P "$PROJECT_ID"
 ```
+
+`--workspace-state clean` uploads only the committed `HEAD` tree (zcli's default also uploads untracked files); the installation guide's [staged-upload helper](docs/install.md#one-command-helper) uploads only the four files the prebuilt build needs. Do not add `--no-git`, which uploads the whole checkout.
 
 Open the service's HTTPS subdomain. Sign in as **admin** with the generated password from its secret variables, complete the required password change, then sign in again. In the create wizard, choose **MongoDB**, **RabbitMQ** or **Elasticsearch**, use an advertised version, keep TLS required and public exposure disabled, and wait for observed readiness. Follow the [MongoDB replica-set](docs/user-guide/replica-sets.md), [RabbitMQ](docs/user-guide/rabbitmq.md) or [Elasticsearch](docs/user-guide/elasticsearch.md) guide for engine-specific setup.
 

@@ -82,14 +82,51 @@ API/tooling; do not assume the base runtime ships the `sqlite3` CLI.
 
 ## Deploy the new control plane
 
-For a local checkout, check out the desired published release or your intended
-source revision. Run `git describe --tags --always` and `git rev-parse HEAD`
-locally, then add their **literal output** under `build.envVariables` in the
-`zerops.yaml` used for this push:
+### Prebuilt release (default)
+
+After backing up `karakoramdata` and preserving its master key as described above,
+check out the desired published release tag:
+
+```sh
+git fetch origin --tags
+git checkout v0.1.2
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+Replace the example tag with your target release. Alternatively, check out and
+update `main`, which pins the latest published release in `deploy/zerops/RELEASE`.
+A release tag pins its own binary; deploying a newer commit on `main` does not
+build its unreleased source changes. The default setup verifies the signed
+checksum manifest, archive SHA-256 and binary version, with a build measured in
+seconds and no Go/Node toolchain. `--workspace-state clean` uploads only the
+committed `HEAD` tree; do not use `--no-git`, which uploads the whole checkout.
+
+For a Git-connected service, redeploy the chosen tag or `main` using Zerops's
+normal Git deployment controls; the checked-out ref determines the release pin.
+`buildFromGit` in the installer is a one-time source import, not an automatically
+configured GitHub webhook integration. Do not rerun `install.sh` or reimport
+services to upgrade.
+
+A failed download, signature/checksum verification or build leaves the running
+version untouched: it never reaches deployment. If you left the service stopped
+after its state backup, it remains stopped until you start it or deploy
+successfully.
+
+### Source builds and provenance
+
+Use `--setup karakoram-source` instead to build the exact checked-out commit for
+unreleased fixes, forks or development. Git-connected imports can select it with
+`zeropsSetup: karakoram-source`. Only this setup rebuilds the UI and static Go
+binary; allow a few minutes.
+
+For a source push using `--no-git`, run `git describe --tags --always` and
+`git rev-parse HEAD` locally, then add their **literal output** under
+`build.envVariables` in the source setup of the `zerops.yaml` used for the push:
 
 ```yaml
 zerops:
-  - setup: karakoram
+  - setup: karakoram-source
     build:
       envVariables:
         KARAKORAM_VERSION: v0.x.y
@@ -106,23 +143,25 @@ in the executable. Refresh these values for every source revision you push.
 Then run from the checkout root:
 
 ```sh
-zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram-source \
   --zerops-yaml-path zerops.yaml --no-git --disable-logs
 ```
 
-For a Git-connected service, redeploy the chosen revision using Zerops's normal
-Git deployment controls. `buildFromGit` in the installer is a one-time source
-import, not an automatically configured GitHub webhook integration. You may
-always use the local push path instead. These provenance inputs are build-time
-values, not settings that can be changed in a running binary. The pipeline gives
-the commit override priority over Git discovery and records a UTC build date
-using the same linker fields as `make build`. See
-[build provenance](install.md#build-provenance-for-local-pushes) for local builds.
+`--no-git` uploads the whole checkout; keep private import files and other
+sensitive files outside it or exclude them before upload. These provenance
+inputs apply only to source builds: prebuilt binaries already carry release
+provenance. They are build-time values, not settings that can be changed in a
+running binary. The source pipeline gives the commit override priority over Git
+discovery and records a UTC build date using the same linker fields as
+`make build`. See [build provenance](install.md#build-provenance-for-local-pushes)
+for local builds.
 Public `/api/v1/version` and the UI explicitly report
 `unknown (built without git metadata)` when provenance was not supplied.
 
-The pipeline rebuilds the UI and static Go binary and deploys the executable to
-the existing runtime. `deploy.temporaryShutdown: true` stops the old container
+### Deployment and readiness
+
+Both setups deploy the executable to the existing runtime.
+`deploy.temporaryShutdown: true` stops the old container
 **before** the new one starts, preventing simultaneous SQLite writers against
 the mounted volume. Keep this setting and the single-container maximum. A short
 UI/API interruption is intentional; do not replace it with zero-downtime overlapping

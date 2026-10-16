@@ -5,7 +5,7 @@ COMMIT ?= $(or $(KARAKORAM_COMMIT),$(shell git rev-parse --short HEAD 2>/dev/nul
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS = -s -w -X github.com/KarakoramDev/Karakoram/internal/version.Version=$(VERSION) -X github.com/KarakoramDev/Karakoram/internal/version.Commit=$(COMMIT) -X github.com/KarakoramDev/Karakoram/internal/version.BuildDate=$(BUILD_DATE)
 UI_TAGS = $(if $(wildcard internal/ui/dist/index.html),-tags ui,)
-.PHONY: build build-all generate test test-integration e2e lint ui openapi-check
+.PHONY: build build-all generate test test-integration e2e lint ui openapi-check release-prepare release-build release
 build:
 	mkdir -p bin
 	CGO_ENABLED=0 go build $(UI_TAGS) -ldflags '$(LDFLAGS)' -o bin/karakoram ./cmd/karakoram
@@ -32,3 +32,10 @@ openapi-check: generate
 	go run ./internal/tools/specnoalias -check
 	git diff --exit-code -- api internal/api pkg/client
 	cd ui && npm run gen:api && git diff --exit-code -- src/api/schema.d.ts
+# Maintainer release steps (see CONTRIBUTING.md): tag, then build/sign/upload/publish.
+release-prepare:
+	scripts/release.sh prepare '$(VERSION)'
+release-build:
+	scripts/release.sh build '$(VERSION)'
+release:
+	scripts/release.sh publish '$(VERSION)' '$(NOTES)'

@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+# Keys allowed to sign release checksums.txt (ssh-keygen -Y, namespace karakoram-release).
+release@karakoram.dev namespaces="karakoram-release" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII7T21efpN1OlnjEX+rktNlT6TbAb106tPyCvQ4okxaR Karakoram release signing key

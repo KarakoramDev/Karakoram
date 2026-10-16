@@ -1,19 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
 zerops:
+  # Default: deploy the signed release binary pinned in deploy/zerops/RELEASE.
+  # Commits made after that release still deploy the pinned binary, not their own source.
   - setup: karakoram
     build:
-      # go.mod selects Go 1.25.0 through automatic toolchain download.
-      base: [go@1, nodejs@22]
+      base: ubuntu@24.04
       buildCommands:
-        - cd ui && npm ci && npm run build
-        - >-
-          CGO_ENABLED=0 go build -tags ui -trimpath
-          -ldflags "-s -w
-          -X github.com/KarakoramDev/Karakoram/internal/version.Version=${KARAKORAM_VERSION:-dev}
-          -X github.com/KarakoramDev/Karakoram/internal/version.Commit=${KARAKORAM_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || printf unknown)}
-          -X github.com/KarakoramDev/Karakoram/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          -o karakoram ./cmd/karakoram
+        - sh deploy/zerops/fetch-release.sh
       deployFiles: [karakoram]
     deploy:
       # SQLite and its Local Storage volume must have only one active writer.
@@ -40,3 +34,19 @@ zerops:
         KARAKORAM_ZEROPS_PROJECT_ID: ${projectId}
         KARAKORAM_PUBLIC_URL: ${zeropsSubdomain}
       start: ./karakoram server
+
+  # Build the exact deployed commit from source (forks, development, unreleased fixes).
+  - setup: karakoram-source
+    extends: karakoram
+    build:
+      # go.mod selects Go 1.25.0 through automatic toolchain download.
+      base: [go@1, nodejs@22]
+      buildCommands:
+        - cd ui && npm ci && npm run build
+        - >-
+          CGO_ENABLED=0 go build -tags ui -trimpath
+          -ldflags "-s -w
+          -X github.com/KarakoramDev/Karakoram/internal/version.Version=${KARAKORAM_VERSION:-dev}
+          -X github.com/KarakoramDev/Karakoram/internal/version.Commit=${KARAKORAM_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || printf unknown)}
+          -X github.com/KarakoramDev/Karakoram/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          -o karakoram ./cmd/karakoram

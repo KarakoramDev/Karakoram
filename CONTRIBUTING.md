@@ -60,7 +60,115 @@ make test
 
 The binaries are `bin/karakoram` and `bin/karactl`. `make build-all` builds the UI first. A plain Go build without existing UI output intentionally does not embed the SPA. Build metadata comes from Make's `VERSION`, `COMMIT` and `BUILD_DATE` variables.
 
+`make build` is the development build. Published release artifacts come from
+`make release`, not from copying `bin/`; see [Releasing](#releasing).
+
 For frontend work, run `npm run dev` in `ui/`; Vite serves port 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects a different development backend. See [ui/README.md](ui/README.md). A local server still needs the actual settings in [internal/server/config.go](internal/server/config.go), including a persistent data directory, master key, public origin and Zerops backend configuration; do not substitute fake production credentials or commit a populated environment file.
+
+## Releasing
+
+A maintainer cuts a release from `main` after a major change, a security fix,
+or enough accumulated fixes to warrant an upgrade. Releases are not made for
+every commit, and pushing commits does not automatically create tags or releases.
+
+Use SemVer tags `vMAJOR.MINOR.PATCH`. Before 1.0, increment MINOR for new
+features or breaking changes (document breaking changes and upgrade steps),
+and PATCH for fixes and security updates. From 1.0 onward, breaking changes
+increment MAJOR, backward-compatible features MINOR, and fixes PATCH.
+A prerelease suffix such as `-rc.1` is allowed; pin one for deployment only
+when deliberately releasing it.
+
+The default Zerops setup deploys the release pinned in `deploy/zerops/RELEASE`,
+even when `main` contains newer source. **Keep its deploy/run sections compatible
+with the pinned binary.** A runtime configuration change requiring a new binary
+must land with the release that ships it, or use `karakoram-source` until then.
+
+### Prerequisites and release notes
+
+Use Go 1.25+, Node 22.6+ with npm, Make, Bash, Git, GNU tar, GNU coreutils
+(including `date` and `sha256sum`), gzip, and OpenSSH `ssh-keygen` with
+`-Y sign`/`-Y verify` support. For publication, install `gh`, authenticate it
+with release rights for the public repository, and have Git push access to
+`origin` for tags and `main`.
+
+The release signing private key defaults to
+`~/.config/karakoram/release-signing-ed25519`; override it with
+`KARAKORAM_RELEASE_SIGNING_KEY`. Its public key must be authorized in
+[`deploy/allowed_signers`](deploy/allowed_signers) for principal
+`release@karakoram.dev`. Keep the private key out of the repository.
+
+Write a release-notes file describing changes, security fixes, upgrade steps,
+and state-schema/rollback compatibility. Keep it outside the checkout (or commit
+it before preparation) so the release tool's clean-tree checks succeed.
+The `NOTES` argument names that file; the tool does not generate release notes.
+Run the applicable [checks](#checks) and review the changes before preparation;
+the release targets do not replace the test and lint suites.
+
+### Prepare, build, and publish
+
+For example, to release `v0.1.2`:
+
+```sh
+make release-prepare VERSION=v0.1.2
+make release-build VERSION=v0.1.2
+make release VERSION=v0.1.2 NOTES=../release-notes-v0.1.2.txt
+```
+
+- **`release-prepare`** requires a clean tree on `main` equal to `origin/main`,
+  a tag absent both locally and on `origin`, and a version newer than the current
+  pin. It detaches HEAD (local `main` stays unchanged), writes
+  `deploy/zerops/RELEASE`, creates a signed-off `Release v0.1.2` commit and an
+  annotated tag. It does not push; review this commit and tag before publishing.
+- **`release-build`** is a local dry run: it checks that the tag exists and pins
+  itself, exports that tag with `git archive`, builds the UI once and cross-builds
+  the server for Linux amd64/arm64 and `karactl` for Linux/macOS amd64/arm64 and
+  Windows amd64. It writes reproducible server archives (binary, LICENSE,
+  NOTICE), raw CLI binaries, `checksums.txt` and its SSH signature to
+  `dist/v0.1.2/`, then verifies the signature and all checksums. It requires the
+  signing key but does not publish or push.
+- **`release`** requires a clean tree with HEAD at the tagged commit and
+  `origin/main` an ancestor of it; a conflicting remote tag is rejected. It
+  rebuilds, pushes the tag, creates a draft GitHub release using `NOTES`,
+  downloads all draft assets, compares them byte-for-byte with the local files
+  and verifies their signature/checksums. Only then does it publish the release
+  (as latest, or as a prerelease for `-rc.N` versions) and fast-forward
+  `origin/main` to the release commit. This ordering keeps `main` from pinning an
+  unpublished release. Rerun the same command after a failure: an unfinished
+  draft is deleted and recreated, and an already published release is only
+  re-verified before `main` is fast-forwarded. Afterwards update the local
+  `main` with `git checkout main && git merge --ff-only origin/main`.
+
+Release builds use `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, the full tagged
+commit SHA, and the tag commit's UTC timestamp as the build date. Archive paths,
+ordering, owner/group and timestamps are normalized, and gzip omits timestamps.
+To reproduce binary checksums, use the **same exact Go toolchain version** as
+the original build, the tagged source and its locked npm dependencies; inspect
+an artifact with `go version -m <binary>` to identify its Go version and build
+settings. A merely compatible newer Go version need not produce identical bytes.
+
+### Signing-key rotation and verification
+
+Before rotating keys, add the new public key to `deploy/allowed_signers` and
+commit that change, then prepare and sign the next release with the new private
+key. Retain old authorized keys for old-release verification; OpenSSH
+`allowed_signers` supports `valid-after`/`valid-before` options when setting
+key-validity windows. Distribute the updated trust file through a trusted channel.
+
+To verify the complete locally built release:
+
+```sh
+RELEASE=v0.1.2
+(cd "dist/$RELEASE" &&
+  ssh-keygen -Y verify -f ../../deploy/allowed_signers \
+    -I release@karakoram.dev -n karakoram-release \
+    -s checksums.txt.sig < checksums.txt &&
+  sha256sum --strict -c checksums.txt)
+```
+
+For downloaded release assets, follow the
+[download and signature-verification procedure](docs/install.md#install-karactl):
+authenticate the signing key, verify the signature over `checksums.txt`, then
+verify the selected binary or server archive against that manifest before use.
 
 ## Change boundaries
 

@@ -32,8 +32,8 @@ install in five steps; this guide is the complete reference.
   including database and Karakoram secrets; Karakoram never needs to read them.
   See [Zerops token permissions](https://docs.zerops.io/features/rbac#integration-tokens).
 - For a local checkout: [zcli](https://docs.zerops.io/references/cli), already logged
-  in with deployment access, and a complete checkout including `ui/package-lock.json`.
-  Go and Node are installed by the remote build; local compilation is not required.
+  in with deployment access. The default prebuilt setup needs no Go or Node
+  toolchain, locally or on Zerops.
 - Free service names `karakoram` and `karakoramdata` in the target project, or
   [choose different names](#use-different-service-names) before importing.
 
@@ -41,15 +41,37 @@ At startup, the control plane logs whether its Zerops token is in sudo mode.
 This is informational, not a requirement for operation.
 
 The installer creates one Ubuntu 24.04 runtime (one container, 0.5–1 GB RAM,
-shared CPU) and a 5 GB Local Storage volume. `zerops.yaml` builds the UI using
-Node 22 and embeds it in a static Go binary. Zerops `go@1` currently starts with
-Go 1.22; the module's `go 1.25.0` directive downloads the required toolchain
-through Go's automatic toolchain selection. The build needs outbound access to
-the Go toolchain/module registries and npm.
+shared CPU) and a 5 GB Local Storage volume.
+
+## Setups: prebuilt release or source build
+
+The root `zerops.yaml` offers two setups with the same runtime and state volume:
+
+- **`karakoram` (default):** downloads the pinned release binary, verifies the
+  SSH signature on its checksum manifest and the archive's SHA-256 checksum,
+  then checks the binary's version. The build takes seconds and needs no Go or
+  Node toolchain. A download or verification failure fails the build.
+- **`karakoram-source`:** builds the exact deployed commit, including the UI,
+  using Node 22 and Go. Allow a few minutes. Use it for forks, development or
+  unreleased fixes; changing source alone does not change the prebuilt binary.
+  Zerops `go@1` starts with Go 1.22; the module's `go 1.25.0` directive downloads
+  the required toolchain through Go's automatic toolchain selection. Only this
+  setup needs outbound access to the Go toolchain/module registries and npm.
+
+[`deploy/zerops/RELEASE`](../deploy/zerops/) pins the release tag used by the
+prebuilt setup. A published release tag pins and deploys itself; `main` between
+releases pins the latest published release, not its newer source commits.
+To build source instead, set `zeropsSetup: karakoram-source` in the import YAML,
+pass `--source` to `install.sh`, or use `--setup karakoram-source` with
+`zcli service push`. A fork deployed with `buildFromGit` must do this as well:
+the prebuilt setup always downloads the upstream KarakoramDev release, never the
+fork's own source.
 
 ### Build provenance for local pushes
 
-`zcli service push --no-git` uploads source without `.git`. Before pushing,
+This section applies only to **`karakoram-source`**. Prebuilt binaries already
+carry their release version, tagged commit and reproducible build date.
+`zcli service push --no-git` uploads source without `.git`. Before a source push,
 obtain the release tag/source label and source revision from the checkout:
 
 ```sh
@@ -64,7 +86,7 @@ relevant part of that file becomes:
 
 ```yaml
 zerops:
-  - setup: karakoram
+  - setup: karakoram-source
     build:
       envVariables:
         KARAKORAM_VERSION: v0.x.y
@@ -168,14 +190,22 @@ zcli project service-import deploy/zerops/import-local.yaml -P "$PROJECT_ID"
 
 In the Zerops dashboard open the newly created **karakoram → Environment
 variables → Secret variables**, edit `KARAKORAM_ZEROPS_TOKEN`, and paste the
-project token. Keep both generated Karakoram secrets unchanged. Add the
-[build provenance values](#build-provenance-for-local-pushes) to the local
-`zerops.yaml`, then deploy:
+project token. Keep both generated Karakoram secrets unchanged, then deploy the
+pinned prebuilt release from the checkout root:
 
 ```sh
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
-  --zerops-yaml-path zerops.yaml --no-git --disable-logs
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 ```
+
+Git mode with `--workspace-state clean` uploads only the committed `HEAD` tree.
+zcli's default workspace state (`all`) also uploads untracked, non-ignored files,
+and `--no-git` uploads the whole directory, including `node_modules` and private
+import copies; use neither for this push.
+The [helper below](#one-command-helper) safely uses `--no-git` by staging only
+the prebuilt setup's required files. For source builds, choose
+`--setup karakoram-source`; if using `--no-git`, first supply the
+[source build provenance](#build-provenance-for-local-pushes).
 
 After the deployment succeeds, activate its HTTP subdomain:
 
@@ -188,8 +218,8 @@ yet. Explicit activation after the first deployment is required on this path.
 
 The local template intentionally has neither `buildFromGit` nor an inline
 pipeline. Zerops imports the runtime in `READY_TO_DEPLOY` state; the push uploads
-this checkout and performs the build. This avoids the known failure caused by
-importing an inline pipeline before its executable has arrived.
+the deployment files and downloads the pinned binary during the build. This
+avoids importing an inline pipeline before its executable has arrived.
 
 ### Use different service names
 
@@ -201,23 +231,38 @@ For example, choose runtime `dbcontrol` and Local Storage `dbcontroldata`:
    and `karakoramdata` to the chosen runtime and storage names. Import this copy
    instead of the checked-in template, then set the runtime's
    `KARAKORAM_ZEROPS_TOKEN` in the dashboard as above.
-2. In the pipeline copy, change `zerops[].setup` to `dbcontrol`,
-   `run.volume.hostname` to `dbcontroldata`, and `run.envVariables.KARAKORAM_DATA_DIR`
-   to `/mnt/dbcontroldata`. The volume hostname and data-directory mount path
-   must agree. Add the build provenance values to this copy too.
+2. In the pipeline copy, rename setup `karakoram` to `dbcontrol`. Rename
+   `karakoram-source` to `dbcontrol-source` and change its `extends:` to
+   `dbcontrol`. In the base setup, change `run.volume.hostname` to
+   `dbcontroldata` and `run.envVariables.KARAKORAM_DATA_DIR` to
+   `/mnt/dbcontroldata`; the hostname and mount path must agree.
+   Source builds using `--no-git` also need the
+   [build provenance values](#build-provenance-for-local-pushes) under the
+   renamed source setup's `build.envVariables`.
 3. Update any explicit hostname references in your customized configuration,
    including `KARAKORAM_ADVERTISE_URL` if set, to the new runtime hostname.
    By default the internal URL uses the injected runtime hostname and
    `KARAKORAM_PUBLIC_URL` uses its injected `zeropsSubdomain`; neither needs
    a hard-coded replacement. Keep the executable/start command `./karakoram server`.
-4. Push to the new runtime using its matching setup name and pipeline file,
-   then enable that runtime's subdomain:
+4. For prebuilt deployment, stage the private pipeline copy together with all
+   files it reads, push to the new runtime, then enable its subdomain:
 
    ```sh
+   UPLOAD_DIR="$(mktemp -d)"
+   mkdir -p "$UPLOAD_DIR/deploy/zerops"
+   cp /private/path/zerops.yaml "$UPLOAD_DIR/zerops.yaml"
+   cp deploy/allowed_signers "$UPLOAD_DIR/deploy/"
+   cp deploy/zerops/RELEASE deploy/zerops/fetch-release.sh "$UPLOAD_DIR/deploy/zerops/"
    zcli service push dbcontrol -P "$PROJECT_ID" --setup dbcontrol \
-     --zerops-yaml-path /private/path/zerops.yaml --no-git --disable-logs
+     --working-dir "$UPLOAD_DIR" --zerops-yaml-path zerops.yaml --no-git --disable-logs
+   rm -r "$UPLOAD_DIR"
    zcli service enable-subdomain dbcontrol -P "$PROJECT_ID"
    ```
+
+   For a source build, push from the checkout root with `--setup dbcontrol-source`
+   and `--zerops-yaml-path /private/path/zerops.yaml` instead of the staged upload.
+   Use Git mode with `--workspace-state clean`, or carefully exclude private
+   files before a `--no-git` upload of the whole checkout.
 
 Use the resulting runtime origin for browser/CLI access and any configured
 external URL references. Do not use the one-command helper for renamed services:
@@ -243,11 +288,25 @@ uses the checked-in token-free local template:
 In that case the initial server cannot become ready until you add the missing
 token through the GUI and restart/redeploy. The helper invokes
 `zcli project service-import` followed by `zcli service push --setup karakoram`
-and `zcli service enable-subdomain`. It uses your existing zcli login and
+and `zcli service enable-subdomain`. The default stages only `zerops.yaml`,
+`deploy/allowed_signers`, `deploy/zerops/RELEASE` and
+`deploy/zerops/fetch-release.sh` in a temporary upload directory; no local build
+or full-checkout upload is needed. It uses your existing zcli login and
 environment and never loads or stores tokens.
 It does not create projects, start a VPN, or overwrite an existing installation.
 Delete the private import copy when no longer needed. Do not reimport the
 installer to upgrade an existing installation.
+
+To build the exact source checkout instead of the pinned release, use:
+
+```sh
+./deploy/zerops/install.sh --source "$PROJECT_ID" /private/path/import-local.yaml
+```
+
+`--source` selects `karakoram-source` and uploads the whole checkout with
+`--no-git`. Keep private import files outside the checkout, exclude other
+sensitive files from the upload, and configure
+[source build provenance](#build-provenance-for-local-pushes) first.
 
 ## Import YAML installation from a public repository
 
@@ -255,8 +314,9 @@ installer to upgrade an existing installation.
    public repository. Its `buildFromGit` already points to
    `https://github.com/KarakoramDev/Karakoram`; no fork is required. If deploying
    your own fork, replace it with your plain public GitHub/GitLab repository URL,
-   without a trailing `.git`. Private repositories cannot be cloned through
-   this import mechanism.
+   without a trailing `.git`, and set `zeropsSetup: karakoram-source`: the
+   default setup deploys the upstream release binary, not the fork's source.
+   Private repositories cannot be cloned through this import mechanism.
 2. Replace the empty `KARAKORAM_ZEROPS_TOKEN` value in a private copy before import,
    or plan to add it in the GUI immediately afterward.
 3. In the existing project's dashboard select **Import services** and paste the
@@ -284,19 +344,29 @@ with **v0.1.0**. Assets are available for Linux and macOS (`linux`/`darwin`,
 For example, download and verify the Linux amd64 binary before installing:
 
 ```sh
-RELEASE=v0.1.0
+RELEASE=v0.1.2
 ASSET=karactl-linux-amd64
 BASE="https://github.com/KarakoramDev/Karakoram/releases/download/$RELEASE"
-curl --fail --location --remote-name "$BASE/$ASSET"
-curl --fail --location --remote-name "$BASE/checksums.txt"
-# Check the selected asset; the manifest also lists the other platform binaries.
-sha256sum --ignore-missing -c checksums.txt && \
+curl --fail --location --proto '=https' --proto-redir '=https' \
+  --remote-name "$BASE/$ASSET" \
+  --remote-name "$BASE/checksums.txt" \
+  --remote-name "$BASE/checksums.txt.sig" &&
+curl --fail --location --proto '=https' --proto-redir '=https' --output allowed_signers \
+  "https://raw.githubusercontent.com/KarakoramDev/Karakoram/$RELEASE/deploy/allowed_signers" &&
+ssh-keygen -Y verify -f allowed_signers -I release@karakoram.dev \
+  -n karakoram-release -s checksums.txt.sig < checksums.txt &&
+sha256sum --ignore-missing -c checksums.txt &&
   install -Dm755 "$ASSET" "$HOME/.local/bin/karactl"
 ```
 
-Run checksum verification in the download directory and proceed only after the
-selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing
-checksums.txt`; on Windows use a SHA-256 verifier against the same manifest.
+Signed checksum manifests are available starting with **v0.1.2**. Verify the
+signing key against a trusted repository checkout or independently trusted
+fingerprint; downloading a key beside an artifact alone does not establish
+its authenticity. Run signature and checksum verification in the download
+directory and proceed only after the selected asset reports `OK`.
+On macOS use `shasum -a 256 --check --ignore-missing checksums.txt` for the
+checksum step; on Windows use OpenSSH signature verification and a SHA-256
+verifier against the same manifest.
 Put `$HOME/.local/bin` on `PATH` for the POSIX example. Building from source
 with Go 1.25 or newer remains an option:
 

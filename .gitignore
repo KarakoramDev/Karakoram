@@ -6,3 +6,4 @@ internal/ui/dist/
 *.db-shm
 *.db-wal
 .env
+dist/

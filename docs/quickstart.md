@@ -55,8 +55,10 @@ services:
 
 This is the same file as [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml).
 It creates the control plane (`karakoram`) and its state volume
-(`karakoramdata`), and builds Karakoram from the public repository. The first
-build takes a few minutes; wait until `karakoram` is **Active**.
+(`karakoramdata`). The default `karakoram` setup downloads and verifies the latest
+signed release pinned on `main`; its build takes seconds, then wait until the
+service is **Active**. To build the exact source commit instead (a few minutes),
+change the import to `zeropsSetup: karakoram-source`.
 
 Don't paste the token into anything else, and delete any file you saved it in.
 Keep the generated `KARAKORAM_MASTER_KEY`: it encrypts Karakoram's stored

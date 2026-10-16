@@ -1,7 +1,8 @@
 #yamlPreprocessor=on
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
-# Set buildFromGit to your fork's public URL when deploying a fork.
+# Set buildFromGit to your fork's public URL when deploying a fork, and set
+# zeropsSetup to karakoram-source: the default setup deploys the upstream release.
 # To deploy a local checkout, use import-local.yaml and install.sh.
 services:
   - hostname: karakoramdata
