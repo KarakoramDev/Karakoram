@@ -7079,7 +7079,7 @@ components:
           description: Member public host:port when public exposure is enabled.
         resources:
           readOnly: true
-          description: Infrastructure resources currently allocated to the member container.
+          description: CPU, memory, and root disk the member container currently has. Each value comes from the member agent's live reading of its container (cgroup CPU set and quota, cgroup memory limit, root filesystem size) when the agent is reachable and reports it; otherwise from the service's effective vertical autoscaling (start or minimum CPU, minimum RAM, minimum root disk). Absent when neither is known.
           allOf:
             - $ref: '#/components/schemas/ObservedResources'
         autoscaling:
@@ -7097,17 +7097,17 @@ components:
       type: object
       additionalProperties: false
       readOnly: true
-      description: Current infrastructure allocation, distinct from desired autoscaling limits.
+      description: Current container allocation, distinct from desired autoscaling limits.
       properties:
         cpuCores:
           type: number
-          description: Allocated CPU cores.
+          description: Usable CPU cores.
         memoryGB:
           type: number
-          description: Allocated memory in GB.
+          description: Memory limit in GiB.
         diskGB:
           type: number
-          description: Allocated disk capacity in GB.
+          description: Runtime root disk size in GiB, not the persistent database volume.
       required:
         - cpuCores
         - memoryGB

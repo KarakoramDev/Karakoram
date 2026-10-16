@@ -235,6 +235,7 @@ type fakeBroker struct {
 	config       int64
 	alarms       json.RawMessage
 	partitions   json.RawMessage
+	resources    *agentapi.ContainerResources
 }
 type fakeAgents struct {
 	t             *testing.T
@@ -311,7 +312,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if b.agentVersion != nil {
 				version = *b.agentVersion
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}})
+			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources})
 		case "/v1/reload":
 			cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
 			if err != nil {

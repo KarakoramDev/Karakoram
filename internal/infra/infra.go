@@ -87,9 +87,6 @@ type Container struct {
 	IPv4           string `json:"ipv4"`
 	IPv6           string `json:"ipv6"`
 	PlacementGroup string `json:"placementGroup,omitempty"`
-	// Resources are the resources currently allocated to the container
-	// (Zerops currentHardwareResource), nil when unknown.
-	Resources *domain.ObservedResources `json:"resources,omitempty"`
 }
 
 // LogQuery bounds an infrastructure log request.

@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"gopkg.in/yaml.v3"
 )
@@ -949,11 +948,7 @@ func (b *Backend) Containers(ctx context.Context, name string) ([]infra.Containe
 	}
 	out := make([]infra.Container, 0, len(list))
 	for _, v := range list {
-		c := infra.Container{ID: v.ID, Hostname: v.Hostname, Status: v.Status, IPv4: v.IPv4, IPv6: v.IPv6}
-		if r := v.CurrentHardwareResource; r != nil {
-			c.Resources = &domain.ObservedResources{CPUCores: r.CPUCores, MemoryGB: r.MemoryMB / 1024, DiskGB: r.DiskGB}
-		}
-		out = append(out, c)
+		out = append(out, infra.Container{ID: v.ID, Hostname: v.Hostname, Status: v.Status, IPv4: v.IPv4, IPv6: v.IPv6})
 	}
 	return out, nil
 }

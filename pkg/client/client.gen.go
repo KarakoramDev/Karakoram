@@ -1432,7 +1432,7 @@ type Member struct {
 	PublicHost    *string `json:"publicHost,omitempty"`
 	RamUsageBytes *int64  `json:"ramUsageBytes,omitempty"`
 
-	// Resources Infrastructure resources currently allocated to the member container.
+	// Resources CPU, memory, and root disk the member container currently has. Each value comes from the member agent's live reading of its container (cgroup CPU set and quota, cgroup memory limit, root filesystem size) when the agent is reachable and reports it; otherwise from the service's effective vertical autoscaling (start or minimum CPU, minimum RAM, minimum root disk). Absent when neither is known.
 	Resources *ObservedResources `json:"resources,omitempty"`
 
 	// Role Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
@@ -1557,15 +1557,15 @@ type OIDCConfig struct {
 	Scopes       *[]string `json:"scopes,omitempty"`
 }
 
-// ObservedResources Current infrastructure allocation, distinct from desired autoscaling limits.
+// ObservedResources Current container allocation, distinct from desired autoscaling limits.
 type ObservedResources struct {
-	// CpuCores Allocated CPU cores.
+	// CpuCores Usable CPU cores.
 	CpuCores float32 `json:"cpuCores"`
 
-	// DiskGB Allocated disk capacity in GB.
+	// DiskGB Runtime root disk size in GiB, not the persistent database volume.
 	DiskGB float32 `json:"diskGB"`
 
-	// MemoryGB Allocated memory in GB.
+	// MemoryGB Memory limit in GiB.
 	MemoryGB float32 `json:"memoryGB"`
 }
 

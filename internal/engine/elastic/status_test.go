@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -229,5 +230,42 @@ func TestApplicationReadinessGatesComponentStatusAndRollingCompletion(t *testing
 		if (s.Rolling.Current == "") != ready {
 			t.Fatalf("%s: rolling completion ignored readiness: %+v", scenario, s.Rolling)
 		}
+	}
+}
+
+func TestStatusReportsAgentResourcesNotPlatformRecords(t *testing.T) {
+	p, rc, f, _ := coreSetup(t, 1)
+	coreConverge(t, p, rc, f)
+	var reported atomic.Pointer[agentapi.ContainerResources]
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/status":
+			_ = json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: 1 << 30, Processes: map[string]agentapi.ProcessStatus{"elasticsearch": {State: "running"}}, Resources: reported.Load()})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	rc.Agents = coreAgentDialer{server.URL, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
+	name := NodeHostname("demo", 0)
+	f.services[name].Resources = domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 2, MinRAM: 2, MaxRAM: 4, MinDisk: 5, MaxDisk: 20}
+	member := func() domain.MemberStatus {
+		t.Helper()
+		status, err := p.Status(context.Background(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.IndexFunc(status.Members, func(m domain.MemberStatus) bool { return m.Name == name })
+		if i < 0 {
+			t.Fatalf("member %s missing: %+v", name, status.Members)
+		}
+		return status.Members[i]
+	}
+	if m := member(); m.Resources == nil || *m.Resources != (domain.ObservedResources{CPUCores: 1, MemoryGB: 2, DiskGB: 5}) {
+		t.Fatalf("agent without a resource reading must fall back to effective autoscaling: %+v", m.Resources)
+	}
+	reported.Store(&agentapi.ContainerResources{CPUCores: 2, MemoryBytes: 4 << 30, RootDiskBytes: 5 << 30})
+	if m := member(); m.Resources == nil || *m.Resources != (domain.ObservedResources{CPUCores: 2, MemoryGB: 4, DiskGB: 5}) {
+		t.Fatalf("agent reading must not be overwritten by platform records: %+v", m.Resources)
 	}
 }

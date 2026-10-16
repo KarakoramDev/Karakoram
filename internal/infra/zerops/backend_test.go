@@ -627,7 +627,7 @@ func TestWaitCancellationAndNullAutoscaling(t *testing.T) {
 	}
 }
 
-func TestContainerObservedResourcesAndCreatingNulls(t *testing.T) {
+func TestContainersAndCreatingNulls(t *testing.T) {
 	creating := false
 	b := newTestBackend(t, func(w http.ResponseWriter, r *http.Request) {
 		if serviceHandler(t, w, r) {
@@ -640,16 +640,12 @@ func TestContainerObservedResourcesAndCreatingNulls(t *testing.T) {
 		reply(t, w, "containers")
 	})
 	containers, err := b.Containers(context.Background(), "member")
-	if err != nil || len(containers) != 1 {
-		t.Fatalf("containers: %v", err)
-	}
-	resources := containers[0].Resources
-	if resources == nil || resources.CPUCores != 1 || resources.MemoryGB != 0.25 || resources.DiskGB != 1 {
-		t.Fatalf("observed allocation: %+v", resources)
+	if err != nil || len(containers) != 1 || containers[0].Status != "ACTIVE" {
+		t.Fatalf("containers: %+v %v", containers, err)
 	}
 	creating = true
 	containers, err = b.Containers(context.Background(), "member")
-	if err != nil || len(containers) != 1 || containers[0].Hostname != "" || containers[0].Resources != nil {
+	if err != nil || len(containers) != 1 || containers[0].Hostname != "" || containers[0].Status != "CREATING" {
 		t.Fatalf("creating container: %+v %v", containers, err)
 	}
 }

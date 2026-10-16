@@ -116,18 +116,15 @@ type PublicPortRouting struct {
 	DeleteOnSync      bool     `json:"deleteOnSync,omitempty"`
 }
 
-// RuntimeContainer tolerates unnamed containers during creation.
+// RuntimeContainer tolerates unnamed containers during creation. Its
+// currentHardwareResource is ignored: it keeps creation-time values after
+// vertical scaling.
 type RuntimeContainer struct {
-	ID                      string `json:"id"`
-	Hostname                string `json:"hostname"`
-	Status                  string `json:"status"`
-	IPv4                    string `json:"ipV4"`
-	IPv6                    string `json:"ipV6"`
-	CurrentHardwareResource *struct {
-		CPUCores float64 `json:"cpuCoreCount"`
-		MemoryMB float64 `json:"memoryMBytes"`
-		DiskGB   float64 `json:"diskGBytes"`
-	} `json:"currentHardwareResource"`
+	ID       string `json:"id"`
+	Hostname string `json:"hostname"`
+	Status   string `json:"status"`
+	IPv4     string `json:"ipV4"`
+	IPv6     string `json:"ipV6"`
 }
 
 // RuntimeLog is an application log entry returned by the signed logging endpoint.

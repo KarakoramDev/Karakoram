@@ -13,7 +13,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -678,15 +680,18 @@ func TestMajorUpgradeRequiresObservedFCV(t *testing.T) {
 	}
 }
 
-type allocatedInfra struct{ *fakeInfra }
-
-func (*allocatedInfra) Containers(context.Context, string) ([]infra.Container, error) {
-	return []infra.Container{{Status: "ACTIVE", Resources: &domain.ObservedResources{CPUCores: 1, MemoryGB: 1, DiskGB: 1}}}, nil
-}
-
-func TestStatusSeparatesFreshPlatformAutoscalingFromAllocation(t *testing.T) {
+func TestStatusReportsAgentResourcesWithAutoscalingFallback(t *testing.T) {
 	p, rc, f, _ := setup(t)
-	rc.Backend = &allocatedInfra{fakeInfra: f}
+	var reported atomic.Pointer[agentapi.ContainerResources]
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/status" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}}, Resources: reported.Load()})
+	}))
+	defer server.Close()
+	rc.Agents = testDialer{server.URL, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
 	s, err := load(rc.Cluster)
 	if err != nil {
 		t.Fatal(err)
@@ -700,26 +705,45 @@ func TestStatusSeparatesFreshPlatformAutoscalingFromAllocation(t *testing.T) {
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
-	for _, bounds := range []domain.Resources{
-		{CPUMode: "SHARED", MinCPU: 2, MaxCPU: 2, MinRAM: 0.5, MaxRAM: 0.5, MinDisk: 1, MaxDisk: 3},
-		{CPUMode: "DEDICATED", MinCPU: 3, MaxCPU: 3, MinRAM: 2, MaxRAM: 2, MinDisk: 1, MaxDisk: 3},
-	} {
-		f.services[name] = &infra.Service{ID: name, Hostname: name, Resources: bounds}
+	member := func() domain.MemberStatus {
+		t.Helper()
 		status, err := p.Status(context.Background(), rc)
 		if err != nil || len(status.Members) != 1 {
 			t.Fatal(status, err)
 		}
-		m := status.Members[0]
-		if m.Autoscaling == nil || *m.Autoscaling != bounds {
+		return status.Members[0]
+	}
+	start := 3.0
+	for _, c := range []struct {
+		bounds domain.Resources
+		want   domain.ObservedResources
+	}{
+		{domain.Resources{CPUMode: "SHARED", MinCPU: 2, MaxCPU: 2, MinRAM: 0.5, MaxRAM: 0.5, MinDisk: 1, MaxDisk: 3}, domain.ObservedResources{CPUCores: 2, MemoryGB: 0.5, DiskGB: 1}},
+		{domain.Resources{CPUMode: "DEDICATED", MinCPU: 1, MaxCPU: 4, MinRAM: 2, MaxRAM: 8, MinDisk: 5, MaxDisk: 10, StartCPU: &start}, domain.ObservedResources{CPUCores: 3, MemoryGB: 2, DiskGB: 5}},
+	} {
+		f.services[name] = &infra.Service{ID: name, Hostname: name, Resources: c.bounds}
+		m := member()
+		if m.Autoscaling == nil || !reflect.DeepEqual(*m.Autoscaling, c.bounds) {
 			t.Fatalf("autoscaling must read current platform config, not desired/applied state: %+v", m)
 		}
-		if m.Resources == nil || m.Resources.CPUCores != 1 || m.Resources.MemoryGB != 1 {
-			t.Fatal("configuration was confused with allocated hardware", m)
+		if m.Resources == nil || *m.Resources != c.want {
+			t.Fatalf("agent without a resource reading must fall back to effective autoscaling %+v: %+v", c.want, m.Resources)
 		}
 	}
+	// A vertical scale-up is visible as soon as the agent reads the new cgroup,
+	// whatever the platform configuration still says.
+	reported.Store(&agentapi.ContainerResources{CPUCores: 2, MemoryBytes: 3 << 29, RootDiskBytes: 7 << 30})
+	if m := member(); m.Resources == nil || *m.Resources != (domain.ObservedResources{CPUCores: 2, MemoryGB: 1.5, DiskGB: 7}) {
+		t.Fatalf("agent reading must win: %+v", m.Resources)
+	}
+	// Partial readings keep what the agent saw and fill the rest from autoscaling.
+	reported.Store(&agentapi.ContainerResources{CPUCores: 2})
+	if m := member(); m.Resources == nil || *m.Resources != (domain.ObservedResources{CPUCores: 2, MemoryGB: 2, DiskGB: 5}) {
+		t.Fatalf("partial agent reading: %+v", m.Resources)
+	}
+	reported.Store(nil)
 	f.services[name].Resources = domain.Resources{}
-	status, err := p.Status(context.Background(), rc)
-	if err != nil || status.Members[0].Autoscaling != nil {
-		t.Fatal("unknown platform configuration must remain unknown", status, err)
+	if m := member(); m.Autoscaling != nil || m.Resources != nil {
+		t.Fatal("unknown platform configuration and agent reading must remain unknown", m)
 	}
 }

@@ -81,7 +81,7 @@ Cancellation requires `clusters/update` on the operation's recorded namespace/cl
 | RAM/disk bounds | GiB in the API; each maximum must be at least its minimum; component floors are provider-specific |
 | Persistent disk | Existing volume grows; decreasing either desired disk bound is rejected |
 | Member `autoscaling` | Effective runtime service bounds read from Zerops, not desired spec |
-| Member `resources` | Current container allocation, not configured autoscaling bounds |
+| Member `resources` | CPU cores, memory limit and root disk the container currently has, read live by the member agent; falls back to effective autoscaling (start or minimum CPU, minimum RAM/disk) when the agent is unreachable or predates the reading |
 | `diskTotalBytes` | Mounted data-volume capacity; runtime autoscaling disk fields describe disposable root disk |
 
 Sizing floors/defaults: [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md), [Elasticsearch](elasticsearch/README.md). They are validation floors, not workload sizing recommendations.

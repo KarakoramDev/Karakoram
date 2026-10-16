@@ -183,7 +183,7 @@ func (f *coreInfra) Containers(_ context.Context, name string) ([]infra.Containe
 	if f.services[name] == nil {
 		return nil, errors.New("service " + name + " not found")
 	}
-	return []infra.Container{{Status: "ACTIVE", PlacementGroup: "group-a", Resources: &domain.ObservedResources{CPUCores: 1, MemoryGB: 2, DiskGB: 5}}}, nil
+	return []infra.Container{{Status: "ACTIVE", PlacementGroup: "group-a"}}, nil
 }
 func (*coreInfra) Logs(context.Context, string, infra.LogQuery) ([]infra.LogLine, error) {
 	return nil, nil

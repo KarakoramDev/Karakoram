@@ -208,15 +208,16 @@ type MemberStatus struct {
 	PlacementGroup string      `json:"placementGroup,omitempty"`
 	// PublicHost is the member's public "host:port" when exposure is enabled.
 	PublicHost string `json:"publicHost,omitempty"`
-	// Resources are the infrastructure resources currently allocated to the
-	// member's container as reported by the backend.
+	// Resources are what the member's container currently has, as read by its
+	// agent, with effective autoscaling filling values the agent did not report.
 	Resources *ObservedResources `json:"resources,omitempty"`
 	// Autoscaling contains effective runtime bounds read from Zerops service
 	// configuration, independently of desired spec and current allocation.
 	Autoscaling *Resources `json:"autoscaling,omitempty"`
 }
 
-// ObservedResources are resources currently allocated by the infrastructure.
+// ObservedResources are the CPU cores, memory (GiB), and runtime root disk
+// (GiB) a container currently has.
 type ObservedResources struct {
 	CPUCores float64 `json:"cpuCores"`
 	MemoryGB float64 `json:"memoryGB"`

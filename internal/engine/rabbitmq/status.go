@@ -5,6 +5,7 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -71,7 +72,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Autoscaling = &copy
 		}
 		st, e := p.agentStatus(ctx, rc, m.Name)
+		var allocated *agentapi.ContainerResources
 		if e == nil {
+			allocated = st.Resources
 			ms.Agent = domain.AgentStatus{Healthy: running(st), ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
@@ -122,11 +125,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				if c.Status != "ACTIVE" && c.Status != "RUNNING" {
 					ms.Health = false
 				}
-				if ms.Resources == nil && c.Resources != nil {
-					copy := *c.Resources
-					ms.Resources = &copy
-				}
 			}
+			ms.Resources = engine.MemberResources(allocated, ms.Autoscaling)
 		}
 		if m.PublicPort > 0 {
 			ip := project.PublicIPv6

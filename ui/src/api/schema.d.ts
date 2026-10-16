@@ -2642,7 +2642,7 @@ export type components = {
             readonly publicHost?: string;
             /** Format: int64 */
             ramUsageBytes?: number;
-            /** @description Infrastructure resources currently allocated to the member container. */
+            /** @description CPU, memory, and root disk the member container currently has. Each value comes from the member agent's live reading of its container (cgroup CPU set and quota, cgroup memory limit, root filesystem size) when the agent is reachable and reports it; otherwise from the service's effective vertical autoscaling (start or minimum CPU, minimum RAM, minimum root disk). Absent when neither is known. */
             readonly resources?: components["schemas"]["ObservedResources"];
             /**
              * @description Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
@@ -2727,13 +2727,13 @@ export type components = {
             /** @description New description; an empty string clears the description. */
             description: string;
         };
-        /** @description Current infrastructure allocation, distinct from desired autoscaling limits. */
+        /** @description Current container allocation, distinct from desired autoscaling limits. */
         ObservedResources: {
-            /** @description Allocated CPU cores. */
+            /** @description Usable CPU cores. */
             cpuCores: number;
-            /** @description Allocated disk capacity in GB. */
+            /** @description Runtime root disk size in GiB, not the persistent database volume. */
             diskGB: number;
-            /** @description Allocated memory in GB. */
+            /** @description Memory limit in GiB. */
             memoryGB: number;
         };
         /** @description Client secret is write-only; omission on update retains the stored secret. */

@@ -325,7 +325,7 @@ func (a *nodeAgent) handler() http.Handler {
 		a.mu.RLock()
 		version := a.version
 		a.mu.RUnlock()
-		respond(w, agentapi.Status{Processes: states, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds())}, err)
+		respond(w, agentapi.Status{Processes: states, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, err)
 	})
 	mux.HandleFunc("POST /v1/reload", func(w http.ResponseWriter, r *http.Request) {
 		changed, err := a.reload(r.Context())

@@ -71,6 +71,21 @@ type Status struct {
 	HostFingerprint string                   `json:"hostFingerprint"`
 	Maintenance     bool                     `json:"maintenance"`
 	UptimeSeconds   int64                    `json:"uptimeSeconds"`
+	// Resources is what the container can currently use, read at request
+	// time. Nil from agents that predate the field or could read nothing.
+	Resources *ContainerResources `json:"resources,omitempty"`
+}
+
+// ContainerResources reports the CPU, memory, and root disk a member
+// container currently has. Zero means the value could not be read.
+type ContainerResources struct {
+	// CPUCores are usable cores: the effective cgroup cpuset size, capped by
+	// a cpu.max quota when one is set.
+	CPUCores float64 `json:"cpuCores"`
+	// MemoryBytes is the cgroup memory limit, or MemTotal without one.
+	MemoryBytes uint64 `json:"memoryBytes"`
+	// RootDiskBytes is the size of the filesystem mounted at /.
+	RootDiskBytes uint64 `json:"rootDiskBytes"`
 }
 
 // ProcessStatus describes one supervised child process.

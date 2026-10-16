@@ -122,7 +122,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Autoscaling = &r
 		}
 		st, e := agentStatus(ctx, rc, m.Name)
+		var allocated *agentapi.ContainerResources
 		if e == nil {
+			allocated = st.Resources
 			ms.Agent = domain.AgentStatus{Healthy: running(st, m.Role), ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
 			ms.Version = st.EngineVersion
 			ms.Uptime = st.UptimeSeconds
@@ -160,11 +162,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				if container.Status != "ACTIVE" && container.Status != "RUNNING" {
 					ms.Health = false
 				}
-				if ms.Resources == nil && container.Resources != nil {
-					r := *container.Resources
-					ms.Resources = &r
-				}
 			}
+			ms.Resources = engine.MemberResources(allocated, ms.Autoscaling)
 		}
 		if m.PublicPort > 0 {
 			ip := project.PublicIPv6

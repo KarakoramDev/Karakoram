@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -87,6 +88,34 @@ func TestCreateThreeMembersBootstrapsOnceAndJoins(t *testing.T) {
 	status, err := p.Status(ctx, rc)
 	if err != nil || status.Phase != domain.PhaseReady || len(status.Members) != 3 {
 		t.Fatalf("status: %+v %v", status, err)
+	}
+}
+
+func TestStatusReportsAgentResourcesWithAutoscalingFallback(t *testing.T) {
+	p, rc, f, a := setup(t)
+	ready(t, p, rc)
+	bounds := domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 2, MinDisk: 5, MaxDisk: 10}
+	for _, service := range f.services {
+		service.Resources = bounds
+	}
+	resources := func(name string) *domain.ObservedResources {
+		t.Helper()
+		status, err := p.Status(context.Background(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.IndexFunc(status.Members, func(m domain.MemberStatus) bool { return m.Name == name })
+		if i < 0 {
+			t.Fatalf("member %s missing: %+v", name, status.Members)
+		}
+		return status.Members[i].Resources
+	}
+	if r := resources("demom0"); r == nil || *r != (domain.ObservedResources{CPUCores: 1, MemoryGB: 1, DiskGB: 5}) {
+		t.Fatalf("agent without a resource reading must fall back to effective autoscaling: %+v", r)
+	}
+	a.broker("demom0").resources = &agentapi.ContainerResources{CPUCores: 2, MemoryBytes: 2 << 30, RootDiskBytes: 5 << 30}
+	if r := resources("demom0"); r == nil || *r != (domain.ObservedResources{CPUCores: 2, MemoryGB: 2, DiskGB: 5}) {
+		t.Fatalf("agent reading must win: %+v", r)
 	}
 }
 

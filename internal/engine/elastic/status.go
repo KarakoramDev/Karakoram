@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
@@ -218,6 +219,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				}
 			}
 		}
+		var allocated *agentapi.ContainerResources
 		if s.Suspended {
 			ms.State = "suspended"
 			ms.Health = false
@@ -225,6 +227,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		} else if a, e := p.agentClient(ctx, rc, m.Name); e == nil {
 			status, e := a.Status(ctx)
 			if e == nil {
+				allocated = status.Resources
 				ms.Agent = domain.AgentStatus{Healthy: strings.EqualFold(status.Processes[product(m)].State, "running"), ConfigVersion: status.ConfigVersion, LastSeen: now(rc)}
 				ms.Uptime = status.UptimeSeconds
 				ms.DiskUsage = float64(status.Disk.UsedBytes)
@@ -256,13 +259,11 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				if !strings.EqualFold(container.Status, "ACTIVE") && !strings.EqualFold(container.Status, "RUNNING") {
 					ms.Health = false
 				}
-				if ms.Resources == nil {
-					ms.Resources = container.Resources
-				}
 				if ms.PlacementGroup == "" {
 					ms.PlacementGroup = container.PlacementGroup
 				}
 			}
+			ms.Resources = engine.MemberResources(allocated, ms.Autoscaling)
 		}
 		ms.Health = ms.Health && ms.Agent.Healthy
 		if m.Removing && !s.Suspended {
