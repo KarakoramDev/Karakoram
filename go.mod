@@ -6,7 +6,7 @@ require (
 	github.com/casbin/casbin/v2 v2.123.0
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-oidc/v3 v3.14.1
-	github.com/getkin/kin-openapi v0.144.0
+	github.com/getkin/kin-openapi v0.149.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/oapi-codegen/runtime v1.1.1
@@ -58,7 +58,7 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
