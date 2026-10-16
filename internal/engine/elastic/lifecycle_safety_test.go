@@ -484,6 +484,20 @@ func TestReplaceUnavailableMemberObservesReplacementJoin(t *testing.T) {
 	if f.services["demon0"] != nil || f.services["demon0v"] != nil {
 		t.Fatal("old member was not retired")
 	}
+	found := false
+	for _, specs := range f.imports {
+		for _, spec := range specs {
+			if spec.Hostname == s.find(newName).Volume {
+				found = true
+				if spec.SpreadReplaces != "demon0v" || spec.SpreadGroup != rc.Cluster.Name {
+					t.Fatalf("replacement spread group = %q, replaces = %q", spec.SpreadGroup, spec.SpreadReplaces)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("replacement volume was not imported")
+	}
 }
 
 func TestMissingAllocationRowRequiresAbsentNode(t *testing.T) {

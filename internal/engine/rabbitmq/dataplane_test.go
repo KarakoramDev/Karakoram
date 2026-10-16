@@ -18,6 +18,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 )
 
 type accessAgentDialer struct {
@@ -115,6 +116,7 @@ func TestAccessPlacementAndLogs(t *testing.T) {
 	}))
 	defer srv.Close()
 	rc, _ := accessContext(t, srv, "disabled", "brokersm0")
+	rc.Backend = fake.New(fake.Options{})
 	rc.Agents = accessAgentDialer{url: srv.URL, ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})}
 	rc.Cluster.Internal = json.RawMessage(`{"members":[{"name":"brokersm0","index":0,"stage":"ready"},{"name":"brokersm1","index":1,"stage":"ready"},{"name":"brokersm2","index":2,"stage":"planned"}]}`)
 	p := New(Options{})

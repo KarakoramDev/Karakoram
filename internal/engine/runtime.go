@@ -106,9 +106,9 @@ func RuntimeServiceSpec(l infra.Layout, m MemberService) infra.ServiceSpec {
 }
 
 // VolumeServiceSpec returns the import spec of a member's persistent volume
-// sized by the disk bounds of r.
+// sized by the disk bounds of r, spread across the cluster's placement group.
 func VolumeServiceSpec(cluster, member, volume, token string, r domain.Resources) infra.ServiceSpec {
-	return infra.ServiceSpec{Hostname: volume, Kind: infra.KindVolume, Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: OwnershipEnv(cluster, member, token), Vars: OwnerVars(token, cluster, member, volume)}
+	return infra.ServiceSpec{Hostname: volume, Kind: infra.KindVolume, Resources: domain.Resources{MinDisk: r.MinDisk, MaxDisk: r.MaxDisk}, Env: OwnershipEnv(cluster, member, token), Vars: OwnerVars(token, cluster, member, volume), SpreadGroup: cluster}
 }
 
 // MountsVolume reports whether an observed runtime records exactly volume's
@@ -119,12 +119,12 @@ func MountsVolume(b infra.Backend, runtime *infra.Service, volume string) bool {
 
 // RequirePublicTCP refuses public TCP exposure the backend cannot provide or
 // whose allowlist it cannot enforce.
-func RequirePublicTCP(b infra.Backend, allowlist []string) error {
+func RequirePublicTCP(b infra.Backend, exposure domain.Exposure) error {
 	c := b.Capabilities()
 	if !c.PublicTCP {
 		return fmt.Errorf("%w: backend %s does not provide public TCP access", ErrNotSupported, b.Name())
 	}
-	if len(allowlist) > 0 && !c.TCPAllowlist {
+	if exposureNeedsTCPAllowlist(exposure) && !c.TCPAllowlist {
 		return fmt.Errorf("%w: backend %s cannot enforce a public TCP allowlist", ErrNotSupported, b.Name())
 	}
 	return nil

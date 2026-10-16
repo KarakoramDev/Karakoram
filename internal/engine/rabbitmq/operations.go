@@ -102,6 +102,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			if e != nil {
 				return result, e
 			}
+			m.ReplacesVolume = old.Volume
 			cp.NewMember = m.Name
 			cp.Stage = "join"
 			s.ReplaceActive = true

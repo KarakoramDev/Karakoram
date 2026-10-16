@@ -90,7 +90,7 @@ func (s *Server) namespaceResponse(ctx context.Context, r *namespaces.Registry, 
 	if err != nil {
 		return s.namespaceFailure(err)
 	}
-	return response{status: status, body: namespaceAPI(n, count, s.namespaceCapabilities(n.Backend)), noStore: true}
+	return response{status: status, body: namespaceAPI(n, count, s.namespaceCapabilities(n.Name, n.Backend)), noStore: true}
 }
 func (s *Server) ListNamespaces(ctx context.Context, request api.ListNamespacesRequestObject) (api.ListNamespacesResponseObject, error) {
 	r, err := s.namespaceRegistry()
@@ -111,7 +111,7 @@ func (s *Server) ListNamespaces(ctx context.Context, request api.ListNamespacesR
 		if err != nil {
 			return s.namespaceFailure(err), nil
 		}
-		items = append(items, namespaceAPI(n, count, s.namespaceCapabilities(n.Backend)))
+		items = append(items, namespaceAPI(n, count, s.namespaceCapabilities(n.Name, n.Backend)))
 	}
 	return listResponse(s, ctx, items, nil), nil
 }
@@ -194,7 +194,12 @@ func (s *Server) namespaceMutation(ctx context.Context, name string, in input) r
 	return s.namespaceResponse(ctx, r, n, status)
 }
 
-func (s *Server) namespaceCapabilities(kind string) infra.Capabilities {
+func (s *Server) namespaceCapabilities(namespace, kind string) infra.Capabilities {
+	if s.namespaces != nil {
+		if backend, err := s.namespaces.Backend(domain.NormalizedNamespace(namespace)); err == nil && backend != nil {
+			return backend.Capabilities()
+		}
+	}
 	if kind == "" {
 		kind = "zerops"
 	}

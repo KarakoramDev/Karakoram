@@ -37,6 +37,11 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	live := map[string]bool{rc.Cluster.Name: true}
 	for _, cluster := range clusters {
 		live[cluster.Name] = true
+		if cluster.Spec.Provider != p.Name() {
+			// Other engines' state has a different shape; their routes are
+			// reserved through ListPublicPorts above.
+			continue
+		}
 		state, e := load(&cluster)
 		if e != nil {
 			return 0, e

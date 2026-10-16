@@ -78,9 +78,11 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Agent = domain.AgentStatus{Healthy: running(st), ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
-			ms.PlacementGroup = st.HostFingerprint
-			if st.HostFingerprint != "" {
-				v.Placement.Groups[st.HostFingerprint] = append(v.Placement.Groups[st.HostFingerprint], m.Name)
+			if !rc.Backend.Capabilities().Placement {
+				ms.PlacementGroup = st.HostFingerprint
+				if st.HostFingerprint != "" {
+					v.Placement.Groups[st.HostFingerprint] = append(v.Placement.Groups[st.HostFingerprint], m.Name)
+				}
 			}
 		} else {
 			ms.Agent.Message = e.Error()
@@ -124,6 +126,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			for _, c := range containers {
 				if c.Status != infra.ContainerActive && c.Status != infra.ContainerRunning {
 					ms.Health = false
+				}
+				if rc.Backend.Capabilities().Placement && c.PlacementGroup != "" {
+					ms.PlacementGroup = c.PlacementGroup
 				}
 			}
 			ms.Resources = engine.MemberResources(allocated, ms.Autoscaling)
@@ -182,7 +187,18 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	condition("Healthy", allHealthy, "ObservedMembers")
 	condition("Alarms", alarms, "MemoryOrDisk")
 	condition("Partition", partition, "ClusterMembership")
-	v.Conditions = append(v.Conditions, domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)})
+	placementCondition := domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)}
+	if rc.Backend.Capabilities().Placement {
+		v.Placement, err = p.Placement(ctx, rc)
+		if err != nil {
+			return v, err
+		}
+		placementCondition.Status, placementCondition.Reason, placementCondition.Message = "True", "BackendReported", v.Placement.Warning
+		if len(v.Placement.Groups["unknown"]) > 0 {
+			placementCondition.Status, placementCondition.Reason = "Unknown", "BackendPlacementUnavailable"
+		}
+	}
+	v.Conditions = append(v.Conditions, placementCondition)
 	for _, m := range ordered(s) {
 		if m.RemovalBlocked != "" {
 			v.Conditions = append(v.Conditions, domain.Condition{Type: "MemberRemovalBlocked", Status: "True", Reason: "UnsafeRemoval", Message: m.RemovalBlocked, LastTransitionTime: now(rc)})

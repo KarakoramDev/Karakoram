@@ -85,7 +85,7 @@ func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bo
 			}
 			continue
 		}
-		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure.Allowlist); err != nil {
+		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
 			return true, err
 		}
 		if m.PublicPort == 0 {

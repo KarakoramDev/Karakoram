@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var zeropsLayout = infra.Layout{AppDir: "/var/www", VolumeRoot: "/mnt", User: "zerops"}
+var zeropsLayout = infra.Layout{AppDir: "/var/www", VolumeRoot: "/mnt", User: "zerops", PrivateAddressFamily: infra.AddressFamilyIPv6}
 var zeropsCapabilities = infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true, DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true, DedicatedCPU: true, HorizontalScaling: true}
 
 // RenderYAML translates a neutral runtime description into a Zerops deployment.

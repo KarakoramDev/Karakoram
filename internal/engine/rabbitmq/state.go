@@ -38,8 +38,10 @@ type internalState struct {
 	DistributionSet bool                      `json:"distributionSet"`
 }
 type member struct {
-	Name                    string                  `json:"name"`
-	Volume                  string                  `json:"volume"`
+	Name   string `json:"name"`
+	Volume string `json:"volume"`
+	// ReplacesVolume preserves the replacement placement hint across reconciles.
+	ReplacesVolume          string                  `json:"replacesVolume,omitempty"`
 	Index                   int                     `json:"index"`
 	Stage                   string                  `json:"stage"`
 	ServiceID               string                  `json:"serviceId,omitempty"`

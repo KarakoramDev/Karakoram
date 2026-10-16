@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// Private-network address families used by backend member DNS.
+const (
+	AddressFamilyIPv6 = "ipv6"
+	AddressFamilyIPv4 = "ipv4"
+)
+
 // Layout describes where a backend's runtimes place the deployed artifact and
 // mounted volumes, and which unprivileged user runs the start command.
 // Prepare commands may use passwordless sudo on every backend.
@@ -22,6 +28,9 @@ type Layout struct {
 	VolumeRoot string `json:"volumeRoot"`
 	// User owns AppDir and runs the start command.
 	User string `json:"user"`
+	// PrivateAddressFamily is the address family resolved by private member
+	// hostnames. Empty means IPv6 for compatibility with existing runtimes.
+	PrivateAddressFamily string `json:"privateAddressFamily,omitempty"`
 }
 
 // VolumePath returns the mount path of a volume service.

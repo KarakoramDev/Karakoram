@@ -33,7 +33,7 @@ func RuntimeSpec(layout infra.Layout, in RuntimeInput) (infra.RuntimeSpec, error
 	if in.Volume != "" && !ValidHostname(in.Volume) {
 		return infra.RuntimeSpec{}, errors.New("deployment requires a valid volume hostname")
 	}
-	prepare := prepareCommands(in.Component, in.Version, layout.User)
+	prepare := PrepareCommands(in.Component, in.Version, layout.User)
 	if len(prepare) == 0 {
 		return infra.RuntimeSpec{}, errors.New("deployment requires a valid Elastic component and exact version")
 	}

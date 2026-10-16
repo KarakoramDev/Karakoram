@@ -104,7 +104,9 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 			continue
 		}
 		if volume {
-			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, rc.Cluster.Spec.Components.Engine.Resources))
+			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, rc.Cluster.Spec.Components.Engine.Resources)
+			spec.SpreadReplaces = m.ReplacesVolume
+			specs = append(specs, spec)
 		} else {
 			specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{
 				Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume,

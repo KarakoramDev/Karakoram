@@ -90,6 +90,15 @@ type ServiceSpec struct {
 	// Volume names the volume service a runtime mounts at
 	// Layout.VolumePath(Volume).
 	Volume string `json:"volume,omitempty"`
+	// SpreadGroup names an anti-affinity group of volume services, e.g. one
+	// replica set. Backends with Capabilities.Placement place the volumes of
+	// one group (and the runtimes mounting them) on distinct hosts while
+	// enough hosts exist; other backends ignore it.
+	SpreadGroup string `json:"spreadGroup,omitempty"`
+	// SpreadReplaces is the hostname of a volume service in the same
+	// SpreadGroup that this volume replaces. Placement-aware backends ignore
+	// the replaced volume when choosing hosts, so the new volume may take its host.
+	SpreadReplaces string `json:"spreadReplaces,omitempty"`
 }
 
 // Service describes an observed infrastructure service.

@@ -160,3 +160,15 @@ func TestImportedServiceIDUsesImportEvidenceNotHostname(t *testing.T) {
 		})
 	}
 }
+
+func TestMaskedOwnershipRecoveryIsBackendNeutral(t *testing.T) {
+	err := UnverifiedOwnership(&infra.Service{Hostname: "member", Masked: true})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("ownership error = %v", err)
+	}
+	for _, text := range []string{"namespace backend masks", "delete the service in the namespace backend", "credentials that can read sensitive variables", "sudo-mode token on Zerops"} {
+		if !strings.Contains(err.Error(), text) {
+			t.Fatalf("recovery instructions missing %q: %v", text, err)
+		}
+	}
+}

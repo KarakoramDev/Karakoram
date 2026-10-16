@@ -307,6 +307,9 @@ func TestRuntimeSpecAndConfig(t *testing.T) {
 		t.Fatal(e)
 	}
 	spec := p.runtimeSpec(rc, m, "8.0.29-13")
+	if !reflect.DeepEqual(spec.Prepare, PrepareCommands("8.0.29-13")) {
+		t.Fatal("exported prepare commands differ from member deployment")
+	}
 	if spec.Base != infra.BaseUbuntu2404 || !reflect.DeepEqual(spec.Ports, []infra.Port{{Port: 27017, Protocol: "tcp"}}) ||
 		!reflect.DeepEqual(spec.Args, []string{"agent"}) || spec.Volume != m.Volume || !spec.StopBeforeStart {
 		t.Fatalf("unexpected runtime: %+v", spec)

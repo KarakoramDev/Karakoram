@@ -61,7 +61,7 @@ func TestRuntimeAndVolumeServiceSpec(t *testing.T) {
 		t.Fatalf("runtime: %+v want %+v", got, want)
 	}
 	v := VolumeServiceSpec("cluster", "member", "volume", "token", resources)
-	wantVolume := infra.ServiceSpec{Hostname: "volume", Kind: infra.KindVolume, Resources: domain.Resources{MinDisk: 5, MaxDisk: 10}, Env: OwnershipEnv("cluster", "member", "token"), Vars: OwnerVars("token", "cluster", "member", "volume")}
+	wantVolume := infra.ServiceSpec{Hostname: "volume", Kind: infra.KindVolume, Resources: domain.Resources{MinDisk: 5, MaxDisk: 10}, Env: OwnershipEnv("cluster", "member", "token"), Vars: OwnerVars("token", "cluster", "member", "volume"), SpreadGroup: "cluster"}
 	if !reflect.DeepEqual(v, wantVolume) {
 		t.Fatalf("volume: %+v want %+v", v, wantVolume)
 	}
@@ -117,8 +117,8 @@ func TestCapabilityRequirements(t *testing.T) {
 					t.Fatalf("capability error=%v supported=%v", err, want)
 				}
 			}
-			check(RequirePublicTCP(b, nil), tc.tcp)
-			check(RequirePublicTCP(b, []string{"192.0.2.0/24"}), tc.allowlist)
+			check(RequirePublicTCP(b, domain.Exposure{}), tc.tcp)
+			check(RequirePublicTCP(b, domain.Exposure{Allowlist: []string{"192.0.2.0/24"}}), tc.allowlist)
 			sub, err := PublicHTTPS(b)
 			check(err, tc.https)
 			if tc.https && sub == nil || !tc.https && sub != nil {

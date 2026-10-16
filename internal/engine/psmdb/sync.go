@@ -172,7 +172,13 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		}
 		if v == nil {
 			r := component(rc.Cluster.Spec, m).Resources
-			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, r))
+			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, r)
+			spec.SpreadReplaces = m.ReplacesVolume
+			if rc.Cluster.Spec.Topology.Type != "replicaSet" {
+				// Each replica set needs its own host separation, including config servers.
+				spec.SpreadGroup = rc.Cluster.Name + "/" + m.Set
+			}
+			specs = append(specs, spec)
 		} else {
 			if err := verifyServiceOwnership(ctx, rc, m, v, true); err != nil {
 				return err
@@ -263,7 +269,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	replication func(context.Context, *engine.Context, *internalState, *member) (mongoadmin.Status, error),
 ) (result engine.Result, err error) {
 	if rc.Cluster.Spec.Exposure.Public {
-		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure.Allowlist); err != nil {
+		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
 			return result, err
 		}
 	}
@@ -792,7 +798,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			continue
 		}
 		if ex.Public {
-			if err := engine.RequirePublicTCP(rc.Backend, ex.Allowlist); err != nil {
+			if err := engine.RequirePublicTCP(rc.Backend, ex); err != nil {
 				return result, err
 			}
 			port, err := p.allocatePublicPort(ctx, rc, s, m)

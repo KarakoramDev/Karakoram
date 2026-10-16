@@ -31,6 +31,57 @@ func TestCgroupSchedulerLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestDistributionAddressFamilies(t *testing.T) {
+	for _, ipv4 := range []bool{false, true} {
+		for _, tls := range []bool{false, true} {
+			t.Run(fmt.Sprintf("ipv4=%t/tls=%t", ipv4, tls), func(t *testing.T) {
+				s := testSpec()
+				s.IPv4Distribution, s.InterNodeTLS = ipv4, tls
+				files, env := render("/data", s, memberConfig(s))
+				proto := "inet6_tcp"
+				if ipv4 {
+					proto = "inet_tcp"
+				}
+				if tls {
+					proto = "inet6_tls"
+					if ipv4 {
+						proto = "inet_tls"
+					}
+				}
+				want := "-proto_dist " + proto
+				if tls {
+					want += " -ssl_dist_optfile /data/karakoram/inter_node_tls.config"
+				}
+				server, ctl := false, false
+				for _, entry := range env {
+					if strings.HasPrefix(entry, "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=") {
+						server = true
+						if entry != "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="+want {
+							t.Fatalf("server distribution arguments do not select %s", proto)
+						}
+					}
+					if strings.HasPrefix(entry, "RABBITMQ_CTL_ERL_ARGS=") {
+						ctl = true
+						if !strings.HasSuffix(entry, " "+want) || strings.Count(entry, "-proto_dist") != 1 {
+							t.Fatalf("CLI distribution arguments do not select %s once", proto)
+						}
+					}
+				}
+				if !server || !ctl {
+					t.Fatal("both broker and CLI must receive distribution arguments")
+				}
+				for _, file := range files {
+					if file.name == "inter_node_tls.config" || file.name == "advanced.config" {
+						if strings.Contains(file.content, "inet6") {
+							t.Fatal("TLS options must not force IPv6 independently of distribution arguments")
+						}
+					}
+				}
+			})
+		}
+	}
+}
 func TestCLIEnvironmentDoesNotInheritSecrets(t *testing.T) {
 	t.Setenv("KARAKORAM_AGENT_TOKEN", "must-not-leak")
 	t.Setenv("UNRELATED_SECRET", "also-private")

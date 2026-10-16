@@ -89,7 +89,7 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 		}{rc.Cluster.Spec.Exposure, target})
 		if m.PublicHash != desired {
 			if rc.Cluster.Spec.Exposure.Public {
-				if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure.Allowlist); err != nil {
+				if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
 					return false, err
 				}
 				if m.PublicPort == 0 {

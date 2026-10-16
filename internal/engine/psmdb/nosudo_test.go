@@ -199,6 +199,9 @@ func TestFreshImportCarriesRuntimeAndVolumeOwnerVariables(t *testing.T) {
 		t.Fatal("missing runtime or volume import")
 	}
 	for _, spec := range f.imports[0] {
+		if spec.Kind == infra.KindVolume && spec.SpreadGroup != rc.Cluster.Name {
+			t.Fatal("replica-set volume does not use the cluster spread group", spec.Hostname)
+		}
 		if got := spec.Vars[engine.OwnerVariable]; got != engine.OwnerMarker(token.Token, rc.Cluster.Name, m.Name, spec.Hostname) {
 			t.Errorf("missing non-sensitive marker for %s", spec.Hostname)
 		}

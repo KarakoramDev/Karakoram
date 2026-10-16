@@ -291,6 +291,9 @@ func TestRuntimeSpecAndMemberConfigTLSModes(t *testing.T) {
 						t.Fatalf("port mismatch: %+v", port)
 					}
 				}
+				if !slices.Equal(runtime.Prepare, PrepareCommands("4.3.5")) {
+					t.Fatal("exported prepare commands differ from member deployment")
+				}
 				for _, want := range []string{"rabbitmq-server=4.3.5-1", "1:27.3.4.17-1", "policy-rc.d", "deb1.rabbitmq.com", "deb2.rabbitmq.com"} {
 					if !strings.Contains(strings.Join(runtime.Prepare, "\n"), want) {
 						t.Errorf("missing %q in prepare: %v", want, runtime.Prepare)

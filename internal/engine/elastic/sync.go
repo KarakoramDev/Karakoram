@@ -272,7 +272,15 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 			return err
 		}
 		if volume == nil {
-			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, comp.Resources))
+			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, comp.Resources)
+			if old := s.find(m.Replaces); old != nil {
+				spec.SpreadReplaces = old.Volume
+			}
+			if rc.Cluster.Spec.Topology.Type == "dedicatedMasters" {
+				// Spread the master quorum and data replicas independently.
+				spec.SpreadGroup = rc.Cluster.Name + "/" + m.Kind
+			}
+			specs = append(specs, spec)
 		}
 	}
 	service, err := rc.Backend.GetService(ctx, m.Name)

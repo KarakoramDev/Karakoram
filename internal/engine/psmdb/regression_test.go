@@ -332,6 +332,24 @@ func TestProjectPortAllocationIncludesExternalRoutes(t *testing.T) {
 	}
 }
 
+func TestPortAllocationSkipsOtherEnginesState(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	other := &domain.Cluster{Name: "broker", Spec: domain.ClusterSpec{Provider: "rabbitmq"}, Internal: json.RawMessage(`{"nextIndex":1,"members":[]}`)}
+	if err := rc.Store.(*store.Store).CreateCluster(context.Background(), other); err != nil {
+		t.Fatal(err)
+	}
+	peer := &domain.Cluster{Name: "peer", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"nextIndex":{"rs0":1},"members":[{"name":"peerm0","publicPort":27017}]}`)}
+	if err := rc.Store.(*store.Store).CreateCluster(context.Background(), peer); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := load(rc.Cluster)
+	plan(rc.Cluster, s)
+	port, err := p.allocatePublicPort(context.Background(), rc, s, s.Members[0])
+	if err != nil || port != 27018 {
+		t.Fatalf("allocation across engines: %d %v", port, err)
+	}
+}
+
 func TestShardedExposureRemovesInternalRoutesAndPublishesOnlyRouter(t *testing.T) {
 	p, rc, f, _ := setup(t)
 	rc.Cluster.Spec.Topology = domain.Topology{Type: "sharded", Shards: 1}

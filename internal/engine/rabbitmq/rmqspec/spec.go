@@ -29,6 +29,9 @@ type MemberSpec struct {
 	DiskFreeLimitBytes       int64  `json:"diskFreeLimitBytes"`
 	DefaultQueueType         string `json:"defaultQueueType"`
 	InterNodeTLS             bool   `json:"interNodeTls"`
+	// IPv4Distribution selects IPv4 Erlang distribution; omitted keeps the
+	// legacy IPv6 transport and serialized member specifications unchanged.
+	IPv4Distribution bool `json:"ipv4Distribution,omitempty"`
 }
 
 type EmptyRequest struct{}

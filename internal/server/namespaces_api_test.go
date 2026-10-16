@@ -8,11 +8,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
@@ -341,5 +344,141 @@ func TestClusterAdmissionChecksNamespaceBackendCapabilities(t *testing.T) {
 	c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Namespace: "limited", Name: "private"})
 	if err != nil || c.Spec.Exposure.Public || c.Generation != 1 {
 		t.Fatalf("rejected update changed cluster: %+v %v", c, err)
+	}
+}
+
+// namespaceInstanceFactory models per-target HTTPS support while advertising
+// the backend's complete feature set in discovery.
+type namespaceInstanceFactory struct{}
+
+func (namespaceInstanceFactory) Info() infra.BackendInfo {
+	return infra.BackendInfo{Kind: "dokploy", DisplayName: "Dokploy", Capabilities: fakeBackend{}.Capabilities(), ConfigKeys: []string{"domainSuffix"}}
+}
+func (namespaceInstanceFactory) TargetFromEnv(func(string) string) (infra.Target, error) {
+	return infra.Target{}, nil
+}
+func (namespaceInstanceFactory) New(target infra.Target) (infra.Backend, error) {
+	caps := fakeBackend{}.Capabilities()
+	caps.PublicHTTPS = target.Config["domainSuffix"] != ""
+	return fake.New(fake.Options{Name: "dokploy", Project: infra.Project{ID: target.ID}, Capabilities: caps}), nil
+}
+func (f namespaceInstanceFactory) Validate(_ context.Context, target infra.Target) (infra.Backend, infra.Project, error) {
+	backend, err := f.New(target)
+	return backend, infra.Project{ID: target.ID}, err
+}
+
+func TestNamespaceCapabilitiesUseBackendInstance(t *testing.T) {
+	for _, https := range []bool{false, true} {
+		t.Run(map[bool]string{false: "no domain suffix", true: "domain suffix"}[https], func(t *testing.T) {
+			s, token := namespaceTestServer(t)
+			if err := s.Backends.Register(namespaceInstanceFactory{}); err != nil {
+				t.Fatal(err)
+			}
+			config := `{}`
+			if https {
+				config = `{"domainSuffix":"db.example.com"}`
+			}
+			w := call(s, http.MethodPost, "/api/v1/namespaces", `{"name":"target","backend":"dokploy","projectId":"environment","token":"credential","config":`+config+`}`, token)
+			if w.Code != http.StatusCreated {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			assertCapabilities := func(data []byte) {
+				t.Helper()
+				var n api.Namespace
+				if err := json.Unmarshal(data, &n); err != nil {
+					t.Fatal(err)
+				}
+				if got := slices.Contains(n.Capabilities, api.Capability("publicHttps")); got != https {
+					t.Fatalf("publicHttps = %t, want %t", got, https)
+				}
+			}
+			assertCapabilities(w.Body.Bytes())
+			w = call(s, http.MethodGet, "/api/v1/namespaces/target", "", token)
+			if w.Code != http.StatusOK {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			assertCapabilities(w.Body.Bytes())
+			w = call(s, http.MethodGet, "/api/v1/namespaces", "", token)
+			if w.Code != http.StatusOK {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			var list struct {
+				Items []api.Namespace `json:"items"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, n := range list.Items {
+				if n.Name == "target" {
+					found = true
+					if slices.Contains(n.Capabilities, api.Capability("publicHttps")) != https {
+						t.Fatal("namespace list reports static rather than instance capabilities")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("target namespace missing from list")
+			}
+		})
+	}
+}
+
+func TestClusterAdmissionUsesBackendInstanceCapabilities(t *testing.T) {
+	s, token := namespaceTestServer(t)
+	if err := s.Backends.Register(namespaceInstanceFactory{}); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	s.Registry, err = engine.NewRegistry(rabbitmq.New(rabbitmq.Options{Store: s.Store}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"nohttps", "https"} {
+		config := `{}`
+		if n == "https" {
+			config = `{"domainSuffix":"db.example.com"}`
+		}
+		w := call(s, http.MethodPost, "/api/v1/namespaces", `{"name":"`+n+`","backend":"dokploy","projectId":"`+n+`","token":"credential","config":`+config+`}`, token)
+		if w.Code != http.StatusCreated {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	publicSpec := `{"provider":"rabbitmq","tls":{"mode":"preferTLS"},"engineOptions":{"managementUI":{"public":true}}}`
+	assertUnsupported := func(method, path, body string) {
+		t.Helper()
+		w := call(s, method, path, body, token)
+		var result api.Error
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || w.Code != http.StatusBadRequest || result.Code != "invalid_request" || !strings.Contains(result.Message, "publicHttps") {
+			t.Fatalf("%s %s: %d %s (%v)", method, path, w.Code, w.Body.String(), err)
+		}
+	}
+	assertUnsupported(http.MethodPost, "/api/v1/clusters?namespace=nohttps", `{"name":"public","spec":`+publicSpec+`}`)
+	w := call(s, http.MethodPost, "/api/v1/clusters?namespace=https", `{"name":"public","spec":`+publicSpec+`}`, token)
+	if w.Code != http.StatusCreated {
+		t.Fatal("HTTPS-capable target rejected", w.Code, w.Body.String())
+	}
+	w = call(s, http.MethodPost, "/api/v1/clusters?namespace=nohttps", `{"name":"private","spec":{"provider":"rabbitmq","tls":{"mode":"preferTLS"}}}`, token)
+	if w.Code != http.StatusCreated {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	assertUnsupported(http.MethodPut, "/api/v1/clusters/private?namespace=nohttps", `{"spec":`+publicSpec+`}`)
+	assertUnsupported(http.MethodPatch, "/api/v1/clusters/private?namespace=nohttps", `{"spec":{"engineOptions":{"managementUI":{"public":true}}}}`)
+	c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Namespace: "nohttps", Name: "private"})
+	if err != nil || c.Generation != 1 {
+		t.Fatalf("rejected update changed cluster generation: %v", err)
+	}
+}
+
+func TestCapabilityLookupFallsBackWhenBackendUnavailable(t *testing.T) {
+	s, _, _ := testServer(t)
+	s.namespaces = unavailableNamespaces{}
+	if got := s.namespaceCapabilities(domain.DefaultNamespace, "zerops"); !got.PublicHTTPS {
+		t.Fatal("namespace capability fallback omitted factory HTTPS support")
+	}
+	p := rabbitmq.New(rabbitmq.Options{})
+	c := &domain.Cluster{Spec: domain.ClusterSpec{EngineOptions: json.RawMessage(`{"managementUI":{"public":true}}`)}}
+	if failure := s.validateBackendCapabilities(t.Context(), p, c); failure != nil {
+		t.Fatal("admission did not fall back to factory capabilities")
 	}
 }

@@ -105,7 +105,13 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 		return &r
 	}
 	info := factory.Info()
-	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, info.Capabilities); err != nil {
+	have := info.Capabilities
+	if s.namespaces != nil {
+		if backend, err := s.namespaces.Backend(namespace); err == nil && backend != nil {
+			have = backend.Capabilities()
+		}
+	}
+	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, have); err != nil {
 		r := fail(400, "invalid_request", err.Error())
 		return &r
 	}

@@ -99,16 +99,31 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		return domain.Placement{}, e
 	}
 	out := domain.Placement{Groups: map[string][]string{}}
-	warnings := []string{"The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance"}
+	var warnings []string
+	if !rc.Backend.Capabilities().Placement {
+		warnings = append(warnings, "The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance")
+	}
 	unknown := false
 	for _, m := range ordered(s) {
-		a, e := p.agent(ctx, rc, m.Name)
 		fingerprint := ""
-		if e == nil {
-			st, err := a.Status(ctx)
-			a.Close()
+		if rc.Backend.Capabilities().Placement {
+			containers, err := rc.Backend.Containers(ctx, m.Name)
 			if err == nil {
-				fingerprint = st.HostFingerprint
+				for _, container := range containers {
+					if container.PlacementGroup != "" {
+						fingerprint = container.PlacementGroup
+						break
+					}
+				}
+			}
+		} else {
+			a, err := p.agent(ctx, rc, m.Name)
+			if err == nil {
+				st, err := a.Status(ctx)
+				a.Close()
+				if err == nil {
+					fingerprint = st.HostFingerprint
+				}
 			}
 		}
 		if fingerprint == "" {
@@ -119,11 +134,19 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 	}
 	for k, g := range out.Groups {
 		if k != "unknown" && len(g) > 1 {
-			warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
+			if rc.Backend.Capabilities().Placement {
+				warnings = append(warnings, fmt.Sprintf("members %s are co-located", strings.Join(g, ", ")))
+			} else {
+				warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
+			}
 		}
 	}
 	if unknown {
-		warnings = append(warnings, "physical-host placement is unknown for some members")
+		if rc.Backend.Capabilities().Placement {
+			warnings = append(warnings, "backend placement is unknown for some members")
+		} else {
+			warnings = append(warnings, "physical-host placement is unknown for some members")
+		}
 	}
 	out.Warning = strings.Join(warnings, "; ")
 	return out, nil

@@ -130,7 +130,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.Version = st.EngineVersion
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
-			ms.PlacementGroup = st.HostFingerprint
+			if !rc.Backend.Capabilities().Placement {
+				ms.PlacementGroup = st.HostFingerprint
+			}
 		} else {
 			ms.Agent.Message = e.Error()
 			v.Conditions = append(v.Conditions, domain.Condition{Type: "Observation/" + m.Name, Status: "Unknown", Reason: "AgentUnavailable", Message: "Member " + m.Name + " runtime version and process health could not be observed: " + e.Error(), LastTransitionTime: now(rc)})
@@ -163,6 +165,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				if container.Status != infra.ContainerActive && container.Status != infra.ContainerRunning {
 					ms.Health = false
 				}
+				if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
+					ms.PlacementGroup = container.PlacementGroup
+				}
 			}
 			ms.Resources = engine.MemberResources(allocated, ms.Autoscaling)
 		}
@@ -192,7 +197,14 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	if e != nil {
 		return v, e
 	}
-	v.Conditions = append(v.Conditions, domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)})
+	placementCondition := domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)}
+	if rc.Backend.Capabilities().Placement {
+		placementCondition.Status, placementCondition.Reason = "True", "BackendReported"
+		if len(v.Placement.Groups["unknown"]) > 0 {
+			placementCondition.Status, placementCondition.Reason = "Unknown", "BackendPlacementUnavailable"
+		}
+	}
+	v.Conditions = append(v.Conditions, placementCondition)
 	health := "False"
 	if allHealthy {
 		health = "True"

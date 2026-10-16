@@ -55,7 +55,7 @@ func HasOwnership(s *infra.Service, agentToken, cluster, member string) bool {
 // operator how to recover instead of retrying silently.
 func UnverifiedOwnership(s *infra.Service) error {
 	if s.Masked && s.Ownership[OwnerVariable] == "" {
-		return fmt.Errorf("%w: service %s has no verified cluster ownership: it carries only sensitive ownership variables, which are masked for a Zerops token without sudo mode, and its ID was never recorded; delete the service in Zerops so Karakoram recreates it, or let one reconcile run with a sudo-mode token to record its ownership", ErrConflict, s.Hostname)
+		return fmt.Errorf("%w: service %s has no verified cluster ownership: it carries only sensitive ownership variables, which the namespace backend masks for the current credentials, and its ID was never recorded; delete the service in the namespace backend so Karakoram recreates it, or let one reconcile run with credentials that can read sensitive variables (a sudo-mode token on Zerops) to record its ownership", ErrConflict, s.Hostname)
 	}
 	return fmt.Errorf("%w: service %s has no verified cluster ownership", ErrConflict, s.Hostname)
 }

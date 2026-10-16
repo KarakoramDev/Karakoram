@@ -33,7 +33,7 @@ func TestRuntimeSpec(t *testing.T) {
 			if spec.Base != infra.BaseUbuntu2404 || !reflect.DeepEqual(spec.Args, []string{"agent"}) || !spec.StopBeforeStart || spec.Volume != tt.volume {
 				t.Fatal("runtime configuration", spec)
 			}
-			if !reflect.DeepEqual(spec.Prepare, prepareCommands(tt.component, in.Version, layout.User)) || !reflect.DeepEqual(spec.Ports, tt.ports) {
+			if !reflect.DeepEqual(spec.Prepare, PrepareCommands(tt.component, in.Version, layout.User)) || !reflect.DeepEqual(spec.Ports, tt.ports) {
 				t.Fatal("prepare or ports", spec)
 			}
 			wantEnv := map[string]string{"KARAKORAM_URL": in.AgentURL, "KARAKORAM_ENGINE": "elasticsearch", "KARAKORAM_CLUSTER": "demo", "KARAKORAM_MEMBER": tt.hostname, "KARAKORAM_INTERNAL_CA": in.InternalCAPEM, engine.DataDirVariable: layout.DataDir(tt.volume)}

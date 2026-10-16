@@ -19,6 +19,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
@@ -391,5 +392,55 @@ func TestRequireTLSRejectsPublicManagementCreateAndUpdate(t *testing.T) {
 				t.Fatalf("%s public management rejected: %v", mode, err)
 			}
 		}
+	}
+}
+
+type privateFamilyBackend struct {
+	infra.Backend
+	family string
+}
+
+func (b privateFamilyBackend) Layout() infra.Layout {
+	layout := b.Backend.Layout()
+	layout.PrivateAddressFamily = b.family
+	return layout
+}
+
+func TestMemberConfigDistributionAddressFamily(t *testing.T) {
+	p, rc, backend, _ := setup(t)
+	s := state(t, rc)
+	m := s.add(rc.Cluster.Name)
+	if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := p.MemberConfig(t.Context(), rc, m.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range []string{"", infra.AddressFamilyIPv6, infra.AddressFamilyIPv4} {
+		t.Run("family="+family, func(t *testing.T) {
+			rc.Backend = privateFamilyBackend{Backend: backend, family: family}
+			config, err := p.MemberConfig(t.Context(), rc, m.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec rmqspec.MemberSpec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if spec.IPv4Distribution != (family == infra.AddressFamilyIPv4) {
+				t.Fatal("backend private address family was not propagated")
+			}
+			if family != infra.AddressFamilyIPv4 {
+				if strings.Contains(string(config.EngineSpec), "ipv4Distribution") || hash(config.EngineSpec) != hash(legacy.EngineSpec) {
+					t.Fatal("legacy/Zerops member specification hash changed")
+				}
+			} else if hash(config.EngineSpec) == hash(legacy.EngineSpec) {
+				t.Fatal("IPv4 transport must change the member specification hash")
+			}
+		})
 	}
 }

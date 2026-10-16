@@ -27,14 +27,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
-func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (infra.RuntimeSpec, error) {
-	if !slices.ContainsFunc(catalog.Versions, func(v domain.VersionInfo) bool { return v.Version == version }) {
-		return infra.RuntimeSpec{}, invalid("unsupported engine version %q", version)
-	}
-	agentURL := rc.AgentURL
-	if agentURL == "" {
-		agentURL = p.options.ControlPlaneURL
-	}
+// PrepareCommands returns the installation commands used by member deployments
+// for a supported RabbitMQ version and its catalog-pinned Erlang runtime.
+func PrepareCommands(version string) []string {
 	prepare := []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg", "curl -fsSL https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA | sudo gpg --dearmor -o /usr/share/keyrings/com.rabbitmq.team.gpg"}
 	sources := []string{}
 	for _, mirror := range []string{"deb1", "deb2"} {
@@ -52,6 +47,18 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (i
 		packages = append(packages, "erlang-"+pkg+"="+catalog.ErlangVersion)
 	}
 	prepare = append(prepare, "sudo apt-get install -y --no-install-recommends "+strings.Join(packages, " "))
+	return prepare
+}
+
+func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (infra.RuntimeSpec, error) {
+	if !slices.ContainsFunc(catalog.Versions, func(v domain.VersionInfo) bool { return v.Version == version }) {
+		return infra.RuntimeSpec{}, invalid("unsupported engine version %q", version)
+	}
+	agentURL := rc.AgentURL
+	if agentURL == "" {
+		agentURL = p.options.ControlPlaneURL
+	}
+	prepare := PrepareCommands(version)
 	options, err := parseOptions(m.EngineOptions)
 	if err != nil {
 		return infra.RuntimeSpec{}, err
@@ -279,6 +286,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		r = runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
 	}
 	spec := rmqspec.MemberSpec{NodeName: "rabbit@" + name, Peers: peers, Cookie: string(cookie), Version: m.DesiredVersion, Plugins: slices.Concat(alwaysEnabledPlugins, options.Plugins), PrometheusPort: 15692, ConfigOverrides: m.EngineConfig, TotalMemoryBytes: int64(r.MinRAM * 1e9), MemoryHighWatermarkBytes: int64(r.MinRAM * 1e9 * 0.6), DiskFreeLimitBytes: int64(max(0.5, r.MinRAM) * 1e9), DefaultQueueType: "quorum", InterNodeTLS: s.InterNodeTLS}
+	spec.IPv4Distribution = rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4
 	switch m.TLSMode {
 	case "disabled":
 		spec.AMQPPort = 5672

@@ -27,7 +27,7 @@ func RequiredCapabilities(spec domain.ClusterSpec) []string {
 	var out []string
 	if spec.Exposure.Public {
 		out = append(out, "publicTcp")
-		if len(spec.Exposure.Allowlist) > 0 {
+		if exposureNeedsTCPAllowlist(spec.Exposure) {
 			out = append(out, "tcpAllowlist")
 		}
 	}
@@ -44,6 +44,12 @@ func RequiredCapabilities(spec domain.ClusterSpec) []string {
 		}
 	}
 	return out
+}
+
+// exposureNeedsTCPAllowlist excludes explicitly acknowledged unrestricted
+// exposure: there is no source-address restriction for the backend to enforce.
+func exposureNeedsTCPAllowlist(exposure domain.Exposure) bool {
+	return len(exposure.Allowlist) > 0 && !(exposure.AllowAllAddresses && domain.ExposureCoversFamily(exposure))
 }
 
 // CheckCapabilities rejects a spec that needs capabilities the backend lacks,

@@ -230,6 +230,9 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	files := []renderedFile{{"rabbitmq.conf", b.String(), 0600}, {"enabled_plugins", "[" + strings.Join(s.Plugins, ",") + "].\n", 0600}, {"home/.erlang.cookie", s.Cookie, 0400}}
 	advanced := "[].\n"
 	dist := "-proto_dist inet6_tcp"
+	if s.IPv4Distribution {
+		dist = "-proto_dist inet_tcp"
+	}
 	if s.AMQPSPort > 0 || s.ManagementTLSPort > 0 || s.StreamTLSPort > 0 || s.InterNodeTLS {
 		files = append(files, renderedFile{"tls/ca.pem", c.TLS.CAPEM, 0600}, renderedFile{"tls/server.pem", c.TLS.CertPEM, 0600}, renderedFile{"tls/server.key", c.TLS.KeyPEM, 0600})
 	}
@@ -243,7 +246,11 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 		serverOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{fail_if_no_peer_cert,true},{versions, ['tlsv1.2']}]"
 		clientOptions := "[{cacertfile," + quote("tls/ca.pem") + "},{certfile," + quote("tls/server.pem") + "},{keyfile," + quote("tls/server.key") + "},{verify,verify_peer},{versions, ['tlsv1.2']}]"
 		advanced = "[{osiris,[{replication_transport,ssl},{replication_server_ssl_options," + serverOptions + "},{replication_client_ssl_options," + clientOptions + "}]}].\n"
-		dist = "-proto_dist inet6_tls -ssl_dist_optfile " + path("inter_node_tls.config")
+		dist = "-proto_dist inet6_tls -ssl_dist_optfile "
+		if s.IPv4Distribution {
+			dist = "-proto_dist inet_tls -ssl_dist_optfile "
+		}
+		dist += path("inter_node_tls.config")
 	}
 	files = append(files, renderedFile{"advanced.config", advanced, 0600})
 	schedulers := cpuSchedulers()

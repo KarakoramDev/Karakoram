@@ -47,8 +47,10 @@ type internalState struct {
 	TargetTLS          string                    `json:"targetTLS,omitempty"`
 }
 type member struct {
-	Name             string           `json:"name"`
-	Volume           string           `json:"volume,omitempty"`
+	Name   string `json:"name"`
+	Volume string `json:"volume,omitempty"`
+	// ReplacesVolume preserves the replacement placement hint across reconciles.
+	ReplacesVolume   string           `json:"replacesVolume,omitempty"`
 	ServiceID        string           `json:"serviceId,omitempty"`
 	VolumeID         string           `json:"volumeId,omitempty"`
 	VolumeOrphaned   bool             `json:"volumeOrphaned,omitempty"`

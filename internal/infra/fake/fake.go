@@ -48,14 +48,15 @@ func defaults(o Options) Options {
 }
 
 type record struct {
-	service       infra.Service
-	secrets, vars map[string]string
-	volume        string
-	runtime       infra.RuntimeSpec
-	deployed      bool
-	public        []infra.PublicPort
-	subdomain     bool
-	logs          []infra.LogLine
+	service        infra.Service
+	secrets, vars  map[string]string
+	volume         string
+	runtime        infra.RuntimeSpec
+	deployed       bool
+	public         []infra.PublicPort
+	subdomain      bool
+	logs           []infra.LogLine
+	placementGroup string
 }
 
 type statusChange struct {
@@ -636,10 +637,23 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	out := []infra.Container{}
 	if r.service.Kind == infra.KindRuntime && r.service.Status == infra.StatusActive {
 		for i := range r.service.MinContainers {
-			out = append(out, infra.Container{ID: fmt.Sprintf("%s-%d", r.service.ID, i+1), Hostname: hostname, Status: infra.ContainerActive})
+			out = append(out, infra.Container{ID: fmt.Sprintf("%s-%d", r.service.ID, i+1), Hostname: hostname, Status: infra.ContainerActive, PlacementGroup: r.placementGroup})
 		}
 	}
 	return out, nil
+}
+
+// SetPlacementGroup sets the authoritative placement returned for a service's
+// containers. An empty group models unavailable placement observations.
+func (b *Backend) SetPlacementGroup(hostname, group string) error {
+	b.state.mu.Lock()
+	defer b.state.mu.Unlock()
+	r, err := b.get(hostname)
+	if err != nil {
+		return err
+	}
+	r.placementGroup = group
+	return nil
 }
 
 // AddLog appends recorded log lines for a service.

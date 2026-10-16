@@ -251,6 +251,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 				return result, invalid("replacement requires a data/config member")
 			}
 			m := s.add(rc.Cluster.Name, old.Set, old.Role, old.Shard)
+			m.ReplacesVolume = old.Volume
 			if e := allocateNewPlans(ctx, rc, s, []*member{m}); e != nil {
 				removeRecord(s, m.Name)
 				return result, e

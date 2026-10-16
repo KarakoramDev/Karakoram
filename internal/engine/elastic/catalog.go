@@ -92,7 +92,9 @@ func ArtifactURL(component, version string) string {
 	return fmt.Sprintf("https://artifacts.elastic.co/downloads/%s/%s-%s-linux-x86_64.tar.gz", product, product, version)
 }
 
-func prepareCommands(component, version, user string) []string {
+// PrepareCommands returns the verified installation command used by deployments
+// of an Elastic component, or nil for invalid component or version text.
+func PrepareCommands(component, version, user string) []string {
 	url := ArtifactURL(component, version)
 	if url == "" {
 		return nil

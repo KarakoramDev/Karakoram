@@ -51,7 +51,7 @@ func TestMaskedOwnershipRequiresMarker(t *testing.T) {
 			}
 			err := verifyMemberServices(t.Context(), rc, m)
 			if !marker {
-				if !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), "sudo mode") {
+				if !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), "credentials that can read sensitive variables") {
 					t.Fatalf("expected actionable masked ownership conflict: %v", err)
 				}
 				if m.ServiceID != "" || m.VolumeID != "" || len(f.varWrites) != 0 {
@@ -252,7 +252,7 @@ func TestExpiredImportMaskedLegacyServicesConflict(t *testing.T) {
 	if err := s.save(rc.Cluster); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.Sync(t.Context(), rc); !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), "sudo mode") {
+	if _, err := p.Sync(t.Context(), rc); !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), "credentials that can read sensitive variables") {
 		t.Fatalf("expired masked import did not report recovery instructions: %v", err)
 	}
 	if len(f.imports) != 1 || len(f.varWrites) != 0 || state(t, rc).Members[0].Stage != "planned" {
@@ -266,6 +266,9 @@ func TestImportSpecsCarryServiceBoundMarkers(t *testing.T) {
 		t.Fatal("expected runtime and volume import")
 	}
 	for _, spec := range f.imports[0] {
+		if spec.Kind == infra.KindVolume && spec.SpreadGroup != rc.Cluster.Name {
+			t.Fatal("broker volume does not use the cluster spread group", spec.Hostname)
+		}
 		want := engine.OwnerMarker(token, rc.Cluster.Name, m.Name, spec.Hostname)
 		if spec.Vars[engine.OwnerVariable] != want || spec.Env[engine.OwnerVariable] != "" || spec.Env["KARAKORAM_AGENT_TOKEN"] != token || spec.Env["KARAKORAM_CLUSTER"] != rc.Cluster.Name || spec.Env["KARAKORAM_MEMBER"] != m.Name {
 			t.Fatalf("missing public marker or changed sensitive ownership environment for %s", spec.Hostname)

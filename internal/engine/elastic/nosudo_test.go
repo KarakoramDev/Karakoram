@@ -50,7 +50,7 @@ func TestMaskedMemberOwnershipEvidence(t *testing.T) {
 				if !errors.Is(err, engine.ErrConflict) {
 					t.Fatalf("unverified services were accepted: %v", err)
 				}
-				if evidence == "none" && !strings.Contains(err.Error(), "sudo mode") {
+				if evidence == "none" && !strings.Contains(err.Error(), "credentials that can read sensitive variables") {
 					t.Fatalf("masked ownership conflict has no recovery hint: %v", err)
 				}
 				if m.ServiceID != "" || m.VolumeID != "" {
@@ -157,6 +157,9 @@ func TestImportRecordsIDsAndPreservesVolumeIdentity(t *testing.T) {
 				t.Fatal("pending import replaced recorded identities before completion", m)
 			}
 			for _, spec := range f.imports[0] {
+				if spec.Kind == infra.KindVolume && spec.SpreadGroup != rc.Cluster.Name {
+					t.Fatal("volume does not use the cluster spread group", spec.Hostname)
+				}
 				if spec.Vars[engine.OwnerVariable] != engine.OwnerMarker(ownershipTestToken, rc.Cluster.Name, m.Name, spec.Hostname) {
 					t.Fatal("member import is missing its service-bound marker", spec.Hostname)
 				}
@@ -313,6 +316,31 @@ func TestRecordedIDsSkipMarkerBackfillDuringDeletionOrWithoutToken(t *testing.T)
 			}
 			if len(backend.writes) != 0 || m.ServiceID != f.services[m.Name].ID || m.VolumeID != f.services[m.Volume].ID {
 				t.Fatal("recorded ownership changed or marker backfill wrote variables")
+			}
+		})
+	}
+}
+
+func TestDedicatedMasterVolumeSpreadGroups(t *testing.T) {
+	for _, kind := range []string{kindMaster, kindNode} {
+		t.Run(kind, func(t *testing.T) {
+			p, rc, backend, s, m := ownershipFixture(t)
+			rc.Cluster.Spec.Topology.Type = "dedicatedMasters"
+			m.Kind = kind
+			if err := p.importMember(t.Context(), rc, s, m); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, spec := range backend.imports[0] {
+				if spec.Kind == infra.KindVolume {
+					found = true
+					if want := rc.Cluster.Name + "/" + kind; spec.SpreadGroup != want {
+						t.Fatalf("spread group = %q, want %q", spec.SpreadGroup, want)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("member volume was not imported")
 			}
 		})
 	}

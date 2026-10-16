@@ -688,7 +688,7 @@ func TestMaskedRelayWithoutIdentityRequiresOwnershipRecovery(t *testing.T) {
 			if err == nil {
 				t.Fatal("masked hostname alone proved ownership")
 			}
-			for _, text := range []string{"earlier version", "sensitive variables are masked for tokens without sudo mode", "delete the relay service in Zerops", "sudo-mode token"} {
+			for _, text := range []string{"earlier version", "namespace backend masks sensitive variables", "delete the relay service in the namespace backend", "credentials that can read sensitive variables", "sudo-mode token on Zerops"} {
 				if !strings.Contains(err.Error(), text) {
 					t.Fatalf("ownership recovery diagnostic missing %q: %v", text, err)
 				}

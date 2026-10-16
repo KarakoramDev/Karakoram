@@ -11,6 +11,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 )
 
 func TestRequiredCapabilities(t *testing.T) {
@@ -79,5 +80,49 @@ func TestCheckCapabilities(t *testing.T) {
 	}
 	if err := CheckCapabilities(nil, domain.ClusterSpec{}, "limited", infra.Capabilities{}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPublicTCPAllowlistAdmission(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		ipType     string
+		allowlist  []string
+		allowAll   bool
+		restricted bool
+	}{
+		{"ipv4 all", "IPV4", []string{"0.0.0.0/0"}, true, false},
+		{"ipv6 all", "IPV6", []string{"::/0"}, true, false},
+		{"ipv4 split coverage", "IPV4", []string{"0.0.0.0/1", "128.0.0.0/1"}, true, false},
+		{"ipv6 split coverage", "IPV6", []string{"::/1", "8000::/1"}, true, false},
+		{"unacknowledged all", "IPV4", []string{"0.0.0.0/0"}, false, true},
+		{"restricted acknowledged", "IPV4", []string{"192.0.2.0/24"}, true, true},
+		{"restricted", "IPV4", []string{"192.0.2.0/24"}, false, true},
+		{"wrong family", "IPV6", []string{"0.0.0.0/0"}, true, true},
+		{"invalid", "IPV4", []string{"invalid"}, true, true},
+		{"no allowlist", "IPV4", nil, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ex := domain.Exposure{Public: true, IPType: tc.ipType, Allowlist: tc.allowlist, AllowAllAddresses: tc.allowAll}
+			want := []string{"publicTcp"}
+			if tc.restricted {
+				want = append(want, "tcpAllowlist")
+			}
+			if got := RequiredCapabilities(domain.ClusterSpec{Exposure: ex}); !reflect.DeepEqual(got, want) {
+				t.Fatalf("required capabilities = %v, want %v", got, want)
+			}
+			tcpOnly := fake.New(fake.Options{Capabilities: infra.Capabilities{PublicTCP: true}})
+			err := RequirePublicTCP(tcpOnly, ex)
+			if tc.restricted && !errors.Is(err, ErrNotSupported) || !tc.restricted && err != nil {
+				t.Fatalf("runtime admission = %v, restricted = %t", err, tc.restricted)
+			}
+			if err := RequirePublicTCP(fake.New(fake.Options{}), ex); err != nil {
+				t.Fatalf("allowlist-capable backend rejected exposure: %v", err)
+			}
+			noTCP := fake.New(fake.Options{Capabilities: infra.Capabilities{Placement: true}})
+			if err := RequirePublicTCP(noTCP, ex); !errors.Is(err, ErrNotSupported) {
+				t.Fatalf("backend without public TCP admitted exposure: %v", err)
+			}
+		})
 	}
 }

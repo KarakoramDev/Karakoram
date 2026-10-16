@@ -411,7 +411,8 @@ func (p *Provider) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain
 	return pbm.PITRWindows(ctx, env)
 }
 
-// Placement returns honest best-effort grouping without anti-affinity promises.
+// Placement uses authoritative backend placement when available, otherwise
+// best-effort agent fingerprints without anti-affinity promises.
 func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Placement, error) {
 	s, e := load(rc.Cluster)
 	if e != nil {
@@ -420,22 +421,45 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 	v := domain.Placement{Groups: map[string][]string{}}
 	unknown := false
 	for _, m := range ordered(s) {
-		st, e := agentStatus(ctx, rc, m.Name)
-		if e != nil || st.HostFingerprint == "" {
-			unknown = true
-			v.Groups["unknown"] = append(v.Groups["unknown"], m.Name)
-			continue
+		group := ""
+		if rc.Backend.Capabilities().Placement {
+			containers, err := rc.Backend.Containers(ctx, m.Name)
+			if err == nil {
+				for _, container := range containers {
+					if container.PlacementGroup != "" {
+						group = container.PlacementGroup
+						break
+					}
+				}
+			}
+		} else if st, err := agentStatus(ctx, rc, m.Name); err == nil {
+			group = st.HostFingerprint
 		}
-		v.Groups[st.HostFingerprint] = append(v.Groups[st.HostFingerprint], m.Name)
+		if group == "" {
+			unknown = true
+			group = "unknown"
+		}
+		v.Groups[group] = append(v.Groups[group], m.Name)
 	}
-	warnings := []string{"Zerops does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance"}
+	var warnings []string
+	if !rc.Backend.Capabilities().Placement {
+		warnings = append(warnings, "The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance")
+	}
 	for k, g := range v.Groups {
 		if k != "unknown" && len(g) > 1 {
-			warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
+			if rc.Backend.Capabilities().Placement {
+				warnings = append(warnings, fmt.Sprintf("members %s are co-located", strings.Join(g, ", ")))
+			} else {
+				warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
+			}
 		}
 	}
 	if unknown {
-		warnings = append(warnings, "placement unknown until members report host fingerprints")
+		if rc.Backend.Capabilities().Placement {
+			warnings = append(warnings, "backend placement is unknown for some members")
+		} else {
+			warnings = append(warnings, "placement unknown until members report host fingerprints")
+		}
 	}
 	v.Warning = strings.Join(warnings, "; ")
 	return v, nil

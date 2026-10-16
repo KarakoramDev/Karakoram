@@ -113,6 +113,20 @@ func TestOperationsResumeAfterCheckpointCrash(t *testing.T) {
 				if s.find("demom1") != nil || s.find("demom3") == nil || len(s.Members) != 3 || f.services["demom1"] != nil || f.services["demom1v"] != nil {
 					t.Fatalf("replacement state: %+v", s)
 				}
+				found := false
+				for _, specs := range f.imports {
+					for _, spec := range specs {
+						if spec.Hostname == "demom3v" {
+							found = true
+							if spec.SpreadReplaces != "demom1v" || spec.SpreadGroup != rc.Cluster.Name {
+								t.Fatalf("replacement spread group = %q, replaces = %q", spec.SpreadGroup, spec.SpreadReplaces)
+							}
+						}
+					}
+				}
+				if !found {
+					t.Fatal("replacement volume was not imported")
+				}
 				assertBefore(t, calls, "agent:demom3:join", "agent:demom1:drain")
 				assertBefore(t, calls, "agent:demom1:stop", "infra:demom1:delete")
 			case domain.OperationRotateSystemUser:

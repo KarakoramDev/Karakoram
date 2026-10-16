@@ -242,3 +242,35 @@ func TestTLSInputsStayWriteOnlyAndRejectCAReplacement(t *testing.T) {
 		t.Fatal("identical CA rejected", w.Code, w.Body.String())
 	}
 }
+
+func TestDokployDefaultTarget(t *testing.T) {
+	t.Setenv("KARAKORAM_BACKEND", "dokploy")
+	t.Setenv("KARAKORAM_MASTER_KEY", strings.Repeat("m", 32))
+	t.Setenv("KARAKORAM_DOKPLOY_ALLOWED_URLS", "")
+	t.Setenv("KARAKORAM_DATA_DIR", "/var/lib/karakoram")
+	t.Setenv("KARAKORAM_PUBLIC_URL", "https://karakoram.example.test")
+	t.Setenv("KARAKORAM_ADVERTISE_URL", "https://karakoram:9443")
+	t.Setenv("KARAKORAM_DOKPLOY_URL", "http://dokploy:3000")
+	t.Setenv("KARAKORAM_DOKPLOY_API_KEY", "test-key")
+	t.Setenv("KARAKORAM_DOKPLOY_ENVIRONMENT_ID", "env-test")
+	t.Setenv("KARAKORAM_DOKPLOY_REGISTRY_ID", "registry-test")
+	c, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := backendRegistry(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := c.defaultTarget(registry)
+	if err != nil || target.Kind != "dokploy" || target.ID != "env-test" || target.Token != "test-key" || target.Config["url"] != "http://dokploy:3000" || target.Config["registryId"] != "registry-test" {
+		t.Fatalf("default target: %+v %v", target, err)
+	}
+	b, err := registry.New(target)
+	if err != nil || b.Name() != "dokploy" {
+		t.Fatalf("operator default URL must be accepted: %v", err)
+	}
+	if _, err := registry.New(infra.Target{Kind: "dokploy", ID: "env-other", Token: "test-key", Config: map[string]string{"url": "http://internal.example.test:3000"}}); err == nil {
+		t.Fatal("non-allowlisted plaintext Dokploy URL accepted")
+	}
+}

@@ -270,7 +270,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	}
 	if service != nil && !owned(n, service) {
 		if service.Masked && service.Ownership["KARAKORAM_RELAY_OWNER"] == "" && n.Relay.ServiceID == "" {
-			return errors.New("Relay ownership cannot be verified: the relay was created by an earlier version and sensitive variables are masked for tokens without sudo mode; delete the relay service in Zerops so Karakoram recreates it, or run one reconciliation with a sudo-mode token")
+			return errors.New("relay ownership cannot be verified: the relay was created by an earlier version and the namespace backend masks sensitive variables for the current credentials; delete the relay service in the namespace backend so Karakoram recreates it, or run one reconciliation with credentials that can read sensitive variables (a sudo-mode token on Zerops)")
 		}
 		return errors.New("Relay hostname belongs to a service this namespace does not own")
 	}

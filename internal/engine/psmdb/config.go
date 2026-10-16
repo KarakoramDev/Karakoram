@@ -26,18 +26,24 @@ import (
 
 const pbmVersion = "2.16.0-1.noble"
 
+// PrepareCommands returns the installation commands used by member deployments
+// for the requested Percona Server for MongoDB version.
+func PrepareCommands(version string) []string {
+	series := strings.ReplaceAll(major(version), ".", "")
+	shell := "2.10.0.noble"
+	if series == "60" {
+		shell = "2.8.3.noble"
+	}
+	return []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release", "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb", "sudo dpkg -i /tmp/percona-release.deb", "sudo percona-release enable psmdb-" + series + " release --scheme https", "sudo percona-release enable pbm release --scheme https", "sudo apt-get update", fmt.Sprintf("sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=%[1]s.noble percona-server-mongodb-mongos=%[1]s.noble percona-server-mongodb-tools=%[1]s.noble percona-mongodb-mongosh=%[2]s percona-backup-mongodb=%[3]s", version, shell, pbmVersion)}
+}
+
 func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) infra.RuntimeSpec {
 	c := rc.Cluster
 	agentURL := rc.AgentURL
 	if agentURL == "" {
 		agentURL = p.options.ControlPlaneURL
 	}
-	series := strings.ReplaceAll(major(version), ".", "")
-	shell := "2.10.0.noble"
-	if series == "60" {
-		shell = "2.8.3.noble"
-	}
-	prepare := []string{"sudo apt-get update", "sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg lsb-release", "curl -fsSL https://repo.percona.com/apt/percona-release_latest.generic_all.deb -o /tmp/percona-release.deb", "sudo dpkg -i /tmp/percona-release.deb", "sudo percona-release enable psmdb-" + series + " release --scheme https", "sudo percona-release enable pbm release --scheme https", "sudo apt-get update", fmt.Sprintf("sudo PERCONA_TELEMETRY_DISABLE=1 apt-get install -y --no-install-recommends percona-server-mongodb-server=%[1]s.noble percona-server-mongodb-mongos=%[1]s.noble percona-server-mongodb-tools=%[1]s.noble percona-mongodb-mongosh=%[2]s percona-backup-mongodb=%[3]s", version, shell, pbmVersion)}
+	prepare := PrepareCommands(version)
 	return (engine.AgentRuntime{
 		Cluster: c.Name, Member: m.Name, Volume: m.Volume,
 		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM,

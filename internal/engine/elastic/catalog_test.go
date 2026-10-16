@@ -100,7 +100,7 @@ func TestArtifacts(t *testing.T) {
 				if ArtifactURL(component, v.Version) != url {
 					t.Fatal("artifact URL")
 				}
-				commands := prepareCommands(component, v.Version, "elasticuser")
+				commands := PrepareCommands(component, v.Version, "elasticuser")
 				if len(commands) != 1 {
 					t.Fatal("command count")
 				}
@@ -113,7 +113,7 @@ func TestArtifacts(t *testing.T) {
 		}
 	}
 	for _, tt := range []struct{ component, version string }{{"unknown", "9.5.5"}, {"elasticsearch", "9.5.5;false"}} {
-		if ArtifactURL(tt.component, tt.version) != "" || prepareCommands(tt.component, tt.version, "elasticuser") != nil {
+		if ArtifactURL(tt.component, tt.version) != "" || PrepareCommands(tt.component, tt.version, "elasticuser") != nil {
 			t.Fatal("unsafe artifact input")
 		}
 	}
