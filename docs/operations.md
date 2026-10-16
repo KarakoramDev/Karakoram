@@ -1,13 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Day-2 operations
+# Operations and troubleshooting
 
-Operate Karakoram and its MongoDB clusters as separate systems: control-plane availability, database quorum, PBM recovery coverage and physical placement are different signals. Start with [installation](install.md), [architecture](architecture.md), [security](security.md) and [limitations](limitations.md).
+Operate the control plane, managed engines and Zerops infrastructure as separate systems; each has its own health and recovery signals.
 
 ## Health and logs
 
 ```sh
-curl --fail --show-error https://YOUR-SUBDOMAIN/healthz
+curl --fail --show-error https://karakoram.example.com/healthz
 karactl health
 karactl clusters status demo
 karactl clusters members demo
@@ -15,107 +15,28 @@ karactl operations cluster demo
 karactl events list --cluster demo
 ```
 
-`/healthz` reports the control-plane store check, not database/PBM health. Inspect cluster phase/conditions, observedGeneration, member role/health/lag, observed binary/FCV, agent config/connectivity, disk capacity and backup/PITR status. A Zerops runtime marked ACTIVE is not sufficient. The platform member exec readiness command `karakoram agent readiness` checks **local TCP 127.0.0.1:27017 only**, without needing credentials/environment; it does not validate replication, users or PBM registration. The provider's authenticated replica-set health gate determines database readiness.
+`/healthz` checks the control-plane store, not engine health. Inspect cluster conditions, observed generation, member health, agent connectivity, allocations, disk headroom and backup status. Zerops ACTIVE alone is insufficient. Operation success is not a health guarantee; see [operations and status](clusters.md#operations-and-status).
 
-The control plane logs at startup whether its Zerops token is in sudo mode.
-This is informational only: sudo mode is not required and should be disabled.
+Use two log sources:
 
-Two log paths serve different purposes:
+- **Zerops deployment/application logs:** preparation, readiness, startup, supervisor diagnostics and forwarded child output, including failures before the agent is reachable. Signed project-log URLs/tokens are credentials.
+- **Karakoram member logs:** authenticated, bounded process tails, not a historical archive:
 
-1. **Zerops runtime/deployment logs:** use the service dashboard's process/application logs. They capture preparation, readiness, startup and forwarded child output. The backend implements the platform's signed project-log mechanism; signed log URLs/access tokens are credentials and must not be pasted into tickets. These logs also cover failures before the node-agent API is reachable.
-2. **Node process tails through Karakoram:**
+  ```sh
+  karactl clusters logs demo <member> --process <process> --lines 100
+  ```
 
-   ```sh
-   karactl clusters logs demo demom0 --process mongod --lines 100
-   karactl clusters logs demo demom0 --process pbm-agent --lines 100
-   # For a router use its actual member name and --process mongos.
-   ```
+  `GET /api/v1/clusters/{cluster}/members/{member}/logs` accepts `process` and `lines` (default 100; accepted range 1–10000). The default process is the provider's first declared process. Each process retains at most **1000 in-memory lines**, lost on agent restart. **`cursor` and `since` are currently ignored; no `nextCursor` is returned.** Requesting more lines cannot recover older history.
 
-   Public API: `GET /api/v1/clusters/{cluster}/members/{member}/logs?process=mongod&lines=100`. The control plane proxies the private agent's authenticated `GET /v1/logs`. The public default is mongod; specify mongos for routers. The agent retains an **in-memory ring of at most 1000 lines per process**, lost on agent restart. Asking for more does not create historical archive/pagination; the current handler supplies a bounded tail rather than durable log cursors. Agent supervisor/control-plane diagnostics are in Zerops application logs, not a separate arbitrary-file read endpoint.
+Process names, readiness checks and engine diagnostics: [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md).
 
-Redact passwords, credential-bearing URIs, environment contents, API tokens and PEM private keys before exporting logs. Capture cluster/member/operation/event identifiers and timestamps instead of full secret responses.
+Platform failures expose a Zerops error code and sanitized field/reason summary in events and conditions. Inspect the named resource bound or missing service before changing the spec; rejected resource updates/imports have [resource diagnostics](clusters.md#resources-and-autoscaling). For `serviceStackNotFound`, check whether the recorded service was removed externally; do not delete unrelated services. Use the Zerops dashboard when details are missing/truncated.
 
-Platform import, deploy and cleanup failures include the Zerops error code and
-a sanitized summary of metadata field/reason values in Events and cluster
-status/conditions. The summary is limited to 1024 bytes; credential-bearing
-fields, environment contents, signed URLs and raw response bodies are not
-included. A message that previously said only “See metadata” now carries the
-available safe diagnostic inline, rather than requiring a separate metadata
-link. Check the named resource bound or missing service before changing the
-specification. For `serviceStackNotFound`, inspect the recorded service/process
-identity and whether the service was removed outside Karakoram; do not recreate
-or delete unrelated services to clear the error. If details are unavailable or
-truncated, inspect that process in the Zerops dashboard and share only redacted
-error codes, service/process IDs and timestamps.
-
-## Namespace and relay operations
-
-Use [namespace lifecycle](user-guide/namespaces.md) for registration, validation,
-rotation, guarded deletion and health fields. Inspect project/token health
-separately from tunnel and database health:
-
-```sh
-karactl namespaces list
-karactl namespaces get prod -o yaml
-karactl namespaces validate prod
-karactl -n prod clusters status orders
-karactl -n prod events list
-karactl -n prod orphaned-volumes list
-```
-
-Invalid project credentials or unavailable namespace routing degrade that
-namespace's clusters; other projects continue reconciling. Check namespace
-`phase`, `token.valid`/validation time/error and relay
-`phase`/`connected`/`lastSeenAt`/`reconnects` before restarting database members.
-`/healthz` and a relay marked ACTIVE do not establish authenticated tunnel
-health. `karakoram relay readiness` probes the private listener only.
-
-An infrastructure API outage is not an invalid-token diagnosis. Namespace token
-checks retain last known validity on HTTP 429/5xx, timeouts and connection
-failures, with `Zerops API temporarily unavailable: <safe detail>; retrying` in
-`token.lastError`. They retry on the usual five-minute validation cadence.
-Only explicit access rejection (401/403 or authentication error code) marks a
-previously valid token invalid. Check timestamps and the diagnostic before
-rotating credentials or repairing a relay. A fresh installation still needs a
-successful first validation before its token is known valid.
-
-During a remote namespace outage, MongoDB replication and already-running
-member-to-S3 PBM work can continue. Management, new agent configuration pulls,
-observations and backup scheduling/control can fail or pause. Cached member
-configuration can preserve startup; an uncached bootstrap cannot. Do not clear
-restore maintenance holds or submit another restore merely because management
-lost connectivity.
-
-The relay reconnects automatically using exponential backoff/jitter capped at
-thirty seconds. Verify outbound HTTPS to the configured public origin and
-WebSocket forwarding at `/relay/v1/connect`, then inspect the relay's Zerops
-runtime/deployment logs without exporting secret environment. `RelayConnected`
-and `RelayDisconnected` events identify session transitions; `RelayTargetRefused`
-names a target the relay could not open and why. Token validation events report
-health transitions. Never publish relay/agent 9443 or broaden target policy to
-repair routing.
-
-Rotate stored namespace tokens with `namespaces rotate-token NAME --token-file
-FILE` (or stdin `-`); validation precedes replacement and the live relay is not
-restarted. For `default`, update the service secret and restart. Client
-certificate renewal uses env-secret replacement and a relay restart; executable
-upgrades redeploy the same control-plane binary when digests differ. Verify
-connection and desired/reported versions after [upgrading](upgrade.md).
-
-The dedicated hub leaf also renews during runtime before expiry. Pending relay
-admissions are fenced against enrollment transitions, and namespace deletion
-revokes both its active session and pending admissions; deleting credentials
-alone is not the session-revocation mechanism.
-
-Before removing a namespace, finish deletion of clusters, storages, retained
-backup records and orphaned volumes. Keep a valid token until the owned relay is
-deleted. A foreign service occupying the relay hostname is never adopted or
-deleted. Removal does not delete the project or its RBAC rules: remove obsolete
-grants deliberately before reusing the namespace name.
+Redact passwords, credential-bearing URIs, environments, tokens, signed URLs and private keys before sharing logs. Preserve identifiers and timestamps instead.
 
 ## Reviewing audit activity
 
-Global and cluster **Events**/**Operations** show the initiating actor in the UI and CLI. Local actions use the persisted account name; OIDC actors include that name and an `(oidc: issuerURL)` suffix. API-token actions include owner, public token name and ID. Background work uses `reconciler`, `scheduler`, `system:startup` or `system` (orphan-volume janitor) unless attributable to an initiating user/operation. Desired-state generations persist the requesting actor, preserving attribution when reconciliation runs later or after restart.
+Events and Operations identify initiating actors, including persisted account names, OIDC issuer suffixes and API-token owner/name/ID. Use the complete actor value when filtering.
 
 ```sh
 karactl -n dev events list --cluster demo
@@ -123,380 +44,115 @@ karactl -n dev operations cluster demo
 # Installation audit access requires audit:read on '*'.
 karactl events list --actor admin --resource accounts
 karactl events list --resource auth -o json
-# Namespace audit filters compose with the selected namespace.
 karactl -n dev events list --actor alice --resource namespaces
 ```
 
-Actor/resource filters are exact, case-sensitive AND matches, also intersected with `--namespace/-n`; omit a flag to leave that field unrestricted and preserve the filters when passing `--cursor`. Copy the full actor value, including OIDC issuer or token metadata, when filtering those actions. `events watch` supports the same actor/resource filters alongside namespace/cluster/type/operation/replay filters. In the global UI, audit-authorized users can apply Actor/Resource filters and inspect Resource/Target together with the namespace switcher; cluster-detail views stay cluster-scoped. Namespace-level audit records require `audit:read` on the namespace; global installation records require it on `*`. A grant such as `dev/**` does not expose another namespace or otherwise unauthorized clusters.
+Actor/resource filters are exact, case-sensitive AND matches intersected with the namespace. Preserve filters with `--cursor`; `events watch` supports them too. Audit scope, coverage gaps, indefinite retention and durability limits are defined in [Security](security.md#audit-attribution-and-durability). Check resource/operation state before retrying an action with missing audit evidence. Transport/replay: [API events](api.md#pagination-and-events).
 
-For cluster specification updates, `reason: ClusterSpecChangeRequested` identifies
-the requested field changes, not proof that reconciliation has completed. Messages
-use dotted paths such as `components.engine.resources.maxCpu` and identify
-schedules and other named-array entries by name or ID rather than array position,
-for example `backup.schedules[nightly].retainCount`.
-For example, `Cluster spec changed for demo (generation 3):
-components.engine.resources.maxCpu: 1 → 2` summarizes the change. Larger diffs
-show up to the first three changes followed by `and N more`; a no-op request reports
-`Cluster spec change requested for demo: no changes`.
+For `reason: ClusterSpecChangeRequested`, the message summarizes up to the first three requested changes, for example `Cluster spec changed for demo (generation 3): components.engine.resources.maxCpu: 1 → 2`, followed by `and N more` for additional changes. A no-op reports `Cluster spec change requested for demo: no changes`.
 
-With `audit:read` on the cluster's `<namespace>/<cluster>` object, expand
-**Changed fields** in either Events view to compare the returned paths' **Before**
-and **After** values. The API list and stream expose the same structured
-`details.changes` array only to audit-authorized readers; `events:read` alone
-does not return `details`. Missing values normally display as `(unset)`, distinct
-from JSON `null`. A **Truncated** row displays omitted values as `(omitted)`,
-not `(unset)`; a truncation warning means values or additional paths may be
-missing. Oversized values can instead appear as `(N bytes)`. Sensitive entries
-are marked **Sensitive** and contain only the
-literal markers `(changed)`, `(set)` or `(unset)`, never the secret value.
-Use `karactl -n dev events list --cluster demo -o json` to inspect the structured
-comparison, then check cluster status and Operations for convergence.
-
-Successful mutations and credential reveals are audited without request/response bodies or secret values; login/OIDC success/failure and logout are also recorded. Audit and cluster events share **indefinite SQLite retention**, without automatic age/count pruning. Monitor state-database disk use and preserve consistent off-platform state backups. The event API is append-only, not a tamper-proof remote audit sink. A remote mutation and local event persistence cannot commit atomically: an absent event or failed request is not sufficient evidence that the remote action did not happen. Inspect operation/resource status before retrying.
-
-See [security](security.md#audit-attribution-and-durability) and [API filter/transport semantics](user-guide/api.md#pagination-and-events).
+1. With [structured audit access](access-control.md#policy-format), expand **Changed fields** in either the global or cluster Events view to compare **Before** and **After**. Missing fields normally display `(unset)`, distinct from JSON `null`. **Truncated** rows display omitted values as `(omitted)`; oversized values may display `(N bytes)`. A comparison-level warning means values or additional paths may be missing. **Sensitive** rows show only [redaction markers](security.md#audit-attribution-and-durability).
+2. Inspect the structured comparison with `karactl -n <ns> events list --cluster <c> -o json`. See [API events](api.md#pagination-and-events) for paths, schema and limits.
+3. Check cluster status and **Operations** for convergence; a requested spec change is not completion.
 
 ## Node-agent semantics
 
-The agent receives nonsecret identity/connection environment (`KARAKORAM_URL`, `KARAKORAM_CLUSTER`, `KARAKORAM_MEMBER`, `KARAKORAM_INTERNAL_CA`, `KARAKORAM_DATA_DIR`) and the per-member secret `KARAKORAM_AGENT_TOKEN`. It pins the control-plane internal CA and pulls only its assigned MemberConfig.
+Agents pin the internal CA, authenticate with a per-member token and pull only their assigned configuration. They apply usable cached configuration at startup, retry first configuration every **five seconds**, and normally refresh every **60 seconds**. Cached members can keep running during control-plane unavailability; uncached startup cannot. Stateless caches do not survive runtime replacement.
 
-| Path under DATA_DIR | Behavior |
-| --- | --- |
-| `karakoram/config.json` | Atomic owner-only **0600** accepted configuration cache, containing locally necessary secrets |
-| `karakoram/keyfile` | MongoDB internal-authentication keyfile, **0400** |
-| `karakoram/mongodb.pem`, `ca.pem`, `mongod.conf`/`mongos.conf` | Protected rendered engine files; private material is owner-only |
-| `karakoram/controls.json` | Atomic **0600** durable maintenance and explicitly stopped-process holds |
-| `karakoram/pbm-receipts/` | Durable **0600** initiation receipts indexed by hashed request ID |
-| `db/` | Persistent database files for data-bearing members |
-
-On startup the agent applies cached config if present, then tries a fresh pull. With a usable cache it can run through control-plane unavailability; without one it waits/retries first configuration every five seconds. Normal re-pull is every **60 seconds**, and `/v1/reload` requests an immediate pull. Provider-activated per-member snapshots prevent all nodes adopting a disruptive config/credential change at once. Stateless router caches do not survive runtime replacement.
-
-The supervisor owns child start/stop and ordinary restart backoff and forwards SIGTERM for clean shutdown. Do not launch a duplicate mongod or PBM supervisor. Maintenance holds suppress automatic restarts, including successful PBM exits during physical restore. Explicit process stops survive config pulls and agent restart; only an explicit maintenance-off or process start/restart releases the corresponding local hold. Provider desired restore holds persist in control-plane state as well. Never delete/edit `controls.json` to “fix” an offline restore without understanding who owns the dbpath.
-
-PBM starts use the durable Operation ID as RequestID and pin the command member before initiation. A completed receipt replays the same response; reuse with a different request is rejected. An interrupted receipt with no persisted outcome fails with:
-
-> PBM initiation outcome unknown after interrupted execution; reconcile before issuing another request
-
-This is intentional safety, not a retry suggestion. Inspect PBM operation metadata/logs/storage and the persisted Karakoram Operation before any recovery action. Do not erase receipts, change the request ID, switch command nodes, or start a second restore to evade ambiguity. Keep receipts and controls with retained volumes across recovery. Private agent commands are for the controller's bounded protocol; there is no public arbitrary exec endpoint.
-
-Immediately after restore initiation, PBM may not yet expose restore metadata.
-The control plane reports this specific absence as **restore starting** for up
-to one minute after PBM accepts the restore. Failed submission attempts do not
-consume that window, and its deadline survives reconciliation retries. Missing
-metadata after that deadline, or after PBM has already reported
-the restore, is an error; unrelated command failures are surfaced immediately.
+Accepted configuration and maintenance/stopped-process holds are atomically persisted as owner-only **0600** files. Configuration contains locally required secrets. The supervisor owns child processes, restart backoff and SIGTERM forwarding; do not start competing supervisors. Maintenance holds suppress automatic restarts. Explicit stop holds survive config pulls and agent restarts until explicitly released by the controller. Do not edit safety files to force recovery. Engine-specific files and recovery holds belong in the engine operations guides above; private agent commands are not arbitrary remote exec.
 
 ## Routine operating checks
 
-- Check database/agent health, lag, disk headroom and current Zerops allocations; desired resource bounds are not instantaneous observed allocation.
-- Check successful backups, S3 verification/quota and **observed continuous** PITR windows. Run periodic data recovery drills, not just backup creation checks.
-- Review recent failed Operations/events and whether desired generations have converged.
-- Inspect placement warnings without calling them HA certification.
-- Preserve control-plane state/master key and monitor expiry of user-supplied TLS/OIDC/API credentials.
-- Drain disruptive work before [Karakoram upgrades](upgrade.md). Existing member agents receive the current binary on a later provider-driven member deployment, not on control-plane restart alone.
-
-## Deleting MongoDB backup data
-
-Deleting a cluster without `--keep-backups` removes snapshots and PITR chunks
-before removing member data, and finalizes storage before removing credentials.
-When member runtimes exist, PBM disables PITR, resynchronizes inventory and removes
-snapshots. After database runtimes are gone, the control plane makes a final
-direct sweep of each cleaned incarnation directory to remove PBM initialization
-markers and any other remaining objects. This sweep is checkpointed per storage
-and retries before credentials are removed. An unreachable agent alone never
-authorizes direct storage deletion: PBM could still be writing data.
-Resuming retained volumes reapplies PBM configuration so a deleted initialization
-marker is recreated even when the desired backup settings are unchanged.
-
-For a suspended cluster, or another cluster whose database runtimes are all
-absent, the control plane deletes objects directly from S3 under the exact
-recorded cluster-incarnation namespace. This includes snapshots not present in
-the backup inventory, their metadata, PITR chunks and namespace markers. It does
-not resume database runtimes or delete adjacent cluster namespaces. Backup
-records and protected recovery credentials are removed only after artifact
-deletion succeeds; interrupted object or inventory deletion can be retried.
-Snapshots explicitly retained from an earlier incarnation are preserved when a
-same-name replacement cluster is deleted. They remain listed and can be deleted
-individually using their recorded snapshot identities.
-
-Keep the backup storage and its credentials available until deletion finishes.
-Storage access failures are reported in the cluster status and delete operation
-with instructions to repair access and retry, or deliberately use
-`--keep-backups`. If a legacy cluster lacks a verified PBM namespace, resume it
-to use PBM cleanup or retain backups; the control plane will not guess an object
-prefix. Deleting an individual retained backup after its cluster is gone uses
-its recorded snapshot directory and metadata file directly; it does not require
-a PBM node and does not remove other snapshots or PITR chunks.
-
-Direct storage deletion batches requests. When object-version listing is
-supported and permitted, it removes every selected object version and delete
-marker; this requires `s3:ListBucketVersions` and `s3:DeleteObjectVersion`.
-If version listing is unavailable or denied, cleanup falls back to ordinary
-listing and key-only deletion using the original list/delete permissions.
-On a versioned bucket this fallback removes only currently visible objects:
-noncurrent versions remain in storage and must be removed separately with
-version-aware credentials or a bucket lifecycle policy. A successful version
-listing followed by denied version deletion remains an access error.
-Cleanup confirms the selected namespace is empty in the listing mode used.
-Large cluster namespaces are cleaned over bounded passes; a pass that makes
-progress before its time limit requeues normally.
-If a storage prefix has changed since a current backup was written, restore
-the original prefix before retrying deletion; changing access permissions does
-not repair a mismatched recorded snapshot location.
+- Review health, current allocations/disk headroom, failed Operations/events and generation convergence.
+- Verify successful backups and storage capacity/access; rehearse data recovery, not just backup creation. See [backups](backups.md) and engine recovery guides.
+- Preserve consistent state backups and the original master key; monitor credential/certificate expiry.
+- Drain disruptive work before [upgrading Karakoram](upgrade.md). Existing member executables roll out on later provider-driven deployments, not control-plane restart alone.
+- For project-token, relay or cross-namespace incidents, use [namespace operations](namespaces.md) and [relay health](namespaces.md#relay-health) before restarting members.
 
 ## Orphaned platform volumes
 
-If the platform refuses to delete a Local Storage volume, Karakoram first confirms that its member runtime was deleted and verifies volume ownership. Repeated mount-related deletion refusals are handed off to the orphan inventory after the retry threshold. Karakoram emits the Warning event **`VolumeOrphaned`** for the original cluster, allowing member removal or cluster deletion to finish while background deletion retries continue. This does not mean the volume is gone: it continues consuming disk and may incur charges until deletion succeeds.
-
-Inspect the read-only inventory with **`GET /api/v1/orphaned-volumes`**, which returns `{items: [...]}`, or:
+After runtime deletion and ownership verification, repeated mount-related volume-deletion refusals move the volume to orphan inventory. `VolumeOrphaned` allows member/cluster removal to finish, **not** storage deletion: disk usage and charges can continue.
 
 ```sh
 karactl orphaned-volumes list
 karactl orphaned-volumes list -o json
 ```
 
-The Web UI shows **Settings > Orphaned volumes** and a warning banner linking to that inventory. Each record identifies the volume hostname, Zerops service ID, original cluster/member, failure history, attempt count, latest delete Process ID and retry timestamps. Visibility requires read permission on the record's cluster; administrators see all records, including those whose clusters have been deleted.
+`GET /api/v1/orphaned-volumes` returns `{items: [...]}`. **Settings → Orphaned volumes** shows the same inventory: hostname, service ID, original cluster/member, failures, attempts, latest delete Process ID and retry timestamps. Cluster-read permission controls visibility; administrators also see records for deleted clusters.
 
-The in-process janitor runs while the control plane is running and keeps retrying recorded volumes, starting after **two minutes**, doubling the retry delay up to **one hour**. Failed attempts emit **`OrphanedVolumeDeleteFailed`** (Warning); when Zerops accepts deletion, the record is removed and **`OrphanedVolumeDeleted`** (Normal) is emitted. These events retain the original cluster name. Before deleting, the janitor checks that the hostname still belongs to the recorded service ID. If the hostname is absent or belongs to a different service ID, it drops the record without deleting anything. Karakoram never deletes services it did not record.
+The control-plane janitor retries after **two minutes**, doubling delays to **one hour**. `OrphanedVolumeDeleteFailed` warns on failure; accepted deletion removes the record and emits `OrphanedVolumeDeleted`. Events retain the original cluster. Before deletion, it checks the recorded service ID; absent/reassigned hostnames drop the record without deleting another service.
 
-For manual cleanup later, delete the volume in the **Zerops GUI** or run **`zcli service delete <hostname>`** once Zerops accepts deletion. If the refusal persists, report the recorded **service ID** (`serviceId`) and **failing delete Process ID** (`lastProcessId`) to Zerops support. When the hostname is gone, the janitor drops the record on its next attempt; no manual Karakoram state edit is needed.
+The inventory has **no force-delete action**. With separate Zerops project permissions, delete in the original namespace's Zerops GUI or use authenticated `zcli service delete <hostname>`. Persistent refusals need Zerops support: provide `serviceId` and failing `lastProcessId`, not secrets. The janitor drops manually removed volumes on its next attempt; do not edit state.
 
-**Manual cleanup is an external prerequisite.** Karakoram's orphaned-volume
-API/CLI and Settings page only list diagnostic records; they have no manual
-force-delete action. The automatic janitor submits ordinary Zerops deletion
-requests with service-ID ownership checks, but cannot override a platform mount
-or process refusal. An operator needs separate Zerops project permissions (and,
-for the CLI route, an authenticated zcli) to resolve that refusal or remove the
-volume. This separation prevents an inventory action from bypassing platform
-data-safety checks. Use the original namespace's project, not necessarily the
-project hosting Karakoram.
-
-Re-creating a cluster or member with the same name skips the orphaned hostname and allocates a new member index. Allocation also skips runtime/volume hostnames already held by existing Zerops services rather than reusing or deleting them. See [resource naming](adr/0009-resource-naming.md) and the [platform limitation](limitations.md#control-plane-and-platform-operations).
+Recreated clusters/members skip orphaned and already occupied runtime/volume hostnames, allocating a new index. See [resource naming](adr/0009-resource-naming.md).
 
 ## Control-plane state backup and recovery
 
-State includes specifications/status/internal ownership, operations/checkpoints, events, accounts/sessions/API-token hashes, policy/settings, metric history and encrypted cluster/storage/PKI credentials. It is SQLite WAL at `KARAKORAM_DATA_DIR/karakoram.db`, normally `/mnt/karakoramdata/karakoram.db`.
+SQLite WAL state lives at `KARAKORAM_DATA_DIR/karakoram.db` (normally `/mnt/karakoramdata/karakoram.db`). It includes desired/observed state, ownership, checkpoints, events, identities/sessions/token hashes, policy/settings, metric history and encrypted credentials/PKI.
 
-A state copy without its original **`KARAKORAM_MASTER_KEY`** cannot recover encrypted secrets. Store the key separately in a restricted secret manager, along with project identity and a replaceable project-scoped Zerops token. Do not generate a new master key for an existing state database. There is no `admin backup-db`, managed backup schedule or master-key re-encryption CLI.
+**Warning:** a state backup without its original `KARAKORAM_MASTER_KEY` cannot recover encrypted secrets. Preserve the key separately in a restricted secret manager, plus project identity and a replaceable integration token. Never replace the key on existing state. There is no `admin backup-db`, managed state-backup schedule or master-key re-encryption CLI.
 
 ### Consistent backup
 
-Use the [complete stopped-writer procedure](upgrade.md#consistent-pre-upgrade-state-backup):
+1. Let disruptive work settle. Stop the single control-plane runtime and wait for STOPPED.
+2. In the Local Storage maintenance container, the volume is mounted at `/data`. Archive the **whole state directory**, including remaining WAL/SHM sidecars and persisted identity material, to a restrictively permissioned file **outside** that directory while no writer runs.
+3. Transfer to encrypted off-platform storage. Record snapshot time, Karakoram version/revision and master-key identity; remove disposable copies after transfer.
+4. Restart one control plane or proceed with the [upgrade](upgrade.md).
 
-1. Let disruptive operations settle, then stop the single control-plane runtime and wait for STOPPED.
-2. In the Zerops Local Storage maintenance container, the mounted volume appears as `/data`. Archive the whole state directory into a file **outside** it, with restrictive permissions, while no writer is running. Include any remaining WAL/SHM sidecars and persisted identity material.
-3. Download to encrypted off-platform storage, recording snapshot time, Karakoram revision/version and the corresponding master-key identity. Remove disposable copies when safely transferred.
-4. Start the old server again or proceed with the intended upgrade.
-
-Never copy only a live `.db`, assume a platform live volume tarball is transactionally consistent, or run two servers against the same volume. A native SQLite backup API/tool can make a consistent live snapshot if separately implemented correctly; the runtime is not guaranteed to include the sqlite3 executable. Control-plane state archives do not contain MongoDB member data; PBM must protect that separately.
+Never copy only a live `.db`, assume a live platform volume archive is consistent, or run two servers against one volume. A correctly used native SQLite backup tool can take a consistent live snapshot, but `sqlite3` is not guaranteed in the runtime. State archives exclude engine data; use engine-native backups separately.
 
 ### Restore a state snapshot
 
-Fence/stop every old control-plane process. Preserve a protected copy of the failed/current state for diagnosis. Restore the complete consistent archive into an emptied state directory on a retained/replacement Local Storage volume, without merging stale WAL/SHM files. Restore ownership to `zerops` and restrictive permissions. Supply the **original** master key, correct project identity, public origin and a valid project-scoped integration token. Deploy one schema-compatible Karakoram binary with singleton/temporaryShutdown settings.
+Fence every old control-plane process and preserve the failed/current state securely. Restore the complete archive into an emptied state directory on retained/replacement storage, without merging stale WAL/SHM files. Restore `zerops` ownership and restrictive permissions. Supply the original key, correct project identity/origins and valid integration token. Deploy one schema-compatible binary with singleton/temporaryShutdown settings.
 
-Automatic migrations are forward-only; an older binary is not a schema rollback tool. State rollback rewinds desired specs, checkpoints, accounts/tokens and inventory but **does not rewind** Zerops services or database data. Observe services, persisted Process IDs, members and PBM state before allowing restored checkpoints to drive disruptive work. A stale snapshot is not permission to replay an unknown restore initiation. Review [upgrade rollback](upgrade.md#rollback).
+Migrations are forward-only; an older binary does not roll back schema. State rollback rewinds specs, checkpoints, accounts/tokens and inventory, **not** external services or engine data. Inspect services, persisted Process IDs, members and engine recovery state before resuming disruptive checkpoints. Never replay an unknown restore initiation just because state is stale.
 
 ### Lost control plane
 
-- **Runtime lost, state volume intact:** fence the old runtime, recreate/redeploy one control-plane runtime mounted to the retained state volume with its original secrets/hostname/origins. Do not rerun a fresh installer that replaces identities/master key. Existing members normally keep running from cache.
-- **State volume lost, external snapshot available:** restore the snapshot and master key as above, then reconcile differences since the snapshot. Restore the same private advertised endpoint/trust identity that agents use; do not casually rename the control plane or regenerate its internal CA.
-- **State and original key/snapshot unavailable:** there is no supported automatic adoption/import-existing-cluster command. Running members may continue using cached config, but a blank control plane cannot infer their secret ownership/PKI/checkpoints. Recover the original state/key or perform an operator-designed database recovery from usable PBM data/credentials into a new installation. Do not create name-colliding clusters and assume it adopts existing services.
+| Loss | Recovery |
+| --- | --- |
+| Runtime; state volume intact | Fence the old runtime; redeploy one runtime on retained state with original secrets, hostname and origins. Do not rerun fresh installation with replacement identities. |
+| State volume; snapshot/key available | Restore as above; reconcile external changes since the snapshot. Preserve the private advertised endpoint and agent trust identity/internal CA. |
+| State/key/snapshot unavailable | No automatic adoption/import-existing-cluster command exists. Recover original state/key or design engine-native data recovery into a new installation. Name collisions do not adopt services. |
 
-Control-plane RPO is your consistent snapshot interval; RTO includes replacement, secret restoration and external-state review. Scheduling/aggregation are interrupted while it is unavailable; configured PBM agents/PITR and normal replication are not inherently dependent on the control-plane process.
+RPO is the consistent snapshot interval. RTO includes replacement, secrets and external-state review. Control-plane downtime pauses scheduling/aggregation; it does not inherently stop existing engine processes or replication.
 
 ## Recovering local admin access
 
-### Zerops-native startup recovery (recommended)
+### Startup recovery
 
-No container exec is needed. Keep the existing state volume and **original `KARAKORAM_MASTER_KEY`**, and keep the control plane a singleton (`maxContainers: 1`).
+Keep the state volume, original master key and singleton (`maxContainers: 1`).
 
-1. In **karakoram → Environment variables → Secret variables**, set **`KARAKORAM_RECOVERY_PASSWORD`** to a new strong, unique temporary password (at least **12 Unicode characters**, at most **1024 bytes**). Set optional `KARAKORAM_RECOVERY_ACCOUNT` to the local account name; it defaults to **`admin`**. Use Zerops service secret variables, not source/pipeline runtime variables, shared project variables or CLI password arguments. Authorized platform automation can instead update the service's secret user data through `PUT /service-stack/{id}/user-data`; preserve unrelated entries and follow Zerops's current secret-variable schema. Never print request bodies or tokens.
-2. **Restart the Karakoram service** so its process receives the updated environment. Before either HTTP listener starts, Karakoram resets the local account, re-enables it, requires a password change, and removes all its sessions/refresh families/API tokens. A missing account is created as a local administrator. Recovery restores `role:admin`'s unrestricted grant and this account's admin binding, clears their conflicting denies/outgoing role inheritance, and replaces this account's prior roles with `role:admin`; unrelated policy is retained. Review customized admin restrictions after recovery. An existing OIDC identity is not converted: choose a different, local recovery account.
-3. Check the secret-free **“Local administrator access recovered; password change required”** startup log and durable `AdminAccessRecovered` event. Sign in through the normal HTTPS UI with the temporary password, complete the mandatory password change, and sign in again with the new password. Reissue automation API tokens deliberately; the old ones remain revoked.
-4. **Delete `KARAKORAM_RECOVERY_PASSWORD`** (and the optional account variable) from the service's secret variables, then **restart** again to remove it from the running process environment. Store only your final password in a password manager.
+1. In **karakoram → Environment variables → Secret variables**, set `KARAKORAM_RECOVERY_PASSWORD` to a strong temporary value: **12 Unicode characters minimum, 1024 bytes maximum**. Optional `KARAKORAM_RECOVERY_ACCOUNT` defaults to `admin`. Use service secrets, not shared project/pipeline variables or CLI password arguments. Authorized platform automation can use `PUT /service-stack/{id}/user-data`: preserve unrelated entries, follow the current secret-variable schema and never log bodies/tokens.
+2. Restart. Before listeners start, recovery resets/re-enables the local account, requires password change and revokes its sessions, refresh families and API tokens. A missing account becomes a local administrator. Recovery restores unrestricted `role:admin`, repairs this account's binding, clears conflicting denies/outgoing inheritance and replaces its previous roles; unrelated policy remains. It does not convert OIDC accounts: choose a local name. Review customized admin restrictions afterward.
+3. Check the secret-free **“Local administrator access recovered; password change required”** log and `AdminAccessRecovered` event. Sign in over HTTPS, change the password, then sign in again. Reissue automation tokens deliberately.
+4. Remove recovery variables and restart again to clear the process environment. Store only the final password.
 
-The state database retains a non-reversible HMAC-SHA-256 receipt, keyed by a domain-separated key derived from the master key, over account and recovery password. Restarts with the same account/value do **not** reset again, including after the mandatory password change or after removing/re-adding the variable. A different recovery password applies again. The receipt is committed only after credentials, revocation, policy and audit persistence succeed; interrupted application is retried on the next startup before serving traffic. Invalid passwords/accounts abort startup without changing account state. A state-snapshot rollback also rewinds receipts: remove stale recovery variables before restoring state unless you intentionally want to apply recovery again.
+A non-reversible receipt makes the same account/password apply only once, even if removed/re-added. A different password applies again. Interrupted recovery retries before serving; invalid inputs abort startup without account changes. Snapshot rollback rewinds receipts: remove stale recovery variables first unless reapplication is intended.
 
 ### Offline alternative
 
-`karakoram admin reset-password ACCOUNT` remains an **offline local-account** recovery alternative, not a remote Zerops exec API:
+Stop every state writer. In a trusted maintenance environment, mount existing state and securely supply the original master key. Upload the matching executable privately; the maintenance container does not include it:
 
-1. Stop the server and ensure no other process writes its state.
-2. Run the matching Karakoram executable in a trusted environment with the existing state mounted and **the original master key securely supplied**. For the Local Storage maintenance container's `/data` mount, a matching Linux binary uploaded privately can be invoked as:
+```sh
+KARAKORAM_DATA_DIR=/data /tmp/karakoram admin reset-password admin
+```
 
-   ```sh
-   KARAKORAM_DATA_DIR=/data /tmp/karakoram admin reset-password admin
-   ```
-
-   The executable path assumes you uploaded it there; the maintenance container does not ship Karakoram automatically. The command securely prompts on a terminal, or reads `KARAKORAM_RESET_PASSWORD` if supplied through a protected environment. Do not pass passwords as CLI arguments, print environment values or save the key/password into shared shell history.
-3. Start one server again, sign in with the reset password, and complete the mandatory password change. Reset revokes sessions/tokens for the account; reconnect/reissue automation credentials deliberately.
-
-The offline command needs the existing DB and master key, not a fresh bootstrap. Unlike startup recovery, it does not repair deleted identities, restore RBAC bindings or change an OIDC identity-provider password. Keep a complete policy backup; the offline password reset alone cannot restore administrator authorization removed by a policy edit.
+Use its terminal prompt or protected `KARAKORAM_RESET_PASSWORD` environment, never password arguments/history. Restart one server and complete mandatory password change. Sessions/tokens are revoked. Unlike startup recovery, this command does not recreate identities, repair RBAC or change OIDC passwords.
 
 ## Troubleshooting by symptom
 
-| Symptom | Inspect | Safe next action |
+| Symptom | Likely cause | Action |
 | --- | --- | --- |
-| Member stuck importing/deploying | Cluster events/internal pending Process, Zerops service/process error and preparation/readiness logs; Local Storage ≥5 GB, name collisions, package/artifact availability | Observe the actual services if a platform Process has expired; otherwise wait for the terminal Process and agent health. For ownership conflicts, see [ownership recovery](#unverified-cluster-ownership). READY_TO_DEPLOY means no successful artifact deployment; import HTTP success is not cluster readiness. Provisioning imports services, then deploys the executable with the generated pipeline. Ensure readiness uses an absolute `/var/www/karakoram agent readiness` path. Do not delete retained data to reset a pipeline. |
-| Agent cannot pull config | Runtime logs for waiting-first-config vs using-cache, private DNS/origin 9443, pinned CA validity, member token/state identity and volume permissions | Restore the original controller endpoint/state/CA/token environment; environment-secret updates require process restart. Do not disable verification or expose 9443 publicly. Cached data-bearing members can continue, uncached/new/router deployments cannot. |
-| PBM agent not registered | PBM process tail, backup storage/config, correct backup roles/TLS/local URI and no duplicate agent | PBM uses local `127.0.0.1` **without directConnection=true**, even on secondaries, so it can discover the primary. Maintain one agent per mongod, none on mongos, same OS user as mongod. Process-running metric alone is not registration proof. |
-| Physical restore stuck/offline | Restore/Operation step, PBM describe-restore through stored S3 config, all member PBM logs, durable maintenance/stop holds and receipt ambiguity | Offline mongod/successful PBM exit can be expected. Keep writers stopped; do not auto-restart processes while PBM owns dbpath. Follow terminal restore progress and provider recovery steps; resync is nonblocking and observed, not an unbounded `--wait`. Ambiguous initiation needs observation before any new request. |
-| Placement warning | Best-effort groups/unknown fingerprints and whether multiple voters share a group | Treat as risk information. CPU mode/service count does not prove separation; do not destroy/recreate in a loop hoping for affinity. Maintain backups and decide whether the platform meets your availability needs. |
-| Binary upgrade stalled | Agent observed binary/lag/quorum, old-major FCV, pending deployment and balancer state | Repair health/FCV prerequisites; do not upgrade remaining members manually in parallel. FCV promotion remains separate. |
-| Public seed connects but normal RS driver fails | Discovered private `hello` hosts, per-member public ports, client DNS/routing and TLS SANs | Routing is not a split-horizon solution. Use private access or a designed external discovery setup; directConnection is diagnostic, not automatic failover. |
-| Backup/PITR missing | Backup errors, base success, primary destination/prefix, S3 quota/access and continuous PBM ranges | Verify storage and fresh base, then observe new coverage. Count retention is not a promised time window. Do not fabricate a PITR interval from wall-clock elapsed time. |
-| API 403 or UI controls absent | Current account state, effective RBAC, forced password change, CSRF for cookie writes | Use permission checks and reauthenticate after password change; reveal needs cluster-credentials read separately. |
-| Root `/metrics` denied/stale | Monitoring permissions on `<namespace>/<cluster>`, enabled targets, namespace relay and latest scrape success | Grant the intended scope and repair scraper connectivity. Cached sample presence is not live heartbeat; use status/timestamps/external checks. |
-| Events watch/UI live updates arrive in batches, but ordinary requests work | Compare durable `/events` and operation/status reads; inspect SSE proxy buffering and padded heartbeat delivery | Approximately 16-KiB random-base64 initial/heartbeat comments reduce buffering; small events may still wait for the fifteen-second heartbeat. Account for ~1.1 KiB/s padding per stream plus startup. Keep no-cache/no-transform/X-Accel-Buffering:no and configure a nonbuffering proxy path where possible. Preserve cursors and refresh/read durable state rather than resubmitting work. |
-
-For destructive repairs or ambiguous restore recovery, preserve redacted evidence and involve a maintainer/operator who can inspect the original state and PBM metadata. Never silently mark an uncertain operation successful or remove safety files to suppress its error.
-
-### Unverified cluster ownership
-
-**Symptom:** `service <cluster>m0 has no verified cluster ownership` during
-initial provisioning.
-
-**Cause:** the cluster was created by Karakoram v0.1.0 or earlier with a token
-without sudo mode. Sensitive variables are masked for tokens without sudo mode,
-and those versions proved ownership by reading a sensitive variable back.
-
-**Recovery:** upgrade to **v0.1.1**. If the cluster has been stuck for less than
-about a day, it recovers automatically: Karakoram proves ownership from its own
-recorded import while Zerops still retains the import's process records.
-
-If it has been stuck longer, the error now explains the missing ownership
-evidence. Choose one of these recovery paths:
-
-1. In Zerops, delete the stuck member's runtime service and its volume so
-   Karakoram recreates them. For member `<cluster>m0`, these are `<cluster>m0`
-   and `<cluster>m0v`. Other member names depend on topology; a member's volume
-   is its hostname with `v` appended (see [resource naming](adr/0009-resource-naming.md#decision)).
-   **Only delete services from this failed initial import that were never
-   deployed and hold no data. Do not delete healthy members or retained data
-   volumes.**
-2. Temporarily supply a project-scoped Full access token **with sudo mode** for
-   one reconcile. Karakoram records the verified service IDs and writes the
-   non-sensitive ownership marker. Then switch back to a token **without sudo
-   mode**. For `default`, update `KARAKORAM_ZEROPS_TOKEN` on the control-plane
-   service and restart after each token change; for another namespace, use
-   [token rotation](user-guide/namespaces.md#add-validate-and-rotate).
-
-Neither path makes a hostname proof of ownership. See the
-[ownership model](security.md#service-ownership) for the evidence Karakoram uses.
-
-### Repeated processNotFound errors
-
-**Symptom:** `zerops HTTP 400 (processNotFound)` repeats every minute.
-
-**Cause:** earlier versions kept polling a platform process that Zerops had
-already forgotten. Zerops retains process records for about 24 hours.
-
-**Recovery:** upgrade to **v0.1.1**. An expired import is finished with an unknown
-outcome, not treated as successful. Karakoram observes the services it may have
-created and re-imports any missing ones. Any other expired action is retried
-with the normal bounded backoff instead of polling the missing process forever.
-If initial provisioning reports an ownership conflict, follow
-[ownership recovery](#unverified-cluster-ownership).
-
-## RabbitMQ operations
-
-Use the [RabbitMQ guide](user-guide/rabbitmq.md) for configuration/access and [ADR 0021](adr/0021-rabbitmq-cluster-lifecycle.md) for lifecycle ordering. Operate through cluster specs and durable restart/replacement/rotation operations, not parallel manual Zerops deployments.
-
-RabbitMQ members report the `broker` role in the API and members table. Member RAM and CPU usage include the supervised `rabbitmq-server` wrapper and its live descendant processes, including `beam.smp`; the CPU counter also includes the wrapper's reaped-child CPU time. MongoDB process accounting is unchanged.
-
-### Delegating RabbitMQ user management
-
-`CreateRabbitMQUser` requires `database-users/create`; `ReplaceRabbitMQUser`
-requires `database-users/update`. Both grants are scoped to
-`<namespace>/<cluster>`. These permissions alone may assign empty tags or
-`management` only. Assigning **any** `administrator`, `policymaker`, `monitoring`
-or `impersonator` tag additionally requires `clusters/update` on the same
-object. The secondary permission is checked before any Management API write,
-including replacements that retain an already-present privileged tag. A grant
-on another namespace or cluster does not authorize it, and an explicit deny
-still wins. `clusters/update` does not substitute for the primary user grant.
-
-For example, a delegated manager for `default/brokers` needs:
-
-```csv
-p, role:user-manager, database-users, create, default/brokers, allow
-p, role:user-manager, database-users, update, default/brokers, allow
-```
-
-Only add `p, role:user-manager, clusters, update, default/brokers, allow` when
-the delegate is trusted with cluster administration as well as privileged
-RabbitMQ tags. This higher grant also authorizes ordinary cluster updates.
-The protected `admin`, `karakoram`, `monitor` and `guest` users remain
-unmodifiable through user-management endpoints regardless of RBAC grants;
-use supported system-user rotation operations instead. Native Management API
-access and definitions import are separate administrative surfaces, not a way
-to delegate only these API user-management permissions.
-
-New clusters default to RabbitMQ 4.3.6. Explicit API creation of deprecated
-4.3.5 remains available for controlled migration, but the creation response
-includes a `DeprecatedVersion` condition and a durable Warning event identifies
-stream authorization disclosures GHSA-6jvc-jx8w-m757 and GHSA-342v-cj47-c9g8,
-both fixed in 4.3.6. Choose 4.3.6 for new deployments and upgrade existing
-4.3.5 clusters before enabling stream access.
-
-### Rolling changes and drain
-
-Karakoram checks online quorum plus one and quorum-critical status before taking a multi-node broker out of service. It drains traffic, persists a maintenance hold and stops the broker **before** disruptive platform actions: Zerops force-stops containers roughly five seconds after SIGTERM. Deployment/readiness can succeed while an intentional hold keeps the broker stopped; that is not messaging readiness. The changed member must acknowledge config, run/rejoin and revive before the next changes. Do not remove hold files or restart other nodes to bypass a blocked operation.
-
-RabbitMQ drain suspends client listeners, closes connections and transfers quorum leadership/responsibilities. It **does not** consume, purge, back up or guarantee migration of all messages. Clients must reconnect to other brokers; a singleton goes offline. Ensure survivor capacity and avoid maintenance during alarms or replica catch-up. After a complete binary upgrade, Karakoram enables feature flags and rebalances queue/stream leaders. Only 4.3.5 → 4.3.6 is supported; transport/CA changes are not ordinary rolling upgrades.
-
-RAM can change live in Zerops, but RabbitMQ's rendered total-memory override and 60% watermark follow minimum RAM only after the gated rolling restart. Disk-free limit is max(0.5 GB, minimum RAM). Compare desired spec, platform configuration/allocation and current metric limits before assuming a resize is effective. CPU-mode cooldowns retain their retry deadline; inspect `PlatformCooldown`/events rather than resubmitting changes.
-
-#### Quorum-blocked restarts
-
-`QuorumCriticalQueues` / `RollingRestartBlocked` identify affected queues, vhosts
-and known members instead of an unexplained agent HTTP 503. The provider checks
-before the online-quorum wait and again after a failed wait. A distinct Warning
-`RollingRestartBlocked` is emitted on blocker transitions, not every retry.
-Cluster and operation messages name up to ten blockers plus the remaining count.
-
-Use **cluster detail → Queue recovery** for the exact native Management API GET,
-replica-add POST and Raft-status GET commands. Run from inside the project using
-the exported cluster CA and revealed `admin` credential; curl prompts for the
-password. No broker shell or Erlang cookie is needed. This is native administrative
-access outside Karakoram RBAC, not a queued Karakoram mutation. The
-[step-by-step procedure](user-guide/rabbitmq.md#quorum-blocked-restarts-and-replica-growth)
-documents the pinned RabbitMQ 4.3.6 route/body, URL encoding and retry precautions.
-Confirm quorum queue type, an online majority, a healthy target not already in the
-group, and voting membership/log catch-up after each addition. Prefer three
-replicas; scale-up alone never increases existing groups. Recover offline
-replicas/metadata/streams rather than forcing membership when majority is lost.
-HTTP success alone does not establish synchronization. Once safe, observe the
-existing workflow resume instead of submitting a duplicate operation.
-
-Creation member states distinguish platform import, deployment, agent readiness
-and bootstrap/join. A departing broker stays in status as `LEAVING` or
-`LEAVING_BLOCKED` until removed, never contributing to healthy-member counts.
-`MemberRemovalBlocked` warns once per changed blocking reason; inspect the
-condition and queue names, migrate/delete durable classic queues explicitly or
-recover unavailable survivors before continuing. Do not hide or forcibly delete
-the still-live member.
-
-
-### Scaling and replacing lost nodes
-
-Scale-up provisions and joins brokers, then rebalances leaders; it does not automatically grow all existing queue groups. Scale-down handles highest indexes first, requires healthy survivors, grows quorum replicas and migrates stream queues independently of the optional stream-protocol plugin before shrinking the leaving node. The reachable node's application is drained/stopped while its Erlang VM remains a Khepri voter; a survivor forgets it before full process shutdown and deletion. Durable classic queues hosted on the node block both scale-down and replacement with `MemberRemovalBlocked` and queue names. Explicitly migrate/delete them before retrying; no classic message-store migration is automatic.
-
-For a lost node/volume, preserve control-plane state, original key, surviving volumes and redacted events. Check that surviving Khepri and queue/stream majorities exist, clear alarms and repair private DNS/networking before requesting `replace-member` with the recorded member name. Replacement creates a fresh, monotonic node identity, joins it and grows/migrates replicas before forgetting/removing the old identity; an unreachable departing node skips local drain/stop and is forgotten through a survivor only with a Khepri voter majority among survivors. Do not recreate a blank volume under an old identity, reset survivors, or manually forget several nodes to unblock work.
-
-Replacement does not recover data whose last surviving replica is gone, and losing a majority is not automatic disaster recovery. If a majority cannot be recovered, assess restoring definitions to a new cluster and replaying/migrating messages from an independent source. Definitions contain no messages. Retained volumes are for coordinated suspend/resume, not a portable message-backup archive.
-
-Resume of a suspended retained cluster starts all brokers before individual readiness/revive waits, allowing the retained metadata majority to recover. Do not require the first retained broker to become individually ready before the others start.
-
-### Alarms and diagnostics
-
-| Observation | Inspect | Safe response |
-| --- | --- | --- |
-| Memory/disk alarm, publishing blocked | `Alarms` condition, memory/disk alarm metrics, resident memory/watermark, free disk/limit, queue backlog and unacknowledged messages | Reduce backlog/load or grow resources; allow the rolling limit update to complete. Do not disable managed alarms or restart several nodes together. |
-| Partition/missing running member | `Partition`/`Healthy`, each member's view, private DNS/network, node identity/cookie/certificates and runtime state | Restore connectivity and quorum. Preserve surviving data; do not treat a healthy scrape as healthy cluster membership. |
-| Rolling change stalled | Operation step, config acknowledgement, quorum-critical checks, maintenance state and pending platform Process | Recover missing replicas/alarms first, observe platform terminal status and let the durable workflow continue. |
-| `MemberRemovalBlocked` | Reported durable classic queue names and owning node | Explicitly migrate or delete the queues before retrying scale-down/replacement. A lost classic store cannot be recovered from definitions. |
-| Management API unavailable | Private 15671/15672, cluster CA/hostname, `karakoram` credentials and namespace relay policy/session | Repair private administration; do not expose node-control/distribution ports or disable certificate verification. |
-| Definitions restore succeeded but messages absent | Backup type/provenance and source object; imported users/vhosts/policies | Expected: definitions merge configuration only. Verify target system credentials and design message replay separately. |
-
-Native management access can change accounts/policies outside Karakoram RBAC. Keep it private. `requireTLS` exposes private HTTPS management on 15671 only; `engineOptions.managementUI.public=true` is rejected in this mode because the platform's public HTTPS forwarding uses a plaintext HTTP backend. Under explicitly selected `preferTLS` or `disabled`, public management is a separate HTTPS-to-HTTP forwarding surface and is not protected by the AMQP CIDR allowlist. Review credentials and definitions storage as sensitive. On deletion choose `keepVolumes` and `keepBackups` independently, inspect retained inventory/orphan cleanup and account for continued volume charges.
+| READY_TO_DEPLOY | No executable deployed | Push/deploy the artifact; import acceptance is not readiness. Preserve retained data. |
+| Startup/readiness fails | Token/project access, invalid key, origin or missing mount | Inspect deployment/application logs; check project access, master key ≥32 characters, URL and state mount without printing secrets. |
+| `userDataZeropsPrefixForbidden` | Reserved secret prefix | Use documented `KARAKORAM_ZEROPS_*` names. |
+| Edited secret not visible | Old process environment | Restart or redeploy; check YAML environment overrides. |
+| Subdomain missing after failed deploy | Public access not enabled | After successful HTTP-port deployment, enable Subdomain access in Zerops. |
+| Zerops token unauthorized | Wrong project/scope or expired token | Check integration token and [security](security.md); replacing a Karakoram API token cannot repair it. |
+| Agent cannot pull config | Routing, pinned CA, identity or permissions | Restore original endpoint/state/CA/token environment; restart after secret changes. Never expose 9443 or disable verification. See [relay health](namespaces.md#relay-health). |
+| Ownership conflict or expired platform Process | Incomplete legacy provisioning | Follow [upgrade recovery](upgrade.md); do not delete unrelated services. |
+| API 403 or missing UI controls | Account/RBAC, required password change or cookie CSRF | Reauthenticate and check effective permissions; credential reveal has a separate grant. |
+| Metrics denied/stale or charts empty | Authorization, disabled collection or failed scrape | Use [monitoring troubleshooting](monitoring.md). |
+| Live events arrive in batches | Proxy buffering | Preserve cursors; read durable status/events before retrying work. See [event transport](api.md#pagination-and-events). |
+| Engine health/recovery/placement warning | Provider-specific condition or platform constraint | Use the engine operations guides and [limitations](limitations.md); preserve evidence rather than clearing safety holds. |

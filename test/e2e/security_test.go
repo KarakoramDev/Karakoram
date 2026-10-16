@@ -33,7 +33,7 @@ func TestSecurity(t *testing.T) {
 		spec.Backup = &api.BackupSpec{Storage: ptr(storage)}
 		name := s.create(spec)
 		// Connection reveal intentionally returns only databaseAdmin
-		// (docs/user-guide/users-tls-access.md); internal system users are
+		// (docs/mongodb/access-and-tls.md); internal system users are
 		// proven through the management, PBM and exporter paths they serve.
 		connection := s.connection(name)
 		if len(connection.Credentials) != 1 || connection.Credentials[0].Username != "databaseAdmin" {

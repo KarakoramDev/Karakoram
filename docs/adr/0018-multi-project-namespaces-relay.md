@@ -22,7 +22,7 @@ Use smux keepalive interval/timeout of 15/45 seconds and WebSocket pings every 2
 
 Restore a **1-MiB per-WebSocket-message read limit** after constructing the byte-stream adapter, and cap active data streams at **256 per session**, excluding the control stream. These limits bound framing/admission, not total streamed payload. Runtime hub/client leaf renewal starts within thirty days of expiry.
 
-Namespace-qualified RBAC objects and an explicit source `backups/export` permission protect cross-namespace restore/clone (ADR 0013). Backup storage belongs to a namespace; cross-namespace recovery uses the source backup's recorded storage. **Backup data transfers directly between members and S3**, not through the relay.
+Namespace-qualified RBAC objects and an explicit source `backups/export` permission protect cross-namespace restore/clone (ADR 0013). Backup storage belongs to a namespace; cross-namespace recovery uses the source backup's recorded storage. MongoDB/PBM and Elasticsearch snapshot payloads transfer directly between members and S3. RabbitMQ definitions are exported through the Management API and uploaded to S3 by the control plane; remote Management API traffic uses the relay.
 
 ## Consequences
 
@@ -43,17 +43,6 @@ Admission is fenced/rechecked at session publication, and deletion revokes both 
 
 ## Evidence
 
-Measured in a test deployment using WebSocket, inner TLS 1.3 and smux v2 through the public L7 origin:
+WebSocket Upgrade through Zerops L7 with inner TLS and multiplexing supports bounded administrative traffic, reverse agent connections and reconnect after endpoint restart. Authentication rejects unrelated certificates, and target policy rejects disallowed destinations before dialing. This supports the management transport choice, not a bulk-transfer, longevity or recovery-time SLA. Keepalives and reconnects do not establish multi-hour/day L7 behavior or platform message-size limits. Local regression and environment-gated multi-namespace coverage are described in [verification](../verification.md).
 
-| Probe | Observation |
-| --- | --- |
-| Admission | HTTP/1.1 Upgrade and inner TLS 1.3 established; unrelated-CA clients and trusted-CA clients with a wrong pinned leaf were rejected without disturbing the legitimate session |
-| Idle/longevity | One unchanged session lasted at least **31 minutes 23.882 seconds**, including three application-idle intervals of about **605 seconds** each, with zero reconnects |
-| Multiplexing | **20/20** concurrent streams byte-verified 1 MB each; initial aggregate payload rate **21.488 MB/s**, RTT p50/p99 **4.460/12.031 ms** |
-| Throughput | One 50 MB echo transaction: **12.358 MB/s**, RTT p50/p99 **0.746/3.075 ms**; eight concurrent transactions: **47.974 MB/s**, RTT **0.938/3.710 ms** |
-| Restart recovery | First observed recovery after relay restart **8.663 seconds**; after hub restart **15.737 seconds** |
-| Direction/policy | Reverse-initiated streams passed before and after the idle window; a disallowed target was refused before dialing |
-
-Rates count original payload once and include stream establishment and small-message phases; they are test transaction rates, not saturated one-way limits. The test establishes transport suitability for administrative/PBM control, not MongoDB/PBM integration or a deployment SLA. It did not characterize multi-hour/day L7 behavior, actual idle timeout or maximum WebSocket message size. Production serial-bound enrollment differs from the test's explicit leaf pins; local regression tests and the environment-gated multi-namespace scenario are described in [verification](../verification.md).
-
-See [architecture](../architecture.md), [namespace lifecycle](../user-guide/namespaces.md) and [security](../security.md#relay-threat-model).
+See [architecture](../architecture.md), [namespace lifecycle](../namespaces.md) and [security](../security.md#relay-threat-model).

@@ -1,31 +1,26 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Quick start: Karakoram on Zerops in 10 minutes
+# Quick start
 
-The shortest path to a running Karakoram and your first database, all from the
-Zerops dashboard: no checkout, no local build and no CLI required. For custom
-service names, custom domains, the CLI and every option, see the full
-[installation guide](install.md).
+Install through the Zerops dashboard, create a cluster and back it up; no checkout or CLI required.
 
-You need a Zerops account and a project to install into. A LIGHT project is
-enough; the databases you create later run as extra services in the same project.
+You need a Zerops account and existing project. LIGHT hosts the control plane; clusters need **additional capacity**. Check engine sizing below and the wizard's total against project capacity. Other paths: [Install](install.md).
 
 ## 1. Create a Zerops token
 
-In Zerops, open **Settings → Access Tokens Management** and create a token with
-**Custom access per project → Full access** for your project only. **Leave sudo
-mode disabled**: it is not required. A sudo-mode token can read every sensitive
-variable in the project, including database and Karakoram secrets; Karakoram
-never needs to read them. Copy the value; it is shown once. Karakoram uses it to
-create and manage database services in that project.
+Open **Settings → Access Tokens Management**. Choose **Custom access per project → Full access** for this project only, with **sudo mode off**. Save the one-time token securely; see [Security](security.md) for the privilege boundary.
 
 ## 2. Import Karakoram
 
-In your project, choose **Import services** and paste this YAML. Put your token
-between the quotes on the `KARAKORAM_ZEROPS_TOKEN` line first:
+Choose **Import services** in the project. Copy this template, then replace the empty `KARAKORAM_ZEROPS_TOKEN` with your token before importing:
 
 ```yaml
 #yamlPreprocessor=on
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Karakoram Authors
+# Set buildFromGit to your fork's public URL when deploying a fork, and set
+# zeropsSetup to karakoram-source: the default setup deploys the upstream release.
+# To deploy a local checkout, use import-local.yaml and install.sh.
 services:
   - hostname: karakoramdata
     type: local-storage:single@1
@@ -42,7 +37,9 @@ services:
     envSecrets:
       KARAKORAM_MASTER_KEY: <@generateRandomString(<48>)>
       KARAKORAM_ADMIN_PASSWORD: <@generateRandomString(<24>)>
-      KARAKORAM_ZEROPS_TOKEN: "paste-your-token-here"
+      # Replace before import, or set in the service GUI and restart after import.
+      # Zerops reserves ZEROPS_* for system variables.
+      KARAKORAM_ZEROPS_TOKEN: ""
     verticalAutoscaling:
       cpuMode: SHARED
       minCpu: 1
@@ -53,77 +50,58 @@ services:
       maxDisk: 2
 ```
 
-This is the same file as [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml).
-It creates the control plane (`karakoram`) and its state volume
-(`karakoramdata`). The default `karakoram` setup downloads and verifies the latest
-signed release pinned on `main`; its build takes seconds, then wait until the
-service is **Active**. To build the exact source commit instead (a few minutes),
-change the import to `zeropsSetup: karakoram-source`.
-
-Don't paste the token into anything else, and delete any file you saved it in.
-Keep the generated `KARAKORAM_MASTER_KEY`: it encrypts Karakoram's stored
-credentials.
+This is [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml). Default `karakoram` downloads/verifies the signed release pinned on `main` (seconds); `zeropsSetup: karakoram-source` builds the exact commit (minutes). Wait for **Active**. Delete token-bearing YAML; preserve the generated master key separately.
 
 ## 3. Sign in
 
-1. Open `karakoram` → **Public access** and follow its `…zerops.app` HTTPS
-   subdomain.
-2. In `karakoram` → **Environment variables → Secret variables**, read
-   `KARAKORAM_ADMIN_PASSWORD`.
-3. Sign in as `admin` with that password. On **Set a new password**, choose a
-   new one (at least 12 characters, different from the generated one), then
-   sign in again with it.
+1. Open **karakoram → Public access** and its HTTPS subdomain.
+2. Read `KARAKORAM_ADMIN_PASSWORD` under **Environment variables → Secret variables**.
+3. Sign in as `admin`, set a different password of at least 12 characters, then sign in again.
 
-## 4. Add backup storage (recommended)
+## 4. Add storage
 
-Backups need an S3 bucket. The quickest is a Zerops **Object Storage** service in
-the same project. Create one, then in Karakoram go to **Settings → Backup
-storages** and fill in the form:
+**Storage is required before any backup.** Create an S3 bucket, for example using Zerops Object Storage. Open **Settings → Backup storages**, then **Create**:
 
 | Field | Value |
 | --- | --- |
-| Name | any short name, e.g. `backups` (2–63 lowercase letters, digits or hyphens) |
-| Endpoint URL | the Object Storage API URL, e.g. `https://storage-prg1.zerops.io` |
-| Region | `us-east-1` |
-| Bucket | the bucket name from the Object Storage service |
-| Access key ID / Secret access key | the keys from the Object Storage service's access details |
+| Name | e.g. `backups`; 2–63 lowercase letters, digits or hyphens |
+| Endpoint URL | Object Storage endpoint shown in Zerops |
+| Region | `us-east-1` for Zerops storage |
+| Bucket | Your bucket name |
+| Access key ID / Secret access key | Object Storage access details |
 
-Leave the other fields at their defaults and choose **Create**, then **Verify** on
-the new row; it should report read, write and delete access. You can skip this
-step and add storage later, but the cluster has no backups until you do.
+Keep other defaults. Choose **Verify** and confirm read/write/delete access. See [Backups and storage](backups.md) for other endpoints and retention rules.
 
-## 5. Create your first database
+## 5. Create a cluster
 
-Choose **New cluster**. The wizard walks through **Basics → Topology → Resources
-→ Backups → Access & TLS → Review**:
+Choose **New cluster**, select the engine and name, then:
 
-- **Basics:** a cluster name (2–12 lowercase letters or digits, starting with a
-  letter, e.g. `orders1`) and the engine: **Percona Server for MongoDB**,
-  **RabbitMQ** or **Elasticsearch**.
-- **Topology:** the default is 3 members/brokers/nodes for availability; 1 is
-  fine for a trial (no failover).
-- **Backups:** select the storage from step 4 and add a schedule (the default is
-  daily at 02:00 UTC, keeping 7).
-- Keep the other suggested defaults (advertised version, TLS required, no public
-  access), review and create.
+| Engine | Wizard choices for a first cluster | Next page |
+| --- | --- | --- |
+| MongoDB | **Percona Server for MongoDB → replica set**; 1 member only for disposable tests, or 3 voters for quorum-based failover when placement permits. Host separation is [not guaranteed](limitations.md#zerops-failure-domains-and-storage). | [Create and size](mongodb/README.md#create) |
+| RabbitMQ | **RabbitMQ**; 1 broker for disposable tests or 3 brokers. | [Create and configure](rabbitmq/README.md#create-and-configure) |
+| Elasticsearch | **Elasticsearch → Combined master and data nodes**; `dev` preset for disposable tests or `prod` for three combined nodes. | [Create and size](elasticsearch/README.md#create) |
 
-A small cluster is usually ready in 5–15 minutes; the cluster page shows
-progress. When it is **Ready**, the **Connection** section on its Overview shows
-the endpoint; **Reveal credentials** shows the user and password, and
-**Download ca.pem** gives the CA certificate your application needs. **Backup
-now** takes a first backup straight away.
+Review member sizing and total project capacity. Select backup storage; keep the advertised version, TLS required and public access off. Review and create; wait for **Ready**.
 
-Your application connects from a service **in the same Zerops project** over the
-private network. Engine guides with connection examples:
-[MongoDB](user-guide/replica-sets.md), [RabbitMQ](user-guide/rabbitmq.md),
-[Elasticsearch](user-guide/elasticsearch.md). More on backups and restore:
-[backups and restore](user-guide/backups-and-restore.md).
+## 6. Take a backup
+
+Open **Cluster → Backups → Backup now**. This is asynchronous: follow the operation and wait until backup inventory reports **Succeeded**. If storage was skipped, add it before retrying.
+
+- [MongoDB](mongodb/backups.md): Percona Backup for MongoDB (PBM) logical or physical backup.
+- [RabbitMQ](rabbitmq/backups.md): definitions only—no messages or point-in-time recovery (PITR).
+- [Elasticsearch](elasticsearch/snapshots.md): native snapshot.
+
+## 7. Connect an application
+
+Use the private network from an application service in the same project. **Revealed credentials are the engine's administrative identity, not application credentials.** Create a scoped application identity and deliver its credentials, endpoints and CA through runtime secrets/configuration:
+
+- [MongoDB users, roles and TLS](mongodb/access-and-tls.md)
+- [RabbitMQ access and TLS](rabbitmq/access-and-tls.md)
+- [Elasticsearch access and security](elasticsearch/access-and-security.md)
 
 ## What next
 
-- Install the [`karactl` CLI](install.md#install-karactl) to script everything
-  you just did.
-- [Upgrade Karakoram](upgrade.md) when a new release ships; never re-import the
-  YAML over an existing installation.
-- Read the [limitations](limitations.md) before putting production data on it.
-- Something stuck? See [troubleshooting](install.md#troubleshooting).
+- [CLI](cli.md), [cluster operations](clusters.md) and [Backups and storage](backups.md).
+- [Upgrade](upgrade.md) existing installations; never re-import the installer.
+- [Limitations](limitations.md) before production; [Operations](operations.md) for troubleshooting.

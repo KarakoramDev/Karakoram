@@ -39,7 +39,13 @@ Missing URL/token skips deployed scenarios. Capability-specific prerequisites ar
 
 `TestMultiNamespace` additionally requires the public IPv6 CIDR and all five S3 storage-creation inputs. It creates an isolated namespace-local storage regardless of `KARAKORAM_E2E_STORAGE_NAME`, then removes it before namespace deletion. The scenario reuses a matching namespace but treats it as disposable, so do not select one containing unrelated resources. Relay enrollment may take up to fifteen minutes. It creates a three-member source and a three-member clone in `default`, validates a restored marker document, checks namespace RBAC and backup export denial, and verifies that token rotation preserves the relay session. Namespace teardown waits for retained-resource guards and relay deletion; `KEEP=1` retains it and its test resources.
 
-For OIDC setup, see the [test issuer instructions](../../docs/user-guide/rbac-and-auth.md#test-only-live-issuer). The issuer accepts public-client or basic-client authentication without validating a client secret, allowing the suite to preserve the deployment's existing write-only secret while restoring other settings. A configured issuer enables full login; no secret replacement is necessary.
+### TEST ONLY live issuer
+
+`test/oidc-issuer` is a standalone auto-approve issuer for acceptance testing, **not a production identity provider**. It authenticates every visitor as `oidctest` with group `karakoram-admins`; bind that group only to a low-privilege test role. Its discovery/JWKS/code/token endpoints enforce the configured callback, one-minute single-use codes and S256 PKCE, and sign five-minute ID tokens with an ephemeral RSA key. Restarting the issuer invalidates pending codes and rotates that test signing key.
+
+Build with `go build ./test/oidc-issuer`. Supply HTTPS `OIDC_ISSUER_URL` and `OIDC_CALLBACK_URL` for your deployment; the fixed client ID is `karakoram-e2e`. The dedicated `test/oidc-issuer/zerops.yaml` setup builds from the repository root. Create a disposable `oidcissuer` runtime service, push with `zcli service push oidcissuer --setup oidcissuer --zerops-yaml-path test/oidc-issuer/zerops.yaml`, then enable its HTTP subdomain. Set the issuer origin to that subdomain and the callback to your Karakoram origin followed by `/api/v1/auth/oidc/callback`. Configure Karakoram's issuer to the service's public HTTPS origin and `groupsClaim: groups`. Delete the issuer and remove its SSO settings/group binding when testing finishes.
+
+The issuer accepts public-client or basic-client authentication without validating a client secret, allowing the suite to preserve the deployment's existing write-only secret while restoring other settings. A configured issuer enables full login; no secret replacement is necessary.
 
 ## Running the suite
 
@@ -150,7 +156,7 @@ These are before/after persistence checks, not continuous-availability or throug
 - Positive public probes retry network-level failures with a bounded deadline; authentication, authorization and certificate/protocol failures remain terminal. This permits network settling without equating cluster readiness with public reachability.
 - Resource tests distinguish effective autoscaling configuration from current container allocation. Metrics checks require buckets strictly newer than their baseline; rebucketing old samples does not count as fresh telemetry.
 - OIDC uses the test issuer's fixed `oidctest` identity and `karakoram-admins` group. Bind that group to **viewer**, not admin. Test-created identities are cleaned unless `KEEP`; pre-existing accounts are not deleted.
-- No Go scenario claims browser/DOM coverage. Exercise the [web UI checklist](../../docs/verification.md#browser-workflow-checklist) separately.
+- No Go scenario claims browser/DOM coverage. Exercise the [web UI checklist](../../docs/verification.md#browser-and-installation-checklists) separately.
 
 The non-deployed API and CLI inventories compare every generated operation with an implemented route and executable command:
 

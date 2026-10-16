@@ -55,7 +55,7 @@ export function OverviewTab() {
       {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
       {spec.provider === 'rabbitmq' ? <QuorumCallout cluster={cluster} base={base} /> : null}
       {healthNotices.map((notice) => <Callout key={notice.title} tone="warn" title={notice.title}>
-        {notice.message} See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/elasticsearch.md#scale-upgrade-restart-and-replace" target="_blank" rel="noreferrer">Elasticsearch scaling guide</a>.
+        {notice.message} See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/operations.md#scale-upgrade-restart-and-replace" target="_blank" rel="noreferrer">Elasticsearch scaling guide</a>.
       </Callout>)}
       <div className={replicaSetDetails ? 'grid-4' : 'grid-3'}>
         <Card flush>
@@ -213,7 +213,7 @@ export function OverviewTab() {
                 ]}
               />
               <CodeLine value={conn.uri} />
-              {spec.provider === 'psmdb' && conn.replicaSet && Boolean(conn.publicHosts?.length) ? <Callout tone="warn">Public seeds advertise private member hostnames. External drivers must resolve and reach the discovered members. <code>directConnection=true</code> is for diagnostics only, not external HA/failover. See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/users-tls-access.md" target="_blank" rel="noreferrer">TLS and access guide</a>.</Callout> : null}
+              {spec.provider === 'psmdb' && conn.replicaSet && Boolean(conn.publicHosts?.length) ? <Callout tone="warn">Public seeds advertise private member hostnames. External drivers must resolve and reach the discovered members. <code>directConnection=true</code> is for diagnostics only, not external HA/failover. See the <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/mongodb/access-and-tls.md#public-exposure-and-discovery" target="_blank" rel="noreferrer">TLS and access guide</a>.</Callout> : null}
               <CredentialsReveal namespace={namespace} name={name} base={base} provider={spec.provider} allowed={can('read', 'cluster-credentials')} />
             </div>
           ) : (

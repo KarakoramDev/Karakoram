@@ -347,7 +347,7 @@ export function ClusterWizardPage() {
                     description: rules.topology[t.type]?.description ?? 'Configure the provider components on the Topology step.',
                   }))}
                 />
-                {provider.name === 'elasticsearch' ? <a className="small" href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/elasticsearch.md#topologies-and-presets" target="_blank" rel="noreferrer">Topology guide: combined nodes or dedicated masters</a> : null}
+                {provider.name === 'elasticsearch' ? <a className="small" href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/README.md#topologies-and-presets" target="_blank" rel="noreferrer">Topology guide: combined nodes or dedicated masters</a> : null}
                 {provider.presets.length ? (
                   <SelectField label="Preset (optional)" value={presetName} onChange={(e) => applyPreset(e.target.value)} hint="Applies the preset's topology, resources and backup defaults; you can still edit every field.">
                     <option value="">Custom</option>
@@ -592,7 +592,7 @@ export function ClusterWizardPage() {
                     ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
                   ]}
                 />
-                {spec.provider === 'rabbitmq' && managementIsPublic(spec.engineOptions) ? <p className="small"><a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md#public-access" target="_blank" rel="noreferrer">Review RabbitMQ public management access and its security boundaries</a>.</p> : null}
+                {spec.provider === 'rabbitmq' && managementIsPublic(spec.engineOptions) ? <p className="small"><a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/rabbitmq/access-and-tls.md#public-access" target="_blank" rel="noreferrer">Review RabbitMQ public management access and its security boundaries</a>.</p> : null}
                 <p className="small muted">These are aggregate autoscaling bounds, not a price estimate or the initial allocation. Billing follows <a href="https://zerops.io/pricing" target="_blank" rel="noreferrer">Zerops pricing</a> for runtime CPU/RAM, runtime disks, data volumes and other enabled resources; backup storage is additional.</p>
                 <Callout tone="info" title="What this configuration means">
                   <ul style={{ margin: 0, paddingLeft: 18 }}>{engineConsequences(spec).map((consequence) => <li key={consequence}>{consequence}</li>)}</ul>

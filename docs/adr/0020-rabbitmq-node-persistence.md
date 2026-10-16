@@ -6,12 +6,9 @@ Status: Accepted
 
 A RabbitMQ node's data directory holds its Khepri metadata replica (RabbitMQ 4.3 has no other metadata store), quorum-queue and stream logs, classic-queue message stores and its cluster membership. Node identity is the pair of node name and data directory. Zerops runtime disks are wiped on every deployment, so a broker could either keep its data directory on a per-node Local Storage volume (as PSMDB members do, ADR 0007) or run ephemerally and resynchronize replicas from peers after every deployment.
 
-We prototyped both on Zerops with RabbitMQ 4.3.6 / Erlang 27.3.4.17 from the Team RabbitMQ apt repositories, three `ubuntu@24.04` services with classic-config peer discovery and 10,000 persistent quorum-queue messages:
+Persistent node identity and data avoid resynchronizing full queue backlogs after ordinary redeployments. An ephemeral node can recover replicas only while peers retain usable metadata and queue majorities; losing several ephemeral nodes together can lose queues and metadata. Single-node re-admission behavior is version-dependent and is not a recovery guarantee.
 
-- **Persistent node, redeploy and restart:** the node returned with the same name and data; all replicas kept identical log indexes and all messages. A node stopped while 1,000 further confirmed messages were published caught up within about 23 seconds of its start request; all 13,000 messages were then consumed and acknowledged.
-- **One ephemeral node wiped:** on 4.3.6 the blank node with the same name was re-admitted automatically and its quorum-queue replica resynchronized from peers. This depends on current Khepri/quorum-queue behaviour, transfers the whole queue backlog again and is not guaranteed for other versions.
-- **Two of three ephemeral nodes wiped** (for example a co-located host failure or two deployments overlapping): the blank nodes could not join through the survivor, formed a separate empty two-node cluster, and the original quorum queue was lost (`NOT_FOUND`); the survivor kept a stale three-node view and membership repair timed out. Recovering a healthy cluster discarded the original queue.
-- Zerops stops a container about five seconds after `SIGTERM`, regardless of the broker's shutdown progress. Vertical RAM changes on a runtime are applied live, but RabbitMQ only re-reads its memory limit on restart.
+The platform stop deadline does not guarantee enough time for clean broker shutdown. Vertical RAM changes can apply live, but RabbitMQ re-reads its memory limit only on restart.
 
 ## Decision
 

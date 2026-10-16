@@ -100,7 +100,7 @@ func TestCatalogConfigMatchesValidation(t *testing.T) {
 }
 
 func TestManagedConfigDocumentationMatchesPrefixes(t *testing.T) {
-	guide, err := os.ReadFile("../../../docs/user-guide/rabbitmq.md")
+	guide, err := os.ReadFile("../../../docs/rabbitmq/README.md")
 	if err != nil {
 		t.Fatal(err)
 	}

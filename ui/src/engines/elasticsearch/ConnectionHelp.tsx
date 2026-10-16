@@ -15,6 +15,6 @@ export function ConnectionHelp({ connection }: { connection: Schemas['Connection
       <CodeLine value={`curl --cacert ca.pem -u elastic "${endpoint.url.replace(/\/$/, '')}/_cluster/health"`} />
     </div>)}
     {!endpoints.length ? <p className="small muted">The HTTPS endpoint appears after Elasticsearch initializes.</p> : null}
-    <p className="xs faint">Use a scoped native user for applications. <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/elasticsearch.md#connect-and-reveal-credentials" target="_blank" rel="noreferrer">Elasticsearch connection guide</a></p>
+    <p className="xs faint">Use a scoped native user for applications. <a href="https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/access-and-security.md#connect-and-reveal-credentials" target="_blank" rel="noreferrer">Elasticsearch connection guide</a></p>
   </details>;
 }

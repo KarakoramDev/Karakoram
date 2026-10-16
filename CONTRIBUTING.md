@@ -2,55 +2,31 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Contributing to Karakoram
 
-Thank you for helping. Karakoram is an Apache-2.0 orchestrator for Percona Server for MongoDB and Percona Backup for MongoDB on the [Zerops](https://zerops.io) platform. It is a community project: it is not affiliated with or endorsed by Zerops, Percona, MongoDB or the OpenEverest project.
+Contribute to Apache-2.0 orchestration for MongoDB (Percona Server/PBM), RabbitMQ and Elasticsearch on [Zerops](https://zerops.io).
 
-Start with the [architecture](docs/architecture.md), [ADRs](docs/adr/README.md), [security model](docs/security.md) and [limitations](docs/limitations.md). Do not introduce Kubernetes dependencies or imply third-party endorsement.
+Read [architecture](docs/architecture.md), [ADRs](docs/adr/README.md), [security](docs/security.md) and [limitations](docs/limitations.md). No Kubernetes dependencies or implied vendor/OpenEverest affiliation or endorsement.
 
-## Code of conduct
+## Conduct and contribution process
 
-Everyone taking part in this project — in issues, pull requests, reviews, discussions and chat — is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md). In short:
+Follow the [Code of Conduct](CODE_OF_CONDUCT.md): be respectful, critique ideas rather than people, keep discussion constructive and respect reviewers' time. Harassment and discriminatory behavior are not accepted. Report conduct concerns to conduct@karakoram.dev; maintainers may remove content or block participants.
 
-- Be respectful and assume good intent. Critique code and ideas, never people.
-- No harassment, personal attacks, discriminatory language or unwelcome attention, in public or in private.
-- Keep discussions on topic and constructive; explain the reasoning behind a request or a rejection.
-- Respect maintainers' and reviewers' time: search existing issues first, keep pull requests focused, and answer review questions.
+1. Search existing issues. For changes beyond a small fix, open an issue to agree on the problem/approach; architectural changes need an ADR update.
+2. Create a topic branch and keep each pull request to one logical change.
+3. Use clear commit messages: summary, blank line, then what changed and why.
+4. Update affected code, callers, tests and documentation together; remove obsolete paths and run the applicable [checks](#checks).
+5. Sign off every commit. Maintainers review pull requests and decide acceptance.
 
-Report unacceptable behaviour to conduct@karakoram.dev. Maintainers may remove comments, close threads or block participants who do not follow these rules.
-
-## How to contribute
-
-1. For anything beyond a small fix, open an issue first to agree on the problem and the approach. Architectural changes need an ADR update.
-2. Fork the repository, create a topic branch and keep each pull request to one logical change.
-3. Write clear commit messages: a short summary line, a blank line, then what changed and why.
-4. Add or update tests and documentation with the change, and make sure the [checks](#checks) pass locally.
-5. Every commit must carry a `Signed-off-by` line (see below). A maintainer reviews every pull request; acceptance is at the maintainers' discretion.
-
-### Developer Certificate of Origin
-
-To keep a clear chain of provenance, every commit must be signed off under the [Developer Certificate of Origin 1.1](https://developercertificate.org/). By adding the line
-
-```
-Signed-off-by: Your Name <you@example.com>
-```
-
-(`git commit -s` does it for you) you certify that you wrote the change or otherwise have the right to submit it under the project's Apache-2.0 license. Use your real name; anonymous or bot sign-offs are not accepted.
+Every commit requires a `Signed-off-by: Your Name <you@example.com>` line under the [Developer Certificate of Origin 1.1](https://developercertificate.org/). `git commit -s` adds it. This certifies your right to contribute under Apache-2.0; use your real name, not anonymous/bot sign-offs.
 
 ## AI/LLM-assisted contributions
 
-AI coding assistants and LLMs are allowed. We ask for a careful, conservative approach guided by engineering judgment — in other words: use common sense and do not blindly accept generated suggestions.
+AI assistance is allowed, but a human must submit, understand and take responsibility for every line, including correctness, security and licensing. Automated/bot-driven pull requests and unreviewed generated output are not accepted. Large/complex reconciliation, data-safety, backup/restore and security logic must be authored and fully understood by the contributor.
 
-- **A human submits every contribution.** Automated or bot-driven pull requests are not accepted.
-- **You are fully responsible for what you submit, including everything an AI produced for you.** You must understand both the design and the implementation, be able to explain and defend every line in review, and own its correctness, security and licensing exactly as if you had typed it yourself. "The AI wrote it" is never an answer to a review question.
-- LLMs are fine for prototyping, boilerplate, tests scaffolding and early self-review. Large or complex logic — especially reconciliation, data-safety, backup/restore and security code — must be authored and fully understood by you; do not submit unreviewed generated output.
-- Make sure generated code does not reproduce third-party code under an incompatible license, and that it contains no secrets or private data from your environment.
-- **Disclose AI use** in the pull request description when it meaningfully contributed to the change (which tool, and for what).
-- Before asking a human for review, you are welcome to run an LLM review of your own patch to catch typos and rough edges. Do not post AI review bots into pull request threads; keep discussions between people.
-
-Maintainers may ask for clarification or decline contributions where AI use raises concerns. This policy will be revisited as tools mature; it is adapted from the [Cloud Hypervisor contribution guidelines](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/CONTRIBUTING.md#aillm-assistance--generated-code).
+Disclose meaningful AI use in the pull request: tool and purpose. Check generated material for incompatible licenses, secrets and private data. Private AI self-review is allowed; do not post AI review bots into human review threads. Maintainers may request clarification or decline contributions. This policy is adapted from [Cloud Hypervisor's guidelines](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/CONTRIBUTING.md#aillm-assistance--generated-code).
 
 ## Development setup
 
-Requirements: Go 1.25+, Make, Node 22.6+ and npm for the UI (the UI test runner uses Node's built-in TypeScript support). Docker and a Linux host are needed for the current agent integration suite's host networking. A Zerops account is not needed for unit tests. Install UI dependencies and build:
+Requirements: **Go 1.25+**, Make, **Node 22.6+** and npm. The UI test runner uses Node's built-in TypeScript support. Agent integration tests require Docker and Linux host networking; unit tests need no Zerops account.
 
 ```sh
 make ui
@@ -58,55 +34,28 @@ make build
 make test
 ```
 
-The binaries are `bin/karakoram` and `bin/karactl`. `make build-all` builds the UI first. A plain Go build without existing UI output intentionally does not embed the SPA. Build metadata comes from Make's `VERSION`, `COMMIT` and `BUILD_DATE` variables.
+Binaries are `bin/karakoram` and `bin/karactl`. `make build-all` builds UI assets first. Plain Go builds without existing UI output do not embed the SPA. Build metadata uses Make's `VERSION`, `COMMIT` and `BUILD_DATE` variables.
 
-`make build` is the development build. Published release artifacts come from
-`make release`, not from copying `bin/`; see [Releasing](#releasing).
+`make build` is for development. Publish artifacts with `make release`, not by copying `bin/`; see [Releasing](#releasing).
 
-For frontend work, run `npm run dev` in `ui/`; Vite serves port 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects a different development backend. See [ui/README.md](ui/README.md). A local server still needs the actual settings in [internal/server/config.go](internal/server/config.go), including a persistent data directory, master key, public origin and Zerops backend configuration; do not substitute fake production credentials or commit a populated environment file.
+For frontend development, run `npm run dev` in `ui/`: Vite listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another backend; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real backend settings. Do not commit populated environment files or substitute fake production credentials.
 
 ## Releasing
 
-A maintainer cuts a release from `main` after a major change, a security fix,
-or enough accumulated fixes to warrant an upgrade. Releases are not made for
-every commit, and pushing commits does not automatically create tags or releases.
+Maintainers release from `main` for major changes, security fixes or accumulated fixes—not every commit. Pushes do not automatically create tags/releases.
 
-Use SemVer tags `vMAJOR.MINOR.PATCH`. Before 1.0, increment MINOR for new
-features or breaking changes (document breaking changes and upgrade steps),
-and PATCH for fixes and security updates. From 1.0 onward, breaking changes
-increment MAJOR, backward-compatible features MINOR, and fixes PATCH.
-A prerelease suffix such as `-rc.1` is allowed; pin one for deployment only
-when deliberately releasing it.
+Use `vMAJOR.MINOR.PATCH`: before 1.0, MINOR for features/breaking changes and PATCH for fixes/security; from 1.0, MAJOR for breaking changes, MINOR for compatible features, PATCH for fixes. Document breaking changes/upgrade steps. Prereleases such as `-rc.1` are allowed; deploy them only deliberately.
 
-The default Zerops setup deploys the release pinned in `deploy/zerops/RELEASE`,
-even when `main` contains newer source. **Keep its deploy/run sections compatible
-with the pinned binary.** A runtime configuration change requiring a new binary
-must land with the release that ships it, or use `karakoram-source` until then.
+Default Zerops deploy/run configuration must remain compatible with the binary pinned in `deploy/zerops/RELEASE`, even on newer `main`. Ship binary-dependent configuration with its release or use `karakoram-source`. **Never edit `RELEASE` by hand:** the release tool writes its single SemVer tag.
 
 ### Prerequisites and release notes
 
-Use Go 1.25+, Node 22.6+ with npm, Make, Bash, Git, GNU tar, GNU coreutils
-(including `date` and `sha256sum`), gzip, and OpenSSH `ssh-keygen` with
-`-Y sign`/`-Y verify` support. For publication, install `gh`, authenticate it
-with release rights for the public repository, and have Git push access to
-`origin` for tags and `main`.
-
-The release signing private key defaults to
-`~/.config/karakoram/release-signing-ed25519`; override it with
-`KARAKORAM_RELEASE_SIGNING_KEY`. Its public key must be authorized in
-[`deploy/allowed_signers`](deploy/allowed_signers) for principal
-`release@karakoram.dev`. Keep the private key out of the repository.
-
-Write a release-notes file describing changes, security fixes, upgrade steps,
-and state-schema/rollback compatibility. Keep it outside the checkout (or commit
-it before preparation) so the release tool's clean-tree checks succeed.
-The `NOTES` argument names that file; the tool does not generate release notes.
-Run the applicable [checks](#checks) and review the changes before preparation;
-the release targets do not replace the test and lint suites.
+- Development tools above, Bash, Git, GNU tar/coreutils (`date`, `sha256sum`), gzip, OpenSSH `ssh-keygen` supporting `-Y sign`/`-Y verify`.
+- Publication: `gh` authenticated with public-repository release rights; Git push rights for `origin` tags and `main`.
+- Signing key: `~/.config/karakoram/release-signing-ed25519`, overridden by `KARAKORAM_RELEASE_SIGNING_KEY`. Authorize its public key in [`deploy/allowed_signers`](deploy/allowed_signers) for `release@karakoram.dev`; never commit the private key.
+- Write `NOTES` outside the checkout (or commit before preparation): changes, security fixes, upgrade steps, state-schema/rollback compatibility. Notes are not generated. Review changes and run applicable [checks](#checks); release targets do not replace them.
 
 ### Prepare, build, and publish
-
-For example, to release `v0.1.2`:
 
 ```sh
 make release-prepare VERSION=v0.1.2
@@ -114,47 +63,25 @@ make release-build VERSION=v0.1.2
 make release VERSION=v0.1.2 NOTES=../release-notes-v0.1.2.txt
 ```
 
-- **`release-prepare`** requires a clean tree on `main` equal to `origin/main`,
-  a tag absent both locally and on `origin`, and a version newer than the current
-  pin. It detaches HEAD (local `main` stays unchanged), writes
-  `deploy/zerops/RELEASE`, creates a signed-off `Release v0.1.2` commit and an
-  annotated tag. It does not push; review this commit and tag before publishing.
-- **`release-build`** is a local dry run: it checks that the tag exists and pins
-  itself, exports that tag with `git archive`, builds the UI once and cross-builds
-  the server for Linux amd64/arm64 and `karactl` for Linux/macOS amd64/arm64 and
-  Windows amd64. It writes reproducible server archives (binary, LICENSE,
-  NOTICE), raw CLI binaries, `checksums.txt` and its SSH signature to
-  `dist/v0.1.2/`, then verifies the signature and all checksums. It requires the
-  signing key but does not publish or push.
-- **`release`** requires a clean tree with HEAD at the tagged commit and
-  `origin/main` an ancestor of it; a conflicting remote tag is rejected. It
-  rebuilds, pushes the tag, creates a draft GitHub release using `NOTES`,
-  downloads all draft assets, compares them byte-for-byte with the local files
-  and verifies their signature/checksums. Only then does it publish the release
-  (as latest, or as a prerelease for `-rc.N` versions) and fast-forward
-  `origin/main` to the release commit. This ordering keeps `main` from pinning an
-  unpublished release. Rerun the same command after a failure: an unfinished
-  draft is deleted and recreated, and an already published release is only
-  re-verified before `main` is fast-forwarded. Afterwards update the local
-  `main` with `git checkout main && git merge --ff-only origin/main`.
+| Target | Requirements and result |
+| --- | --- |
+| `release-prepare` | Clean tree, `main` equal to `origin/main`, tag absent locally/remotely, version newer than pin. Detaches HEAD, writes pin, creates signed-off `Release v0.1.2` commit and annotated tag. Local `main` unchanged; no push. Review commit/tag. |
+| `release-build` | Tag must exist and pin itself; signing key required. Dry run exports tag with `git archive`, builds UI once, server for Linux amd64/arm64 and CLI for Linux/macOS amd64/arm64 + Windows amd64. Writes server archives (binary/LICENSE/NOTICE), raw CLI binaries, `checksums.txt` and SSH signature to `dist/v0.1.2/`; verifies signature/all checksums. No publication/push. |
+| `release` | Clean tree, HEAD at tag, `origin/main` ancestor; conflicting remote tag rejected. Rebuilds, pushes tag, creates draft from `NOTES`, downloads every asset, compares bytes and verifies signature/checksums. Then publishes (latest, or prerelease for suffixed tags) and fast-forwards `origin/main`, never pinning unpublished assets. |
 
-Release builds use `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, the full tagged
-commit SHA, and the tag commit's UTC timestamp as the build date. Archive paths,
-ordering, owner/group and timestamps are normalized, and gzip omits timestamps.
-To reproduce binary checksums, use the **same exact Go toolchain version** as
-the original build, the tagged source and its locked npm dependencies; inspect
-an artifact with `go version -m <binary>` to identify its Go version and build
-settings. A merely compatible newer Go version need not produce identical bytes.
+Rerun the same publication command after failure: unfinished drafts are recreated; published releases are re-verified before fast-forwarding `main`. Afterwards:
+
+```sh
+git checkout main && git merge --ff-only origin/main
+```
+
+Reproducibility: `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, full tagged commit SHA and its UTC timestamp. Archive paths/order/owner/group/timestamps are normalized; gzip omits timestamps. Identical checksums require the **exact same Go toolchain**, tagged source and locked npm dependencies, not merely a compatible Go version. Inspect with `go version -m <binary>`.
 
 ### Signing-key rotation and verification
 
-Before rotating keys, add the new public key to `deploy/allowed_signers` and
-commit that change, then prepare and sign the next release with the new private
-key. Retain old authorized keys for old-release verification; OpenSSH
-`allowed_signers` supports `valid-after`/`valid-before` options when setting
-key-validity windows. Distribute the updated trust file through a trusted channel.
+Commit the new public key to `deploy/allowed_signers` before preparing/signing with it. Retain old keys for old releases; use OpenSSH `valid-after`/`valid-before` for validity windows. Distribute trust-file updates through a trusted channel.
 
-To verify the complete locally built release:
+Verify a complete local release:
 
 ```sh
 RELEASE=v0.1.2
@@ -165,27 +92,58 @@ RELEASE=v0.1.2
   sha256sum --strict -c checksums.txt)
 ```
 
-For downloaded release assets, follow the
-[download and signature-verification procedure](docs/install.md#install-karactl):
-authenticate the signing key, verify the signature over `checksums.txt`, then
-verify the selected binary or server archive against that manifest before use.
+For downloads, [authenticate the signing key, verify the manifest signature, then the selected binary/archive checksum](docs/install.md#install-karactl) before use.
 
-## Change boundaries
+## Code and change boundaries
 
-- Generic desired-state durability belongs in `internal/reconciler`/`internal/store`; MongoDB mechanisms belong in `internal/engine/psmdb`; Zerops wire formats belong in `internal/infra/zerops`.
-- Provider metadata drives versions, topology constraints and UI defaults. Do not hand-maintain a second catalog in the CLI/UI.
-- Perform at most one disruptive reconciliation action per step. Persist intent/checkpoints and externally returned identifiers before progressing; observe actual completion. SQLite and remote services do not form one atomic transaction.
-- Preserve agent config/controls/receipt compatibility across rolling deployments. Maintenance/process holds must survive restart and periodic pulls. An ambiguous PBM initiation is not authorization to issue another restore.
-- Ordinary resource/status/log/event responses must not reveal credentials. Preserve separate `cluster-credentials:read` enforcement, per-object list/stream filtering and deny-overrides policies.
-- Make focused changes, add regression coverage for the actual behavior, update affected guides and callers, and remove obsolete paths. For a changed architectural decision, update the numbered ADR with its consequences and evidence.
+| Area | Responsibility |
+| --- | --- |
+| `internal/server`, `internal/api` | Runtime wiring, strict HTTP contract, handlers and authorization |
+| `internal/domain`, `internal/store` | Models, SQLite migrations, durable intent/checkpoints/events/secrets |
+| `internal/reconciler` | Serialized lifecycle/operations, observation and cleanup |
+| `internal/engine` | In-process provider registry and reconciliation/data-plane interfaces |
+| `internal/engine/psmdb`, `internal/engine/psmdb/pbm` | MongoDB topology/access/TLS and PBM backup/PITR/restore |
+| `internal/engine/rabbitmq` | Broker lifecycle, Management API access and definitions recovery |
+| `internal/engine/elastic` | Elasticsearch/Stack lifecycle, native security and snapshot recovery |
+| `internal/infra/zerops`, `internal/namespaces`, `internal/relay` | Zerops wire formats, project lifecycle and relay transport |
+| `internal/agent`, `internal/agentapi` | Engine process supervision/rendering and private protocol |
+| `internal/auth`, `internal/rbac` | Identity, sessions/tokens and policy |
+| `internal/scheduler`, `internal/events`, `internal/monitoring` | Schedules/retention, durable activity/SSE and metrics |
+| `internal/cli`, `ui/`, `internal/ui` | CLI, typed React application and embedded assets |
 
-## Public API changes
+- Keep generic durability in reconciler/store; engine mechanisms stay within their provider; Zerops wire formats stay in the backend adapter.
+- Provider metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Providers are compiled in, not dynamically installable plugins.
+- Perform at most one disruptive action per reconciliation step. Persist intent/checkpoints and remote identifiers before progressing, then observe completion. SQLite and remote services are not one transaction.
+- Preserve agent config/control/receipt compatibility through rolling deployments. Maintenance/process holds survive restarts and pulls; ambiguous initiation is not permission to repeat destructive work.
+- Ordinary status/log/event reads must remain credential-free. Preserve separate `cluster-credentials:read`, per-object filtering and deny-overrides policies.
 
-1. Edit [api/openapi.yaml](api/openapi.yaml), including `x-karakoram-rbac`, request/response schemas, write-only secret fields and errors.
-2. Run `make generate` to regenerate the Go server (`internal/api/gen.go`), public client (`pkg/client/client.gen.go`, package `client`) and RBAC operation map. Do not edit generated files directly. Keep hand-written client helpers separate and independent of `internal/` packages; `pkg/client` is imported by external applications as well as the CLI. See the [consumer SDK guide](docs/user-guide/api.md#clientssdk).
-3. In `ui/`, run `npm run gen:api` to regenerate TypeScript types; this is separate from Go generation.
-4. Migrate server handlers, CLI commands, UI consumers and tests together. Regenerate the CLI guide from recursive `karactl --help` when its surface changes.
-5. Run `make openapi-check`; it rejects YAML aliases and regenerates/compares both Go contract/client/RBAC files and TypeScript types. Install the UI dependencies before running it.
+## Public API changes and regeneration
+
+1. Edit [api/openapi.yaml](api/openapi.yaml): schemas, `x-karakoram-rbac`, write-only secrets and errors.
+2. Regenerate Go server/client/RBAC and TypeScript artifacts; do not hand-edit generated files.
+3. Migrate handlers, CLI, UI and tests together. When CLI commands change, update the command-group table in [docs/cli.md](docs/cli.md) from recursive `karactl --help`.
+4. Run the contract drift check with UI dependencies installed.
+
+From the repository root:
+
+```sh
+make generate
+(cd ui && npm ci && npm run gen:api)
+make openapi-check
+```
+
+Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, plus the RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation writes `ui/src/api/schema.d.ts` using lockfile-pinned openapi-typescript. Keep handwritten public client helpers separate from generated files and independent of `internal/`; external consumers import `pkg/client`. See [Clients/SDK](docs/api.md#clientssdk).
+
+`make openapi-check` rejects YAML aliases and regenerates/compares Go contract/client/RBAC and TypeScript files; it is a drift check, not live behavior verification. If editing introduces YAML anchors/aliases, normalize without changing meaning:
+
+```sh
+go run ./internal/tools/specnoalias
+go run ./internal/tools/specnoalias -check
+go generate ./api/...
+(cd ui && npm run gen:api)
+```
+
+Normalization preserves existing component-response references; `-check` fails if anchors/aliases remain.
 
 ## Checks
 
@@ -196,22 +154,21 @@ make lint
 make openapi-check
 ```
 
-Integration tests use real database containers. Read the test's prerequisites before running them; skipped integration tests are not evidence of passing database behavior. `make lint` runs Go vet, staticcheck 2025.1.1 and UI typecheck/ESLint, so install UI dependencies first.
+Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, staticcheck 2025.1.1 and UI typecheck/ESLint; install UI dependencies first.
 
-Live tests are opt-in and destructive to their own resources:
+Live tests are opt-in and destructive to their resources:
 
 ```sh
-# Load credentials using a secret manager, without shell tracing.
-# KARAKORAM_E2E_URL and KARAKORAM_E2E_TOKEN must already be set.
+# Securely load KARAKORAM_E2E_URL and KARAKORAM_E2E_TOKEN first.
 make e2e
 ```
 
-Read [test/e2e/README.md](test/e2e/README.md) for S3, IPv6 allowlist, CLI and OIDC settings. Use an isolated test installation in a dedicated Zerops project. The suite changes global policy/settings and restores them; do not run against production or concurrently with another live mutation suite. Do not modify the platform's `core` service. In pull requests, state which live scenarios you ran and their results.
+Follow [test/e2e/README.md](test/e2e/README.md) for S3, IPv6 allowlist, CLI and OIDC settings. Use an isolated installation in a dedicated project: the suite mutates global policy/settings, so never run against production or concurrently with another live mutation suite. Do not modify the platform's `core` service. Report scenarios exercised and results in the pull request.
 
 ## Security and licensing
 
-Never include Zerops integration tokens, API tokens, master keys, passwords, PEM private keys, signed upload/log URLs or populated secret fixtures in commits, screenshots or issue reports. Treat CLI configuration and state archives as credentials. Use synthetic test secrets, redact reports, and avoid enabling shell trace around credential-bearing commands.
+Never commit credentials, master keys, passwords, private PEMs, signed upload/log URLs or populated secret fixtures. Protect CLI configuration/state archives as credentials; use synthetic fixtures, redacted reports and no shell tracing around secrets.
 
-New source files should carry `SPDX-License-Identifier: Apache-2.0` and `Copyright 2026 The Karakoram Authors`, using the language's comment syntax. If third-party implementation is deliberately incorporated, verify license compatibility and retain required original file headers and NOTICE attribution. Apache-2.0 does not grant third-party trademark rights.
+New source files need `SPDX-License-Identifier: Apache-2.0` and `Copyright 2026 The Karakoram Authors` comments. Verify incorporated code's license compatibility and retain required headers/NOTICE attribution. Apache-2.0 grants no third-party trademark rights.
 
-For suspected vulnerabilities, follow the private-reporting guidance in [security.md](docs/security.md#reporting-vulnerabilities) (security@karakoram.dev), rather than posting exploit details or secrets publicly. Describe impact, affected revision, prerequisites and a minimal redacted reproduction.
+Report vulnerabilities privately through [security reporting](docs/security.md#reporting-vulnerabilities), security@karakoram.dev: include impact, revision, prerequisites and a minimal redacted reproduction, not public exploit details or secrets.

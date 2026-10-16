@@ -81,7 +81,7 @@ func TestAccessRejectsUnscopedAPIKeyBeforeConnecting(t *testing.T) {
 }
 
 func TestAPMIntakeRecipeKeepsTokenOutOfCurlArguments(t *testing.T) {
-	doc, err := os.ReadFile("../../../docs/user-guide/elasticsearch.md")
+	doc, err := os.ReadFile("../../../docs/elasticsearch/stack.md")
 	if err != nil {
 		t.Fatal(err)
 	}

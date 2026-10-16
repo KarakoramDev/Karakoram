@@ -6,7 +6,7 @@ import { Callout, Card, CopyButton } from '../../components/ui/Primitives';
 import { useClusterContext } from '../../pages/clusters/detail/ClusterDetail';
 import type { Schemas } from '../../api/client';
 
-const guide = 'https://github.com/KarakoramDev/Karakoram/blob/main/docs/user-guide/rabbitmq.md#quorum-blocked-restarts-and-replica-growth';
+const guide = 'https://github.com/KarakoramDev/Karakoram/blob/main/docs/rabbitmq/operations.md#quorum-blocked-restarts-and-replica-growth';
 
 export function QuorumRecoveryPanel({ cluster, base }: { cluster: Schemas['Cluster']; base: string }) {
   const conditions = cluster.status.conditions;

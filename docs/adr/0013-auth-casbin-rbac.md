@@ -37,14 +37,14 @@ Use owner-scoped API tokens for `karactl`/automation, with `kk_` prefix, hashed 
 
 ### Audit attribution
 
-Rank **coverage first, security second, maintainability third**: audit every successful mutation and credential reveal; never log bodies/secrets; avoid a second per-operation convention. Central successful-action auditing uses generated RBAC dispatch metadata. Authentication owns login/logout/OIDC success/failure, including unauthenticated failures and redirects.
+Rank **coverage first, security second, maintainability third**: audit successful mutations and credential reveals using generated RBAC dispatch metadata, without bodies/secrets or a second per-operation convention. Failed REST actions, including authorization denials, are not recorded by this path. Authentication records successful local/OIDC login, session refresh and logout, and local credential-check failures. OIDC callback failures are recorded only after a verified issuer/subject matches a persisted OIDC account; earlier/unmatched failures and redirects are not a complete authentication audit trail.
 
 | Alternative | Coverage (weight 3) | Security (weight 2) | Maintainability (weight 1) | Weighted score (1–5) |
 | --- | --- | --- | --- | --- |
 | Central dispatch plus authentication events | 5: uniform classified-action coverage | 4: safe metadata only | 5: one dispatch convention | 28/30 |
 | Per-handler audit | 3: new handlers must remember the append | 4: domain-specific messages, repeated secret boundaries | 3: duplicated attribution/review | 20/30 |
 
-Per-handler auditing would win if indispensable audit details were unavailable from dispatch and uniform coverage could be enforced. Here action/resource metadata is sufficient; engine diagnostics remain separate. **No request/response bodies, passwords, tokens, storage secrets or private keys are logged.**
+Per-handler auditing would win if indispensable audit details were unavailable from dispatch and uniform coverage could be enforced. Here action/resource metadata is sufficient; engine diagnostics remain separate. **Audit events contain no request/response bodies, passwords, tokens, storage secrets or private keys.** This does not describe all application logs; ADR 0012 documents the generated initial-admin-password logging exception.
 
 Local actors use persisted account names; OIDC actors add `(oidc: issuerURL)` from the verified issuer; token actors use owner plus public name/ID. Store context carries attribution into desired-state generations and queued Operations, then reconciliation events in every namespace. Autonomous actors are `reconciler`, `scheduler`, `system:startup` and `system` for orphan-volume janitor and namespace controller work. Cluster-management events retain namespace/cluster scope and resource `clusters`/target cluster name; janitor events keep their original scope with resource `orphaned-volumes`/target hostname. Namespace mutations and relay lifecycle events retain their namespace, actor and resource `namespaces`. Audit reads use `<namespace>/<cluster>` for cluster records, `<namespace>` for namespace-level records and `*` globally. Namespace, actor and resource filters compose and never widen visibility. Cross-namespace recovery records retain the initiating actor in both namespaces.
 

@@ -1,0 +1,136 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The Karakoram Authors -->
+# Namespaces and relays
+
+A namespace maps one existing Zerops project to its infrastructure credentials, management routing and RBAC scope.
+
+`default` is the control-plane project: its token comes from `KARAKORAM_ZEROPS_TOKEN` and networking is direct. Additional projects each use an outbound management relay. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
+
+## Names and selection
+
+Names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters/digits/hyphens, starting with a letter and ending with a letter/digit. `default` is reserved. A project belongs to only one namespace. Name/project identity are immutable; description is editable. Cluster/storage names are namespace-local.
+
+| Interface | Selection |
+| --- | --- |
+| CLI object/create/mutation | `--namespace/-n` → saved context → `default` |
+| CLI collections | Without explicit `-n`, all authorized namespaces; with `-n`, filtered |
+| UI | Switcher offers authorized namespaces and **All namespaces**; choose an explicit namespace for creation |
+
+```sh
+karactl config set-context production --namespace prod
+karactl -n prod clusters list
+```
+
+Responses carry `namespace`; unfiltered tables identify it. CLI/UI namespace lists follow all authorized pages. Namespace metadata requires its own read grant; cluster access does not imply it. UI selection uses `?namespace=` and a non-secret local preference; shared links do not bypass RBAC.
+
+An explicit nonexistent `?namespace=NAME` returns **404 `not_found` only if the caller holds a permission in that namespace**; otherwise collections remain empty and object requests return their normal **403**. The 404 identifies `details.resource: namespace` and `details.name`. Omit the parameter for all namespaces; empty/malformed values return **400**.
+
+## Add, validate and rotate
+
+1. Create a token for the additional project using the [required Zerops token scope](security.md). Allow capacity for one relay runtime and an available hostname, normally `karakoramrelay`.
+2. Ensure `KARAKORAM_PUBLIC_URL` is an HTTPS origin reachable from that project. Proxies must forward WebSocket Upgrade at root `/relay/v1/connect`, without browser-login interception; admission uses inner mTLS.
+3. Choose **Settings → Namespaces → Add namespace → Validate and add**, or:
+
+```sh
+# Store the project token in a private, untracked file; '-' reads stdin.
+karactl namespaces create --name dev --project-id '<project-id>' \
+  --token-file namespace-token.txt
+karactl namespaces get dev -o yaml
+# Once the relay is connected, select the namespace for cluster commands.
+karactl -n dev clusters list
+karactl namespaces validate dev
+karactl namespaces update dev --description 'Development and test'
+karactl namespaces rotate-token dev --token-file replacement-token.txt --yes
+```
+
+Tokens are write-only. Never put them in argument values, committed files or shell traces. Registration validates synchronously and returns **201**; deployment follows asynchronously. Missing required fields/invalid names return **400**; existing/reserved names **409**; invalid credentials/project scope, duplicate projects or occupied relay hostnames **422**.
+
+Validation checks project identity/service-list access, not every mutation grant: insufficient read-capable tokens can pass and fail deployment. Wait for `token.valid: true`, namespace/relay `Ready` and `relay.connected: true`.
+
+Re-validation reports invalid stored credentials through `token.valid: false`/`lastError`, not necessarily an HTTP error. Checks run about every five minutes. Explicit **401/403** or authentication errors invalidate tokens; **429/5xx**, timeouts and connection failures retain last-known validity with `Zerops API temporarily unavailable: <safe detail>; retrying`. First validation must succeed before validity is known. Transient create/rotation failures return **500 `internal_error`**, not 422, and do not save submitted credentials.
+
+Rotation validates the **same project**, seals the replacement and updates live infrastructure access without restarting the relay/session. Revoke the old token only after success. `default` API rotation returns **409**: update its service secret and restart instead.
+
+## Relay health
+
+Each relay is one private Ubuntu runtime running `karakoram relay`, with private TCP 9443 and no public access. It connects outbound using WSS, inner mTLS 1.3 and multiplexed streams. Remote agents pull configuration through `https://<relay hostname>:9443` with end-to-end internal TLS.
+
+The hostname appends `relay` to the control-plane hostname; over 25 characters it uses the first sixteen characters, four hexadecimal SHA-256 characters and `relay`. `KARAKORAM_RELAY_HOSTNAME` affects new enrollments only; recorded hostnames/SANs remain unchanged.
+
+| Field | Meaning |
+| --- | --- |
+| `phase` | Namespace `Pending`, `Ready`, `Error`, `Deleting` |
+| `token.source`, `valid` | `env` for default or `stored`; last validation result |
+| `token.lastValidatedAt`, `lastError`, `rotatedAt` | Validation/rotation timestamps and diagnostic; no token/fingerprint |
+| `relay.hostname`, `serviceId` | Private service identity |
+| `relay.phase` | `NotRequired` for default; otherwise `Pending`, `Deploying`, `Ready`, `Error` |
+| `relay.connected`, `connectedSince`, `lastSeenAt` | Authenticated session/activity |
+| `relay.version`, `desiredVersion` | Reported/desired executable; digest mismatch triggers redeployment |
+| `relay.certNotAfter` | Certificate expiry; renewal starts within thirty days |
+| `relay.reconnects`, `lastError` | Process-local hub reconnect count and diagnostic, not a lifetime SLA |
+
+`/healthz`, platform ACTIVE and `karakoram relay readiness` do not prove tunnel connectivity: relay readiness probes only its local listener. Transport bounds are 1 MiB per WebSocket message and 256 active data streams per session, excluding control, not a total-payload cap.
+
+## Relay operations
+
+```sh
+karactl namespaces list
+karactl namespaces get prod -o yaml
+karactl namespaces validate prod
+karactl -n prod clusters status orders
+karactl -n prod events list
+karactl -n prod orphaned-volumes list
+```
+
+Invalid credentials/unavailable routing degrade that namespace's management; other namespaces continue reconciling. Existing engine processes may continue, but observations, new configuration pulls and backup control/scheduling can fail or pause. Cached configuration can preserve startup; uncached bootstrap requires connectivity. Do not clear maintenance holds or repeat restores solely because management disconnected.
+
+Relays reconnect automatically with backoff/jitter capped at thirty seconds. Inspect `RelayConnected`, `RelayDisconnected` and `RelayTargetRefused` events and Zerops deployment/runtime logs without exporting secrets. Certificate renewal replaces env secrets and restarts the relay; upgrades redeploy on executable-digest mismatch. Check connection and desired/reported versions after [upgrading](upgrade.md).
+
+## Backup storages
+
+Register storage in the cluster's namespace (`karactl -n dev storages create -f FILE`); backup settings/schedules reference local storage names. Identical names need not mean identical buckets/credentials. New names use 2–63 lowercase letters/digits/hyphens, starting with a letter; trailing hyphens are allowed, and older stored names remain manageable. Verification runs from the control-plane network, not the relay; backup transfer paths are engine-specific. See [storage and cross-namespace recovery](backups.md).
+
+## RBAC examples
+
+Add to a complete policy retaining administrator access; see [policy format](access-control.md).
+
+```csv
+# Development authority.
+p, user:alice, *, *, dev/**
+# Production reads, excluding credential reveal.
+p, user:alice, *, read, prod/**
+p, user:alice, cluster-credentials, read, prod/**, deny
+# Separate credential and namespace metadata grants.
+p, user:bob, cluster-credentials, read, prod/orders
+p, user:bob, namespaces, read, prod
+# Namespace audit; not global installation activity.
+p, user:auditor, audit, read, dev/**
+# Source export; backup read and target mutation are still required.
+p, user:bob, backups, export, prod/**
+```
+
+`dev/**` spans namespace/objects; `dev/*` does not span further separators. Namespace creation requires `namespaces/create` on global `*`. Fresh operator/viewer namespace grants and upgrade-policy preservation are documented in [Default roles](access-control.md#default-roles).
+
+## Remove
+
+```sh
+karactl namespaces delete dev --yes
+karactl namespaces get dev -o yaml
+```
+
+Deletion returns **202 without an Operation ID/body** and marks `Deleting`; poll `namespaces get` until removed (404 for an authorized caller), or follow lifecycle events. There is no `--wait` and no `operations wait` target.
+
+**409** blocks removal while clusters (including deleting), storages, retained backup records or pending orphaned volumes remain. Finish cleanup first; retain valid credentials until the owned relay is removed. `default` cannot be deleted. Deletion removes credentials/state and revokes active/pending relay sessions, not the project or RBAC grants. Review stale grants before name reuse; replacement enrollment starts fresh.
+
+## Troubleshooting
+
+| Symptom | Cause | Action |
+| --- | --- | --- |
+| Token invalid | Explicit access rejection | Validate scope/project; rotate the infrastructure token, not a Karakoram API token |
+| Temporary Zerops API error | Rate limit/outage/connectivity | Keep token; inspect timestamps; allow automatic retry or validate after recovery |
+| Relay Pending/Deploying/Error | Capacity, deployment or ownership conflict | Inspect `lastError`/platform logs; never adopt a foreign hostname or replace enrollment manually |
+| Disconnected | Origin/certificate/WebSocket failure | Check outbound HTTPS/Upgrade and session fields; do not restart database members first |
+| Target refused | Unresolved/unavailable target or policy update lag | Brief refusals during topology changes are expected; persistent refusals need generated-hostname checks; never broaden policy to arbitrary services/IPs |
+| Agents cannot pull | Tunnel/listener/CA/SAN/token mismatch | Inspect assigned-member configuration; never disable TLS verification |
+| Recovery 403 | Missing source/target authority or deny | Check [cross-namespace recovery permissions](backups.md) |
+| Removal 409 | Namespace inventory remains | Inspect storages, retained backups and orphan inventory, not just clusters |
