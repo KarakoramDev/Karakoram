@@ -43,7 +43,7 @@ This is informational, not a requirement for operation.
 The installer creates one Ubuntu 24.04 runtime (one container, 0.5–1 GB RAM,
 shared CPU) and a 5 GB Local Storage volume. `zerops.yaml` builds the UI using
 Node 22 and embeds it in a static Go binary. Zerops `go@1` currently starts with
-Go 1.22; the module's `go 1.24.0` directive downloads the required toolchain
+Go 1.22; the module's `go 1.25.0` directive downloads the required toolchain
 through Go's automatic toolchain selection. The build needs outbound access to
 the Go toolchain/module registries and npm.
 
@@ -298,7 +298,7 @@ Run checksum verification in the download directory and proceed only after the
 selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing
 checksums.txt`; on Windows use a SHA-256 verifier against the same manifest.
 Put `$HOME/.local/bin` on `PATH` for the POSIX example. Building from source
-with Go 1.24 or newer remains an option:
+with Go 1.25 or newer remains an option:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl

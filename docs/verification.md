@@ -6,7 +6,7 @@ Karakoram has local Go tests, Docker-backed integration tests and an environment
 
 ## Running the checks
 
-Run commands from the repository root. Use Go 1.24 or newer. Docker integration tests require a working Docker daemon and permission to start containers and pull the configured images. Tests using host networking require Linux and unused listener ports; do not run them on a host serving important databases.
+Run commands from the repository root. Use Go 1.25 or newer. Docker integration tests require a working Docker daemon and permission to start containers and pull the configured images. Tests using host networking require Linux and unused listener ports; do not run them on a host serving important databases.
 
 ```sh
 # Local unit and HTTP-handler tests (no Zerops deployment required):

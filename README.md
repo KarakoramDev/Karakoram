@@ -70,7 +70,7 @@ See the [installation guide](docs/install.md) for prerequisites, secret handling
 
 ## Build from source
 
-Use Go **1.24 or newer**, Node **22.6 or newer**, npm and Make:
+Use Go **1.25 or newer**, Node **22.6 or newer**, npm and Make:
 
 ```sh
 make build-all             # build the web UI and both Go executables

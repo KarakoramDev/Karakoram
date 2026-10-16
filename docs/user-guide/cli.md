@@ -9,7 +9,7 @@
 Prebuilt binaries for MongoDB, RabbitMQ and Elasticsearch are attached to
 [GitHub releases](https://github.com/KarakoramDev/Karakoram/releases) starting
 with **v0.1.0**. Follow [download and checksum verification](../install.md#install-karactl)
-before installing. Building from a release checkout with Go 1.24 or newer remains an option:
+before installing. Building from a release checkout with Go 1.25 or newer remains an option:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl
