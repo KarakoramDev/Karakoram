@@ -274,3 +274,49 @@ func TestDokployDefaultTarget(t *testing.T) {
 		t.Fatal("non-allowlisted plaintext Dokploy URL accepted")
 	}
 }
+
+func TestNomadDefaultTarget(t *testing.T) {
+	t.Setenv("KARAKORAM_BACKEND", "nomad")
+	t.Setenv("KARAKORAM_MASTER_KEY", strings.Repeat("m", 32))
+	t.Setenv("KARAKORAM_DATA_DIR", "/var/lib/karakoram")
+	t.Setenv("KARAKORAM_PUBLIC_URL", "https://karakoram.example.test")
+	t.Setenv("KARAKORAM_ADVERTISE_URL", "https://karakoram:9443")
+	for _, key := range []string{"ALLOWED_ADDRS", "CACERT", "CLIENT_CERT", "CLIENT_KEY", "TLS_SERVER_NAME"} {
+		t.Setenv("KARAKORAM_NOMAD_"+key, "")
+	}
+	env := map[string]string{
+		"ADDR": "http://nomad.example.test:4646", "TOKEN": "nomad-test-token", "NAMESPACE": "nomad-test",
+		"REGION": "global", "DATACENTERS": "dc1,dc2", "NODE_POOL": "default", "NETWORK": "member",
+		"PUBLIC_IPV4": "192.0.2.1", "PUBLIC_IPV6": "2001:db8::1",
+	}
+	for key, value := range env {
+		t.Setenv("KARAKORAM_NOMAD_"+key, value)
+	}
+	c, err := ConfigFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := backendRegistry(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := c.defaultTarget(registry)
+	if err != nil || target.Kind != "nomad" || target.ID != "nomad-test" || target.Token != env["TOKEN"] {
+		t.Fatalf("Nomad default target identity was not mapped: %v", err)
+	}
+	for key, value := range map[string]string{"address": env["ADDR"], "region": env["REGION"], "datacenters": env["DATACENTERS"], "nodePool": env["NODE_POOL"], "network": env["NETWORK"], "publicIPv4": env["PUBLIC_IPV4"], "publicIPv6": env["PUBLIC_IPV6"]} {
+		if target.Config[key] != value {
+			t.Errorf("Nomad config %s = %q, want %q", key, target.Config[key], value)
+		}
+	}
+	b, err := registry.New(target)
+	if err != nil {
+		t.Fatal("operator Nomad address rejected:", err)
+	}
+	if b.Name() != "nomad" {
+		t.Fatalf("backend name = %q", b.Name())
+	}
+	if _, err := registry.New(infra.Target{Kind: "nomad", ID: "other", Token: "test-token", Config: map[string]string{"address": "http://other.example.test:4646"}}); err == nil {
+		t.Fatal("non-allowlisted plaintext Nomad address accepted")
+	}
+}

@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Namespaces and relays
 
-A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` (Zerops projects) or the experimental `dokploy` (Dokploy environments on a Docker Swarm, see [Dokploy backend](dokploy.md)). Existing records and omitted create kinds default to `zerops`.
+A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` (Zerops projects), experimental `dokploy` (Dokploy environments on a Docker Swarm, see [Dokploy backend](dokploy.md)), or experimental `nomad` (Nomad namespaces, see [Nomad backend](nomad.md)). Existing records and omitted create kinds default to `zerops`.
 
-`default` is the control-plane target: `KARAKORAM_BACKEND` selects its kind (default `zerops`, token from `KARAKORAM_ZEROPS_TOKEN`; `dokploy` reads `KARAKORAM_DOKPLOY_*`) and networking is direct. Additional namespaces use an outbound management relay when their backend requires one (`BackendInfo.Relay`); Zerops keeps this requirement. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
+`default` is the control-plane target: `KARAKORAM_BACKEND` selects its kind (default `zerops`, token from `KARAKORAM_ZEROPS_TOKEN`; `dokploy` reads `KARAKORAM_DOKPLOY_*`; `nomad` reads `KARAKORAM_NOMAD_*`, including `KARAKORAM_NOMAD_NAMESPACE`, `KARAKORAM_NOMAD_ADDR` and `KARAKORAM_NOMAD_TOKEN`) and networking is direct. Additional namespaces use an outbound management relay when their backend requires one (`BackendInfo.Relay`); all three current backends require it. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
 
 ## Names and selection
 
@@ -31,7 +31,7 @@ An explicit nonexistent `?namespace=NAME` returns **404 `not_found` only if the 
 
 In **Settings → Namespaces**, the table and detail identify the backend; the detail's **Capabilities** section marks each known feature **Supported** or **Not supported**.
 
-Namespace creation accepts `backend` (default `zerops`) and a string-to-string `config` object. CLI flags are `--backend zerops|dokploy` and repeatable `--config key=value`; Zerops accepts no config keys, Dokploy's keys are listed in [its guide](dokploy.md#target-settings). Its API URL is operator-only, set with `KARAKORAM_ZEROPS_API_URL` for all namespaces, including legacy records; namespace callers cannot override it. Credentials belong in the write-only token input, never config. Unknown backend kinds/config keys are rejected with **400**. Experimental backends are marked as such in the list and in the UI.
+Namespace creation accepts `backend` (default `zerops`) and a string-to-string `config` object. CLI flags are `--backend zerops|dokploy|nomad` and repeatable `--config key=value`; Zerops accepts no config keys, while [Dokploy](dokploy.md#target-settings) and [Nomad](nomad.md#target-settings) list their settings in their guides. Zerops's API URL is operator-only, set with `KARAKORAM_ZEROPS_API_URL` for all namespaces, including legacy records; namespace callers cannot override it. Credentials belong in the write-only token input, never config. Unknown backend kinds/config keys are rejected with **400**. Experimental backends are marked as such in the list and in the UI.
 
 Cluster create, replace and patch requests check the namespace backend's advertised capabilities after engine defaults and validation. Specs requiring unavailable features (such as public TCP exposure or dedicated CPU) return **400 `invalid_request`** before any cluster change is saved; capability admission uses static backend metadata, not a platform API request.
 

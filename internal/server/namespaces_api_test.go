@@ -8,8 +8,10 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
@@ -18,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
+	"github.com/KarakoramDev/Karakoram/internal/infra/nomad"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
 )
 
@@ -480,5 +483,77 @@ func TestCapabilityLookupFallsBackWhenBackendUnavailable(t *testing.T) {
 	c := &domain.Cluster{Spec: domain.ClusterSpec{EngineOptions: json.RawMessage(`{"managementUI":{"public":true}}`)}}
 	if failure := s.validateBackendCapabilities(t.Context(), p, c); failure != nil {
 		t.Fatal("admission did not fall back to factory capabilities")
+	}
+}
+
+func TestNamespaceNomadConfigAndAddressPolicy(t *testing.T) {
+	const credential = "namespace-nomad-test-token"
+	var requests atomic.Int64
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("namespace") == "other-project" || strings.HasSuffix(r.URL.Path, "/other-project") {
+			requests.Add(1)
+		}
+		if r.Header.Get("X-Nomad-Token") != credential {
+			http.Error(w, "Permission denied", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/namespace/nomad-project":
+			_, _ = w.Write([]byte(`{"Name":"nomad-project","Description":"Nomad test namespace"}`))
+		case "/v1/jobs", "/v1/vars":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(apiServer.Close)
+	s, token := namespaceTestServer(t)
+	if err := s.Backends.Register(nomad.NewFactory(nomad.WithAllowedAddrs(apiServer.URL))); err != nil {
+		t.Fatal(err)
+	}
+	config := map[string]string{
+		"address": apiServer.URL, "region": "global", "datacenters": "dc1,dc2",
+		"nodePool": "default", "network": "member", "publicIPv4": "192.0.2.1", "publicIPv6": "2001:db8::1",
+	}
+	body, err := json.Marshal(map[string]any{"name": "nomadtarget", "backend": "nomad", "projectId": "nomad-project", "token": credential, "config": config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, http.MethodPost, "/api/v1/namespaces", string(body), token)
+	if w.Code != http.StatusCreated {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), credential) {
+		t.Fatal("Nomad credential leaked in namespace response")
+	}
+	stored, err := s.Store.GetNamespaceForUpdate(t.Context(), "nomadtarget")
+	if err != nil || stored.Backend != "nomad" || stored.Config["network"] != "member" || stored.Config["address"] != apiServer.URL {
+		t.Fatalf("Nomad namespace configuration was not retained: %v", err)
+	}
+	for _, tc := range []struct {
+		name   string
+		config map[string]string
+	}{
+		{"unknown", map[string]string{"address": apiServer.URL, "unknown": "rejected"}},
+		{"disallowed", map[string]string{"address": "http://unapproved.example.test:4646"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := requests.Load()
+			body, err := json.Marshal(map[string]any{"name": tc.name, "backend": "nomad", "projectId": "other-project", "token": credential, "config": tc.config})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, http.MethodPost, "/api/v1/namespaces", string(body), token)
+			if w.Code != http.StatusBadRequest && w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("invalid Nomad config accepted: %d %s", w.Code, w.Body.String())
+			}
+			if strings.Contains(w.Body.String(), credential) {
+				t.Fatal("rejected Nomad namespace exposed token")
+			}
+			if requests.Load() != before {
+				t.Fatal("rejected Nomad configuration reached the API")
+			}
+		})
 	}
 }

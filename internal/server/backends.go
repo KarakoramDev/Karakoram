@@ -8,11 +8,12 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/infra/dokploy"
+	"github.com/KarakoramDev/Karakoram/internal/infra/nomad"
 	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 )
 
 func backendRegistry(c Config) (*infra.Registry, error) {
-	return infra.NewRegistry(zerops.NewFactory(zerops.Options{BaseURL: c.ZeropsAPIURL}), dokploy.NewFactory())
+	return infra.NewRegistry(zerops.NewFactory(zerops.Options{BaseURL: c.ZeropsAPIURL}), dokploy.NewFactory(), nomad.NewFactory())
 }
 
 func (c Config) defaultTarget(registry *infra.Registry) (infra.Target, error) {

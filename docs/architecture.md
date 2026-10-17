@@ -27,7 +27,7 @@ Private networking alone is not an authentication boundary. Agent traffic uses p
 
 ## Namespaces and relay routing
 
-A namespace selects an immutable backend kind and target with its infrastructure credentials. Backends are Zerops (targets are Zerops projects) and the experimental [Dokploy backend](dokploy.md) (targets are Dokploy environments on a Docker Swarm). `default` is the control plane's own target and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; Zerops retains that requirement.
+A namespace selects an immutable backend kind and target with its infrastructure credentials. Backends are Zerops (targets are Zerops projects), the experimental [Dokploy backend](dokploy.md) (Dokploy environments on a Docker Swarm), and the experimental [Nomad backend](nomad.md) (Nomad namespaces on an operator-managed cluster). `default` is the control plane's own target and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; all three current backends require it.
 
 The relay opens an outbound WebSocket connection through public HTTPS and carries an inner mutually authenticated TLS tunnel. Provider-approved administration traffic and protected agent traffic use namespace-qualified streams; agent configuration pulls retain end-to-end TLS. A namespace token or relay outage interrupts management of that namespace, not every project. The relay is not application networking.
 

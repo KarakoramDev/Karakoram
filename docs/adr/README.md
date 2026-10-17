@@ -38,6 +38,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0030](0030-backend-neutral-infrastructure-contract.md) | Backend-neutral services, runtime deployment, capabilities and per-namespace backend registry |
 | [0031](0031-engine-component-model.md) | Ordered component definitions, per-component resources and engine-owned lifecycle callbacks |
 | [0032](0032-dokploy-backend.md) | Experimental Dokploy/Swarm backend: alias DNS, built member images, pinned volumes and host anti-affinity |
+| [0033](0033-nomad-backend.md) | Experimental Nomad backend: isolated exec rootfs, routed CNI, native service discovery and fenced node-local volumes |
 
 ## References and verification
 
