@@ -19,6 +19,19 @@ import (
 
 func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	switch {
+	case s.operation == "listPostgresGrants":
+		_ = c.MarkFlagRequired("database")
+		validateArgs := c.Args
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := validateArgs(cmd, args); err != nil {
+				return err
+			}
+			database, _ := cmd.Flags().GetString("database")
+			if strings.TrimSpace(database) == "" {
+				return usageError("--database is required")
+			}
+			return nil
+		}
 	case strings.HasPrefix(s.path, "namespaces "):
 		a.namespaceFlags(c, s.operation)
 	case strings.HasPrefix(s.path, "clusters create"), strings.HasPrefix(s.path, "clusters scale"):
@@ -43,7 +56,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			c.Long = "Create a cluster. Convenience flags use PSMDB defaults; --provider defaults to psmdb.\nFor other providers, presets or optional components, submit the complete JSON/YAML body with -f.\nRun karactl providers get <provider> -o json to inspect versions, presets and components,\nthen copy a preset spec into a body containing name and spec. There is no --preset flag."
 			c.Flags().String("provider", "psmdb", "Engine provider")
 			c.Flags().String("version", "", "Exact engine version (defaults to provider catalog default; see providers get <provider>)")
-			c.Flags().String("topology", "replicaSet", "Provider topology (replicaSet, sharded, cluster or dedicatedMasters)")
+			c.Flags().String("topology", "replicaSet", "Provider topology (replicaSet, sharded, cluster, dedicatedMasters, single or ha)")
 			c.Flags().String("backup-storage", "", "Default backup storage")
 			c.Flags().StringArray("schedule", nil, "Schedule: NAME=CRON,type=TYPE,retain=COUNT[,storage=NAME]")
 			c.Flags().Bool("pitr", false, "Enable continuous point-in-time recovery")
@@ -67,7 +80,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	case s.operation == "replaceClusterBalancer":
 		c.Flags().Bool("enabled", true, "Enable balancing")
 	case s.operation == "createBackup":
-		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions or snapshot)")
+		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions, snapshot, full, diff or incr)")
 		c.Flags().String("storage", "", "Backup storage (defaults to cluster configuration)")
 		c.Annotations[operationAnnotation] += ",getCluster"
 	case s.operation == "createRestore":
@@ -186,8 +199,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			name = args[1]
 		}
 		typ, _ := cmd.Flags().GetString("type")
-		if typ != "logical" && typ != "physical" && typ != "definitions" && typ != "snapshot" {
-			return nil, usageError("backup type must be logical, physical, definitions or snapshot")
+		if typ != "logical" && typ != "physical" && typ != "definitions" && typ != "snapshot" && typ != "full" && typ != "diff" && typ != "incr" {
+			return nil, usageError("backup type must be logical, physical, definitions, snapshot, full, diff or incr")
 		}
 		storage, _ := cmd.Flags().GetString("storage")
 		if storage == "" {
@@ -257,7 +270,7 @@ func (a *app) clusterCreate(cmd *cobra.Command, name string) (any, error) {
 	version, _ := cmd.Flags().GetString("version")
 	provider, _ := cmd.Flags().GetString("provider")
 	topology, _ := cmd.Flags().GetString("topology")
-	if topology != "replicaSet" && topology != "sharded" && topology != "cluster" && topology != "dedicatedMasters" {
+	if topology != "replicaSet" && topology != "sharded" && topology != "cluster" && topology != "dedicatedMasters" && topology != "single" && topology != "ha" {
 		return nil, usageError("invalid provider topology %q", topology)
 	}
 	mode, _ := cmd.Flags().GetString("cpu-mode")
@@ -394,7 +407,7 @@ func parseSchedule(input, storage string) (map[string]any, error) {
 		}
 		switch key {
 		case "type":
-			if value != "logical" && value != "physical" && value != "definitions" && value != "snapshot" {
+			if value != "logical" && value != "physical" && value != "definitions" && value != "snapshot" && value != "full" && value != "diff" && value != "incr" {
 				return nil, usageError("invalid schedule type %q", value)
 			}
 			result[key] = value
@@ -427,7 +440,7 @@ func restoreSource(cluster, backup, point string) (map[string]any, error) {
 		if err != nil {
 			return nil, usageError("restore time: %s", err)
 		}
-		s["pitrTime"] = t.UTC().Format(time.RFC3339)
+		s["pitrTime"] = t.UTC().Format(time.RFC3339Nano)
 	}
 	return s, nil
 }

@@ -46,6 +46,9 @@ const (
 // Defines values for BackupType.
 const (
 	BackupTypeDefinitions BackupType = "definitions"
+	BackupTypeDiff        BackupType = "diff"
+	BackupTypeFull        BackupType = "full"
+	BackupTypeIncr        BackupType = "incr"
 	BackupTypeLogical     BackupType = "logical"
 	BackupTypePhysical    BackupType = "physical"
 	BackupTypeSnapshot    BackupType = "snapshot"
@@ -54,6 +57,9 @@ const (
 // Defines values for BackupScheduleType.
 const (
 	BackupScheduleTypeDefinitions BackupScheduleType = "definitions"
+	BackupScheduleTypeDiff        BackupScheduleType = "diff"
+	BackupScheduleTypeFull        BackupScheduleType = "full"
+	BackupScheduleTypeIncr        BackupScheduleType = "incr"
 	BackupScheduleTypeLogical     BackupScheduleType = "logical"
 	BackupScheduleTypePhysical    BackupScheduleType = "physical"
 	BackupScheduleTypeSnapshot    BackupScheduleType = "snapshot"
@@ -62,6 +68,9 @@ const (
 // Defines values for BackupScheduleInputType.
 const (
 	BackupScheduleInputTypeDefinitions BackupScheduleInputType = "definitions"
+	BackupScheduleInputTypeDiff        BackupScheduleInputType = "diff"
+	BackupScheduleInputTypeFull        BackupScheduleInputType = "full"
+	BackupScheduleInputTypeIncr        BackupScheduleInputType = "incr"
 	BackupScheduleInputTypeLogical     BackupScheduleInputType = "logical"
 	BackupScheduleInputTypePhysical    BackupScheduleInputType = "physical"
 	BackupScheduleInputTypeSnapshot    BackupScheduleInputType = "snapshot"
@@ -172,20 +181,35 @@ const (
 
 // Defines values for MemberRole.
 const (
+	MemberRoleAnalytics       MemberRole = "analytics"
 	MemberRoleApm             MemberRole = "apm"
 	MemberRoleArbiter         MemberRole = "arbiter"
+	MemberRoleAuth            MemberRole = "auth"
 	MemberRoleBroker          MemberRole = "broker"
 	MemberRoleConfigPrimary   MemberRole = "config-primary"
 	MemberRoleConfigSecondary MemberRole = "config-secondary"
 	MemberRoleData            MemberRole = "data"
+	MemberRoleFunctions       MemberRole = "functions"
+	MemberRoleGateway         MemberRole = "gateway"
+	MemberRoleImgproxy        MemberRole = "imgproxy"
 	MemberRoleKibana          MemberRole = "kibana"
 	MemberRoleLogstash        MemberRole = "logstash"
 	MemberRoleMaster          MemberRole = "master"
 	MemberRoleMasterdata      MemberRole = "master,data"
+	MemberRoleMeta            MemberRole = "meta"
+	MemberRolePooler          MemberRole = "pooler"
 	MemberRolePrimary         MemberRole = "primary"
+	MemberRoleProxy           MemberRole = "proxy"
+	MemberRoleRealtime        MemberRole = "realtime"
+	MemberRoleReplica         MemberRole = "replica"
+	MemberRoleRest            MemberRole = "rest"
 	MemberRoleRouter          MemberRole = "router"
 	MemberRoleSecondary       MemberRole = "secondary"
+	MemberRoleStandalone      MemberRole = "standalone"
+	MemberRoleStorage         MemberRole = "storage"
+	MemberRoleStudio          MemberRole = "studio"
 	MemberRoleUnknown         MemberRole = "unknown"
+	MemberRoleVector          MemberRole = "vector"
 )
 
 // Defines values for NamespacePhase.
@@ -216,6 +240,7 @@ const (
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
 	OperationTypeResume           OperationType = "resume"
+	OperationTypeRotateJwtSecret  OperationType = "rotate-jwt-secret"
 	OperationTypeRotateSystemUser OperationType = "rotate-system-user"
 	OperationTypeRotateTls        OperationType = "rotate-tls"
 	OperationTypeTls              OperationType = "tls"
@@ -234,9 +259,21 @@ const (
 	False PlacementGuaranteedAntiAffinity = false
 )
 
+// Defines values for PostgresGrantPrivileges.
+const (
+	CONNECT   PostgresGrantPrivileges = "CONNECT"
+	CREATE    PostgresGrantPrivileges = "CREATE"
+	TEMP      PostgresGrantPrivileges = "TEMP"
+	TEMPORARY PostgresGrantPrivileges = "TEMPORARY"
+	USAGE     PostgresGrantPrivileges = "USAGE"
+)
+
 // Defines values for ProviderBackupTypes.
 const (
 	ProviderBackupTypesDefinitions ProviderBackupTypes = "definitions"
+	ProviderBackupTypesDiff        ProviderBackupTypes = "diff"
+	ProviderBackupTypesFull        ProviderBackupTypes = "full"
+	ProviderBackupTypesIncr        ProviderBackupTypes = "incr"
 	ProviderBackupTypesLogical     ProviderBackupTypes = "logical"
 	ProviderBackupTypesPhysical    ProviderBackupTypes = "physical"
 	ProviderBackupTypesSnapshot    ProviderBackupTypes = "snapshot"
@@ -246,8 +283,10 @@ const (
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
+	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
+	ProviderTopologyTypeSingle           ProviderTopologyType = "single"
 )
 
 // Defines values for ProviderVersionStatus.
@@ -352,6 +391,12 @@ const (
 	SystemUserNameKarakoramLogstash SystemUserName = "karakoram_logstash"
 	SystemUserNameKarakoramMonitor  SystemUserName = "karakoram-monitor"
 	SystemUserNameKibanaToken       SystemUserName = "kibana-token"
+	SystemUserNameKkAdmin           SystemUserName = "kk_admin"
+	SystemUserNameKkMonitor         SystemUserName = "kk_monitor"
+	SystemUserNameKkProxyAdmin      SystemUserName = "kk_proxy_admin"
+	SystemUserNameKkReplicator      SystemUserName = "kk_replicator"
+	SystemUserNameKkRewind          SystemUserName = "kk_rewind"
+	SystemUserNamePostgres          SystemUserName = "postgres"
 	SystemUserNameUserAdmin         SystemUserName = "userAdmin"
 )
 
@@ -404,24 +449,30 @@ const (
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
+	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
+	TopologyTypeSingle           TopologyType = "single"
 )
 
 // Defines values for TopologyInputType.
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
+	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
+	TopologyInputTypeSingle           TopologyInputType = "single"
 )
 
 // Defines values for TopologyPatchType.
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
+	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
+	TopologyPatchTypeSingle           TopologyPatchType = "single"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -585,11 +636,14 @@ type Backup struct {
 	OperationId *string     `json:"operationId,omitempty"`
 	PbmName     *string     `json:"pbmName,omitempty"`
 	Phase       BackupPhase `json:"phase"`
-	Provider    *string     `json:"provider,omitempty"`
-	Schedule    *string     `json:"schedule,omitempty"`
-	Size        *int64      `json:"size,omitempty"`
-	StartedAt   *time.Time  `json:"startedAt,omitempty"`
-	Storage     string      `json:"storage"`
+
+	// Postgres Immutable pgBackRest backup-set provenance and dependency metadata.
+	Postgres  *PostgresBackup `json:"postgres,omitempty"`
+	Provider  *string         `json:"provider,omitempty"`
+	Schedule  *string         `json:"schedule,omitempty"`
+	Size      *int64          `json:"size,omitempty"`
+	StartedAt *time.Time      `json:"startedAt,omitempty"`
+	Storage   string          `json:"storage"`
 
 	// Trigger What initiated the snapshot; restore identifies an automatic post-restore base backup.
 	Trigger BackupTrigger `json:"trigger"`
@@ -1455,15 +1509,18 @@ type Member struct {
 	Agent *AgentStatus `json:"agent,omitempty"`
 
 	// Autoscaling Effective runtime vertical autoscaling configuration read from the platform, distinct from desired spec and current allocation. Disk bounds refer to the disposable runtime root disk, not the persistent database volume.
-	Autoscaling    *Resources `json:"autoscaling,omitempty"`
-	CpuUsage       *float32   `json:"cpuUsage,omitempty"`
-	DiskTotalBytes *int64     `json:"diskTotalBytes,omitempty"`
-	DiskUsageBytes *int64     `json:"diskUsageBytes,omitempty"`
-	Health         bool       `json:"health"`
-	LagSeconds     *float32   `json:"lagSeconds,omitempty"`
-	Name           string     `json:"name"`
-	Optime         *time.Time `json:"optime,omitempty"`
-	PlacementGroup *string    `json:"placementGroup,omitempty"`
+	Autoscaling *Resources `json:"autoscaling,omitempty"`
+
+	// ComponentVersion Service-component version, independent of the PostgreSQL data-member version.
+	ComponentVersion *string    `json:"componentVersion,omitempty"`
+	CpuUsage         *float32   `json:"cpuUsage,omitempty"`
+	DiskTotalBytes   *int64     `json:"diskTotalBytes,omitempty"`
+	DiskUsageBytes   *int64     `json:"diskUsageBytes,omitempty"`
+	Health           bool       `json:"health"`
+	LagSeconds       *float32   `json:"lagSeconds,omitempty"`
+	Name             string     `json:"name"`
+	Optime           *time.Time `json:"optime,omitempty"`
+	PlacementGroup   *string    `json:"placementGroup,omitempty"`
 
 	// PublicHost Member public host:port when public exposure is enabled.
 	PublicHost    *string `json:"publicHost,omitempty"`
@@ -1472,7 +1529,7 @@ type Member struct {
 	// Resources CPU, memory, and root disk the member container currently has. Each value comes from the member agent's live reading of its container (cgroup CPU set and quota, cgroup memory limit, root filesystem size) when the agent is reachable and reports it; otherwise from the service's effective vertical autoscaling (start or minimum CPU, minimum RAM, minimum root disk). Absent when neither is known.
 	Resources *ObservedResources `json:"resources,omitempty"`
 
-	// Role Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
+	// Role Provider data-member or service-component role.
 	Role    MemberRole `json:"role"`
 	Set     string     `json:"set"`
 	State   string     `json:"state"`
@@ -1480,7 +1537,7 @@ type Member struct {
 	Version *string    `json:"version,omitempty"`
 }
 
-// MemberRole Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
+// MemberRole Provider data-member or service-component role.
 type MemberRole string
 
 // MemberList defines model for MemberList.
@@ -1745,6 +1802,103 @@ type PlacementGuaranteedAntiAffinity bool
 type PlacementGroup struct {
 	Members []string `json:"members"`
 	Name    string   `json:"name"`
+}
+
+// PostgresBackup Immutable pgBackRest backup-set provenance and dependency metadata.
+type PostgresBackup struct {
+	Label      string    `json:"label"`
+	Prior      *string   `json:"prior,omitempty"`
+	References *[]string `json:"references,omitempty"`
+	RepoBytes  int64     `json:"repoBytes"`
+
+	// Repository Snapshot-time repository object prefix, excluding bucket.
+	Repository string `json:"repository"`
+
+	// SystemId PostgreSQL system identifier, encoded as a string without precision loss.
+	SystemId string `json:"systemId"`
+
+	// Version PostgreSQL version recorded by pgBackRest.
+	Version  string  `json:"version"`
+	WalStart *string `json:"walStart,omitempty"`
+	WalStop  *string `json:"walStop,omitempty"`
+}
+
+// PostgresDatabase defines model for PostgresDatabase.
+type PostgresDatabase struct {
+	AllowConnections *bool   `json:"allowConnections,omitempty"`
+	Encoding         *string `json:"encoding,omitempty"`
+	Locale           *string `json:"locale,omitempty"`
+	Name             string  `json:"name"`
+	Owner            string  `json:"owner"`
+}
+
+// PostgresGrant defines model for PostgresGrant.
+type PostgresGrant struct {
+	Database   string                    `json:"database"`
+	Privileges []PostgresGrantPrivileges `json:"privileges"`
+	Role       string                    `json:"role"`
+	Schema     *string                   `json:"schema,omitempty"`
+}
+
+// PostgresGrantPrivileges defines model for PostgresGrant.Privileges.
+type PostgresGrantPrivileges string
+
+// PostgresRole defines model for PostgresRole.
+type PostgresRole struct {
+	Bypassrls       bool       `json:"bypassrls"`
+	ConnectionLimit int        `json:"connectionLimit"`
+	Createdb        bool       `json:"createdb"`
+	Createrole      bool       `json:"createrole"`
+	Login           bool       `json:"login"`
+	MemberOf        []string   `json:"memberOf"`
+	Name            string     `json:"name"`
+	Replication     bool       `json:"replication"`
+	Superuser       bool       `json:"superuser"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
+}
+
+// PostgresRoleCreated defines model for PostgresRoleCreated.
+type PostgresRoleCreated struct {
+	Bypassrls         bool       `json:"bypassrls"`
+	ConnectionLimit   int        `json:"connectionLimit"`
+	Createdb          bool       `json:"createdb"`
+	Createrole        bool       `json:"createrole"`
+	GeneratedPassword *string    `json:"generatedPassword,omitempty"`
+	Login             bool       `json:"login"`
+	MemberOf          []string   `json:"memberOf"`
+	Name              string     `json:"name"`
+	Replication       bool       `json:"replication"`
+	Superuser         bool       `json:"superuser"`
+	ValidUntil        *time.Time `json:"validUntil,omitempty"`
+}
+
+// PostgresRolePatch defines model for PostgresRolePatch.
+type PostgresRolePatch struct {
+	Bypassrls       *bool      `json:"bypassrls,omitempty"`
+	ConnectionLimit *int       `json:"connectionLimit,omitempty"`
+	Createdb        *bool      `json:"createdb,omitempty"`
+	Createrole      *bool      `json:"createrole,omitempty"`
+	Login           *bool      `json:"login,omitempty"`
+	MemberOf        *[]string  `json:"memberOf,omitempty"`
+	Password        *string    `json:"password,omitempty"`
+	Replication     *bool      `json:"replication,omitempty"`
+	Superuser       *bool      `json:"superuser,omitempty"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
+}
+
+// PostgresRoleWrite defines model for PostgresRoleWrite.
+type PostgresRoleWrite struct {
+	Bypassrls       *bool      `json:"bypassrls,omitempty"`
+	ConnectionLimit *int       `json:"connectionLimit,omitempty"`
+	Createdb        *bool      `json:"createdb,omitempty"`
+	Createrole      *bool      `json:"createrole,omitempty"`
+	Login           *bool      `json:"login,omitempty"`
+	MemberOf        *[]string  `json:"memberOf,omitempty"`
+	Name            string     `json:"name"`
+	Password        *string    `json:"password,omitempty"`
+	Replication     *bool      `json:"replication,omitempty"`
+	Superuser       *bool      `json:"superuser,omitempty"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
 }
 
 // Preset defines model for Preset.
@@ -2122,6 +2276,32 @@ type StorageVerification struct {
 
 // StorageVerificationFailureReason Present when verified is false; categorized, secret-free cause.
 type StorageVerificationFailureReason string
+
+// SupabaseCredentials defines model for SupabaseCredentials.
+type SupabaseCredentials struct {
+	AnonKey           string `json:"anonKey"`
+	ApiUrl            string `json:"apiUrl"`
+	DashboardPassword string `json:"dashboardPassword"`
+	DashboardUsername string `json:"dashboardUsername"`
+	JwtSecret         string `json:"jwtSecret"`
+	PublishableKey    string `json:"publishableKey"`
+	SecretKey         string `json:"secretKey"`
+	ServiceRoleKey    string `json:"serviceRoleKey"`
+	StudioUrl         string `json:"studioUrl"`
+}
+
+// SupabaseFunction Relative file paths mapped to source text, including a nonempty index.ts entrypoint. Total source bytes must not exceed 1 MiB; parent path components are forbidden.
+type SupabaseFunction map[string]string
+
+// SupabaseFunctionList defines model for SupabaseFunctionList.
+type SupabaseFunctionList struct {
+	Items []string `json:"items"`
+}
+
+// SupabaseSMTPPassword defines model for SupabaseSMTPPassword.
+type SupabaseSMTPPassword struct {
+	Password *string `json:"password,omitempty"`
+}
 
 // SystemUser defines model for SystemUser.
 type SystemUser struct {
@@ -3212,6 +3392,211 @@ type GetClusterPlacementParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListPostgresDatabasesParams defines parameters for ListPostgresDatabases.
+type ListPostgresDatabasesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreatePostgresDatabaseParams defines parameters for CreatePostgresDatabase.
+type CreatePostgresDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeletePostgresDatabaseParams defines parameters for DeletePostgresDatabase.
+type DeletePostgresDatabaseParams struct {
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetPostgresDatabaseParams defines parameters for GetPostgresDatabase.
+type GetPostgresDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevokePostgresPrivilegesParams defines parameters for RevokePostgresPrivileges.
+type RevokePostgresPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListPostgresGrantsParams defines parameters for ListPostgresGrants.
+type ListPostgresGrantsParams struct {
+	Database string `form:"database" json:"database"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GrantPostgresPrivilegesParams defines parameters for GrantPostgresPrivileges.
+type GrantPostgresPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListPostgresRolesParams defines parameters for ListPostgresRoles.
+type ListPostgresRolesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreatePostgresRoleParams defines parameters for CreatePostgresRole.
+type CreatePostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeletePostgresRoleParams defines parameters for DeletePostgresRole.
+type DeletePostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetPostgresRoleParams defines parameters for GetPostgresRole.
+type GetPostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// PatchPostgresRoleParams defines parameters for PatchPostgresRole.
+type PatchPostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdatePostgresRoleParams defines parameters for UpdatePostgresRole.
+type UpdatePostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RotatePostgresRolePasswordParams defines parameters for RotatePostgresRolePassword.
+type RotatePostgresRolePasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListRabbitMQOperatorPoliciesParams defines parameters for ListRabbitMQOperatorPolicies.
 type ListRabbitMQOperatorPoliciesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -3770,6 +4155,105 @@ type GetClusterStatusParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// GetSupabaseCredentialsParams defines parameters for GetSupabaseCredentials.
+type GetSupabaseCredentialsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListSupabaseFunctionsParams defines parameters for ListSupabaseFunctions.
+type ListSupabaseFunctionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// DeleteSupabaseFunctionParams defines parameters for DeleteSupabaseFunction.
+type DeleteSupabaseFunctionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetSupabaseFunctionParams defines parameters for GetSupabaseFunction.
+type GetSupabaseFunctionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// PutSupabaseFunctionParams defines parameters for PutSupabaseFunction.
+type PutSupabaseFunctionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RotateSupabaseJWTSecretParams defines parameters for RotateSupabaseJWTSecret.
+type RotateSupabaseJWTSecretParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetSupabaseSMTPPasswordParams defines parameters for SetSupabaseSMTPPassword.
+type SetSupabaseSMTPPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListSystemUsersParams defines parameters for ListSystemUsers.
 type ListSystemUsersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -4038,6 +4522,24 @@ type CreateElasticUserJSONRequestBody = ElasticUserCreate
 // UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
 type UpdateElasticUserJSONRequestBody = ElasticUserWrite
 
+// CreatePostgresDatabaseJSONRequestBody defines body for CreatePostgresDatabase for application/json ContentType.
+type CreatePostgresDatabaseJSONRequestBody = PostgresDatabase
+
+// RevokePostgresPrivilegesJSONRequestBody defines body for RevokePostgresPrivileges for application/json ContentType.
+type RevokePostgresPrivilegesJSONRequestBody = PostgresGrant
+
+// GrantPostgresPrivilegesJSONRequestBody defines body for GrantPostgresPrivileges for application/json ContentType.
+type GrantPostgresPrivilegesJSONRequestBody = PostgresGrant
+
+// CreatePostgresRoleJSONRequestBody defines body for CreatePostgresRole for application/json ContentType.
+type CreatePostgresRoleJSONRequestBody = PostgresRoleWrite
+
+// PatchPostgresRoleJSONRequestBody defines body for PatchPostgresRole for application/json ContentType.
+type PatchPostgresRoleJSONRequestBody = PostgresRolePatch
+
+// UpdatePostgresRoleJSONRequestBody defines body for UpdatePostgresRole for application/json ContentType.
+type UpdatePostgresRoleJSONRequestBody = PostgresRoleWrite
+
 // CreateRabbitMQOperatorPolicyJSONRequestBody defines body for CreateRabbitMQOperatorPolicy for application/json ContentType.
 type CreateRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
 
@@ -4079,6 +4581,12 @@ type RaiseClusterFCVJSONRequestBody = RaiseFCVRequest
 
 // CreateRestoreJSONRequestBody defines body for CreateRestore for application/json ContentType.
 type CreateRestoreJSONRequestBody = CreateRestoreRequest
+
+// PutSupabaseFunctionJSONRequestBody defines body for PutSupabaseFunction for application/json ContentType.
+type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
+
+// SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
+type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
 
 // CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
 type CreateNamespaceJSONRequestBody = NamespaceCreate
@@ -4631,6 +5139,60 @@ type ClientInterface interface {
 	// GetClusterPlacement request
 	GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListPostgresDatabases request
+	ListPostgresDatabases(ctx context.Context, cluster ClusterPath, params *ListPostgresDatabasesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePostgresDatabaseWithBody request with any body
+	CreatePostgresDatabaseWithBody(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreatePostgresDatabase(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, body CreatePostgresDatabaseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeletePostgresDatabase request
+	DeletePostgresDatabase(ctx context.Context, cluster ClusterPath, database string, params *DeletePostgresDatabaseParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPostgresDatabase request
+	GetPostgresDatabase(ctx context.Context, cluster ClusterPath, database string, params *GetPostgresDatabaseParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokePostgresPrivilegesWithBody request with any body
+	RevokePostgresPrivilegesWithBody(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RevokePostgresPrivileges(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, body RevokePostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPostgresGrants request
+	ListPostgresGrants(ctx context.Context, cluster ClusterPath, params *ListPostgresGrantsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GrantPostgresPrivilegesWithBody request with any body
+	GrantPostgresPrivilegesWithBody(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	GrantPostgresPrivileges(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, body GrantPostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPostgresRoles request
+	ListPostgresRoles(ctx context.Context, cluster ClusterPath, params *ListPostgresRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePostgresRoleWithBody request with any body
+	CreatePostgresRoleWithBody(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreatePostgresRole(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, body CreatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeletePostgresRole request
+	DeletePostgresRole(ctx context.Context, cluster ClusterPath, role string, params *DeletePostgresRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPostgresRole request
+	GetPostgresRole(ctx context.Context, cluster ClusterPath, role string, params *GetPostgresRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchPostgresRoleWithBody request with any body
+	PatchPostgresRoleWithBody(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PatchPostgresRole(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, body PatchPostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePostgresRoleWithBody request with any body
+	UpdatePostgresRoleWithBody(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdatePostgresRole(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, body UpdatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotatePostgresRolePassword request
+	RotatePostgresRolePassword(ctx context.Context, cluster ClusterPath, role string, params *RotatePostgresRolePasswordParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListRabbitMQOperatorPolicies request
 	ListRabbitMQOperatorPolicies(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4772,6 +5334,31 @@ type ClientInterface interface {
 
 	// GetClusterStatus request
 	GetClusterStatus(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSupabaseCredentials request
+	GetSupabaseCredentials(ctx context.Context, cluster ClusterPath, params *GetSupabaseCredentialsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSupabaseFunctions request
+	ListSupabaseFunctions(ctx context.Context, cluster ClusterPath, params *ListSupabaseFunctionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSupabaseFunction request
+	DeleteSupabaseFunction(ctx context.Context, cluster ClusterPath, name string, params *DeleteSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSupabaseFunction request
+	GetSupabaseFunction(ctx context.Context, cluster ClusterPath, name string, params *GetSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutSupabaseFunctionWithBody request with any body
+	PutSupabaseFunctionWithBody(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutSupabaseFunction(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, body PutSupabaseFunctionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateSupabaseJWTSecret request
+	RotateSupabaseJWTSecret(ctx context.Context, cluster ClusterPath, params *RotateSupabaseJWTSecretParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetSupabaseSMTPPasswordWithBody request with any body
+	SetSupabaseSMTPPasswordWithBody(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetSupabaseSMTPPassword(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, body SetSupabaseSMTPPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSystemUsers request
 	ListSystemUsers(ctx context.Context, cluster ClusterPath, params *ListSystemUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5971,6 +6558,246 @@ func (c *Client) GetClusterPlacement(ctx context.Context, cluster ClusterPath, p
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListPostgresDatabases(ctx context.Context, cluster ClusterPath, params *ListPostgresDatabasesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPostgresDatabasesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreatePostgresDatabaseWithBody(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePostgresDatabaseRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreatePostgresDatabase(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, body CreatePostgresDatabaseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePostgresDatabaseRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeletePostgresDatabase(ctx context.Context, cluster ClusterPath, database string, params *DeletePostgresDatabaseParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeletePostgresDatabaseRequest(c.Server, cluster, database, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetPostgresDatabase(ctx context.Context, cluster ClusterPath, database string, params *GetPostgresDatabaseParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPostgresDatabaseRequest(c.Server, cluster, database, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevokePostgresPrivilegesWithBody(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokePostgresPrivilegesRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevokePostgresPrivileges(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, body RevokePostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokePostgresPrivilegesRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListPostgresGrants(ctx context.Context, cluster ClusterPath, params *ListPostgresGrantsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPostgresGrantsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GrantPostgresPrivilegesWithBody(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGrantPostgresPrivilegesRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GrantPostgresPrivileges(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, body GrantPostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGrantPostgresPrivilegesRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListPostgresRoles(ctx context.Context, cluster ClusterPath, params *ListPostgresRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPostgresRolesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreatePostgresRoleWithBody(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePostgresRoleRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreatePostgresRole(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, body CreatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePostgresRoleRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeletePostgresRole(ctx context.Context, cluster ClusterPath, role string, params *DeletePostgresRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeletePostgresRoleRequest(c.Server, cluster, role, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetPostgresRole(ctx context.Context, cluster ClusterPath, role string, params *GetPostgresRoleParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPostgresRoleRequest(c.Server, cluster, role, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PatchPostgresRoleWithBody(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchPostgresRoleRequestWithBody(c.Server, cluster, role, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PatchPostgresRole(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, body PatchPostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchPostgresRoleRequest(c.Server, cluster, role, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePostgresRoleWithBody(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePostgresRoleRequestWithBody(c.Server, cluster, role, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePostgresRole(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, body UpdatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePostgresRoleRequest(c.Server, cluster, role, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotatePostgresRolePassword(ctx context.Context, cluster ClusterPath, role string, params *RotatePostgresRolePasswordParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotatePostgresRolePasswordRequest(c.Server, cluster, role, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListRabbitMQOperatorPolicies(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListRabbitMQOperatorPoliciesRequest(c.Server, cluster, params)
 	if err != nil {
@@ -6585,6 +7412,114 @@ func (c *Client) RotateClusterTLS(ctx context.Context, cluster ClusterPath, para
 
 func (c *Client) GetClusterStatus(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterStatusRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSupabaseCredentials(ctx context.Context, cluster ClusterPath, params *GetSupabaseCredentialsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSupabaseCredentialsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListSupabaseFunctions(ctx context.Context, cluster ClusterPath, params *ListSupabaseFunctionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSupabaseFunctionsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteSupabaseFunction(ctx context.Context, cluster ClusterPath, name string, params *DeleteSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSupabaseFunctionRequest(c.Server, cluster, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSupabaseFunction(ctx context.Context, cluster ClusterPath, name string, params *GetSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSupabaseFunctionRequest(c.Server, cluster, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutSupabaseFunctionWithBody(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutSupabaseFunctionRequestWithBody(c.Server, cluster, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutSupabaseFunction(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, body PutSupabaseFunctionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutSupabaseFunctionRequest(c.Server, cluster, name, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateSupabaseJWTSecret(ctx context.Context, cluster ClusterPath, params *RotateSupabaseJWTSecretParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateSupabaseJWTSecretRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetSupabaseSMTPPasswordWithBody(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetSupabaseSMTPPasswordRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetSupabaseSMTPPassword(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, body SetSupabaseSMTPPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetSupabaseSMTPPasswordRequest(c.Server, cluster, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -12105,6 +13040,1146 @@ func NewGetClusterPlacementRequest(server string, cluster ClusterPath, params *G
 	return req, nil
 }
 
+// NewListPostgresDatabasesRequest generates requests for ListPostgresDatabases
+func NewListPostgresDatabasesRequest(server string, cluster ClusterPath, params *ListPostgresDatabasesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/databases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePostgresDatabaseRequest calls the generic CreatePostgresDatabase builder with application/json body
+func NewCreatePostgresDatabaseRequest(server string, cluster ClusterPath, params *CreatePostgresDatabaseParams, body CreatePostgresDatabaseJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePostgresDatabaseRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreatePostgresDatabaseRequestWithBody generates requests for CreatePostgresDatabase with any type of body
+func NewCreatePostgresDatabaseRequestWithBody(server string, cluster ClusterPath, params *CreatePostgresDatabaseParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/databases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeletePostgresDatabaseRequest generates requests for DeletePostgresDatabase
+func NewDeletePostgresDatabaseRequest(server string, cluster ClusterPath, database string, params *DeletePostgresDatabaseParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "database", runtime.ParamLocationPath, database)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/databases/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Force != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "force", runtime.ParamLocationQuery, *params.Force); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetPostgresDatabaseRequest generates requests for GetPostgresDatabase
+func NewGetPostgresDatabaseRequest(server string, cluster ClusterPath, database string, params *GetPostgresDatabaseParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "database", runtime.ParamLocationPath, database)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/databases/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevokePostgresPrivilegesRequest calls the generic RevokePostgresPrivileges builder with application/json body
+func NewRevokePostgresPrivilegesRequest(server string, cluster ClusterPath, params *RevokePostgresPrivilegesParams, body RevokePostgresPrivilegesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRevokePostgresPrivilegesRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewRevokePostgresPrivilegesRequestWithBody generates requests for RevokePostgresPrivileges with any type of body
+func NewRevokePostgresPrivilegesRequestWithBody(server string, cluster ClusterPath, params *RevokePostgresPrivilegesParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/grants", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListPostgresGrantsRequest generates requests for ListPostgresGrants
+func NewListPostgresGrantsRequest(server string, cluster ClusterPath, params *ListPostgresGrantsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/grants", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "database", runtime.ParamLocationQuery, params.Database); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGrantPostgresPrivilegesRequest calls the generic GrantPostgresPrivileges builder with application/json body
+func NewGrantPostgresPrivilegesRequest(server string, cluster ClusterPath, params *GrantPostgresPrivilegesParams, body GrantPostgresPrivilegesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewGrantPostgresPrivilegesRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewGrantPostgresPrivilegesRequestWithBody generates requests for GrantPostgresPrivileges with any type of body
+func NewGrantPostgresPrivilegesRequestWithBody(server string, cluster ClusterPath, params *GrantPostgresPrivilegesParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/grants", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListPostgresRolesRequest generates requests for ListPostgresRoles
+func NewListPostgresRolesRequest(server string, cluster ClusterPath, params *ListPostgresRolesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePostgresRoleRequest calls the generic CreatePostgresRole builder with application/json body
+func NewCreatePostgresRoleRequest(server string, cluster ClusterPath, params *CreatePostgresRoleParams, body CreatePostgresRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePostgresRoleRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreatePostgresRoleRequestWithBody generates requests for CreatePostgresRole with any type of body
+func NewCreatePostgresRoleRequestWithBody(server string, cluster ClusterPath, params *CreatePostgresRoleParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeletePostgresRoleRequest generates requests for DeletePostgresRole
+func NewDeletePostgresRoleRequest(server string, cluster ClusterPath, role string, params *DeletePostgresRoleParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetPostgresRoleRequest generates requests for GetPostgresRole
+func NewGetPostgresRoleRequest(server string, cluster ClusterPath, role string, params *GetPostgresRoleParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPatchPostgresRoleRequest calls the generic PatchPostgresRole builder with application/json body
+func NewPatchPostgresRoleRequest(server string, cluster ClusterPath, role string, params *PatchPostgresRoleParams, body PatchPostgresRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchPostgresRoleRequestWithBody(server, cluster, role, params, "application/json", bodyReader)
+}
+
+// NewPatchPostgresRoleRequestWithBody generates requests for PatchPostgresRole with any type of body
+func NewPatchPostgresRoleRequestWithBody(server string, cluster ClusterPath, role string, params *PatchPostgresRoleParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUpdatePostgresRoleRequest calls the generic UpdatePostgresRole builder with application/json body
+func NewUpdatePostgresRoleRequest(server string, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, body UpdatePostgresRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdatePostgresRoleRequestWithBody(server, cluster, role, params, "application/json", bodyReader)
+}
+
+// NewUpdatePostgresRoleRequestWithBody generates requests for UpdatePostgresRole with any type of body
+func NewUpdatePostgresRoleRequestWithBody(server string, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRotatePostgresRolePasswordRequest generates requests for RotatePostgresRolePassword
+func NewRotatePostgresRolePasswordRequest(server string, cluster ClusterPath, role string, params *RotatePostgresRolePasswordParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "role", runtime.ParamLocationPath, role)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/roles/%s/password", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListRabbitMQOperatorPoliciesRequest generates requests for ListRabbitMQOperatorPolicies
 func NewListRabbitMQOperatorPoliciesRequest(server string, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams) (*http.Request, error) {
 	var err error
@@ -15196,6 +17271,538 @@ func NewGetClusterStatusRequest(server string, cluster ClusterPath, params *GetC
 	return req, nil
 }
 
+// NewGetSupabaseCredentialsRequest generates requests for GetSupabaseCredentials
+func NewGetSupabaseCredentialsRequest(server string, cluster ClusterPath, params *GetSupabaseCredentialsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/credentials", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListSupabaseFunctionsRequest generates requests for ListSupabaseFunctions
+func NewListSupabaseFunctionsRequest(server string, cluster ClusterPath, params *ListSupabaseFunctionsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/functions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteSupabaseFunctionRequest generates requests for DeleteSupabaseFunction
+func NewDeleteSupabaseFunctionRequest(server string, cluster ClusterPath, name string, params *DeleteSupabaseFunctionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/functions/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetSupabaseFunctionRequest generates requests for GetSupabaseFunction
+func NewGetSupabaseFunctionRequest(server string, cluster ClusterPath, name string, params *GetSupabaseFunctionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/functions/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutSupabaseFunctionRequest calls the generic PutSupabaseFunction builder with application/json body
+func NewPutSupabaseFunctionRequest(server string, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, body PutSupabaseFunctionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutSupabaseFunctionRequestWithBody(server, cluster, name, params, "application/json", bodyReader)
+}
+
+// NewPutSupabaseFunctionRequestWithBody generates requests for PutSupabaseFunction with any type of body
+func NewPutSupabaseFunctionRequestWithBody(server string, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/functions/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRotateSupabaseJWTSecretRequest generates requests for RotateSupabaseJWTSecret
+func NewRotateSupabaseJWTSecretRequest(server string, cluster ClusterPath, params *RotateSupabaseJWTSecretParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/rotate-jwt-secret", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetSupabaseSMTPPasswordRequest calls the generic SetSupabaseSMTPPassword builder with application/json body
+func NewSetSupabaseSMTPPasswordRequest(server string, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, body SetSupabaseSMTPPasswordJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetSupabaseSMTPPasswordRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewSetSupabaseSMTPPasswordRequestWithBody generates requests for SetSupabaseSMTPPassword with any type of body
+func NewSetSupabaseSMTPPasswordRequestWithBody(server string, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/supabase/smtp-password", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListSystemUsersRequest generates requests for ListSystemUsers
 func NewListSystemUsersRequest(server string, cluster ClusterPath, params *ListSystemUsersParams) (*http.Request, error) {
 	var err error
@@ -17043,6 +19650,60 @@ type ClientWithResponsesInterface interface {
 	// GetClusterPlacementWithResponse request
 	GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error)
 
+	// ListPostgresDatabasesWithResponse request
+	ListPostgresDatabasesWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresDatabasesParams, reqEditors ...RequestEditorFn) (*ListPostgresDatabasesResponse, error)
+
+	// CreatePostgresDatabaseWithBodyWithResponse request with any body
+	CreatePostgresDatabaseWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePostgresDatabaseResponse, error)
+
+	CreatePostgresDatabaseWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, body CreatePostgresDatabaseJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePostgresDatabaseResponse, error)
+
+	// DeletePostgresDatabaseWithResponse request
+	DeletePostgresDatabaseWithResponse(ctx context.Context, cluster ClusterPath, database string, params *DeletePostgresDatabaseParams, reqEditors ...RequestEditorFn) (*DeletePostgresDatabaseResponse, error)
+
+	// GetPostgresDatabaseWithResponse request
+	GetPostgresDatabaseWithResponse(ctx context.Context, cluster ClusterPath, database string, params *GetPostgresDatabaseParams, reqEditors ...RequestEditorFn) (*GetPostgresDatabaseResponse, error)
+
+	// RevokePostgresPrivilegesWithBodyWithResponse request with any body
+	RevokePostgresPrivilegesWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RevokePostgresPrivilegesResponse, error)
+
+	RevokePostgresPrivilegesWithResponse(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, body RevokePostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*RevokePostgresPrivilegesResponse, error)
+
+	// ListPostgresGrantsWithResponse request
+	ListPostgresGrantsWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresGrantsParams, reqEditors ...RequestEditorFn) (*ListPostgresGrantsResponse, error)
+
+	// GrantPostgresPrivilegesWithBodyWithResponse request with any body
+	GrantPostgresPrivilegesWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GrantPostgresPrivilegesResponse, error)
+
+	GrantPostgresPrivilegesWithResponse(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, body GrantPostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*GrantPostgresPrivilegesResponse, error)
+
+	// ListPostgresRolesWithResponse request
+	ListPostgresRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresRolesParams, reqEditors ...RequestEditorFn) (*ListPostgresRolesResponse, error)
+
+	// CreatePostgresRoleWithBodyWithResponse request with any body
+	CreatePostgresRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePostgresRoleResponse, error)
+
+	CreatePostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, body CreatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePostgresRoleResponse, error)
+
+	// DeletePostgresRoleWithResponse request
+	DeletePostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *DeletePostgresRoleParams, reqEditors ...RequestEditorFn) (*DeletePostgresRoleResponse, error)
+
+	// GetPostgresRoleWithResponse request
+	GetPostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *GetPostgresRoleParams, reqEditors ...RequestEditorFn) (*GetPostgresRoleResponse, error)
+
+	// PatchPostgresRoleWithBodyWithResponse request with any body
+	PatchPostgresRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchPostgresRoleResponse, error)
+
+	PatchPostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, body PatchPostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchPostgresRoleResponse, error)
+
+	// UpdatePostgresRoleWithBodyWithResponse request with any body
+	UpdatePostgresRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePostgresRoleResponse, error)
+
+	UpdatePostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, body UpdatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePostgresRoleResponse, error)
+
+	// RotatePostgresRolePasswordWithResponse request
+	RotatePostgresRolePasswordWithResponse(ctx context.Context, cluster ClusterPath, role string, params *RotatePostgresRolePasswordParams, reqEditors ...RequestEditorFn) (*RotatePostgresRolePasswordResponse, error)
+
 	// ListRabbitMQOperatorPoliciesWithResponse request
 	ListRabbitMQOperatorPoliciesWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*ListRabbitMQOperatorPoliciesResponse, error)
 
@@ -17184,6 +19845,31 @@ type ClientWithResponsesInterface interface {
 
 	// GetClusterStatusWithResponse request
 	GetClusterStatusWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterStatusParams, reqEditors ...RequestEditorFn) (*GetClusterStatusResponse, error)
+
+	// GetSupabaseCredentialsWithResponse request
+	GetSupabaseCredentialsWithResponse(ctx context.Context, cluster ClusterPath, params *GetSupabaseCredentialsParams, reqEditors ...RequestEditorFn) (*GetSupabaseCredentialsResponse, error)
+
+	// ListSupabaseFunctionsWithResponse request
+	ListSupabaseFunctionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListSupabaseFunctionsParams, reqEditors ...RequestEditorFn) (*ListSupabaseFunctionsResponse, error)
+
+	// DeleteSupabaseFunctionWithResponse request
+	DeleteSupabaseFunctionWithResponse(ctx context.Context, cluster ClusterPath, name string, params *DeleteSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*DeleteSupabaseFunctionResponse, error)
+
+	// GetSupabaseFunctionWithResponse request
+	GetSupabaseFunctionWithResponse(ctx context.Context, cluster ClusterPath, name string, params *GetSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*GetSupabaseFunctionResponse, error)
+
+	// PutSupabaseFunctionWithBodyWithResponse request with any body
+	PutSupabaseFunctionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSupabaseFunctionResponse, error)
+
+	PutSupabaseFunctionWithResponse(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, body PutSupabaseFunctionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSupabaseFunctionResponse, error)
+
+	// RotateSupabaseJWTSecretWithResponse request
+	RotateSupabaseJWTSecretWithResponse(ctx context.Context, cluster ClusterPath, params *RotateSupabaseJWTSecretParams, reqEditors ...RequestEditorFn) (*RotateSupabaseJWTSecretResponse, error)
+
+	// SetSupabaseSMTPPasswordWithBodyWithResponse request with any body
+	SetSupabaseSMTPPasswordWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSupabaseSMTPPasswordResponse, error)
+
+	SetSupabaseSMTPPasswordWithResponse(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, body SetSupabaseSMTPPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*SetSupabaseSMTPPasswordResponse, error)
 
 	// ListSystemUsersWithResponse request
 	ListSystemUsersWithResponse(ctx context.Context, cluster ClusterPath, params *ListSystemUsersParams, reqEditors ...RequestEditorFn) (*ListSystemUsersResponse, error)
@@ -19370,6 +22056,428 @@ func (r GetClusterPlacementResponse) StatusCode() int {
 	return 0
 }
 
+type ListPostgresDatabasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Items []PostgresDatabase `json:"items"`
+	}
+	JSON400 *BadRequest
+	JSON401 *Unauthorized
+	JSON403 *Forbidden
+	JSON404 *NotFound
+	JSON409 *Conflict
+	JSON500 *InternalError
+	JSON503 *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPostgresDatabasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPostgresDatabasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreatePostgresDatabaseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *PostgresDatabase
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePostgresDatabaseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePostgresDatabaseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeletePostgresDatabaseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r DeletePostgresDatabaseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeletePostgresDatabaseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetPostgresDatabaseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PostgresDatabase
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPostgresDatabaseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPostgresDatabaseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RevokePostgresPrivilegesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokePostgresPrivilegesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokePostgresPrivilegesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListPostgresGrantsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Items []PostgresGrant `json:"items"`
+	}
+	JSON400 *BadRequest
+	JSON401 *Unauthorized
+	JSON403 *Forbidden
+	JSON404 *NotFound
+	JSON409 *Conflict
+	JSON500 *InternalError
+	JSON503 *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPostgresGrantsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPostgresGrantsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GrantPostgresPrivilegesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r GrantPostgresPrivilegesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GrantPostgresPrivilegesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListPostgresRolesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Items []PostgresRole `json:"items"`
+	}
+	JSON400 *BadRequest
+	JSON401 *Unauthorized
+	JSON403 *Forbidden
+	JSON404 *NotFound
+	JSON409 *Conflict
+	JSON500 *InternalError
+	JSON503 *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPostgresRolesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPostgresRolesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreatePostgresRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *PostgresRoleCreated
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePostgresRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePostgresRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeletePostgresRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r DeletePostgresRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeletePostgresRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetPostgresRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PostgresRole
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPostgresRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPostgresRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PatchPostgresRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PostgresRole
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchPostgresRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchPostgresRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdatePostgresRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PostgresRole
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdatePostgresRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdatePostgresRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotatePostgresRolePasswordResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		GeneratedPassword string `json:"generatedPassword"`
+	}
+	JSON400 *BadRequest
+	JSON401 *Unauthorized
+	JSON403 *Forbidden
+	JSON404 *NotFound
+	JSON409 *Conflict
+	JSON500 *InternalError
+	JSON503 *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r RotatePostgresRolePasswordResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotatePostgresRolePasswordResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListRabbitMQOperatorPoliciesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20447,6 +23555,210 @@ func (r GetClusterStatusResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetClusterStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSupabaseCredentialsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SupabaseCredentials
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSupabaseCredentialsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSupabaseCredentialsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListSupabaseFunctionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SupabaseFunctionList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSupabaseFunctionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSupabaseFunctionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteSupabaseFunctionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSupabaseFunctionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSupabaseFunctionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSupabaseFunctionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SupabaseFunction
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSupabaseFunctionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSupabaseFunctionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutSupabaseFunctionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r PutSupabaseFunctionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutSupabaseFunctionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotateSupabaseJWTSecretResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Operation
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateSupabaseJWTSecretResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateSupabaseJWTSecretResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetSupabaseSMTPPasswordResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r SetSupabaseSMTPPasswordResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetSupabaseSMTPPasswordResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -22076,6 +25388,180 @@ func (c *ClientWithResponses) GetClusterPlacementWithResponse(ctx context.Contex
 	return ParseGetClusterPlacementResponse(rsp)
 }
 
+// ListPostgresDatabasesWithResponse request returning *ListPostgresDatabasesResponse
+func (c *ClientWithResponses) ListPostgresDatabasesWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresDatabasesParams, reqEditors ...RequestEditorFn) (*ListPostgresDatabasesResponse, error) {
+	rsp, err := c.ListPostgresDatabases(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPostgresDatabasesResponse(rsp)
+}
+
+// CreatePostgresDatabaseWithBodyWithResponse request with arbitrary body returning *CreatePostgresDatabaseResponse
+func (c *ClientWithResponses) CreatePostgresDatabaseWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePostgresDatabaseResponse, error) {
+	rsp, err := c.CreatePostgresDatabaseWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePostgresDatabaseResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreatePostgresDatabaseWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresDatabaseParams, body CreatePostgresDatabaseJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePostgresDatabaseResponse, error) {
+	rsp, err := c.CreatePostgresDatabase(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePostgresDatabaseResponse(rsp)
+}
+
+// DeletePostgresDatabaseWithResponse request returning *DeletePostgresDatabaseResponse
+func (c *ClientWithResponses) DeletePostgresDatabaseWithResponse(ctx context.Context, cluster ClusterPath, database string, params *DeletePostgresDatabaseParams, reqEditors ...RequestEditorFn) (*DeletePostgresDatabaseResponse, error) {
+	rsp, err := c.DeletePostgresDatabase(ctx, cluster, database, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeletePostgresDatabaseResponse(rsp)
+}
+
+// GetPostgresDatabaseWithResponse request returning *GetPostgresDatabaseResponse
+func (c *ClientWithResponses) GetPostgresDatabaseWithResponse(ctx context.Context, cluster ClusterPath, database string, params *GetPostgresDatabaseParams, reqEditors ...RequestEditorFn) (*GetPostgresDatabaseResponse, error) {
+	rsp, err := c.GetPostgresDatabase(ctx, cluster, database, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPostgresDatabaseResponse(rsp)
+}
+
+// RevokePostgresPrivilegesWithBodyWithResponse request with arbitrary body returning *RevokePostgresPrivilegesResponse
+func (c *ClientWithResponses) RevokePostgresPrivilegesWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RevokePostgresPrivilegesResponse, error) {
+	rsp, err := c.RevokePostgresPrivilegesWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokePostgresPrivilegesResponse(rsp)
+}
+
+func (c *ClientWithResponses) RevokePostgresPrivilegesWithResponse(ctx context.Context, cluster ClusterPath, params *RevokePostgresPrivilegesParams, body RevokePostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*RevokePostgresPrivilegesResponse, error) {
+	rsp, err := c.RevokePostgresPrivileges(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokePostgresPrivilegesResponse(rsp)
+}
+
+// ListPostgresGrantsWithResponse request returning *ListPostgresGrantsResponse
+func (c *ClientWithResponses) ListPostgresGrantsWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresGrantsParams, reqEditors ...RequestEditorFn) (*ListPostgresGrantsResponse, error) {
+	rsp, err := c.ListPostgresGrants(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPostgresGrantsResponse(rsp)
+}
+
+// GrantPostgresPrivilegesWithBodyWithResponse request with arbitrary body returning *GrantPostgresPrivilegesResponse
+func (c *ClientWithResponses) GrantPostgresPrivilegesWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GrantPostgresPrivilegesResponse, error) {
+	rsp, err := c.GrantPostgresPrivilegesWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGrantPostgresPrivilegesResponse(rsp)
+}
+
+func (c *ClientWithResponses) GrantPostgresPrivilegesWithResponse(ctx context.Context, cluster ClusterPath, params *GrantPostgresPrivilegesParams, body GrantPostgresPrivilegesJSONRequestBody, reqEditors ...RequestEditorFn) (*GrantPostgresPrivilegesResponse, error) {
+	rsp, err := c.GrantPostgresPrivileges(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGrantPostgresPrivilegesResponse(rsp)
+}
+
+// ListPostgresRolesWithResponse request returning *ListPostgresRolesResponse
+func (c *ClientWithResponses) ListPostgresRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresRolesParams, reqEditors ...RequestEditorFn) (*ListPostgresRolesResponse, error) {
+	rsp, err := c.ListPostgresRoles(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPostgresRolesResponse(rsp)
+}
+
+// CreatePostgresRoleWithBodyWithResponse request with arbitrary body returning *CreatePostgresRoleResponse
+func (c *ClientWithResponses) CreatePostgresRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePostgresRoleResponse, error) {
+	rsp, err := c.CreatePostgresRoleWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePostgresRoleResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreatePostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, params *CreatePostgresRoleParams, body CreatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePostgresRoleResponse, error) {
+	rsp, err := c.CreatePostgresRole(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePostgresRoleResponse(rsp)
+}
+
+// DeletePostgresRoleWithResponse request returning *DeletePostgresRoleResponse
+func (c *ClientWithResponses) DeletePostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *DeletePostgresRoleParams, reqEditors ...RequestEditorFn) (*DeletePostgresRoleResponse, error) {
+	rsp, err := c.DeletePostgresRole(ctx, cluster, role, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeletePostgresRoleResponse(rsp)
+}
+
+// GetPostgresRoleWithResponse request returning *GetPostgresRoleResponse
+func (c *ClientWithResponses) GetPostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *GetPostgresRoleParams, reqEditors ...RequestEditorFn) (*GetPostgresRoleResponse, error) {
+	rsp, err := c.GetPostgresRole(ctx, cluster, role, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPostgresRoleResponse(rsp)
+}
+
+// PatchPostgresRoleWithBodyWithResponse request with arbitrary body returning *PatchPostgresRoleResponse
+func (c *ClientWithResponses) PatchPostgresRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchPostgresRoleResponse, error) {
+	rsp, err := c.PatchPostgresRoleWithBody(ctx, cluster, role, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchPostgresRoleResponse(rsp)
+}
+
+func (c *ClientWithResponses) PatchPostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *PatchPostgresRoleParams, body PatchPostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchPostgresRoleResponse, error) {
+	rsp, err := c.PatchPostgresRole(ctx, cluster, role, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchPostgresRoleResponse(rsp)
+}
+
+// UpdatePostgresRoleWithBodyWithResponse request with arbitrary body returning *UpdatePostgresRoleResponse
+func (c *ClientWithResponses) UpdatePostgresRoleWithBodyWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePostgresRoleResponse, error) {
+	rsp, err := c.UpdatePostgresRoleWithBody(ctx, cluster, role, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePostgresRoleResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdatePostgresRoleWithResponse(ctx context.Context, cluster ClusterPath, role string, params *UpdatePostgresRoleParams, body UpdatePostgresRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePostgresRoleResponse, error) {
+	rsp, err := c.UpdatePostgresRole(ctx, cluster, role, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePostgresRoleResponse(rsp)
+}
+
+// RotatePostgresRolePasswordWithResponse request returning *RotatePostgresRolePasswordResponse
+func (c *ClientWithResponses) RotatePostgresRolePasswordWithResponse(ctx context.Context, cluster ClusterPath, role string, params *RotatePostgresRolePasswordParams, reqEditors ...RequestEditorFn) (*RotatePostgresRolePasswordResponse, error) {
+	rsp, err := c.RotatePostgresRolePassword(ctx, cluster, role, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotatePostgresRolePasswordResponse(rsp)
+}
+
 // ListRabbitMQOperatorPoliciesWithResponse request returning *ListRabbitMQOperatorPoliciesResponse
 func (c *ClientWithResponses) ListRabbitMQOperatorPoliciesWithResponse(ctx context.Context, cluster ClusterPath, params *ListRabbitMQOperatorPoliciesParams, reqEditors ...RequestEditorFn) (*ListRabbitMQOperatorPoliciesResponse, error) {
 	rsp, err := c.ListRabbitMQOperatorPolicies(ctx, cluster, params, reqEditors...)
@@ -22528,6 +26014,85 @@ func (c *ClientWithResponses) GetClusterStatusWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseGetClusterStatusResponse(rsp)
+}
+
+// GetSupabaseCredentialsWithResponse request returning *GetSupabaseCredentialsResponse
+func (c *ClientWithResponses) GetSupabaseCredentialsWithResponse(ctx context.Context, cluster ClusterPath, params *GetSupabaseCredentialsParams, reqEditors ...RequestEditorFn) (*GetSupabaseCredentialsResponse, error) {
+	rsp, err := c.GetSupabaseCredentials(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSupabaseCredentialsResponse(rsp)
+}
+
+// ListSupabaseFunctionsWithResponse request returning *ListSupabaseFunctionsResponse
+func (c *ClientWithResponses) ListSupabaseFunctionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListSupabaseFunctionsParams, reqEditors ...RequestEditorFn) (*ListSupabaseFunctionsResponse, error) {
+	rsp, err := c.ListSupabaseFunctions(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSupabaseFunctionsResponse(rsp)
+}
+
+// DeleteSupabaseFunctionWithResponse request returning *DeleteSupabaseFunctionResponse
+func (c *ClientWithResponses) DeleteSupabaseFunctionWithResponse(ctx context.Context, cluster ClusterPath, name string, params *DeleteSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*DeleteSupabaseFunctionResponse, error) {
+	rsp, err := c.DeleteSupabaseFunction(ctx, cluster, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSupabaseFunctionResponse(rsp)
+}
+
+// GetSupabaseFunctionWithResponse request returning *GetSupabaseFunctionResponse
+func (c *ClientWithResponses) GetSupabaseFunctionWithResponse(ctx context.Context, cluster ClusterPath, name string, params *GetSupabaseFunctionParams, reqEditors ...RequestEditorFn) (*GetSupabaseFunctionResponse, error) {
+	rsp, err := c.GetSupabaseFunction(ctx, cluster, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSupabaseFunctionResponse(rsp)
+}
+
+// PutSupabaseFunctionWithBodyWithResponse request with arbitrary body returning *PutSupabaseFunctionResponse
+func (c *ClientWithResponses) PutSupabaseFunctionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSupabaseFunctionResponse, error) {
+	rsp, err := c.PutSupabaseFunctionWithBody(ctx, cluster, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutSupabaseFunctionResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutSupabaseFunctionWithResponse(ctx context.Context, cluster ClusterPath, name string, params *PutSupabaseFunctionParams, body PutSupabaseFunctionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSupabaseFunctionResponse, error) {
+	rsp, err := c.PutSupabaseFunction(ctx, cluster, name, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutSupabaseFunctionResponse(rsp)
+}
+
+// RotateSupabaseJWTSecretWithResponse request returning *RotateSupabaseJWTSecretResponse
+func (c *ClientWithResponses) RotateSupabaseJWTSecretWithResponse(ctx context.Context, cluster ClusterPath, params *RotateSupabaseJWTSecretParams, reqEditors ...RequestEditorFn) (*RotateSupabaseJWTSecretResponse, error) {
+	rsp, err := c.RotateSupabaseJWTSecret(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateSupabaseJWTSecretResponse(rsp)
+}
+
+// SetSupabaseSMTPPasswordWithBodyWithResponse request with arbitrary body returning *SetSupabaseSMTPPasswordResponse
+func (c *ClientWithResponses) SetSupabaseSMTPPasswordWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSupabaseSMTPPasswordResponse, error) {
+	rsp, err := c.SetSupabaseSMTPPasswordWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetSupabaseSMTPPasswordResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetSupabaseSMTPPasswordWithResponse(ctx context.Context, cluster ClusterPath, params *SetSupabaseSMTPPasswordParams, body SetSupabaseSMTPPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*SetSupabaseSMTPPasswordResponse, error) {
+	rsp, err := c.SetSupabaseSMTPPassword(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetSupabaseSMTPPasswordResponse(rsp)
 }
 
 // ListSystemUsersWithResponse request returning *ListSystemUsersResponse
@@ -28626,6 +32191,1120 @@ func ParseGetClusterPlacementResponse(rsp *http.Response) (*GetClusterPlacementR
 	return response, nil
 }
 
+// ParseListPostgresDatabasesResponse parses an HTTP response from a ListPostgresDatabasesWithResponse call
+func ParseListPostgresDatabasesResponse(rsp *http.Response) (*ListPostgresDatabasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPostgresDatabasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Items []PostgresDatabase `json:"items"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreatePostgresDatabaseResponse parses an HTTP response from a CreatePostgresDatabaseWithResponse call
+func ParseCreatePostgresDatabaseResponse(rsp *http.Response) (*CreatePostgresDatabaseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePostgresDatabaseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest PostgresDatabase
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeletePostgresDatabaseResponse parses an HTTP response from a DeletePostgresDatabaseWithResponse call
+func ParseDeletePostgresDatabaseResponse(rsp *http.Response) (*DeletePostgresDatabaseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeletePostgresDatabaseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPostgresDatabaseResponse parses an HTTP response from a GetPostgresDatabaseWithResponse call
+func ParseGetPostgresDatabaseResponse(rsp *http.Response) (*GetPostgresDatabaseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPostgresDatabaseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PostgresDatabase
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokePostgresPrivilegesResponse parses an HTTP response from a RevokePostgresPrivilegesWithResponse call
+func ParseRevokePostgresPrivilegesResponse(rsp *http.Response) (*RevokePostgresPrivilegesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokePostgresPrivilegesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPostgresGrantsResponse parses an HTTP response from a ListPostgresGrantsWithResponse call
+func ParseListPostgresGrantsResponse(rsp *http.Response) (*ListPostgresGrantsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPostgresGrantsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Items []PostgresGrant `json:"items"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGrantPostgresPrivilegesResponse parses an HTTP response from a GrantPostgresPrivilegesWithResponse call
+func ParseGrantPostgresPrivilegesResponse(rsp *http.Response) (*GrantPostgresPrivilegesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GrantPostgresPrivilegesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPostgresRolesResponse parses an HTTP response from a ListPostgresRolesWithResponse call
+func ParseListPostgresRolesResponse(rsp *http.Response) (*ListPostgresRolesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPostgresRolesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Items []PostgresRole `json:"items"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreatePostgresRoleResponse parses an HTTP response from a CreatePostgresRoleWithResponse call
+func ParseCreatePostgresRoleResponse(rsp *http.Response) (*CreatePostgresRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePostgresRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest PostgresRoleCreated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeletePostgresRoleResponse parses an HTTP response from a DeletePostgresRoleWithResponse call
+func ParseDeletePostgresRoleResponse(rsp *http.Response) (*DeletePostgresRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeletePostgresRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPostgresRoleResponse parses an HTTP response from a GetPostgresRoleWithResponse call
+func ParseGetPostgresRoleResponse(rsp *http.Response) (*GetPostgresRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPostgresRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PostgresRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePatchPostgresRoleResponse parses an HTTP response from a PatchPostgresRoleWithResponse call
+func ParsePatchPostgresRoleResponse(rsp *http.Response) (*PatchPostgresRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchPostgresRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PostgresRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdatePostgresRoleResponse parses an HTTP response from a UpdatePostgresRoleWithResponse call
+func ParseUpdatePostgresRoleResponse(rsp *http.Response) (*UpdatePostgresRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdatePostgresRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PostgresRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotatePostgresRolePasswordResponse parses an HTTP response from a RotatePostgresRolePasswordWithResponse call
+func ParseRotatePostgresRolePasswordResponse(rsp *http.Response) (*RotatePostgresRolePasswordResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotatePostgresRolePasswordResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			GeneratedPassword string `json:"generatedPassword"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListRabbitMQOperatorPoliciesResponse parses an HTTP response from a ListRabbitMQOperatorPoliciesWithResponse call
 func ParseListRabbitMQOperatorPoliciesResponse(rsp *http.Response) (*ListRabbitMQOperatorPoliciesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -31337,6 +36016,538 @@ func ParseGetClusterStatusResponse(rsp *http.Response) (*GetClusterStatusRespons
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSupabaseCredentialsResponse parses an HTTP response from a GetSupabaseCredentialsWithResponse call
+func ParseGetSupabaseCredentialsResponse(rsp *http.Response) (*GetSupabaseCredentialsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSupabaseCredentialsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SupabaseCredentials
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSupabaseFunctionsResponse parses an HTTP response from a ListSupabaseFunctionsWithResponse call
+func ParseListSupabaseFunctionsResponse(rsp *http.Response) (*ListSupabaseFunctionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSupabaseFunctionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SupabaseFunctionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSupabaseFunctionResponse parses an HTTP response from a DeleteSupabaseFunctionWithResponse call
+func ParseDeleteSupabaseFunctionResponse(rsp *http.Response) (*DeleteSupabaseFunctionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSupabaseFunctionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSupabaseFunctionResponse parses an HTTP response from a GetSupabaseFunctionWithResponse call
+func ParseGetSupabaseFunctionResponse(rsp *http.Response) (*GetSupabaseFunctionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSupabaseFunctionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SupabaseFunction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutSupabaseFunctionResponse parses an HTTP response from a PutSupabaseFunctionWithResponse call
+func ParsePutSupabaseFunctionResponse(rsp *http.Response) (*PutSupabaseFunctionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutSupabaseFunctionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateSupabaseJWTSecretResponse parses an HTTP response from a RotateSupabaseJWTSecretWithResponse call
+func ParseRotateSupabaseJWTSecretResponse(rsp *http.Response) (*RotateSupabaseJWTSecretResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateSupabaseJWTSecretResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Operation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetSupabaseSMTPPasswordResponse parses an HTTP response from a SetSupabaseSMTPPasswordWithResponse call
+func ParseSetSupabaseSMTPPasswordResponse(rsp *http.Response) (*SetSupabaseSMTPPasswordResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetSupabaseSMTPPasswordResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

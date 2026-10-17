@@ -67,6 +67,16 @@ Each relay is one private Ubuntu runtime running `karakoram relay`, with private
 
 The hostname appends `relay` to the control-plane hostname; over 25 characters it uses the first sixteen characters, four hexadecimal SHA-256 characters and `relay`. `KARAKORAM_RELAY_HOSTNAME` affects new enrollments only; recorded hostnames/SANs remain unchanged.
 
+The relay's destination policy authorizes exact logical member/port pairs, not
+arbitrary IPs or dotted hostnames. PostgreSQL proxy readiness and retirement
+add an instance selector while retaining the logical member's TLS identity.
+The hub checks each selector against fresh live-container inventory from that
+namespace's own backend and member before sending it over authenticated mTLS.
+Only the agent port (9443) supports instance selection. The relay still rejects
+loopback, link-local, unspecified and multicast destinations, including DNS
+answers; inventory failure or an absent/stopped/unowned instance fails closed.
+Every running proxy must acknowledge the applied drain version separately.
+
 | Field | Meaning |
 | --- | --- |
 | `phase` | Namespace `Pending`, `Ready`, `Error`, `Deleting` |

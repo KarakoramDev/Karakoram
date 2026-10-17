@@ -16,7 +16,7 @@ import (
 // bodies or responses: both may contain passwords, tokens or private keys.
 func (s *Server) auditAction(ctx context.Context, name string, in input, result response) error {
 	rule, exists := api.OperationRBAC[operationID(name)]
-	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection") {
+	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection" && name != "GetSupabaseCredentials") {
 		return nil
 	}
 	if result.status >= 300 {
@@ -35,6 +35,13 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Operation = op.Id
 	}
 	switch name {
+	case "GetSupabaseCredentials":
+		e.Reason = "SupabaseCredentialsRevealed"
+	case "PutSupabaseFunction", "DeleteSupabaseFunction":
+		e.Resource = "supabase-functions"
+		e.Target = in.Cluster + "/" + in.Name
+	case "SetSupabaseSMTPPassword":
+		e.Reason = "SupabaseSMTPPasswordUpdated"
 	case "CreateElasticUser":
 		e.Target = in.Cluster + "/" + in.Body.(*api.ElasticUserCreate).Username
 	case "UpdateElasticUser", "DeleteElasticUser":
@@ -108,6 +115,17 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = "policy"
 	case "ReplaceSettings":
 		e.Target = "oidc"
+	case "CreatePostgresRole", "UpdatePostgresRole":
+		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresRoleWrite).Name
+	case "PatchPostgresRole", "DeletePostgresRole", "RotatePostgresRolePassword":
+		e.Target = in.Cluster + "/" + in.Role
+	case "CreatePostgresDatabase":
+		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresDatabase).Name
+	case "DeletePostgresDatabase":
+		e.Target = in.Cluster + "/" + in.Database
+	case "GrantPostgresPrivileges", "RevokePostgresPrivileges":
+		body := in.Body.(*api.PostgresGrant)
+		e.Target = in.Cluster + "/" + body.Database + "/" + body.Role
 	case "CreateDatabaseUser":
 		b := in.Body.(*api.CreateDatabaseUserRequest)
 		e.Target = in.Cluster + "/" + b.Database + "/" + b.Username

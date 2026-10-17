@@ -175,7 +175,7 @@ export function ClusterWizardPage() {
   const counts = topologyErrors(spec, topology);
   const footprint = totalFootprint(spec);
   const mongo = provider.name === 'psmdb';
-  const pitr = mongo && hasCapability(provider, 'pitr');
+  const pitr = hasCapability(provider, 'pitr');
   const engineUI = engines[provider.name];
   const WizardSection = engineUI?.wizardSection;
   const TopologySection = engineUI?.topologySection;
@@ -359,7 +359,7 @@ export function ClusterWizardPage() {
                     ))}
                   </SelectField>
                 ) : null}
-                {WizardSection ? <WizardSection provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : null}
+                {WizardSection ? <WizardSection namespace={targetNamespace} provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : null}
                 {touched.basics && engineUI?.validateSpec?.(spec).length ? <Callout tone="danger" title="Check engine options"><ul style={{ margin: 0, paddingLeft: 18 }}>{engineUI.validateSpec(spec).map((message) => <li key={message}>{message}</li>)}</ul></Callout> : null}
                 {spec.dataSource ? (
                   <Callout tone="info" title="Seeding from existing data">
@@ -444,7 +444,7 @@ export function ClusterWizardPage() {
                     hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                   />
                 )}
-                {provider.name !== 'elasticsearch' ? <TextAreaField
+                {!['elasticsearch', 'postgres', 'supabase'].includes(provider.name) ? <TextAreaField
                   label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML, optional)' : 'Engine configuration overrides (optional)')}
                   mono
                   rows={5}
@@ -496,7 +496,7 @@ export function ClusterWizardPage() {
                     label="Primary storage"
                     value={spec.backup?.storage ?? ''}
                     onChange={(e) => update((s) => ({ ...s, backup: { ...(s.backup ?? {}), storage: e.target.value || undefined } }))}
-                    hint={pitr ? 'Default destination for on-demand backups and PITR oplog slices.' : 'Default destination for on-demand backups.'}
+                    hint={pitr ? 'Default destination for on-demand backups and continuous recovery archives.' : 'Default destination for on-demand backups.'}
                     error={touched.backups && !spec.backup?.storage && ((spec.backup?.schedules?.length ?? 0) > 0 || spec.backup?.pitr?.enabled) ? `Choose a primary storage for schedules${pitr ? ' and PITR' : ''}.` : undefined}
                   >
                     <option value="">None</option>
@@ -507,14 +507,14 @@ export function ClusterWizardPage() {
                     ))}
                   </SelectField>
                   {pitr ? <Switch
-                    label="Point-in-time recovery (continuous oplog capture)"
+                    label={`Point-in-time recovery (continuous ${mongo ? 'oplog' : 'WAL'} capture)`}
                     checked={spec.backup?.pitr?.enabled ?? false}
                     disabled={!spec.backup?.storage}
                     onChange={(e) => update((s) => ({ ...s, backup: { ...(s.backup ?? {}), pitr: { enabled: e.target.checked, oplogSpanMinutes: s.backup?.pitr?.oplogSpanMinutes ?? 10 } } }))}
                   /> : null}
                   {pitr && spec.backup?.pitr?.enabled ? (
                     <TextField
-                      label="Oplog slice interval (minutes)"
+                      label={mongo ? 'Oplog slice interval (minutes)' : 'WAL archive interval (minutes)'}
                       type="number"
                       min={1}
                       style={{ maxWidth: 220 }}

@@ -265,7 +265,7 @@ func schemaFailure(err error) response {
 func decoderFailure(err error) response {
 	var large *http.MaxBytesError
 	if errors.As(err, &large) {
-		return fail(413, "payload_too_large", "body exceeds the 2 MiB size limit")
+		return fail(413, "payload_too_large", fmt.Sprintf("body exceeds the %d MiB size limit", large.Limit>>20))
 	}
 	var typed *json.UnmarshalTypeError
 	if errors.As(err, &typed) {

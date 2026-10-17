@@ -29,6 +29,7 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 		return nil, reject("runtime has no deployment")
 	}
 	volumeName := ""
+	volumeNode := ""
 	if r.Volume != "" {
 		volume, err := b.require(ctx, r.Volume)
 		if err != nil {
@@ -38,6 +39,7 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 			return nil, reject("volume has no physical name")
 		}
 		volumeName = volume.VolumeName
+		volumeNode = volume.Node
 	}
 	cores := r.Resources.MaxCPU
 	if cores == 0 {
@@ -148,6 +150,7 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 			"LostAfter": int64(12 * time.Hour),
 			"Replace":   false, "Reconcile": "keep_original",
 		}
+		group["Constraints"] = []any{map[string]any{"LTarget": "${node.unique.id}", "Operand": "=", "RTarget": volumeNode}}
 		group["Volumes"] = map[string]any{"data": map[string]any{
 			"Type": "host", "Source": volumeName, "ReadOnly": false, "Sticky": true,
 			"AccessMode": "single-node-single-writer", "AttachmentMode": "file-system",

@@ -7,3 +7,7 @@ internal/ui/dist/
 *.db-wal
 .env
 dist/
+
+# Python bytecode
+__pycache__/
+*.pyc

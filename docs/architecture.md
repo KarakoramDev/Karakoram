@@ -51,6 +51,20 @@ Agents cache assigned configuration on the data volume with owner-only permissio
 
 Rendered credentials, certificates and configuration are restricted to the runtime owner. Explicit maintenance and process-stop holds are persisted separately from pulled configuration, so a configuration refresh or agent restart does not silently release them. Restore/restart recovery remains provider-specific: use the engine operations and recovery guides rather than manually overriding holds.
 
+When the member executable is PID 1, a minimal init parent re-executes the real
+agent as its child. The parent forwards termination, interrupt and hangup signals,
+reaps adopted daemon descendants, and exits with the real agent's status. This
+keeps orphan reaping separate from the agent's `os/exec` command waits; daemonized
+database processes cannot remain zombies that block their supervisor's lifecycle
+checks. Ordinary non-PID-1 members do not re-execute.
+
+The shared process supervisor reaps each direct child independently of stdout and
+stderr EOF. After exit it allows up to 250 ms for final log draining, then closes
+its pipe readers so descendants retaining inherited descriptors cannot block exit
+status, restart scheduling or stop completion. Normal EOF finishes the drain
+immediately. Exit observation does not signal descendants; explicit stop/restart
+retains the configured stop signal to the child's process group.
+
 ## Recovery, monitoring and events
 
 The control plane owns scheduling and count retention; its downtime pauses new scheduling and retention. Already-started engine-side work can continue without the control plane. Engine backups and control-plane state backups protect different assets: preserve both the SQLite state and its master key as described in [state backup and recovery](operations.md#control-plane-state-backup-and-recovery).
@@ -65,12 +79,16 @@ The control plane is single-replica. Local Storage is tied to a single host, and
 
 Providers are compiled into Karakoram, not dynamically installable plugins. Each owns its version catalog, validation/defaults, topology, health observation, lifecycle checkpoints, access APIs and backup semantics. Shared interfaces handle infrastructure, namespaces, secrets, operations and monitoring; capability metadata gates supported UI/API actions. A cluster's provider is immutable.
 
-Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declarations with per-component replicas and resources in `spec.components.extra`. Shared stateless reconciliation handles enable/disable stages through engine callbacks; credentials, application readiness, resizing and stateful safety remain engine-owned. Elasticsearch uses this for Kibana, Logstash and APM. See [ADR 0031](adr/0031-engine-component-model.md).
+Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declarations with per-component replicas and resources in `spec.components.extra`. Shared stateless reconciliation handles enable/disable stages through engine callbacks; credentials, application readiness, resizing and stateful safety remain engine-owned. Elasticsearch uses this for Kibana, Logstash and APM; PostgreSQL for ProxySQL; Supabase for its modular native services. See [ADR 0031](adr/0031-engine-component-model.md).
 
 | Engine | Provider | Runtime and operational details |
 | --- | --- | --- |
 | MongoDB | `psmdb` | [Overview](mongodb/README.md) |
 | RabbitMQ | `rabbitmq` | [Overview](rabbitmq/README.md) |
 | Elasticsearch | `elasticsearch` | [Overview](elasticsearch/README.md) |
+| PostgreSQL | `postgres` | [Percona, Patroni/etcd HA, ProxySQL and pgBackRest](postgres/README.md) |
+| Supabase | `supabase` | [PostgreSQL core plus modular native services](supabase/README.md) |
+
+Supabase wraps the PostgreSQL core rather than duplicating database lifecycle. Internal services use a protocol-transparent leader forwarder rather than ProxySQL; the client proxy retains explicit protocol limits. Native service availability comes from an embedded, checksum-pinned lock with operator mirror precedence, not floating downloads. See [ADRs 0034–0036](adr/README.md) and [native artifacts](native-artifacts.md).
 
 See [ADR 0005](adr/0005-engine-provider-seam.md) for the provider seam and [Contributing](../CONTRIBUTING.md) for code layout and development workflows.

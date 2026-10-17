@@ -25,6 +25,8 @@ type Backend struct {
 	mu          sync.Mutex
 	artifacts   *artifactResolver
 	artifactURL string
+	clock       func() time.Time
+	instance    string
 }
 
 var _ infra.Backend = (*Backend)(nil)
@@ -103,6 +105,17 @@ func (b *Backend) observed(ctx context.Context, r *record) (infra.Service, error
 		return s, nil
 	}
 	if r.Desired == "stopped" {
+		if b.restorationFenced(r) || r.Pending != nil && r.Pending.Phase == "stopping" {
+			s.Status = infra.StatusCreating
+			if r.Pending != nil && r.Pending.Action == "stop" {
+				state, err := b.OpStatus(ctx, encodeOp(*r.Pending))
+				if state.Done {
+					s.Status = infra.StatusStopped
+				}
+				return s, err
+			}
+			return s, nil
+		}
 		s.Status = infra.StatusStopped
 		return s, nil
 	}
@@ -111,7 +124,7 @@ func (b *Backend) observed(ctx context.Context, r *record) (infra.Service, error
 	if err != nil {
 		return s, err
 	}
-	var job struct{ Version, JobModifyIndex uint64 }
+	var job observedJob
 	_, err = b.c.get(ctx, "/v1/job/"+r.Hostname, nil, &job)
 	if err != nil && !errors.Is(err, infra.ErrNotFound) {
 		return s, err
@@ -120,7 +133,12 @@ func (b *Backend) observed(ctx context.Context, r *record) (infra.Service, error
 		s.Status = infra.StatusFailed
 	}
 	if errors.Is(err, infra.ErrNotFound) {
-		return s, nil
+		s.Status, err = b.restoreMissingJob(ctx, r)
+		return s, err
+	}
+	if !b.ownsJob(r, job) {
+		s.Status = infra.StatusFailed
+		return s, jobOwnershipConflict()
 	}
 	for _, a := range as {
 		if a.JobVersion != job.Version || a.CreateIndex <= job.JobModifyIndex {

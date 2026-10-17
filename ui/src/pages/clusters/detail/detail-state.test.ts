@@ -5,6 +5,7 @@ import test from 'node:test';
 import { assignedRoles, assignedUsers, certificateDownload, clusterEmptyCopy, colocatedGroups, credentialDatabaseLabel, FCV_GUIDANCE, fcvObservation, generationState, latestSuccessfulBackup, maintenanceCopy, observedVersion, passwordValid, psmdbConnect, refreshSubmissionBody, requireUpgradeBackup, scalingReview } from './detail-state.ts';
 import { fetchBackupInventory } from './backup-inventory.ts';
 import { elasticHealthNotices, elasticMemberSummary } from './detail-state.ts';
+import { upgradeType } from './detail-state.ts';
 
 const resources = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 5, maxDisk: 10 };
 const spec = { components: { engine: { replicas: 1, resources } } };
@@ -60,6 +61,24 @@ test('Elasticsearch maintenance explains database downtime and separate ordered 
   assert.match(multiple, /master quorum and redundant shard copies/);
   assert.match(multiple, /Kibana restarts separately/);
   assert.doesNotMatch(multiple, /only Elasticsearch data node|Secondaries/);
+});
+test('PostgreSQL major upgrades are offline in upgrade labels and confirmations, minors stay rolling', () => {
+  for (const [current, target] of [['16.13.1', '17.11.1'], ['17.11.1', '18.6.1']]) {
+    assert.equal(upgradeType('postgres', current!.split('.')[0]!, target!.split('.')[0]!, false), 'Major (OFFLINE maintenance)');
+    for (const replicas of [1, 3]) {
+      const copy = maintenanceCopy('postgres', replicas, current, target);
+      assert.match(copy, /OFFLINE.*all data members are stopped.*pg_upgrade --link/);
+      assert.match(copy, /All database access is unavailable.*replica rebuild/);
+      assert.match(copy, /successful backup is required/);
+      assert.doesNotMatch(copy, /replicas restart first|briefly interrupts/);
+    }
+  }
+  assert.equal(upgradeType('postgres', '17', '17', false), 'Minor (rolling)');
+  assert.match(maintenanceCopy('postgres', 3, '17.11.1', '17.12.1'), /replicas restart first.*switchover/);
+  assert.doesNotMatch(maintenanceCopy('postgres', 3, '17.11.1', '17.12.1'), /OFFLINE|pg_upgrade/);
+  assert.match(maintenanceCopy('postgres', 1, '17.11.1', '17.12.1'), /single-member.*interrupts database access/);
+  assert.match(maintenanceCopy('postgres', 3), /replicas restart first/);
+  assert.equal(upgradeType('psmdb', '7.0', '8.0', true), 'Major (rolling, FCV stays until raised)');
 });
 test('newest successful backup ignores failed and pending records', () => {
   const backups = [{ phase: 'Succeeded', completedAt: '2026-01-01T00:00:00Z' }, { phase: 'Succeeded', completedAt: '2026-01-02T00:00:00Z' }, { phase: 'Failed', completedAt: '2026-01-03T00:00:00Z' }];

@@ -18,10 +18,26 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/xdg-go/scram"
 	"golang.org/x/crypto/hkdf"
 )
 
 const prefix = "kk:v1:"
+
+// SCRAMVerifier derives a PostgreSQL verifier so plaintext passwords never enter SQL.
+func SCRAMVerifier(password string) (string, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("generating SCRAM salt: %w", err)
+	}
+	client, err := scram.SHA256.NewClient("", password, "")
+	if err != nil {
+		return "", errors.New("password is not valid SCRAM text")
+	}
+	stored := client.GetStoredCredentials(scram.KeyFactors{Salt: string(salt), Iters: 4096})
+	encode := base64.StdEncoding.EncodeToString
+	return fmt.Sprintf("SCRAM-SHA-256$4096:%s$%s:%s", encode(salt), encode(stored.StoredKey), encode(stored.ServerKey)), nil
+}
 
 // Sealer encrypts secrets and authenticates idempotency digests with separate
 // master-key-derived keys.

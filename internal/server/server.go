@@ -457,11 +457,17 @@ func (s *Server) Handler() http.Handler {
 		if strings.HasPrefix(s.PublicURL, "https://") {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}
-		if r.ContentLength > 2<<20 {
-			_ = fail(413, "payload_too_large", "body exceeds the 2 MiB size limit").write(w)
+		bodyLimit := int64(2 << 20)
+		_, route := mux.Handler(r)
+		if route == "PUT /api/v1/clusters/{cluster}/supabase/functions/{name}" {
+			// JSON escaping can expand one source byte to six wire bytes.
+			bodyLimit = 7 << 20
+		}
+		if r.ContentLength > bodyLimit {
+			_ = fail(413, "payload_too_large", fmt.Sprintf("body exceeds the %d MiB size limit", bodyLimit>>20)).write(w)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		r.Body = http.MaxBytesReader(w, r.Body, bodyLimit)
 		var readable bool
 		r, readable = s.captureIdempotencyBody(w, r)
 		if !readable {

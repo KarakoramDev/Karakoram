@@ -127,6 +127,9 @@ func TestVolumeSpreadAndRuntimePlacement(t *testing.T) {
 	if containers[0].PlacementGroup != m.Node || containers[0].Status != infra.ContainerRunning {
 		t.Fatalf("container placement/status: %+v, volume node %s", containers[0], m.Node)
 	}
+	if containers[0].Hostname == "runtime" || !strings.HasSuffix(containers[0].Hostname, "."+containers[0].ID) {
+		t.Fatalf("container address is not task-specific overlay DNS: %+v", containers[0])
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var holder, runtime *fakeApplication
@@ -262,6 +265,39 @@ func TestOwnershipMasksSecretsAndKeepsVars(t *testing.T) {
 	if values["PLAIN"] != "changed-var" || values["UNRELATED_SECRET"] != "private-other" {
 		t.Fatal("environment replacement dropped existing values")
 	}
+}
+
+func TestPrivateDNSAndPublicEndpointModes(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("runtime", ""))
+	deployFake(t, b, "runtime", "")
+	check := func(want string) {
+		t.Helper()
+		row := fakeAppSnapshot(t, f, "runtime")
+		if want == "vip" {
+			if value, exists := row["endpointSpecSwarm"]; !exists || value != nil {
+				t.Fatalf("public endpoint override = %#v, want cleared override", value)
+			}
+			return
+		}
+		endpoint, ok := row["endpointSpecSwarm"].(map[string]any)
+		if !ok || endpoint["Mode"] != want {
+			t.Fatalf("endpoint mode = %#v, want %s", row["endpointSpecSwarm"], want)
+		}
+	}
+	check("dnsrr")
+	public := infra.PublicPort{Port: 18080, TargetPort: 8080, Protocol: "tcp", IPType: "IPV4"}
+	if err := b.EnsurePublicPort(t.Context(), "runtime", public); err != nil {
+		t.Fatal(err)
+	}
+	check("vip")
+	deployFake(t, b, "runtime", "")
+	check("vip")
+	if err := b.DeletePublicPorts(t.Context(), "runtime"); err != nil {
+		t.Fatal(err)
+	}
+	check("dnsrr")
 }
 
 func TestPublicPortAllowlistAndReload(t *testing.T) {
@@ -734,6 +770,11 @@ func TestNetworkOverridesAndPendingPortSettings(t *testing.T) {
 		t.Fatalf("private service must have only its target network and alias: %+v", networks)
 	}
 	id := imported.Services["runtime"]
+	// Exercise Dokploy's raw port/reload semantics without a custom EndpointSpec,
+	// which otherwise takes precedence over its separate port settings.
+	if err := b.c.post(t.Context(), "application.update", map[string]any{"applicationId": id, "endpointSpecSwarm": nil}, nil); err != nil {
+		t.Fatal(err)
+	}
 	if err := b.c.post(t.Context(), "port.create", map[string]any{"applicationId": id, "publishedPort": 19090, "targetPort": 9090, "protocol": "tcp", "publishMode": "ingress"}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -1011,5 +1052,37 @@ func TestEnvironmentTrailingBackslashUsesUnquotedEncoding(t *testing.T) {
 		if _, err := encodeEnvironment(map[string]string{"A": value}); !errors.Is(err, infra.ErrRejected) {
 			t.Fatalf("unrepresentable trailing-backslash value must be rejected: %v", err)
 		}
+	}
+}
+
+func TestContainersAddressEveryStillRunningSwarmTask(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("proxy", ""))
+	f.mu.Lock()
+	for _, app := range f.apps {
+		if app.row["name"] != "proxy" {
+			continue
+		}
+		app.holdTasks = true
+		app.tasks = []map[string]any{
+			{"containerId": "task-a", "name": "app.1", "state": "running", "currentState": "Running 1 minute ago"},
+			{"containerId": "task-b", "name": `\_ app.2`, "state": "shutdown", "currentState": "Running 1 minute ago"},
+			{"containerId": "task-c", "name": "app.3", "state": "running", "currentState": "Preparing 1 second ago"},
+			{"containerId": "task-d", "name": "app.4", "state": "shutdown", "currentState": "Shutdown 1 minute ago"},
+		}
+	}
+	f.mu.Unlock()
+	containers, err := b.Containers(t.Context(), "proxy")
+	if err != nil || len(containers) != 3 {
+		t.Fatalf("live/stopping/preparing tasks: %+v %v", containers, err)
+	}
+	for i, want := range []string{"app.1.task-a", "app.2.task-b", "app.3.task-c"} {
+		if containers[i].Hostname != want {
+			t.Fatalf("task-specific DNS = %q, want %q", containers[i].Hostname, want)
+		}
+	}
+	if containers[1].Status != infra.ContainerRunning || containers[2].Status != infra.StatusCreating {
+		t.Fatalf("desired shutdown hid a still-running task: %+v", containers)
 	}
 }

@@ -11,6 +11,7 @@ Register S3 destinations, manage backup inventory and schedules, and recover int
 | [MongoDB](mongodb/backups.md) | PBM `logical` (CLI default) / `physical`; incremental type not exposed; providerless legacy records belong here | Yes | Members write directly to S3 |
 | [RabbitMQ](rabbitmq/backups.md) | `definitions` only; **no queued messages**; restore merges definitions | No | Control plane exports through Management API, then compresses/uploads to S3 |
 | [Elasticsearch](elasticsearch/snapshots.md) | Native `snapshot` | No | Nodes write directly to S3 |
+| [PostgreSQL / Supabase](postgres/backups.md) | pgBackRest `full`, `diff`, `incr`; PostgreSQL data only | When enabled | Current primary writes backups and WAL directly to S3 |
 
 Backup payload transfer to S3 does not use the management relay; remote administration requests may. Control-plane storage verification does not prove member connectivity. Engine backups and [control-plane state backups](operations.md#control-plane-state-backup-and-recovery) protect different assets. Zerops live volume archives are not consistent engine backups.
 
@@ -108,6 +109,74 @@ karactl -n dev restores create orderscopy recovery \
 ```
 
 New-cluster requests use `spec.dataSource.namespace`; in-place REST requests use `sourceNamespace`. Recovery reads the source backup's recorded storage; ensure the applicable data path can reach it. Target backup settings must use target-local storage. The live-source `--into-new` convenience clone omits copied backup settings across namespaces; configure them afterward.
+
+### PostgreSQL and Supabase recovery
+
+See the focused [PostgreSQL recovery guide](postgres/backups.md) and [Supabase recovery boundaries](supabase/operations.md#recovery-boundaries). The shared rules below apply to both providers.
+
+Use an explicit `--type full`, `--type diff` or `--type incr`; the generic CLI
+default `logical` belongs to MongoDB. A differential requires an existing full;
+an incremental requires an existing consistent backup chain. The registered
+storage's endpoint scheme, path-style addressing and TLS verification policy
+apply on every potential primary. Repository paths are isolated by namespace and
+cluster incarnation: `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>`,
+with stanza `kk`. Keep storage credentials and the control-plane master key.
+
+pgBackRest automatic expiration is disabled. The Karakoram scheduler controls
+retention through `delete-backup` operations, but defers the newest full until a
+newer full exists and preserves ancestors of retained sets across schedules and
+manual requests. Skipped sets are reconsidered on later passes; actual counts
+can exceed the configured limit while dependencies require them.
+Explicitly deleting a full **also deletes its dependent differential and
+incremental sets**, including records from other schedules or manual requests;
+deleting a differential also deletes incrementals that reference it. The newest
+full cannot be deleted while the cluster is live. Rejected or failed expiration
+fails its operation and releases the queue for subsequent backups.
+WAL preceding the oldest remaining full chain is pruned by expiration.
+After source deletion, retained-backup deletion
+uses the recorded repository and native backup dependency metadata, rewrites
+checksummed pgBackRest inventory, and removes the whole isolated repository when
+its last backup is deleted.
+
+Enable `spec.backup.pitr.enabled` with a default storage. `oplogSpanMinutes`
+controls PostgreSQL `archive_timeout` (one minute when omitted); this bounds WAL
+switching during low activity, not an exact commit-time recovery guarantee. The
+reported conservative interval starts at the oldest successful consistent
+backup's stop time and ends at the current primary's last successful archive
+completion time. No interval is advertised when PITR is disabled or archiving
+is failing. Archive completion is not a precise last-commit timestamp; missing
+objects or externally modified repositories can still make recovery fail.
+
+In-place restore is destructive and offline. Single-member recovery stops
+PostgreSQL, performs a delta restore, starts the server and waits for promotion.
+HA recovery fences and stops every Patroni/PostgreSQL member, resets only that
+cluster's DCS scope, restores a seed through Patroni custom bootstrap, and
+rebuilds the remaining members before completing. Recovery continues archiving
+to the target's stanza on a new timeline. When restoring from a different source
+repository, archiving remains disabled until the target repository configuration
+is published and the bootstrap archive override is removed on every member.
+For a different-source restore into an existing target repository, stanza-upgrade
+appends the restored system-ID history while retaining the target's prior backup
+sets; it does not overwrite them with the source repository's inventory.
+When PITR is enabled a new full backup is queued afterward; recovery is not
+protected by that new base until it succeeds.
+Recovery adopts the backup's sealed system-role credentials after all existing
+members are stopped, before restarting the restored seed. This also applies to
+same-cluster backups taken before a system-password rotation; reveal connection
+credentials again after recovery rather than reusing an earlier password.
+
+A clone's `dataSource` may name a backup or a PITR time in the same or another
+namespace. Source and target providers must match **exactly**:
+`postgres` cannot consume a `supabase` backup or vice versa. PostgreSQL major
+versions must match; source and destination topologies may differ. Bootstrap
+reads the source repository with archiving disabled, then switches to the
+target's own repository and queues a full backup. Target-local backup storage
+must be configured in the clone request to establish that independent recovery
+history. Retained backup clones
+use the snapshot's sealed system credentials, not a deleted source's live
+credential scope. Supabase backups protect PostgreSQL data, not objects stored
+by its separate Storage service.
+
 
 ## Permissions
 

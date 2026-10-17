@@ -2647,6 +2647,537 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Balancer'
+  /clusters/{cluster}/supabase/credentials:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: getSupabaseCredentials
+      tags: [Supabase]
+      summary: Reveal Supabase endpoints and credentials
+      x-karakoram-rbac: {resource: cluster-credentials, action: read, object: cluster}
+      responses:
+        '200':
+          description: Credentials must not be cached.
+          headers:
+            Cache-Control:
+              schema: {type: string, enum: [no-store]}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SupabaseCredentials'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/supabase/smtp-password:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    put:
+      operationId: setSupabaseSMTPPassword
+      tags: [Supabase]
+      summary: Set the write-only SMTP password
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SupabaseSMTPPassword'}
+      responses:
+        '204': {description: Password stored without returning its value.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/supabase/functions:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listSupabaseFunctions
+      tags: [Supabase]
+      summary: List deployed edge function names
+      x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      responses:
+        '200':
+          description: Function names.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SupabaseFunctionList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/supabase/functions/{name}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - name: name
+        in: path
+        required: true
+        schema: {type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,62}$'}
+    get:
+      operationId: getSupabaseFunction
+      tags: [Supabase]
+      summary: Read edge function source files
+      x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      responses:
+        '200':
+          description: Relative file paths mapped to source text; not cached.
+          headers:
+            Cache-Control:
+              schema: {type: string, enum: [no-store]}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SupabaseFunction'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    put:
+      operationId: putSupabaseFunction
+      tags: [Supabase]
+      summary: Deploy or replace an edge function
+      description: At most 100 functions per cluster and 1 MiB of source text per function. A nonempty index.ts entrypoint is required; main is reserved for the runtime dispatcher. Paths must be relative, without dot or parent components or backslashes.
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SupabaseFunction'}
+      responses:
+        '204': {description: Function source stored.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: deleteSupabaseFunction
+      tags: [Supabase]
+      summary: Delete an edge function
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204': {description: Function deleted.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/supabase/rotate-jwt-secret:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: rotateSupabaseJWTSecret
+      tags: [Supabase]
+      summary: Queue JWT signing secret and API key rotation
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Operation'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/postgres/roles:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listPostgresRoles
+      tags: [Postgres]
+      summary: List application PostgreSQL roles
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Application roles; reserved engine identities are hidden.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PostgresRole'}}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createPostgresRole
+      tags: [Postgres]
+      summary: Create a PostgreSQL role
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PostgresRoleWrite'}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '201':
+          description: Role created. A generated login password is returned only here.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresRoleCreated'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/postgres/roles/{role}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: role, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 63}}
+    get:
+      operationId: getPostgresRole
+      tags: [Postgres]
+      summary: Read a PostgreSQL application role
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+        '200':
+          description: Role attributes, never its password.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresRole'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: updatePostgresRole
+      tags: [Postgres]
+      summary: Replace PostgreSQL role attributes and optionally its password
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PostgresRoleWrite'}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Updated role.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresRole'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    patch:
+      operationId: patchPostgresRole
+      tags: [Postgres]
+      summary: Update selected PostgreSQL role attributes
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PostgresRolePatch'}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Updated role.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresRole'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: deletePostgresRole
+      tags: [Postgres]
+      summary: Delete a PostgreSQL application role
+      x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+        '204': {description: Role deleted.}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /clusters/{cluster}/postgres/roles/{role}/password:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: role, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 63}}
+    post:
+      operationId: rotatePostgresRolePassword
+      tags: [Postgres]
+      summary: Generate and rotate a login role password
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Newly generated password; never retrievable again without the same idempotency key.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generatedPassword]
+                properties:
+                  generatedPassword: {type: string}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/postgres/databases:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listPostgresDatabases
+      tags: [Postgres]
+      summary: List PostgreSQL application databases
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Application databases.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PostgresDatabase'}}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createPostgresDatabase
+      tags: [Postgres]
+      summary: Create a database from template0 with immutable encoding and locale
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PostgresDatabase'}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '201':
+          description: Database created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresDatabase'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/postgres/databases/{database}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: database, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 63}}
+    get:
+      operationId: getPostgresDatabase
+      tags: [Postgres]
+      summary: Read a PostgreSQL application database
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+        '200':
+          description: Database attributes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresDatabase'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      operationId: deletePostgresDatabase
+      tags: [Postgres]
+      summary: Delete a PostgreSQL application database
+      x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - {name: force, in: query, schema: {type: boolean, default: false}}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+        '204': {description: Database deleted.}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /clusters/{cluster}/postgres/grants:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listPostgresGrants
+      tags: [Postgres]
+      summary: List explicit database and schema grants in a database
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      parameters:
+        - {name: database, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 63}}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Explicit grants, excluding reserved roles.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PostgresGrant'}}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: grantPostgresPrivileges
+      tags: [Postgres]
+      summary: Grant whitelisted database or schema privileges
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PostgresGrant'}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '204': {description: Privileges granted.}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: revokePostgresPrivileges
+      tags: [Postgres]
+      summary: Revoke whitelisted database or schema privileges
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PostgresGrant'}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '204': {description: Privileges revoked.}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /clusters/{cluster}/rabbitmq/vhosts:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
@@ -6169,6 +6700,40 @@ components:
           type: string
           description: New description; an empty string clears the description.
       required: [description]
+    SupabaseCredentials:
+      type: object
+      additionalProperties: false
+      required: [apiUrl, studioUrl, anonKey, serviceRoleKey, publishableKey, secretKey, dashboardUsername, dashboardPassword, jwtSecret]
+      properties:
+        apiUrl: {type: string}
+        studioUrl: {type: string}
+        anonKey: {type: string, format: password}
+        serviceRoleKey: {type: string, format: password}
+        publishableKey: {type: string, format: password}
+        secretKey: {type: string, format: password}
+        dashboardUsername: {type: string}
+        dashboardPassword: {type: string, format: password}
+        jwtSecret: {type: string, format: password}
+    SupabaseSMTPPassword:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password: {type: string, format: password, writeOnly: true}
+    SupabaseFunction:
+      type: object
+      minProperties: 1
+      description: Relative file paths mapped to source text, including a nonempty index.ts entrypoint. Total source bytes must not exceed 1 MiB; parent path components are forbidden.
+      additionalProperties: {type: string}
+    SupabaseFunctionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {type: string}
     NamespaceTokenRotate:
       type: object
       additionalProperties: false
@@ -6705,6 +7270,8 @@ components:
             - sharded
             - cluster
             - dedicatedMasters
+            - single
+            - ha
         shards:
           type: integer
           minimum: 1
@@ -6768,6 +7335,8 @@ components:
             - sharded
             - cluster
             - dedicatedMasters
+            - single
+            - ha
         displayName:
           type: string
         defaults:
@@ -6843,6 +7412,9 @@ components:
               - physical
               - definitions
               - snapshot
+              - full
+              - diff
+              - incr
         capabilities:
           type: array
           items:
@@ -6889,6 +7461,9 @@ components:
             - physical
             - definitions
             - snapshot
+            - full
+            - diff
+            - incr
         storage:
           type: string
           minLength: 1
@@ -7113,7 +7688,7 @@ components:
           type: string
         role:
           type: string
-          description: Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
+          description: Provider data-member or service-component role.
           enum:
             - primary
             - secondary
@@ -7129,12 +7704,30 @@ components:
             - kibana
             - logstash
             - apm
+            - replica
+            - standalone
+            - proxy
+            - gateway
+            - auth
+            - rest
+            - realtime
+            - storage
+            - imgproxy
+            - meta
+            - studio
+            - functions
+            - pooler
+            - analytics
+            - vector
         state:
           type: string
         health:
           type: boolean
         version:
           type: string
+        componentVersion:
+          type: string
+          description: Service-component version, independent of the PostgreSQL data-member version.
         lagSeconds:
           type: number
         optime:
@@ -7774,6 +8367,12 @@ components:
             - karakoram_apm
             - kibana-token
             - apm-secret-token
+            - postgres
+            - kk_replicator
+            - kk_monitor
+            - kk_admin
+            - kk_rewind
+            - kk_proxy_admin
         username:
           type: string
         roles:
@@ -7838,6 +8437,90 @@ components:
             type: string
             enum: [management, policymaker, monitoring, administrator, impersonator]
       required: [name, tags]
+    PostgresRole:
+      type: object
+      additionalProperties: false
+      required: [name, login, superuser, createdb, createrole, replication, bypassrls, connectionLimit, memberOf]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 63}
+        login: {type: boolean, default: true}
+        superuser: {type: boolean, default: false}
+        createdb: {type: boolean, default: false}
+        createrole: {type: boolean, default: false}
+        replication: {type: boolean, default: false}
+        bypassrls: {type: boolean, default: false}
+        connectionLimit: {type: integer, minimum: -1, default: -1}
+        memberOf: {type: array, items: {type: string}, default: []}
+        validUntil: {type: string, format: date-time}
+    PostgresRoleWrite:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 63}
+        login: {type: boolean, default: true}
+        superuser: {type: boolean, default: false}
+        createdb: {type: boolean, default: false}
+        createrole: {type: boolean, default: false}
+        replication: {type: boolean, default: false}
+        bypassrls: {type: boolean, default: false}
+        connectionLimit: {type: integer, minimum: -1, default: -1}
+        memberOf: {type: array, items: {type: string}}
+        validUntil: {type: string, format: date-time}
+        password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
+    PostgresRolePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        login: {type: boolean}
+        superuser: {type: boolean}
+        createdb: {type: boolean}
+        createrole: {type: boolean}
+        replication: {type: boolean}
+        bypassrls: {type: boolean}
+        connectionLimit: {type: integer, minimum: -1}
+        memberOf: {type: array, items: {type: string}}
+        validUntil: {type: string, format: date-time}
+        password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
+    PostgresRoleCreated:
+      type: object
+      additionalProperties: false
+      required: [name, login, superuser, createdb, createrole, replication, bypassrls, connectionLimit, memberOf]
+      properties:
+        name: {type: string}
+        login: {type: boolean}
+        superuser: {type: boolean}
+        createdb: {type: boolean}
+        createrole: {type: boolean}
+        replication: {type: boolean}
+        bypassrls: {type: boolean}
+        connectionLimit: {type: integer}
+        memberOf: {type: array, items: {type: string}}
+        validUntil: {type: string, format: date-time}
+        generatedPassword: {type: string}
+    PostgresDatabase:
+      type: object
+      additionalProperties: false
+      required: [name, owner]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 63}
+        owner: {type: string, minLength: 1, maxLength: 63}
+        encoding: {type: string, default: UTF8}
+        locale: {type: string, default: C.UTF-8}
+        allowConnections: {type: boolean, default: true}
+    PostgresGrant:
+      type: object
+      additionalProperties: false
+      required: [role, database, privileges]
+      properties:
+        role: {type: string, minLength: 1, maxLength: 63}
+        database: {type: string, minLength: 1, maxLength: 63}
+        schema: {type: string, minLength: 1, maxLength: 63}
+        privileges:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, enum: [CONNECT, CREATE, TEMP, TEMPORARY, USAGE]}
     RabbitMQUserWrite:
       type: object
       additionalProperties: false
@@ -8123,6 +8806,41 @@ components:
       required:
         - roles
         - privileges
+    PostgresBackup:
+      type: object
+      additionalProperties: false
+      description: Immutable pgBackRest backup-set provenance and dependency metadata.
+      properties:
+        label:
+          type: string
+        repository:
+          type: string
+          description: Snapshot-time repository object prefix, excluding bucket.
+        prior:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+        walStart:
+          type: string
+        walStop:
+          type: string
+        systemId:
+          type: string
+          description: PostgreSQL system identifier, encoded as a string without precision loss.
+        version:
+          type: string
+          description: PostgreSQL version recorded by pgBackRest.
+        repoBytes:
+          type: integer
+          format: int64
+      required:
+        - label
+        - repository
+        - systemId
+        - version
+        - repoBytes
     Backup:
       type: object
       additionalProperties: false
@@ -8153,6 +8871,8 @@ components:
         location:
           type: string
           description: Complete snapshot-time object key, prefix, or snapshot reference.
+        postgres:
+          $ref: '#/components/schemas/PostgresBackup'
         type:
           type: string
           enum:
@@ -8160,6 +8880,9 @@ components:
             - physical
             - definitions
             - snapshot
+            - full
+            - diff
+            - incr
         trigger:
           type: string
           description: What initiated the snapshot; restore identifies an automatic post-restore base backup.
@@ -8532,6 +9255,7 @@ components:
             - replace-member
             - rotate-system-user
             - rotate-tls
+            - rotate-jwt-secret
             - create
             - update
             - tls
@@ -9047,6 +9771,8 @@ components:
             - sharded
             - cluster
             - dedicatedMasters
+            - single
+            - ha
         shards:
           type: integer
           minimum: 1
@@ -9232,6 +9958,8 @@ components:
             - sharded
             - cluster
             - dedicatedMasters
+            - single
+            - ha
           nullable: true
         shards:
           type: integer
@@ -9425,6 +10153,9 @@ components:
             - physical
             - definitions
             - snapshot
+            - full
+            - diff
+            - incr
         storage:
           type: string
           minLength: 1

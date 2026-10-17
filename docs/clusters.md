@@ -10,26 +10,34 @@ Each cluster selects an immutable provider/engine. Data-bearing members are Zero
 
 The provider catalog advertises versions, upgrade paths, topology/component limits, backup types and operations. Query `karactl providers list` or `karactl providers get <provider> -o yaml`. Supported does not mean disruption-free: follow the linked engine's prerequisites and limits.
 
-| Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) |
-| --- | --- | --- | --- |
-| Create | Yes | Yes | Yes |
-| Scale CPU/RAM/disk | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows |
-| Add/remove members | Yes | Yes | Yes |
-| Replace member | Yes | Yes | Yes |
-| Rolling restart | Yes | Yes | Yes |
-| Rolling upgrade | Catalog paths | Catalog paths | Catalog paths |
-| Feature compatibility version (FCV) promotion | Yes | No | No |
-| TLS rotation | Yes | Yes | Yes |
-| System-user rotation | Yes | Yes | Yes |
-| Public TCP exposure | Yes | Yes | Yes |
-| Backup types | Percona Backup for MongoDB (PBM): logical, physical | Definitions only; no messages | Native snapshots |
-| Point-in-time recovery (PITR) | Yes | No | No |
-| In-place restore | Yes | Merge definitions | Native restore |
-| Clone | Yes | Definitions only | Yes |
-| Suspend/resume | Yes | Yes | Yes |
-| Cross-namespace clone | Yes | Definitions only | Yes |
+| Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) | [PostgreSQL](postgres/README.md) / [Supabase](supabase/README.md) |
+| --- | --- | --- | --- | --- |
+| Create | Yes | Yes | Yes | Yes; Supabase artifact availability gates components |
+| Scale CPU/RAM/disk | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows and needs backend capability |
+| Add/remove members | Yes | Yes | Yes | Single→HA; HA 3↔5; no HA→single |
+| Replace member | Yes | Yes | Yes | Yes |
+| Rolling restart | Yes | Yes | Yes | HA; single interrupts service |
+| Upgrade | Catalog paths | Catalog paths | Catalog paths | Rolling minor; offline adjacent major for postgres; PG17 minor only for Supabase |
+| Feature compatibility version (FCV) promotion | Yes | No | No | No |
+| TLS rotation | Yes | Yes | Yes | Yes; no CA replacement |
+| System-user rotation | Yes | Yes | Yes | Yes |
+| Public TCP exposure | Yes | Yes | Yes | Yes; selected client service |
+| Backup types | Percona Backup for MongoDB (PBM): logical, physical | Definitions only; no messages | Native snapshots | pgBackRest full/diff/incr; database data only |
+| Point-in-time recovery (PITR) | Yes | No | No | Yes, opt-in |
+| In-place restore | Yes | Merge definitions | Native restore | Destructive/offline |
+| Clone | Yes | Definitions only | Yes | Same provider and PG major only |
+| Suspend/resume | Yes | Yes | Yes | Yes |
+| Cross-namespace clone | Yes | Definitions only | Yes | Yes; same provider and PG major |
 
 See [Backups and storage](backups.md) for shared recovery mechanics and the engine guides for runtime, compatibility and checkpoint rules.
+
+### PostgreSQL and Supabase
+
+[PostgreSQL](postgres/README.md) adds `single` (one member) and `ha` (three/five Patroni + etcd members), a separate ProxySQL component, native roles/databases/grants and pgBackRest full/diff/incr/PITR recovery. It supports cataloged Percona majors 16/17/18, replica-first minor maintenance and offline backup-gated adjacent major upgrades. Single→HA and HA 3↔5 are supported; HA→single is rejected. See [access/TLS](postgres/access-and-tls.md), [operations](postgres/operations.md) and [backups](postgres/backups.md).
+
+[Supabase](supabase/README.md) wraps that core, limits PostgreSQL to major 17 and adds independently sized stateless components. `spec.version` is the database version; application versions are release-locked. Internal database connections bypass ProxySQL through a leader-aware TCP forwarder. See [components/presets/dependencies and current artifact limits](supabase/components.md) and [credentials, SMTP and function operations](supabase/operations.md). Standard/full preset definitions do not imply their artifacts are currently available.
+
+Both providers support TLS/system-user rotation, public TCP subject to backend capability, restore/clone, replacement and retained-volume suspension. Backups match providers exactly and protect database data, not separate Supabase object storage or all control-plane-held application state. [Shared recovery](backups.md) describes namespace and retention rules.
 
 ## Create and change desired state
 

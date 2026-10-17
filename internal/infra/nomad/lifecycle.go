@@ -112,24 +112,49 @@ func (b *Backend) Restart(ctx context.Context, hostname string) (infra.Op, error
 	if r.Pending != nil && r.Pending.Phase == "failed" && r.Desired == "running" && r.Deployment != nil {
 		return b.begin(ctx, r, "restart")
 	}
-	as, err := b.allocations(ctx, hostname)
+	if b.operationLeaseBlocked(r) {
+		return infra.Op{}, infra.ErrConflict
+	}
+	work, cancel := operationContext(ctx)
+	defer cancel()
+	lease, err := b.newOperationLease()
 	if err != nil {
 		return infra.Op{}, err
+	}
+	r.RestartLease = lease
+	if err = b.save(work, r); err != nil {
+		return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
+	}
+	as, err := b.allocations(work, hostname)
+	if err != nil {
+		return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
 	}
 	running := false
 	for _, a := range as {
 		if a.ClientStatus == "running" {
-			if err = b.c.post(ctx, "/v1/client/allocation/"+a.ID+"/restart", nil, map[string]any{"AllTasks": true}, nil); err != nil {
-				return infra.Op{}, err
+			if !b.leaseUsable(lease) {
+				return infra.Op{}, b.releaseFailedOperation(work, r, lease, infra.ErrConflict)
+			}
+			if err = operationMutation(work, func() error {
+				return b.c.post(work, "/v1/client/allocation/"+a.ID+"/restart", nil, map[string]any{"AllTasks": true}, nil)
+			}); err != nil {
+				return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
 			}
 			running = true
 		}
+	}
+	if err = b.releaseExactOperationLease(work, r, lease); err != nil {
+		return infra.Op{}, err
 	}
 	if !running && r.Desired == "running" && r.Deployment != nil {
 		// A failed/lost allocation (or a purged job) cannot be restarted via
 		// the allocation endpoint. Recreate the saved job through the same
 		// stop/terminal/register fence as other destructive lifecycle changes.
-		return b.begin(ctx, r, "restart")
+		current, err := b.require(ctx, hostname)
+		if err != nil {
+			return infra.Op{}, err
+		}
+		return b.begin(ctx, current, "restart")
 	}
 	return infra.Op{}, nil
 }
@@ -206,20 +231,25 @@ func (b *Backend) deleteService(ctx context.Context, hostname, id string, fenced
 		if err = ignoreNotFound(b.c.delete(ctx, "/v1/volume/host/"+r.VolumeID, nil, nil)); err != nil {
 			return infra.Op{}, err
 		}
-		return infra.Op{}, b.finishDelete(ctx, r)
+		_, err = b.finishDelete(ctx, r)
+		return infra.Op{}, err
 	}
 	r.Desired = "deleting"
 	return b.begin(ctx, r, "delete")
 }
-func (b *Backend) finishDelete(ctx context.Context, r *record) error {
+func (b *Backend) finishDelete(ctx context.Context, r *record) (bool, error) {
+	if b.restorationFenced(r) {
+		return false, nil
+	}
 	v, err := b.readVariable(ctx, "nomad/jobs/"+r.Hostname)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if v.ModifyIndex != 0 {
 		if err = b.removeVariable(ctx, v.Path, v.ModifyIndex); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return b.removeVariable(ctx, recordPrefix+r.Hostname, r.Index)
+	err = b.removeVariable(ctx, recordPrefix+r.Hostname, r.Index)
+	return err == nil, err
 }

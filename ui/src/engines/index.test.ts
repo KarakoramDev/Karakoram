@@ -158,3 +158,21 @@ test('replica validation follows provider limits instead of Mongo voting sizes',
   assert.equal(validateReplicas(3, replicaLimits(topology, 'worker')).length, 1);
   assert.deepEqual(replicaLimits(undefined, 'engine'), {});
 });
+
+test('PostgreSQL-family registry metadata uses native endpoints, summaries and monitoring', () => {
+  for (const provider of ['postgres', 'supabase']) {
+    assert.equal(engines[provider]?.publicPort, 5432);
+    assert.equal(hasReplicaSetDetails(provider), false);
+    assert.equal(publicExposureMetadata(engines[provider], spec).publicPortLabel, 'PostgreSQL');
+    const names = monitoringPanels(provider).flatMap((p) => p.names);
+    for (const metric of ['postgres_connections', 'postgres_max_connections', 'postgres_transactions_committed_total', 'postgres_replication_lag_bytes', 'postgres_last_archived_age_seconds', 'postgres_database_size_bytes', 'postgres_proxysql_connections_used']) assert.ok(names.includes(metric), metric);
+    assert.ok(names.includes('cpu.percent'));
+    assert.equal(names.includes('repl.lagSeconds'), false);
+  }
+  assert.ok(monitoringPanels('supabase').some((p) => p.names.includes('supabase_up')));
+  assert.equal(tabAvailable({ name: 'postgres', capabilities: ['postgresAccess'] }, 'postgres'), true);
+  assert.equal(tabAvailable({ name: 'postgres', capabilities: [] }, 'postgres'), false);
+  assert.equal(tabAvailable({ name: 'supabase', capabilities: [] }, 'components'), true);
+  assert.equal(tabAvailable({ name: 'supabase', capabilities: [] }, 'functions'), true);
+  assert.equal(tabAvailable({ name: 'postgres', capabilities: [] }, 'functions'), false);
+});

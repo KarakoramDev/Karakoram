@@ -1,0 +1,72 @@
+{
+  "pg_net": {
+    "repo": "supabase/pg_net",
+    "commit": "0ab4bae33a306316f9056fc9c87ba3f977fc6b7e",
+    "version": "0.20.3",
+    "license": "PostgreSQL",
+    "flags": {"preload": true}
+  },
+  "supabase_vault": {
+    "repo": "supabase/vault",
+    "commit": "6e0cd916242d922a646e4d611cc215e09dd429f4",
+    "version": "0.3.1",
+    "license": "PostgreSQL",
+    "flags": {"preload": false}
+  },
+  "pgsodium": {
+    "repo": "michelp/pgsodium",
+    "commit": "54c06acf3ad06cc5c9c77d350cf58c7c25052454",
+    "version": "3.1.8",
+    "license": "PostgreSQL",
+    "flags": {"preload": false, "unavailableFeatures": ["server-key-management", "key-id", "tce"]}
+  },
+  "pgjwt": {
+    "repo": "michelp/pgjwt",
+    "commit": "f3d82fd30151e754e19ce5d6a06c71c20689ce3d",
+    "version": "0.2.0",
+    "license": "MIT",
+    "flags": {"preload": false}
+  },
+  "pg_graphql": {
+    "repo": "supabase/pg_graphql",
+    "commit": "2b68b46def702aa4ec94d20a951fa32f9fb85aa8",
+    "version": "1.5.11",
+    "license": "PostgreSQL",
+    "flags": {"preload": false}
+  },
+  "pg_jsonschema": {
+    "repo": "supabase/pg_jsonschema",
+    "commit": "dcbe58ebfe6712746162253770167cfa7a73667a",
+    "version": "0.3.3",
+    "license": "PostgreSQL",
+    "flags": {"preload": false}
+  },
+  "hypopg": {
+    "repo": "HypoPG/hypopg",
+    "commit": "97026c0bff16b905c555acdd82e15979fa6b9781",
+    "version": "1.4.1",
+    "license": "PostgreSQL",
+    "flags": {"preload": false}
+  },
+  "index_advisor": {
+    "repo": "olirice/index_advisor",
+    "commit": "d37723555e6425f18e6a45cb0956ced2250a3fe7",
+    "version": "0.2.0",
+    "license": "PostgreSQL",
+    "flags": {"preload": false}
+  },
+  "plpgsql_check": {
+    "repo": "okbob/plpgsql_check",
+    "commit": "4790a627e744273377abc7d10a2830bb26cf3881",
+    "version": "2.8.11",
+    "license": "MIT",
+    "flags": {"preload": false}
+  },
+  "pg_hashids": {
+    "repo": "iCyberon/pg_hashids",
+    "commit": "cd0e1b31d52b394a0df64079406a14a4f7387cd6",
+    "version": "1.3.0",
+    "license": "PostgreSQL",
+    "flags": {"preload": false}
+  }
+}

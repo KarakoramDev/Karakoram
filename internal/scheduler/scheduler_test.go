@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -178,5 +181,73 @@ func TestSameNameSchedulesAreNamespaceScoped(t *testing.T) {
 	defaultBackups, err := db.ListBackups(ctx, domain.ClusterRef{Namespace: "default", Name: "demo"})
 	if err != nil || len(defaultBackups) != 0 || len(trigger.names) != 1 || trigger.names[0] != ref.Key() {
 		t.Fatal(defaultBackups, trigger, err)
+	}
+}
+
+func TestProviderRetentionPolicy(t *testing.T) {
+	for _, provider := range []engine.Provider{postgres.New(postgres.Options{}), psmdb.New(psmdb.Options{})} {
+		t.Run(provider.Name(), func(t *testing.T) {
+			ctx := t.Context()
+			key, _ := secrets.New(strings.Repeat("k", 32))
+			db, err := store.Open(filepath.Join(t.TempDir(), "retention.db"), key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			registry, err := engine.NewRegistry(provider)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := New(Options{Store: db, Registry: registry})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: provider.Name(), Backup: domain.BackupConfig{Schedules: []domain.BackupSchedule{
+				{Name: "fulls", RetainCount: 1}, {Name: "increments", RetainCount: 1},
+			}}}}
+			if err := db.CreateCluster(ctx, &c); err != nil {
+				t.Fatal(err)
+			}
+			for i, name := range []string{"oldfull", "oldincr", "newincr", "newfull"} {
+				at := time.Date(2026, 10, 17, 1, i, 0, 0, time.UTC)
+				b := domain.Backup{Name: name, Cluster: c.Name, Storage: "archive", Phase: domain.PhaseSucceeded, Trigger: "schedule", Schedule: "increments", Type: "incr", CompletedAt: &at}
+				if strings.HasSuffix(name, "full") {
+					b.Schedule, b.Type = "fulls", "full"
+				}
+				// Dependency metadata is irrelevant to providers without policy.
+				b.Postgres = &domain.PostgresBackup{Label: name, Repository: "repo"}
+				if name == "newincr" {
+					b.Postgres.Prior = "oldincr"
+				}
+				if name == "oldincr" {
+					b.Postgres.Prior = "oldfull"
+				}
+				if err := db.CreateBackup(ctx, &b); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.EnforceRetention(ctx, c.Ref()); err != nil {
+				t.Fatal(err)
+			}
+			ops, err := db.ListOperations(ctx, c.Ref())
+			if err != nil {
+				t.Fatal(err)
+			}
+			deleted := map[string]bool{}
+			for _, op := range ops {
+				var payload map[string]string
+				if err := json.Unmarshal(op.Payload, &payload); err != nil {
+					t.Fatal(err)
+				}
+				deleted[payload["backup"]] = true
+			}
+			if provider.Name() == "psmdb" {
+				if len(deleted) != 2 || !deleted["oldfull"] || !deleted["oldincr"] {
+					t.Fatal("PSMDB count retention changed", deleted)
+				}
+			} else if len(deleted) != 0 {
+				t.Fatal("retention removed a retained incremental's ancestors", deleted)
+			}
+		})
 	}
 }

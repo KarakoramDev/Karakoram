@@ -321,10 +321,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		}
 	}
 	var convergenceErr error
+	var p engine.Provider
 	convergenceAttempted := false
 	defer func() {
 		if !errors.Is(err, errClusterGone) {
-			err = errors.Join(err, m.trackingOperations(ctx, c, convergenceErr, convergenceAttempted))
+			err = errors.Join(err, m.trackingOperations(ctx, p, c, convergenceErr, convergenceAttempted))
 		}
 	}()
 	// Capture attribution before synchronization advances ObservedGeneration.
@@ -338,7 +339,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if operation != "" {
 		ctx = context.WithValue(ctx, operationEventKey{}, operation)
 	}
-	p, err := m.opts.Registry.Get(c.Spec.Provider)
+	p, err = m.opts.Registry.Get(c.Spec.Provider)
 	if err != nil {
 		return 0, err
 	}
@@ -416,6 +417,15 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	}
 	if syncErr != nil {
 		return 0, syncErr
+	}
+	if policy, ok := p.(engine.OperationClaimPolicy); ok {
+		allowed, err := policy.CanClaimOperation(c)
+		if err != nil {
+			return 0, err
+		}
+		if !allowed {
+			return result.RequeueAfter, nil
+		}
 	}
 	op, err = m.opts.Store.ClaimOperation(ctx, ref)
 	if errors.Is(err, store.ErrNotFound) {
@@ -567,7 +577,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	}
 	// Compensation has its own window, not the exhausted work deadline.
 	if !terminal && !failing {
-		deadline := op.CreatedAt.Add(m.operationTimeout(op))
+		deadline := m.operationStart(p, op).Add(m.operationTimeout(op))
 		var cancel context.CancelFunc
 		callCtx, cancel = context.WithTimeout(ctx, deadline.Sub(rc.Clock.Now()))
 		defer cancel()

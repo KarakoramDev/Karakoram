@@ -8,6 +8,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/getkin/kin-openapi v0.151.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/oasdiff/yaml3 v0.0.14
@@ -46,6 +47,8 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

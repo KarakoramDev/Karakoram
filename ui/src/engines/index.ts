@@ -3,6 +3,7 @@
 
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
+import { postgresMetadata, supabaseMetadata } from './postgres/metadata.ts';
 export type { EngineUI, MonitoringPanel, TopologyEditorProps, WizardSectionProps } from './types';
 export { reviewChanges } from './changes.ts';
 
@@ -11,6 +12,8 @@ export { reviewChanges } from './changes.ts';
  * `./register.ts` (`./<provider>/index.tsx`) so this module stays loadable by `node --test`.
  */
 export const engines: Record<string, EngineUI> = {
+  postgres: postgresMetadata,
+  supabase: supabaseMetadata,
   psmdb: {
     label: 'Percona Server for MongoDB',
     description: 'Replica sets and sharded MongoDB clusters.',
@@ -47,7 +50,7 @@ export const genericMonitoringPanels: MonitoringPanel[] = [
 
 const PSMDB_CAPABILITIES = ['databaseUsers', 'databaseRoles', 'systemUsers', 'balancer', 'pitr', 'backups', 'restores', 'fcv', 'publicExposure', 'tls', 'monitoring', 'engineConfig'];
 const PSMDB_OPERATIONS = ['backup', 'delete-backup', 'restore', 'raise-fcv', 'restart', 'replace-member', 'rotate-system-user', 'rotate-tls'];
-type Metadata = Pick<Schemas['Provider'], 'capabilities' | 'operations' | 'processes'>;
+type Metadata = Pick<Schemas['Provider'], 'capabilities' | 'operations' | 'processes'> & { name?: string };
 
 /** Catalog access is optional for readers with cluster-scoped permissions. */
 export function detailProvider(name: string, provider: Schemas['Provider'] | undefined): Schemas['Provider'] | undefined {
@@ -83,6 +86,8 @@ export function versionSelectable(provider: string, version: Schemas['Provider']
 }
 
 export function tabAvailable(provider: Metadata | undefined, tab: string): boolean {
+  if (tab === 'postgres') return hasCapability(provider, 'postgresAccess');
+  if (tab === 'components' || tab === 'functions') return provider?.name === 'supabase';
   if (tab === 'users') return hasCapability(provider, 'databaseUsers') || hasCapability(provider, 'systemUsers');
   if (tab === 'backups' || tab === 'restores') return hasCapability(provider, tab);
   return true;

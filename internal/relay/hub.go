@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,9 +32,12 @@ func (e *ErrRefused) Error() string { return "relay target refused: " + e.Reason
 // HubOptions defines trust, enrollment and transport limits. Authorize is required:
 // it must reject absent/default namespaces and unenrolled or revoked certificate serials.
 type HubOptions struct {
-	Certificate          tls.Certificate
-	ClientCAs            *x509.CertPool
-	Authorize            func(context.Context, string, *x509.Certificate) error
+	Certificate tls.Certificate
+	ClientCAs   *x509.CertPool
+	Authorize   func(context.Context, string, *x509.Certificate) error
+	// AuthorizeInstance must check the namespace backend's fresh live inventory.
+	// Arguments are namespace, logical member hostname and instance hostname/IP.
+	AuthorizeInstance    func(context.Context, string, string, string) error
 	Logger               *slog.Logger
 	OnSession            func(string, SessionEvent)
 	HandshakeTimeout     time.Duration
@@ -404,6 +408,29 @@ func (h *Hub) acceptAgents(ctx context.Context, ns string, s *hubSession) {
 // DialContext opens a policy-checked TCP tunnel. RemoteAddr reports addr, not the WebSocket peer.
 // Cancellation bounds stream opening and the dial reply; successful connections are caller-owned.
 func (h *Hub) DialContext(ctx context.Context, namespace, network, addr string) (net.Conn, error) {
+	return h.dial(ctx, namespace, network, addr, "")
+}
+
+// DialInstanceContext selects one live runtime of an allowed logical agent.
+// No instance tunnel can be opened without fresh namespace inventory authorization.
+func (h *Hub) DialInstanceContext(ctx context.Context, namespace, network, addr, instance string) (net.Conn, error) {
+	member, port, err := net.SplitHostPort(addr)
+	if err != nil || port != "9443" || !hostnamePattern.MatchString(member) || instance == "" || instance == member {
+		return nil, &ErrRefused{Reason: refusedAddress}
+	}
+	h.mu.Lock()
+	allowed := slices.Contains(h.state(namespace).policy.Targets, addr)
+	h.mu.Unlock()
+	if !allowed || h.o.AuthorizeInstance == nil {
+		return nil, &ErrRefused{Reason: refusedPolicy}
+	}
+	if err := h.o.AuthorizeInstance(ctx, namespace, member, instance); err != nil {
+		return nil, err
+	}
+	return h.dial(ctx, namespace, network, addr, instance)
+}
+
+func (h *Hub) dial(ctx context.Context, namespace, network, addr, instance string) (net.Conn, error) {
 	if network != "tcp" && network != "tcp4" && network != "tcp6" {
 		return nil, fmt.Errorf("unsupported relay network %q", network)
 	}
@@ -458,7 +485,7 @@ func (h *Hub) DialContext(ctx context.Context, namespace, network, addr string) 
 		stream = result.s
 	}
 	err := boundedStreamOperation(ctx, stream, h.o.HandshakeTimeout, func() error {
-		if err := WriteHeader(stream, Dial{Type: "dial", Addr: addr}); err != nil {
+		if err := WriteHeader(stream, Dial{Type: "dial", Addr: addr, Instance: instance}); err != nil {
 			return err
 		}
 		reply, err := ReadReply(stream)

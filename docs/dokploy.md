@@ -4,20 +4,24 @@
 
 The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed Docker Swarm that you operate. It is **experimental**: it passes the shared backend conformance suite and was exercised with MongoDB, RabbitMQ and Elasticsearch on a three-node test Swarm, but it has no production track record. Zerops remains the reference backend. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
 
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and remain experimental on Dokploy; this is not an acceptance claim for these engines. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered S3 destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
+
 ## How it maps
 
 |Karakoram|Dokploy / Swarm|
 |---|---|
 |Namespace target (`projectId`)|One Dokploy **environment** ID|
 |Member runtime|One Dokploy application named after the member hostname (Dokploy suffixes the Swarm service name); one replica, stop-first updates and rollbacks, 120 s stop grace period|
-|Member DNS name|A network alias equal to the member hostname on the target's IPv4 overlay network (RabbitMQ uses IPv4 Erlang distribution here)|
+|Member DNS name|A network alias equal to the member hostname on the target's IPv4 overlay network; private services use DNSRR task addresses so peer certificate source-address verification sees matching DNS|
 |Persistent volume|A Docker named volume on one node, owned by a "volume holder" application that is never started and gives the volume its own ID|
 |Deployment|Karakoram uploads a build archive (Dockerfile + the release `karakoram` archive); Dokploy builds the image on the manager and pushes it to your registry; workers pull it|
 |Anti-affinity|Volumes of one replica set (MongoDB) or cluster (RabbitMQ, Elasticsearch) are pinned to distinct Swarm nodes while enough nodes exist; runtimes follow their volume|
-|Public TCP|Swarm ingress-published ports (routing mesh)|
+|Public TCP|Swarm ingress-published ports (routing mesh); exposed services switch to VIP endpoint mode, returning to DNSRR after port removal|
 |Public HTTPS (Kibana, RabbitMQ management)|Dokploy domains served by Dokploy's Traefik|
 
 Docker is used on this backend only because Dokploy runs Swarm services. Each member image is a pinned Ubuntu 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
+
+Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking Bash with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
 
 ## Capabilities
 

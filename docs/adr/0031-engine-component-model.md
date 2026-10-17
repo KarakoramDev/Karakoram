@@ -19,7 +19,7 @@ Elasticsearch declares Kibana, Logstash and APM in `internal/engine/elastic/comp
 
 Providers also declare spec-dependent admission requirements through `CapabilityRequirer`: multiple MongoDB routers in sharded topology and multiple Elasticsearch stateless-component replicas require horizontal scaling; public RabbitMQ management UI and public Kibana/APM require public HTTPS. `CheckCapabilities` combines those with engine-neutral public TCP, allowlist and dedicated-CPU requirements. Unsupported backend operations remain terminal capability errors rather than entering platform retries.
 
-A future Supabase engine could declare an ordered `ComponentSet` for `auth`, `rest`, `realtime`, `storage` and `studio`, with per-component defaults, dependencies and resources in `Components.Extra`. It would implement its own configuration, credentials, compatibility and readiness callbacks, use the stateless helper only for stateless services, and own any stateful volume transitions. This is an extension path, not a registered Supabase provider or a claim that those services are implemented.
+Supabase declares an ordered `ComponentSet` for its native services with per-component resources and explicit dependencies in `Components.Extra`. It owns application configuration, credentials, compatibility and readiness while the shared PostgreSQL core owns data members and the client proxy. Artifact availability is separately enforced at admission; a declared component is not proof of an available binary. See [ADR 0035](0035-supabase-engine.md).
 
 ## Consequences
 

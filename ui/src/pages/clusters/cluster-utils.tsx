@@ -69,6 +69,9 @@ const ROLE_TONE: Record<Schemas['Member']['role'], Tone> = {
   primary: 'accent', secondary: 'neutral', arbiter: 'neutral', 'config-primary': 'accent',
   'config-secondary': 'neutral', router: 'info', broker: 'neutral', unknown: 'warn',
   master: 'accent', data: 'neutral', 'master,data': 'accent', kibana: 'info', logstash: 'info', apm: 'info',
+  replica: 'neutral', standalone: 'accent', proxy: 'info',
+  gateway: 'info', auth: 'info', rest: 'info', realtime: 'info', storage: 'info', imgproxy: 'info',
+  meta: 'info', studio: 'info', functions: 'info', pooler: 'info', analytics: 'info', vector: 'info',
 };
 
 export function MemberRole({ member, roles }: { member: Schemas['Member']; roles?: MemberRoles }) {

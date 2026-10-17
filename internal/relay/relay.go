@@ -375,6 +375,7 @@ func (r *runtime) acceptLocal(ctx context.Context, l net.Listener) error {
 }
 
 var hostnamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
+var instanceHostPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 // Fixed dial refusal reasons a relay reports to the hub.
 const (
@@ -406,7 +407,7 @@ func RefusalReason(reason string) string {
 // distribution are never relayed.
 var relayPorts = map[string]bool{"9443": true, "27017": true, "5672": true, "5671": true, "15672": true, "15671": true, "9200": true, "5601": true, "9600": true, "8200": true, "5044": true, "8080": true}
 
-func (r *runtime) target(ctx context.Context, s *relaySession, addr string) (net.Conn, error) {
+func (r *runtime) target(ctx context.Context, s *relaySession, addr, instance string) (net.Conn, error) {
 	s.mu.RLock()
 	_, allowed := s.targets[addr]
 	s.mu.RUnlock()
@@ -426,9 +427,27 @@ func (r *runtime) target(ctx context.Context, s *relaySession, addr string) (net
 	if host == "core" || strings.EqualFold(host, r.o.Hostname) {
 		return nil, errors.New(refusedReserved)
 	}
-	ips, err := r.o.Resolver(ctx, host)
-	if err != nil || len(ips) == 0 {
-		return nil, errors.New(refusedUnresolved)
+	var ips []netip.Addr
+	if instance != "" {
+		// The authenticated hub checks its namespace's live backend inventory.
+		// Policy remains bound to the logical member, never an arbitrary IP.
+		if port != "9443" || instance == host || instance == "core" || strings.EqualFold(instance, r.o.Hostname) {
+			return nil, errors.New(refusedAddress)
+		}
+		if ip, parseErr := netip.ParseAddr(instance); parseErr == nil {
+			ips = []netip.Addr{ip}
+		} else {
+			if len(instance) > 253 || !instanceHostPattern.MatchString(instance) {
+				return nil, errors.New(refusedAddress)
+			}
+			host = instance
+		}
+	}
+	if len(ips) == 0 {
+		ips, err = r.o.Resolver(ctx, host)
+		if err != nil || len(ips) == 0 {
+			return nil, errors.New(refusedUnresolved)
+		}
 	}
 	for _, ip := range ips {
 		ip = ip.Unmap()
@@ -467,7 +486,7 @@ func (r *runtime) handleDial(s *relaySession, stream *smux.Stream) {
 		return
 	}
 	dialCtx, cancel := context.WithTimeout(s.ctx, r.o.DialTimeout)
-	target, err := r.target(dialCtx, s, dial.Addr)
+	target, err := r.target(dialCtx, s, dial.Addr, dial.Instance)
 	cancel()
 	if err != nil {
 		r.o.Logger.Warn("relay target refused", "namespace", r.o.Namespace, "target", dial.Addr, "reason", err.Error())

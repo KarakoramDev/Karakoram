@@ -663,3 +663,44 @@ func eventuallyTrue(t *testing.T, ok func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestNodeStopDurableHold(t *testing.T) {
+	a, c, e := fakeNode(t, buildFake(t))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := a.apply(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	n := &Node{a: a}
+	if err := n.WithLock(ctx, func(locked *Node) error { return locked.Stop(ctx, "worker") }); err != nil {
+		t.Fatal(err)
+	}
+	if !n.Stopped("worker") || workerState(a).PID != 0 {
+		t.Fatal("engine stop did not hold and stop process")
+	}
+	if _, err := a.apply(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if workerState(a).PID != 0 {
+		t.Fatal("configuration pull released hold")
+	}
+	controls, err := loadControls(a.o.DataDir)
+	if err != nil || !controls.Stopped["worker"] {
+		t.Fatal("stop hold was not persisted", err)
+	}
+	restarted, _, _ := fakeNode(t, e.binary)
+	restarted.o.DataDir, restarted.controls = a.o.DataDir, controls
+	if _, err := restarted.apply(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if workerState(restarted).PID != 0 {
+		t.Fatal("cached configuration restart released hold")
+	}
+	if err := restarted.processAction(ctx, "worker", "start"); err != nil {
+		t.Fatal(err)
+	}
+	controls, err = loadControls(a.o.DataDir)
+	if err != nil || controls.Stopped["worker"] || workerState(restarted).PID == 0 {
+		t.Fatal("restore's explicit start did not release durable hold", err)
+	}
+}

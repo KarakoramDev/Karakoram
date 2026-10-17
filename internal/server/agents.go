@@ -66,6 +66,11 @@ func (d *AgentDialer) Dial(ctx context.Context, ref domain.ClusterRef, member st
 	if d.namespaces != nil {
 		if dialer := d.namespaces.Dialer(ref.Namespace); dialer != nil {
 			opts.DialContext = dialer.DialContext
+			if instances, ok := dialer.(interface {
+				DialInstanceContext(context.Context, string, string, string) (net.Conn, error)
+			}); ok {
+				opts.DialInstanceContext = instances.DialInstanceContext
+			}
 		}
 	}
 	client, err := agentapi.NewClient(opts)

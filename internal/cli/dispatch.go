@@ -21,6 +21,8 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 	}
 	_ = q
 	switch op {
+	case "getSupabaseCredentials", "setSupabaseSMTPPassword", "listSupabaseFunctions", "getSupabaseFunction", "putSupabaseFunction", "deleteSupabaseFunction", "rotateSupabaseJWTSecret":
+		return dispatchSupabase(ctx, c, op, args, q, body)
 	case "listElasticUsers", "getElasticUser", "createElasticUser", "updateElasticUser", "deleteElasticUser", "listElasticRoles", "getElasticRole", "createElasticRole", "updateElasticRole", "deleteElasticRole", "listElasticAPIKeys", "createElasticAPIKey", "invalidateElasticAPIKey":
 		return dispatchElastic(ctx, c, op, args, q, body)
 	case "listBackends":
@@ -494,6 +496,9 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.VerifyBackupStorage(ctx, args[0], &p)
 	default:
+		if strings.Contains(op, "Postgres") {
+			return dispatchPostgres(ctx, c, op, args, q, body)
+		}
 		if strings.Contains(op, "RabbitMQ") {
 			return dispatchRabbitMQ(ctx, c, op, args, q, body)
 		}

@@ -264,7 +264,7 @@ func TestUpgradeTrackingPersistsNativeMemberAndComponentProgress(t *testing.T) {
 		c.Status.Phase = domain.PhaseUpgrading
 		c.Status.Message = "Rolling upgrade: " + step
 		c.Status.Conditions = []domain.Condition{{Type: "RollingProgress", Status: "True", Reason: step, Message: c.Status.Message}}
-		if err := m.trackingOperations(ctx, c, nil, true); err != nil {
+		if err := m.trackingOperations(ctx, nil, c, nil, true); err != nil {
 			t.Fatal(err)
 		}
 		got, err := s.GetOperation(ctx, op.ID)
@@ -274,7 +274,7 @@ func TestUpgradeTrackingPersistsNativeMemberAndComponentProgress(t *testing.T) {
 	}
 	c.Status.Phase, c.Status.ObservedGeneration = domain.PhaseReady, c.Generation
 	c.Status.Conditions = nil
-	if err := m.trackingOperations(ctx, c, nil, true); err != nil {
+	if err := m.trackingOperations(ctx, nil, c, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.GetOperation(ctx, op.ID)

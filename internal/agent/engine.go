@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -46,6 +47,9 @@ type ProcessSpec struct {
 	Binary    string
 	Args, Env []string
 	Dir       string
+	// StopSignal defaults to SIGTERM. Engines may select another graceful
+	// shutdown mode, such as PostgreSQL's SIGINT fast shutdown.
+	StopSignal syscall.Signal
 }
 
 // Node exposes protected files and process control to an in-process engine.
@@ -136,7 +140,7 @@ func (n *Node) Configure(name string, spec ProcessSpec) error {
 	if !n.a.allowedProcess(name) {
 		return errors.New("unknown process")
 	}
-	n.a.sup.configure(name, processSpec{binary: spec.Binary, args: spec.Args, env: spec.Env, dir: spec.Dir, cleanEnv: true})
+	n.a.sup.configure(name, processSpec{binary: spec.Binary, args: spec.Args, env: spec.Env, dir: spec.Dir, stopSignal: spec.StopSignal, cleanEnv: true})
 	return nil
 }
 
@@ -150,6 +154,24 @@ func (n *Node) Action(ctx context.Context, name, action string) error {
 		defer n.a.applyMu.Unlock()
 	}
 	return n.actionLocked(ctx, name, action)
+}
+
+// Stop persists a stop hold before stopping a process. Configuration pulls and
+// restarts preserve the hold; an explicit process API start/restart releases it.
+func (n *Node) Stop(ctx context.Context, name string) error {
+	return n.WithLock(ctx, func(locked *Node) error {
+		if !locked.a.allowedProcess(name) {
+			return errors.New("unknown process")
+		}
+		if err := locked.a.setProcessStopped(name, true); err != nil {
+			return err
+		}
+		states, _ := locked.Snapshot()
+		if _, ok := states[name]; !ok {
+			return nil
+		}
+		return locked.actionLocked(ctx, name, "stop")
+	})
 }
 
 // WithLock serializes an engine command with Apply and generic control changes.
@@ -195,8 +217,22 @@ func (n *Node) actionLocked(ctx context.Context, name, action string) error {
 				return n.a.sup.action(ctx, name, "stop")
 			}
 		}
+		if err := n.beforeStart(ctx, name); err != nil {
+			return err
+		}
 	}
 	return n.a.sup.action(ctx, name, action)
+}
+
+// beforeStart runs optional engine preparation under applyMu. The callback must
+// not invoke process actions; explicit controls and pulled intent share it.
+func (n *Node) beforeStart(ctx context.Context, name string) error {
+	if preparer, ok := n.a.engine.(interface {
+		BeforeStart(context.Context, *Node, string) error
+	}); ok {
+		return preparer.BeforeStart(ctx, n, name)
+	}
+	return nil
 }
 
 func engineName(name string) string {

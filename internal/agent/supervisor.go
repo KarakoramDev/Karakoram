@@ -18,10 +18,15 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 )
 
+// Give log readers time to consume buffered output after the direct child exits.
+// Descendants may keep the write ends open indefinitely.
+const supervisorLogDrainGrace = 250 * time.Millisecond
+
 type processSpec struct {
-	binary    string
-	args, env []string
-	dir       string
+	binary     string
+	args, env  []string
+	dir        string
+	stopSignal syscall.Signal
 	// cleanEnv starts the child from a minimal environment instead of the
 	// agent's, so member credentials such as the agent token are not inherited.
 	cleanEnv bool
@@ -87,15 +92,26 @@ func (s *supervisor) startLocked(name string, p *child) error {
 	}
 	cmd.Dir = p.spec.dir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	stdout, err := cmd.StdoutPipe()
+	// Own the pipes so cmd.Wait can reap the child without closing readers
+	// before its final output has been captured.
+	stdout, stdoutWriter, err := os.Pipe()
 	if err != nil {
 		return err
 	}
-	stderr, err := cmd.StderrPipe()
+	stderr, stderrWriter, err := os.Pipe()
 	if err != nil {
+		_ = stdout.Close()
+		_ = stdoutWriter.Close()
 		return err
 	}
-	if err = cmd.Start(); err != nil {
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
+	err = cmd.Start()
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	if err != nil {
+		_ = stdout.Close()
+		_ = stderr.Close()
 		p.status.State = "failed"
 		p.status.Error = err.Error()
 		s.scheduleLocked(name, p)
@@ -115,8 +131,18 @@ func (s *supervisor) startLocked(name string, p *child) error {
 	go func() { defer logs.Done(); s.capture(name, "stdout", stdout) }()
 	go func() { defer logs.Done(); s.capture(name, "stderr", stderr) }()
 	go func() {
-		logs.Wait()
 		err := cmd.Wait()
+		// Reaping must not depend on EOF: an orphaned descendant can still
+		// hold stdout/stderr. Preserve normal final logs, then close readers
+		// after a bounded grace without signalling any descendants.
+		drain := time.AfterFunc(supervisorLogDrainGrace, func() {
+			_ = stdout.Close()
+			_ = stderr.Close()
+		})
+		logs.Wait()
+		drain.Stop()
+		_ = stdout.Close()
+		_ = stderr.Close()
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		p.cmd = nil
@@ -171,10 +197,13 @@ func (s *supervisor) action(ctx context.Context, name, action string) error {
 	case "stop", "restart":
 		p.desired = false
 		p.generation++
-		cmd, done := p.cmd, p.done
+		cmd, done, signal := p.cmd, p.done, p.spec.stopSignal
+		if signal == 0 {
+			signal = syscall.SIGTERM
+		}
 		s.mu.Unlock()
 		if cmd != nil {
-			if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
+			if err := syscall.Kill(-cmd.Process.Pid, signal); err != nil && err != syscall.ESRCH {
 				return err
 			}
 			select {

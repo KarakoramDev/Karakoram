@@ -44,6 +44,9 @@ const (
 // Defines values for BackupType.
 const (
 	BackupTypeDefinitions BackupType = "definitions"
+	BackupTypeDiff        BackupType = "diff"
+	BackupTypeFull        BackupType = "full"
+	BackupTypeIncr        BackupType = "incr"
 	BackupTypeLogical     BackupType = "logical"
 	BackupTypePhysical    BackupType = "physical"
 	BackupTypeSnapshot    BackupType = "snapshot"
@@ -52,6 +55,9 @@ const (
 // Defines values for BackupScheduleType.
 const (
 	BackupScheduleTypeDefinitions BackupScheduleType = "definitions"
+	BackupScheduleTypeDiff        BackupScheduleType = "diff"
+	BackupScheduleTypeFull        BackupScheduleType = "full"
+	BackupScheduleTypeIncr        BackupScheduleType = "incr"
 	BackupScheduleTypeLogical     BackupScheduleType = "logical"
 	BackupScheduleTypePhysical    BackupScheduleType = "physical"
 	BackupScheduleTypeSnapshot    BackupScheduleType = "snapshot"
@@ -60,6 +66,9 @@ const (
 // Defines values for BackupScheduleInputType.
 const (
 	BackupScheduleInputTypeDefinitions BackupScheduleInputType = "definitions"
+	BackupScheduleInputTypeDiff        BackupScheduleInputType = "diff"
+	BackupScheduleInputTypeFull        BackupScheduleInputType = "full"
+	BackupScheduleInputTypeIncr        BackupScheduleInputType = "incr"
 	BackupScheduleInputTypeLogical     BackupScheduleInputType = "logical"
 	BackupScheduleInputTypePhysical    BackupScheduleInputType = "physical"
 	BackupScheduleInputTypeSnapshot    BackupScheduleInputType = "snapshot"
@@ -170,20 +179,35 @@ const (
 
 // Defines values for MemberRole.
 const (
+	MemberRoleAnalytics       MemberRole = "analytics"
 	MemberRoleApm             MemberRole = "apm"
 	MemberRoleArbiter         MemberRole = "arbiter"
+	MemberRoleAuth            MemberRole = "auth"
 	MemberRoleBroker          MemberRole = "broker"
 	MemberRoleConfigPrimary   MemberRole = "config-primary"
 	MemberRoleConfigSecondary MemberRole = "config-secondary"
 	MemberRoleData            MemberRole = "data"
+	MemberRoleFunctions       MemberRole = "functions"
+	MemberRoleGateway         MemberRole = "gateway"
+	MemberRoleImgproxy        MemberRole = "imgproxy"
 	MemberRoleKibana          MemberRole = "kibana"
 	MemberRoleLogstash        MemberRole = "logstash"
 	MemberRoleMaster          MemberRole = "master"
 	MemberRoleMasterdata      MemberRole = "master,data"
+	MemberRoleMeta            MemberRole = "meta"
+	MemberRolePooler          MemberRole = "pooler"
 	MemberRolePrimary         MemberRole = "primary"
+	MemberRoleProxy           MemberRole = "proxy"
+	MemberRoleRealtime        MemberRole = "realtime"
+	MemberRoleReplica         MemberRole = "replica"
+	MemberRoleRest            MemberRole = "rest"
 	MemberRoleRouter          MemberRole = "router"
 	MemberRoleSecondary       MemberRole = "secondary"
+	MemberRoleStandalone      MemberRole = "standalone"
+	MemberRoleStorage         MemberRole = "storage"
+	MemberRoleStudio          MemberRole = "studio"
 	MemberRoleUnknown         MemberRole = "unknown"
+	MemberRoleVector          MemberRole = "vector"
 )
 
 // Defines values for NamespacePhase.
@@ -214,6 +238,7 @@ const (
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
 	OperationTypeResume           OperationType = "resume"
+	OperationTypeRotateJwtSecret  OperationType = "rotate-jwt-secret"
 	OperationTypeRotateSystemUser OperationType = "rotate-system-user"
 	OperationTypeRotateTls        OperationType = "rotate-tls"
 	OperationTypeTls              OperationType = "tls"
@@ -232,9 +257,21 @@ const (
 	False PlacementGuaranteedAntiAffinity = false
 )
 
+// Defines values for PostgresGrantPrivileges.
+const (
+	CONNECT   PostgresGrantPrivileges = "CONNECT"
+	CREATE    PostgresGrantPrivileges = "CREATE"
+	TEMP      PostgresGrantPrivileges = "TEMP"
+	TEMPORARY PostgresGrantPrivileges = "TEMPORARY"
+	USAGE     PostgresGrantPrivileges = "USAGE"
+)
+
 // Defines values for ProviderBackupTypes.
 const (
 	ProviderBackupTypesDefinitions ProviderBackupTypes = "definitions"
+	ProviderBackupTypesDiff        ProviderBackupTypes = "diff"
+	ProviderBackupTypesFull        ProviderBackupTypes = "full"
+	ProviderBackupTypesIncr        ProviderBackupTypes = "incr"
 	ProviderBackupTypesLogical     ProviderBackupTypes = "logical"
 	ProviderBackupTypesPhysical    ProviderBackupTypes = "physical"
 	ProviderBackupTypesSnapshot    ProviderBackupTypes = "snapshot"
@@ -244,8 +281,10 @@ const (
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
+	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
+	ProviderTopologyTypeSingle           ProviderTopologyType = "single"
 )
 
 // Defines values for ProviderVersionStatus.
@@ -350,6 +389,12 @@ const (
 	SystemUserNameKarakoramLogstash SystemUserName = "karakoram_logstash"
 	SystemUserNameKarakoramMonitor  SystemUserName = "karakoram-monitor"
 	SystemUserNameKibanaToken       SystemUserName = "kibana-token"
+	SystemUserNameKkAdmin           SystemUserName = "kk_admin"
+	SystemUserNameKkMonitor         SystemUserName = "kk_monitor"
+	SystemUserNameKkProxyAdmin      SystemUserName = "kk_proxy_admin"
+	SystemUserNameKkReplicator      SystemUserName = "kk_replicator"
+	SystemUserNameKkRewind          SystemUserName = "kk_rewind"
+	SystemUserNamePostgres          SystemUserName = "postgres"
 	SystemUserNameUserAdmin         SystemUserName = "userAdmin"
 )
 
@@ -402,24 +447,30 @@ const (
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
+	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
+	TopologyTypeSingle           TopologyType = "single"
 )
 
 // Defines values for TopologyInputType.
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
+	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
+	TopologyInputTypeSingle           TopologyInputType = "single"
 )
 
 // Defines values for TopologyPatchType.
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
+	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
+	TopologyPatchTypeSingle           TopologyPatchType = "single"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -583,11 +634,14 @@ type Backup struct {
 	OperationId *string     `json:"operationId,omitempty"`
 	PbmName     *string     `json:"pbmName,omitempty"`
 	Phase       BackupPhase `json:"phase"`
-	Provider    *string     `json:"provider,omitempty"`
-	Schedule    *string     `json:"schedule,omitempty"`
-	Size        *int64      `json:"size,omitempty"`
-	StartedAt   *time.Time  `json:"startedAt,omitempty"`
-	Storage     string      `json:"storage"`
+
+	// Postgres Immutable pgBackRest backup-set provenance and dependency metadata.
+	Postgres  *PostgresBackup `json:"postgres,omitempty"`
+	Provider  *string         `json:"provider,omitempty"`
+	Schedule  *string         `json:"schedule,omitempty"`
+	Size      *int64          `json:"size,omitempty"`
+	StartedAt *time.Time      `json:"startedAt,omitempty"`
+	Storage   string          `json:"storage"`
 
 	// Trigger What initiated the snapshot; restore identifies an automatic post-restore base backup.
 	Trigger BackupTrigger `json:"trigger"`
@@ -1453,15 +1507,18 @@ type Member struct {
 	Agent *AgentStatus `json:"agent,omitempty"`
 
 	// Autoscaling Effective runtime vertical autoscaling configuration read from the platform, distinct from desired spec and current allocation. Disk bounds refer to the disposable runtime root disk, not the persistent database volume.
-	Autoscaling    *Resources `json:"autoscaling,omitempty"`
-	CpuUsage       *float32   `json:"cpuUsage,omitempty"`
-	DiskTotalBytes *int64     `json:"diskTotalBytes,omitempty"`
-	DiskUsageBytes *int64     `json:"diskUsageBytes,omitempty"`
-	Health         bool       `json:"health"`
-	LagSeconds     *float32   `json:"lagSeconds,omitempty"`
-	Name           string     `json:"name"`
-	Optime         *time.Time `json:"optime,omitempty"`
-	PlacementGroup *string    `json:"placementGroup,omitempty"`
+	Autoscaling *Resources `json:"autoscaling,omitempty"`
+
+	// ComponentVersion Service-component version, independent of the PostgreSQL data-member version.
+	ComponentVersion *string    `json:"componentVersion,omitempty"`
+	CpuUsage         *float32   `json:"cpuUsage,omitempty"`
+	DiskTotalBytes   *int64     `json:"diskTotalBytes,omitempty"`
+	DiskUsageBytes   *int64     `json:"diskUsageBytes,omitempty"`
+	Health           bool       `json:"health"`
+	LagSeconds       *float32   `json:"lagSeconds,omitempty"`
+	Name             string     `json:"name"`
+	Optime           *time.Time `json:"optime,omitempty"`
+	PlacementGroup   *string    `json:"placementGroup,omitempty"`
 
 	// PublicHost Member public host:port when public exposure is enabled.
 	PublicHost    *string `json:"publicHost,omitempty"`
@@ -1470,7 +1527,7 @@ type Member struct {
 	// Resources CPU, memory, and root disk the member container currently has. Each value comes from the member agent's live reading of its container (cgroup CPU set and quota, cgroup memory limit, root filesystem size) when the agent is reachable and reports it; otherwise from the service's effective vertical autoscaling (start or minimum CPU, minimum RAM, minimum root disk). Absent when neither is known.
 	Resources *ObservedResources `json:"resources,omitempty"`
 
-	// Role Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
+	// Role Provider data-member or service-component role.
 	Role    MemberRole `json:"role"`
 	Set     string     `json:"set"`
 	State   string     `json:"state"`
@@ -1478,7 +1535,7 @@ type Member struct {
 	Version *string    `json:"version,omitempty"`
 }
 
-// MemberRole Provider member role; MongoDB replica roles, RabbitMQ brokers, or Elasticsearch node and component roles.
+// MemberRole Provider data-member or service-component role.
 type MemberRole string
 
 // MemberList defines model for MemberList.
@@ -1743,6 +1800,103 @@ type PlacementGuaranteedAntiAffinity bool
 type PlacementGroup struct {
 	Members []string `json:"members"`
 	Name    string   `json:"name"`
+}
+
+// PostgresBackup Immutable pgBackRest backup-set provenance and dependency metadata.
+type PostgresBackup struct {
+	Label      string    `json:"label"`
+	Prior      *string   `json:"prior,omitempty"`
+	References *[]string `json:"references,omitempty"`
+	RepoBytes  int64     `json:"repoBytes"`
+
+	// Repository Snapshot-time repository object prefix, excluding bucket.
+	Repository string `json:"repository"`
+
+	// SystemId PostgreSQL system identifier, encoded as a string without precision loss.
+	SystemId string `json:"systemId"`
+
+	// Version PostgreSQL version recorded by pgBackRest.
+	Version  string  `json:"version"`
+	WalStart *string `json:"walStart,omitempty"`
+	WalStop  *string `json:"walStop,omitempty"`
+}
+
+// PostgresDatabase defines model for PostgresDatabase.
+type PostgresDatabase struct {
+	AllowConnections *bool   `json:"allowConnections,omitempty"`
+	Encoding         *string `json:"encoding,omitempty"`
+	Locale           *string `json:"locale,omitempty"`
+	Name             string  `json:"name"`
+	Owner            string  `json:"owner"`
+}
+
+// PostgresGrant defines model for PostgresGrant.
+type PostgresGrant struct {
+	Database   string                    `json:"database"`
+	Privileges []PostgresGrantPrivileges `json:"privileges"`
+	Role       string                    `json:"role"`
+	Schema     *string                   `json:"schema,omitempty"`
+}
+
+// PostgresGrantPrivileges defines model for PostgresGrant.Privileges.
+type PostgresGrantPrivileges string
+
+// PostgresRole defines model for PostgresRole.
+type PostgresRole struct {
+	Bypassrls       bool       `json:"bypassrls"`
+	ConnectionLimit int        `json:"connectionLimit"`
+	Createdb        bool       `json:"createdb"`
+	Createrole      bool       `json:"createrole"`
+	Login           bool       `json:"login"`
+	MemberOf        []string   `json:"memberOf"`
+	Name            string     `json:"name"`
+	Replication     bool       `json:"replication"`
+	Superuser       bool       `json:"superuser"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
+}
+
+// PostgresRoleCreated defines model for PostgresRoleCreated.
+type PostgresRoleCreated struct {
+	Bypassrls         bool       `json:"bypassrls"`
+	ConnectionLimit   int        `json:"connectionLimit"`
+	Createdb          bool       `json:"createdb"`
+	Createrole        bool       `json:"createrole"`
+	GeneratedPassword *string    `json:"generatedPassword,omitempty"`
+	Login             bool       `json:"login"`
+	MemberOf          []string   `json:"memberOf"`
+	Name              string     `json:"name"`
+	Replication       bool       `json:"replication"`
+	Superuser         bool       `json:"superuser"`
+	ValidUntil        *time.Time `json:"validUntil,omitempty"`
+}
+
+// PostgresRolePatch defines model for PostgresRolePatch.
+type PostgresRolePatch struct {
+	Bypassrls       *bool      `json:"bypassrls,omitempty"`
+	ConnectionLimit *int       `json:"connectionLimit,omitempty"`
+	Createdb        *bool      `json:"createdb,omitempty"`
+	Createrole      *bool      `json:"createrole,omitempty"`
+	Login           *bool      `json:"login,omitempty"`
+	MemberOf        *[]string  `json:"memberOf,omitempty"`
+	Password        *string    `json:"password,omitempty"`
+	Replication     *bool      `json:"replication,omitempty"`
+	Superuser       *bool      `json:"superuser,omitempty"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
+}
+
+// PostgresRoleWrite defines model for PostgresRoleWrite.
+type PostgresRoleWrite struct {
+	Bypassrls       *bool      `json:"bypassrls,omitempty"`
+	ConnectionLimit *int       `json:"connectionLimit,omitempty"`
+	Createdb        *bool      `json:"createdb,omitempty"`
+	Createrole      *bool      `json:"createrole,omitempty"`
+	Login           *bool      `json:"login,omitempty"`
+	MemberOf        *[]string  `json:"memberOf,omitempty"`
+	Name            string     `json:"name"`
+	Password        *string    `json:"password,omitempty"`
+	Replication     *bool      `json:"replication,omitempty"`
+	Superuser       *bool      `json:"superuser,omitempty"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
 }
 
 // Preset defines model for Preset.
@@ -2120,6 +2274,32 @@ type StorageVerification struct {
 
 // StorageVerificationFailureReason Present when verified is false; categorized, secret-free cause.
 type StorageVerificationFailureReason string
+
+// SupabaseCredentials defines model for SupabaseCredentials.
+type SupabaseCredentials struct {
+	AnonKey           string `json:"anonKey"`
+	ApiUrl            string `json:"apiUrl"`
+	DashboardPassword string `json:"dashboardPassword"`
+	DashboardUsername string `json:"dashboardUsername"`
+	JwtSecret         string `json:"jwtSecret"`
+	PublishableKey    string `json:"publishableKey"`
+	SecretKey         string `json:"secretKey"`
+	ServiceRoleKey    string `json:"serviceRoleKey"`
+	StudioUrl         string `json:"studioUrl"`
+}
+
+// SupabaseFunction Relative file paths mapped to source text, including a nonempty index.ts entrypoint. Total source bytes must not exceed 1 MiB; parent path components are forbidden.
+type SupabaseFunction map[string]string
+
+// SupabaseFunctionList defines model for SupabaseFunctionList.
+type SupabaseFunctionList struct {
+	Items []string `json:"items"`
+}
+
+// SupabaseSMTPPassword defines model for SupabaseSMTPPassword.
+type SupabaseSMTPPassword struct {
+	Password *string `json:"password,omitempty"`
+}
 
 // SystemUser defines model for SystemUser.
 type SystemUser struct {
@@ -3210,6 +3390,211 @@ type GetClusterPlacementParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListPostgresDatabasesParams defines parameters for ListPostgresDatabases.
+type ListPostgresDatabasesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreatePostgresDatabaseParams defines parameters for CreatePostgresDatabase.
+type CreatePostgresDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeletePostgresDatabaseParams defines parameters for DeletePostgresDatabase.
+type DeletePostgresDatabaseParams struct {
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetPostgresDatabaseParams defines parameters for GetPostgresDatabase.
+type GetPostgresDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevokePostgresPrivilegesParams defines parameters for RevokePostgresPrivileges.
+type RevokePostgresPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListPostgresGrantsParams defines parameters for ListPostgresGrants.
+type ListPostgresGrantsParams struct {
+	Database string `form:"database" json:"database"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GrantPostgresPrivilegesParams defines parameters for GrantPostgresPrivileges.
+type GrantPostgresPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListPostgresRolesParams defines parameters for ListPostgresRoles.
+type ListPostgresRolesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreatePostgresRoleParams defines parameters for CreatePostgresRole.
+type CreatePostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeletePostgresRoleParams defines parameters for DeletePostgresRole.
+type DeletePostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetPostgresRoleParams defines parameters for GetPostgresRole.
+type GetPostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// PatchPostgresRoleParams defines parameters for PatchPostgresRole.
+type PatchPostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdatePostgresRoleParams defines parameters for UpdatePostgresRole.
+type UpdatePostgresRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RotatePostgresRolePasswordParams defines parameters for RotatePostgresRolePassword.
+type RotatePostgresRolePasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListRabbitMQOperatorPoliciesParams defines parameters for ListRabbitMQOperatorPolicies.
 type ListRabbitMQOperatorPoliciesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -3768,6 +4153,105 @@ type GetClusterStatusParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// GetSupabaseCredentialsParams defines parameters for GetSupabaseCredentials.
+type GetSupabaseCredentialsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListSupabaseFunctionsParams defines parameters for ListSupabaseFunctions.
+type ListSupabaseFunctionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// DeleteSupabaseFunctionParams defines parameters for DeleteSupabaseFunction.
+type DeleteSupabaseFunctionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetSupabaseFunctionParams defines parameters for GetSupabaseFunction.
+type GetSupabaseFunctionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// PutSupabaseFunctionParams defines parameters for PutSupabaseFunction.
+type PutSupabaseFunctionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RotateSupabaseJWTSecretParams defines parameters for RotateSupabaseJWTSecret.
+type RotateSupabaseJWTSecretParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetSupabaseSMTPPasswordParams defines parameters for SetSupabaseSMTPPassword.
+type SetSupabaseSMTPPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListSystemUsersParams defines parameters for ListSystemUsers.
 type ListSystemUsersParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -4036,6 +4520,24 @@ type CreateElasticUserJSONRequestBody = ElasticUserCreate
 // UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
 type UpdateElasticUserJSONRequestBody = ElasticUserWrite
 
+// CreatePostgresDatabaseJSONRequestBody defines body for CreatePostgresDatabase for application/json ContentType.
+type CreatePostgresDatabaseJSONRequestBody = PostgresDatabase
+
+// RevokePostgresPrivilegesJSONRequestBody defines body for RevokePostgresPrivileges for application/json ContentType.
+type RevokePostgresPrivilegesJSONRequestBody = PostgresGrant
+
+// GrantPostgresPrivilegesJSONRequestBody defines body for GrantPostgresPrivileges for application/json ContentType.
+type GrantPostgresPrivilegesJSONRequestBody = PostgresGrant
+
+// CreatePostgresRoleJSONRequestBody defines body for CreatePostgresRole for application/json ContentType.
+type CreatePostgresRoleJSONRequestBody = PostgresRoleWrite
+
+// PatchPostgresRoleJSONRequestBody defines body for PatchPostgresRole for application/json ContentType.
+type PatchPostgresRoleJSONRequestBody = PostgresRolePatch
+
+// UpdatePostgresRoleJSONRequestBody defines body for UpdatePostgresRole for application/json ContentType.
+type UpdatePostgresRoleJSONRequestBody = PostgresRoleWrite
+
 // CreateRabbitMQOperatorPolicyJSONRequestBody defines body for CreateRabbitMQOperatorPolicy for application/json ContentType.
 type CreateRabbitMQOperatorPolicyJSONRequestBody = RabbitMQPolicy
 
@@ -4077,6 +4579,12 @@ type RaiseClusterFCVJSONRequestBody = RaiseFCVRequest
 
 // CreateRestoreJSONRequestBody defines body for CreateRestore for application/json ContentType.
 type CreateRestoreJSONRequestBody = CreateRestoreRequest
+
+// PutSupabaseFunctionJSONRequestBody defines body for PutSupabaseFunction for application/json ContentType.
+type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
+
+// SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
+type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
 
 // CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
 type CreateNamespaceJSONRequestBody = NamespaceCreate
@@ -4512,6 +5020,48 @@ type ServerInterface interface {
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterPlacementParams)
+	// List PostgreSQL application databases
+	// (GET /clusters/{cluster}/postgres/databases)
+	ListPostgresDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresDatabasesParams)
+	// Create a database from template0 with immutable encoding and locale
+	// (POST /clusters/{cluster}/postgres/databases)
+	CreatePostgresDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreatePostgresDatabaseParams)
+	// Delete a PostgreSQL application database
+	// (DELETE /clusters/{cluster}/postgres/databases/{database})
+	DeletePostgresDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params DeletePostgresDatabaseParams)
+	// Read a PostgreSQL application database
+	// (GET /clusters/{cluster}/postgres/databases/{database})
+	GetPostgresDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params GetPostgresDatabaseParams)
+	// Revoke whitelisted database or schema privileges
+	// (DELETE /clusters/{cluster}/postgres/grants)
+	RevokePostgresPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevokePostgresPrivilegesParams)
+	// List explicit database and schema grants in a database
+	// (GET /clusters/{cluster}/postgres/grants)
+	ListPostgresGrants(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresGrantsParams)
+	// Grant whitelisted database or schema privileges
+	// (POST /clusters/{cluster}/postgres/grants)
+	GrantPostgresPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GrantPostgresPrivilegesParams)
+	// List application PostgreSQL roles
+	// (GET /clusters/{cluster}/postgres/roles)
+	ListPostgresRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresRolesParams)
+	// Create a PostgreSQL role
+	// (POST /clusters/{cluster}/postgres/roles)
+	CreatePostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreatePostgresRoleParams)
+	// Delete a PostgreSQL application role
+	// (DELETE /clusters/{cluster}/postgres/roles/{role})
+	DeletePostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeletePostgresRoleParams)
+	// Read a PostgreSQL application role
+	// (GET /clusters/{cluster}/postgres/roles/{role})
+	GetPostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetPostgresRoleParams)
+	// Update selected PostgreSQL role attributes
+	// (PATCH /clusters/{cluster}/postgres/roles/{role})
+	PatchPostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params PatchPostgresRoleParams)
+	// Replace PostgreSQL role attributes and optionally its password
+	// (PUT /clusters/{cluster}/postgres/roles/{role})
+	UpdatePostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdatePostgresRoleParams)
+	// Generate and rotate a login role password
+	// (POST /clusters/{cluster}/postgres/roles/{role}/password)
+	RotatePostgresRolePassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params RotatePostgresRolePasswordParams)
 	// List RabbitMQ OperatorPolicy
 	// (GET /clusters/{cluster}/rabbitmq/operator-policies)
 	ListRabbitMQOperatorPolicies(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQOperatorPoliciesParams)
@@ -4626,6 +5176,27 @@ type ServerInterface interface {
 	// Read observed cluster status
 	// (GET /clusters/{cluster}/status)
 	GetClusterStatus(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterStatusParams)
+	// Reveal Supabase endpoints and credentials
+	// (GET /clusters/{cluster}/supabase/credentials)
+	GetSupabaseCredentials(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetSupabaseCredentialsParams)
+	// List deployed edge function names
+	// (GET /clusters/{cluster}/supabase/functions)
+	ListSupabaseFunctions(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListSupabaseFunctionsParams)
+	// Delete an edge function
+	// (DELETE /clusters/{cluster}/supabase/functions/{name})
+	DeleteSupabaseFunction(w http.ResponseWriter, r *http.Request, cluster ClusterPath, name string, params DeleteSupabaseFunctionParams)
+	// Read edge function source files
+	// (GET /clusters/{cluster}/supabase/functions/{name})
+	GetSupabaseFunction(w http.ResponseWriter, r *http.Request, cluster ClusterPath, name string, params GetSupabaseFunctionParams)
+	// Deploy or replace an edge function
+	// (PUT /clusters/{cluster}/supabase/functions/{name})
+	PutSupabaseFunction(w http.ResponseWriter, r *http.Request, cluster ClusterPath, name string, params PutSupabaseFunctionParams)
+	// Queue JWT signing secret and API key rotation
+	// (POST /clusters/{cluster}/supabase/rotate-jwt-secret)
+	RotateSupabaseJWTSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RotateSupabaseJWTSecretParams)
+	// Set the write-only SMTP password
+	// (PUT /clusters/{cluster}/supabase/smtp-password)
+	SetSupabaseSMTPPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetSupabaseSMTPPasswordParams)
 	// List system-user metadata without passwords
 	// (GET /clusters/{cluster}/system-users)
 	ListSystemUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListSystemUsersParams)
@@ -9039,6 +9610,1011 @@ func (siw *ServerInterfaceWrapper) GetClusterPlacement(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListPostgresDatabases operation middleware
+func (siw *ServerInterfaceWrapper) ListPostgresDatabases(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPostgresDatabasesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPostgresDatabases(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePostgresDatabase operation middleware
+func (siw *ServerInterfaceWrapper) CreatePostgresDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreatePostgresDatabaseParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePostgresDatabase(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePostgresDatabase operation middleware
+func (siw *ServerInterfaceWrapper) DeletePostgresDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "database" -------------
+	var database string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "database", r.PathValue("database"), &database, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeletePostgresDatabaseParams
+
+	// ------------- Optional query parameter "force" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "force", r.URL.Query(), &params.Force)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "force", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePostgresDatabase(w, r, cluster, database, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPostgresDatabase operation middleware
+func (siw *ServerInterfaceWrapper) GetPostgresDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "database" -------------
+	var database string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "database", r.PathValue("database"), &database, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPostgresDatabaseParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPostgresDatabase(w, r, cluster, database, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokePostgresPrivileges operation middleware
+func (siw *ServerInterfaceWrapper) RevokePostgresPrivileges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokePostgresPrivilegesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokePostgresPrivileges(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPostgresGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListPostgresGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPostgresGrantsParams
+
+	// ------------- Required query parameter "database" -------------
+
+	if paramValue := r.URL.Query().Get("database"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "database"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "database", r.URL.Query(), &params.Database)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPostgresGrants(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantPostgresPrivileges operation middleware
+func (siw *ServerInterfaceWrapper) GrantPostgresPrivileges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GrantPostgresPrivilegesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantPostgresPrivileges(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPostgresRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListPostgresRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPostgresRolesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPostgresRoles(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePostgresRole operation middleware
+func (siw *ServerInterfaceWrapper) CreatePostgresRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreatePostgresRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePostgresRole(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePostgresRole operation middleware
+func (siw *ServerInterfaceWrapper) DeletePostgresRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeletePostgresRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePostgresRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPostgresRole operation middleware
+func (siw *ServerInterfaceWrapper) GetPostgresRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPostgresRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPostgresRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchPostgresRole operation middleware
+func (siw *ServerInterfaceWrapper) PatchPostgresRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchPostgresRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchPostgresRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePostgresRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePostgresRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdatePostgresRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePostgresRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotatePostgresRolePassword operation middleware
+func (siw *ServerInterfaceWrapper) RotatePostgresRolePassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotatePostgresRolePasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotatePostgresRolePassword(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRabbitMQOperatorPolicies operation middleware
 func (siw *ServerInterfaceWrapper) ListRabbitMQOperatorPolicies(w http.ResponseWriter, r *http.Request) {
 
@@ -11812,6 +13388,482 @@ func (siw *ServerInterfaceWrapper) GetClusterStatus(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetSupabaseCredentials operation middleware
+func (siw *ServerInterfaceWrapper) GetSupabaseCredentials(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSupabaseCredentialsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSupabaseCredentials(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSupabaseFunctions operation middleware
+func (siw *ServerInterfaceWrapper) ListSupabaseFunctions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSupabaseFunctionsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSupabaseFunctions(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSupabaseFunction operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSupabaseFunction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSupabaseFunctionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSupabaseFunction(w, r, cluster, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSupabaseFunction operation middleware
+func (siw *ServerInterfaceWrapper) GetSupabaseFunction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSupabaseFunctionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSupabaseFunction(w, r, cluster, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutSupabaseFunction operation middleware
+func (siw *ServerInterfaceWrapper) PutSupabaseFunction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutSupabaseFunctionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutSupabaseFunction(w, r, cluster, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateSupabaseJWTSecret operation middleware
+func (siw *ServerInterfaceWrapper) RotateSupabaseJWTSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotateSupabaseJWTSecretParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateSupabaseJWTSecret(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSupabaseSMTPPassword operation middleware
+func (siw *ServerInterfaceWrapper) SetSupabaseSMTPPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetSupabaseSMTPPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSupabaseSMTPPassword(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSystemUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListSystemUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -13246,6 +15298,20 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/operations", wrapper.ListClusterOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/pitr", wrapper.GetPITRWindow)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/placement", wrapper.GetClusterPlacement)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/databases", wrapper.ListPostgresDatabases)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/databases", wrapper.CreatePostgresDatabase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/postgres/databases/{database}", wrapper.DeletePostgresDatabase)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/databases/{database}", wrapper.GetPostgresDatabase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/postgres/grants", wrapper.RevokePostgresPrivileges)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/grants", wrapper.ListPostgresGrants)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/grants", wrapper.GrantPostgresPrivileges)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/roles", wrapper.ListPostgresRoles)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/roles", wrapper.CreatePostgresRole)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/postgres/roles/{role}", wrapper.DeletePostgresRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/roles/{role}", wrapper.GetPostgresRole)
+	m.HandleFunc("PATCH "+options.BaseURL+"/clusters/{cluster}/postgres/roles/{role}", wrapper.PatchPostgresRole)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/postgres/roles/{role}", wrapper.UpdatePostgresRole)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/roles/{role}/password", wrapper.RotatePostgresRolePassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies", wrapper.ListRabbitMQOperatorPolicies)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies", wrapper.CreateRabbitMQOperatorPolicy)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/rabbitmq/operator-policies/{vhost}/{name}", wrapper.DeleteRabbitMQOperatorPolicy)
@@ -13284,6 +15350,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/resume", wrapper.ResumeCluster)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rotate-tls", wrapper.RotateClusterTLS)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/status", wrapper.GetClusterStatus)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/supabase/credentials", wrapper.GetSupabaseCredentials)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/supabase/functions", wrapper.ListSupabaseFunctions)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/supabase/functions/{name}", wrapper.DeleteSupabaseFunction)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/supabase/functions/{name}", wrapper.GetSupabaseFunction)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/supabase/functions/{name}", wrapper.PutSupabaseFunction)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/supabase/rotate-jwt-secret", wrapper.RotateSupabaseJWTSecret)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/supabase/smtp-password", wrapper.SetSupabaseSMTPPassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/system-users", wrapper.ListSystemUsers)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/system-users/{user}/rotate", wrapper.RotateSystemUser)
 	m.HandleFunc("GET "+options.BaseURL+"/events", wrapper.ListEvents)
@@ -21174,6 +23247,1393 @@ func (response GetClusterPlacement500JSONResponse) VisitGetClusterPlacementRespo
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListPostgresDatabasesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListPostgresDatabasesParams
+}
+
+type ListPostgresDatabasesResponseObject interface {
+	VisitListPostgresDatabasesResponse(w http.ResponseWriter) error
+}
+
+type ListPostgresDatabases200JSONResponse struct {
+	Items []PostgresDatabase `json:"items"`
+}
+
+func (response ListPostgresDatabases200JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresDatabases400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListPostgresDatabases400JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresDatabases401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPostgresDatabases401JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresDatabases403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPostgresDatabases403JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresDatabases404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPostgresDatabases404JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresDatabases409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListPostgresDatabases409JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresDatabases500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPostgresDatabases500JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresDatabases503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListPostgresDatabases503JSONResponse) VisitListPostgresDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreatePostgresDatabaseRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreatePostgresDatabaseParams
+	Body    *CreatePostgresDatabaseJSONRequestBody
+}
+
+type CreatePostgresDatabaseResponseObject interface {
+	VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error
+}
+
+type CreatePostgresDatabase201JSONResponse PostgresDatabase
+
+func (response CreatePostgresDatabase201JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreatePostgresDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreatePostgresDatabase400JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreatePostgresDatabase401JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreatePostgresDatabase403JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreatePostgresDatabase404JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreatePostgresDatabase409JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreatePostgresDatabase413JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreatePostgresDatabase415JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreatePostgresDatabase500JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreatePostgresDatabase503JSONResponse) VisitCreatePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeletePostgresDatabaseRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Database string      `json:"database"`
+	Params   DeletePostgresDatabaseParams
+}
+
+type DeletePostgresDatabaseResponseObject interface {
+	VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error
+}
+
+type DeletePostgresDatabase204Response struct {
+}
+
+func (response DeletePostgresDatabase204Response) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeletePostgresDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeletePostgresDatabase400JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeletePostgresDatabase401JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeletePostgresDatabase403JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeletePostgresDatabase404JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeletePostgresDatabase409JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeletePostgresDatabase500JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeletePostgresDatabase503JSONResponse) VisitDeletePostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetPostgresDatabaseRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Database string      `json:"database"`
+	Params   GetPostgresDatabaseParams
+}
+
+type GetPostgresDatabaseResponseObject interface {
+	VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error
+}
+
+type GetPostgresDatabase200JSONResponse PostgresDatabase
+
+func (response GetPostgresDatabase200JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetPostgresDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetPostgresDatabase400JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetPostgresDatabase401JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetPostgresDatabase403JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetPostgresDatabase404JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetPostgresDatabase409JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetPostgresDatabase500JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetPostgresDatabase503JSONResponse) VisitGetPostgresDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokePostgresPrivilegesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RevokePostgresPrivilegesParams
+	Body    *RevokePostgresPrivilegesJSONRequestBody
+}
+
+type RevokePostgresPrivilegesResponseObject interface {
+	VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error
+}
+
+type RevokePostgresPrivileges204Response struct {
+}
+
+func (response RevokePostgresPrivileges204Response) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokePostgresPrivileges400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RevokePostgresPrivileges400JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevokePostgresPrivileges401JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevokePostgresPrivileges403JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokePostgresPrivileges404JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RevokePostgresPrivileges409JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RevokePostgresPrivileges413JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RevokePostgresPrivileges415JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RevokePostgresPrivileges500JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokePostgresPrivileges503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RevokePostgresPrivileges503JSONResponse) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresGrantsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListPostgresGrantsParams
+}
+
+type ListPostgresGrantsResponseObject interface {
+	VisitListPostgresGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListPostgresGrants200JSONResponse struct {
+	Items []PostgresGrant `json:"items"`
+}
+
+func (response ListPostgresGrants200JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresGrants400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListPostgresGrants400JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresGrants401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPostgresGrants401JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresGrants403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPostgresGrants403JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresGrants404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPostgresGrants404JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresGrants409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListPostgresGrants409JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresGrants500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPostgresGrants500JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresGrants503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListPostgresGrants503JSONResponse) VisitListPostgresGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GrantPostgresPrivilegesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  GrantPostgresPrivilegesParams
+	Body    *GrantPostgresPrivilegesJSONRequestBody
+}
+
+type GrantPostgresPrivilegesResponseObject interface {
+	VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error
+}
+
+type GrantPostgresPrivileges204Response struct {
+}
+
+func (response GrantPostgresPrivileges204Response) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GrantPostgresPrivileges400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GrantPostgresPrivileges400JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GrantPostgresPrivileges401JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GrantPostgresPrivileges403JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GrantPostgresPrivileges404JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GrantPostgresPrivileges409JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GrantPostgresPrivileges413JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GrantPostgresPrivileges415JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GrantPostgresPrivileges500JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantPostgresPrivileges503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GrantPostgresPrivileges503JSONResponse) VisitGrantPostgresPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresRolesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListPostgresRolesParams
+}
+
+type ListPostgresRolesResponseObject interface {
+	VisitListPostgresRolesResponse(w http.ResponseWriter) error
+}
+
+type ListPostgresRoles200JSONResponse struct {
+	Items []PostgresRole `json:"items"`
+}
+
+func (response ListPostgresRoles200JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresRoles400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListPostgresRoles400JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresRoles401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPostgresRoles401JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresRoles403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPostgresRoles403JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresRoles404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPostgresRoles404JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresRoles409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListPostgresRoles409JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresRoles500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPostgresRoles500JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresRoles503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListPostgresRoles503JSONResponse) VisitListPostgresRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreatePostgresRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreatePostgresRoleParams
+	Body    *CreatePostgresRoleJSONRequestBody
+}
+
+type CreatePostgresRoleResponseObject interface {
+	VisitCreatePostgresRoleResponse(w http.ResponseWriter) error
+}
+
+type CreatePostgresRole201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreatePostgresRole201JSONResponse struct {
+	Body    PostgresRoleCreated
+	Headers CreatePostgresRole201ResponseHeaders
+}
+
+func (response CreatePostgresRole201JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreatePostgresRole400JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreatePostgresRole401JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreatePostgresRole403JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreatePostgresRole404JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreatePostgresRole409JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreatePostgresRole413JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreatePostgresRole415JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreatePostgresRole500JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreatePostgresRole503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreatePostgresRole503JSONResponse) VisitCreatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeletePostgresRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  DeletePostgresRoleParams
+}
+
+type DeletePostgresRoleResponseObject interface {
+	VisitDeletePostgresRoleResponse(w http.ResponseWriter) error
+}
+
+type DeletePostgresRole204Response struct {
+}
+
+func (response DeletePostgresRole204Response) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeletePostgresRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeletePostgresRole400JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeletePostgresRole401JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeletePostgresRole403JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeletePostgresRole404JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeletePostgresRole409JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeletePostgresRole500JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeletePostgresRole503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeletePostgresRole503JSONResponse) VisitDeletePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetPostgresRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  GetPostgresRoleParams
+}
+
+type GetPostgresRoleResponseObject interface {
+	VisitGetPostgresRoleResponse(w http.ResponseWriter) error
+}
+
+type GetPostgresRole200JSONResponse PostgresRole
+
+func (response GetPostgresRole200JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetPostgresRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetPostgresRole400JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetPostgresRole401JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetPostgresRole403JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetPostgresRole404JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetPostgresRole409JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetPostgresRole500JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetPostgresRole503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetPostgresRole503JSONResponse) VisitGetPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchPostgresRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  PatchPostgresRoleParams
+	Body    *PatchPostgresRoleJSONRequestBody
+}
+
+type PatchPostgresRoleResponseObject interface {
+	VisitPatchPostgresRoleResponse(w http.ResponseWriter) error
+}
+
+type PatchPostgresRole200JSONResponse PostgresRole
+
+func (response PatchPostgresRole200JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchPostgresRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PatchPostgresRole400JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PatchPostgresRole401JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PatchPostgresRole403JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PatchPostgresRole404JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PatchPostgresRole409JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response PatchPostgresRole413JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response PatchPostgresRole415JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PatchPostgresRole500JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchPostgresRole503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response PatchPostgresRole503JSONResponse) VisitPatchPostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdatePostgresRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  UpdatePostgresRoleParams
+	Body    *UpdatePostgresRoleJSONRequestBody
+}
+
+type UpdatePostgresRoleResponseObject interface {
+	VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdatePostgresRole200JSONResponse PostgresRole
+
+func (response UpdatePostgresRole200JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdatePostgresRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdatePostgresRole400JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdatePostgresRole401JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdatePostgresRole403JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdatePostgresRole404JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdatePostgresRole409JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response UpdatePostgresRole413JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response UpdatePostgresRole415JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdatePostgresRole500JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdatePostgresRole503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response UpdatePostgresRole503JSONResponse) VisitUpdatePostgresRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotatePostgresRolePasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  RotatePostgresRolePasswordParams
+}
+
+type RotatePostgresRolePasswordResponseObject interface {
+	VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error
+}
+
+type RotatePostgresRolePassword200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type RotatePostgresRolePassword200JSONResponse struct {
+	Body struct {
+		GeneratedPassword string `json:"generatedPassword"`
+	}
+	Headers RotatePostgresRolePassword200ResponseHeaders
+}
+
+func (response RotatePostgresRolePassword200JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotatePostgresRolePassword400JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotatePostgresRolePassword401JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotatePostgresRolePassword403JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotatePostgresRolePassword404JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotatePostgresRolePassword409JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotatePostgresRolePassword500JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresRolePassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RotatePostgresRolePassword503JSONResponse) VisitRotatePostgresRolePasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListRabbitMQOperatorPoliciesRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  ListRabbitMQOperatorPoliciesParams
@@ -24526,6 +27986,685 @@ func (response GetClusterStatus500JSONResponse) VisitGetClusterStatusResponse(w 
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type GetSupabaseCredentialsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  GetSupabaseCredentialsParams
+}
+
+type GetSupabaseCredentialsResponseObject interface {
+	VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error
+}
+
+type GetSupabaseCredentials200ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetSupabaseCredentials200JSONResponse struct {
+	Body    SupabaseCredentials
+	Headers GetSupabaseCredentials200ResponseHeaders
+}
+
+func (response GetSupabaseCredentials200JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetSupabaseCredentials400JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSupabaseCredentials401JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSupabaseCredentials403JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSupabaseCredentials404JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetSupabaseCredentials409JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetSupabaseCredentials500JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseCredentials503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetSupabaseCredentials503JSONResponse) VisitGetSupabaseCredentialsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSupabaseFunctionsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListSupabaseFunctionsParams
+}
+
+type ListSupabaseFunctionsResponseObject interface {
+	VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error
+}
+
+type ListSupabaseFunctions200JSONResponse SupabaseFunctionList
+
+func (response ListSupabaseFunctions200JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListSupabaseFunctions400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListSupabaseFunctions400JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSupabaseFunctions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListSupabaseFunctions401JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSupabaseFunctions403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListSupabaseFunctions403JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSupabaseFunctions404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListSupabaseFunctions404JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSupabaseFunctions409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListSupabaseFunctions409JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSupabaseFunctions500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListSupabaseFunctions500JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListSupabaseFunctions503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListSupabaseFunctions503JSONResponse) VisitListSupabaseFunctionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteSupabaseFunctionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Name    string      `json:"name"`
+	Params  DeleteSupabaseFunctionParams
+}
+
+type DeleteSupabaseFunctionResponseObject interface {
+	VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error
+}
+
+type DeleteSupabaseFunction204Response struct {
+}
+
+func (response DeleteSupabaseFunction204Response) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSupabaseFunction400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteSupabaseFunction400JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteSupabaseFunction401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteSupabaseFunction401JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteSupabaseFunction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteSupabaseFunction403JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteSupabaseFunction404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteSupabaseFunction404JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteSupabaseFunction409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteSupabaseFunction409JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteSupabaseFunction500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteSupabaseFunction500JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteSupabaseFunction503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteSupabaseFunction503JSONResponse) VisitDeleteSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSupabaseFunctionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Name    string      `json:"name"`
+	Params  GetSupabaseFunctionParams
+}
+
+type GetSupabaseFunctionResponseObject interface {
+	VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error
+}
+
+type GetSupabaseFunction200ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetSupabaseFunction200JSONResponse struct {
+	Body    SupabaseFunction
+	Headers GetSupabaseFunction200ResponseHeaders
+}
+
+func (response GetSupabaseFunction200JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetSupabaseFunction400JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSupabaseFunction401JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSupabaseFunction403JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetSupabaseFunction404JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetSupabaseFunction409JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetSupabaseFunction500JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetSupabaseFunction503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetSupabaseFunction503JSONResponse) VisitGetSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutSupabaseFunctionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Name    string      `json:"name"`
+	Params  PutSupabaseFunctionParams
+	Body    *PutSupabaseFunctionJSONRequestBody
+}
+
+type PutSupabaseFunctionResponseObject interface {
+	VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error
+}
+
+type PutSupabaseFunction204Response struct {
+}
+
+func (response PutSupabaseFunction204Response) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PutSupabaseFunction400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutSupabaseFunction400JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PutSupabaseFunction401JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutSupabaseFunction403JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PutSupabaseFunction404JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PutSupabaseFunction409JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response PutSupabaseFunction413JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response PutSupabaseFunction415JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PutSupabaseFunction500JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PutSupabaseFunction503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response PutSupabaseFunction503JSONResponse) VisitPutSupabaseFunctionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateSupabaseJWTSecretRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RotateSupabaseJWTSecretParams
+}
+
+type RotateSupabaseJWTSecretResponseObject interface {
+	VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error
+}
+
+type RotateSupabaseJWTSecret202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RotateSupabaseJWTSecret202JSONResponse struct {
+	Body    Operation
+	Headers RotateSupabaseJWTSecret202ResponseHeaders
+}
+
+func (response RotateSupabaseJWTSecret202JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotateSupabaseJWTSecret400JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotateSupabaseJWTSecret401JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotateSupabaseJWTSecret403JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotateSupabaseJWTSecret404JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotateSupabaseJWTSecret409JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotateSupabaseJWTSecret500JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateSupabaseJWTSecret503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RotateSupabaseJWTSecret503JSONResponse) VisitRotateSupabaseJWTSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetSupabaseSMTPPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  SetSupabaseSMTPPasswordParams
+	Body    *SetSupabaseSMTPPasswordJSONRequestBody
+}
+
+type SetSupabaseSMTPPasswordResponseObject interface {
+	VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error
+}
+
+type SetSupabaseSMTPPassword204Response struct {
+}
+
+func (response SetSupabaseSMTPPassword204Response) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetSupabaseSMTPPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SetSupabaseSMTPPassword400JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetSupabaseSMTPPassword401JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetSupabaseSMTPPassword403JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetSupabaseSMTPPassword404JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetSupabaseSMTPPassword409JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response SetSupabaseSMTPPassword413JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response SetSupabaseSMTPPassword415JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetSupabaseSMTPPassword500JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetSupabaseSMTPPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response SetSupabaseSMTPPassword503JSONResponse) VisitSetSupabaseSMTPPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ListSystemUsersRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  ListSystemUsersParams
@@ -27788,6 +31927,48 @@ type StrictServerInterface interface {
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(ctx context.Context, request GetClusterPlacementRequestObject) (GetClusterPlacementResponseObject, error)
+	// List PostgreSQL application databases
+	// (GET /clusters/{cluster}/postgres/databases)
+	ListPostgresDatabases(ctx context.Context, request ListPostgresDatabasesRequestObject) (ListPostgresDatabasesResponseObject, error)
+	// Create a database from template0 with immutable encoding and locale
+	// (POST /clusters/{cluster}/postgres/databases)
+	CreatePostgresDatabase(ctx context.Context, request CreatePostgresDatabaseRequestObject) (CreatePostgresDatabaseResponseObject, error)
+	// Delete a PostgreSQL application database
+	// (DELETE /clusters/{cluster}/postgres/databases/{database})
+	DeletePostgresDatabase(ctx context.Context, request DeletePostgresDatabaseRequestObject) (DeletePostgresDatabaseResponseObject, error)
+	// Read a PostgreSQL application database
+	// (GET /clusters/{cluster}/postgres/databases/{database})
+	GetPostgresDatabase(ctx context.Context, request GetPostgresDatabaseRequestObject) (GetPostgresDatabaseResponseObject, error)
+	// Revoke whitelisted database or schema privileges
+	// (DELETE /clusters/{cluster}/postgres/grants)
+	RevokePostgresPrivileges(ctx context.Context, request RevokePostgresPrivilegesRequestObject) (RevokePostgresPrivilegesResponseObject, error)
+	// List explicit database and schema grants in a database
+	// (GET /clusters/{cluster}/postgres/grants)
+	ListPostgresGrants(ctx context.Context, request ListPostgresGrantsRequestObject) (ListPostgresGrantsResponseObject, error)
+	// Grant whitelisted database or schema privileges
+	// (POST /clusters/{cluster}/postgres/grants)
+	GrantPostgresPrivileges(ctx context.Context, request GrantPostgresPrivilegesRequestObject) (GrantPostgresPrivilegesResponseObject, error)
+	// List application PostgreSQL roles
+	// (GET /clusters/{cluster}/postgres/roles)
+	ListPostgresRoles(ctx context.Context, request ListPostgresRolesRequestObject) (ListPostgresRolesResponseObject, error)
+	// Create a PostgreSQL role
+	// (POST /clusters/{cluster}/postgres/roles)
+	CreatePostgresRole(ctx context.Context, request CreatePostgresRoleRequestObject) (CreatePostgresRoleResponseObject, error)
+	// Delete a PostgreSQL application role
+	// (DELETE /clusters/{cluster}/postgres/roles/{role})
+	DeletePostgresRole(ctx context.Context, request DeletePostgresRoleRequestObject) (DeletePostgresRoleResponseObject, error)
+	// Read a PostgreSQL application role
+	// (GET /clusters/{cluster}/postgres/roles/{role})
+	GetPostgresRole(ctx context.Context, request GetPostgresRoleRequestObject) (GetPostgresRoleResponseObject, error)
+	// Update selected PostgreSQL role attributes
+	// (PATCH /clusters/{cluster}/postgres/roles/{role})
+	PatchPostgresRole(ctx context.Context, request PatchPostgresRoleRequestObject) (PatchPostgresRoleResponseObject, error)
+	// Replace PostgreSQL role attributes and optionally its password
+	// (PUT /clusters/{cluster}/postgres/roles/{role})
+	UpdatePostgresRole(ctx context.Context, request UpdatePostgresRoleRequestObject) (UpdatePostgresRoleResponseObject, error)
+	// Generate and rotate a login role password
+	// (POST /clusters/{cluster}/postgres/roles/{role}/password)
+	RotatePostgresRolePassword(ctx context.Context, request RotatePostgresRolePasswordRequestObject) (RotatePostgresRolePasswordResponseObject, error)
 	// List RabbitMQ OperatorPolicy
 	// (GET /clusters/{cluster}/rabbitmq/operator-policies)
 	ListRabbitMQOperatorPolicies(ctx context.Context, request ListRabbitMQOperatorPoliciesRequestObject) (ListRabbitMQOperatorPoliciesResponseObject, error)
@@ -27902,6 +32083,27 @@ type StrictServerInterface interface {
 	// Read observed cluster status
 	// (GET /clusters/{cluster}/status)
 	GetClusterStatus(ctx context.Context, request GetClusterStatusRequestObject) (GetClusterStatusResponseObject, error)
+	// Reveal Supabase endpoints and credentials
+	// (GET /clusters/{cluster}/supabase/credentials)
+	GetSupabaseCredentials(ctx context.Context, request GetSupabaseCredentialsRequestObject) (GetSupabaseCredentialsResponseObject, error)
+	// List deployed edge function names
+	// (GET /clusters/{cluster}/supabase/functions)
+	ListSupabaseFunctions(ctx context.Context, request ListSupabaseFunctionsRequestObject) (ListSupabaseFunctionsResponseObject, error)
+	// Delete an edge function
+	// (DELETE /clusters/{cluster}/supabase/functions/{name})
+	DeleteSupabaseFunction(ctx context.Context, request DeleteSupabaseFunctionRequestObject) (DeleteSupabaseFunctionResponseObject, error)
+	// Read edge function source files
+	// (GET /clusters/{cluster}/supabase/functions/{name})
+	GetSupabaseFunction(ctx context.Context, request GetSupabaseFunctionRequestObject) (GetSupabaseFunctionResponseObject, error)
+	// Deploy or replace an edge function
+	// (PUT /clusters/{cluster}/supabase/functions/{name})
+	PutSupabaseFunction(ctx context.Context, request PutSupabaseFunctionRequestObject) (PutSupabaseFunctionResponseObject, error)
+	// Queue JWT signing secret and API key rotation
+	// (POST /clusters/{cluster}/supabase/rotate-jwt-secret)
+	RotateSupabaseJWTSecret(ctx context.Context, request RotateSupabaseJWTSecretRequestObject) (RotateSupabaseJWTSecretResponseObject, error)
+	// Set the write-only SMTP password
+	// (PUT /clusters/{cluster}/supabase/smtp-password)
+	SetSupabaseSMTPPassword(ctx context.Context, request SetSupabaseSMTPPasswordRequestObject) (SetSupabaseSMTPPasswordResponseObject, error)
 	// List system-user metadata without passwords
 	// (GET /clusters/{cluster}/system-users)
 	ListSystemUsers(ctx context.Context, request ListSystemUsersRequestObject) (ListSystemUsersResponseObject, error)
@@ -30040,6 +34242,433 @@ func (sh *strictHandler) GetClusterPlacement(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// ListPostgresDatabases operation middleware
+func (sh *strictHandler) ListPostgresDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresDatabasesParams) {
+	var request ListPostgresDatabasesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPostgresDatabases(ctx, request.(ListPostgresDatabasesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPostgresDatabases")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPostgresDatabasesResponseObject); ok {
+		if err := validResponse.VisitListPostgresDatabasesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePostgresDatabase operation middleware
+func (sh *strictHandler) CreatePostgresDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreatePostgresDatabaseParams) {
+	var request CreatePostgresDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreatePostgresDatabaseJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePostgresDatabase(ctx, request.(CreatePostgresDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePostgresDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePostgresDatabaseResponseObject); ok {
+		if err := validResponse.VisitCreatePostgresDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeletePostgresDatabase operation middleware
+func (sh *strictHandler) DeletePostgresDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params DeletePostgresDatabaseParams) {
+	var request DeletePostgresDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Database = database
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeletePostgresDatabase(ctx, request.(DeletePostgresDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeletePostgresDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeletePostgresDatabaseResponseObject); ok {
+		if err := validResponse.VisitDeletePostgresDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPostgresDatabase operation middleware
+func (sh *strictHandler) GetPostgresDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params GetPostgresDatabaseParams) {
+	var request GetPostgresDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Database = database
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPostgresDatabase(ctx, request.(GetPostgresDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPostgresDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPostgresDatabaseResponseObject); ok {
+		if err := validResponse.VisitGetPostgresDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokePostgresPrivileges operation middleware
+func (sh *strictHandler) RevokePostgresPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevokePostgresPrivilegesParams) {
+	var request RevokePostgresPrivilegesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RevokePostgresPrivilegesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokePostgresPrivileges(ctx, request.(RevokePostgresPrivilegesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokePostgresPrivileges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokePostgresPrivilegesResponseObject); ok {
+		if err := validResponse.VisitRevokePostgresPrivilegesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPostgresGrants operation middleware
+func (sh *strictHandler) ListPostgresGrants(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresGrantsParams) {
+	var request ListPostgresGrantsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPostgresGrants(ctx, request.(ListPostgresGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPostgresGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPostgresGrantsResponseObject); ok {
+		if err := validResponse.VisitListPostgresGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GrantPostgresPrivileges operation middleware
+func (sh *strictHandler) GrantPostgresPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GrantPostgresPrivilegesParams) {
+	var request GrantPostgresPrivilegesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body GrantPostgresPrivilegesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GrantPostgresPrivileges(ctx, request.(GrantPostgresPrivilegesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GrantPostgresPrivileges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GrantPostgresPrivilegesResponseObject); ok {
+		if err := validResponse.VisitGrantPostgresPrivilegesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPostgresRoles operation middleware
+func (sh *strictHandler) ListPostgresRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresRolesParams) {
+	var request ListPostgresRolesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPostgresRoles(ctx, request.(ListPostgresRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPostgresRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPostgresRolesResponseObject); ok {
+		if err := validResponse.VisitListPostgresRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePostgresRole operation middleware
+func (sh *strictHandler) CreatePostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreatePostgresRoleParams) {
+	var request CreatePostgresRoleRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreatePostgresRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePostgresRole(ctx, request.(CreatePostgresRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePostgresRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePostgresRoleResponseObject); ok {
+		if err := validResponse.VisitCreatePostgresRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeletePostgresRole operation middleware
+func (sh *strictHandler) DeletePostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeletePostgresRoleParams) {
+	var request DeletePostgresRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeletePostgresRole(ctx, request.(DeletePostgresRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeletePostgresRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeletePostgresRoleResponseObject); ok {
+		if err := validResponse.VisitDeletePostgresRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPostgresRole operation middleware
+func (sh *strictHandler) GetPostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetPostgresRoleParams) {
+	var request GetPostgresRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPostgresRole(ctx, request.(GetPostgresRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPostgresRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPostgresRoleResponseObject); ok {
+		if err := validResponse.VisitGetPostgresRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchPostgresRole operation middleware
+func (sh *strictHandler) PatchPostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params PatchPostgresRoleParams) {
+	var request PatchPostgresRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	var body PatchPostgresRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchPostgresRole(ctx, request.(PatchPostgresRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchPostgresRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchPostgresRoleResponseObject); ok {
+		if err := validResponse.VisitPatchPostgresRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePostgresRole operation middleware
+func (sh *strictHandler) UpdatePostgresRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdatePostgresRoleParams) {
+	var request UpdatePostgresRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	var body UpdatePostgresRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePostgresRole(ctx, request.(UpdatePostgresRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePostgresRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePostgresRoleResponseObject); ok {
+		if err := validResponse.VisitUpdatePostgresRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotatePostgresRolePassword operation middleware
+func (sh *strictHandler) RotatePostgresRolePassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params RotatePostgresRolePasswordParams) {
+	var request RotatePostgresRolePasswordRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotatePostgresRolePassword(ctx, request.(RotatePostgresRolePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotatePostgresRolePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotatePostgresRolePasswordResponseObject); ok {
+		if err := validResponse.VisitRotatePostgresRolePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRabbitMQOperatorPolicies operation middleware
 func (sh *strictHandler) ListRabbitMQOperatorPolicies(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListRabbitMQOperatorPoliciesParams) {
 	var request ListRabbitMQOperatorPoliciesRequestObject
@@ -31188,6 +35817,212 @@ func (sh *strictHandler) GetClusterStatus(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterStatusResponseObject); ok {
 		if err := validResponse.VisitGetClusterStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSupabaseCredentials operation middleware
+func (sh *strictHandler) GetSupabaseCredentials(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetSupabaseCredentialsParams) {
+	var request GetSupabaseCredentialsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSupabaseCredentials(ctx, request.(GetSupabaseCredentialsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSupabaseCredentials")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSupabaseCredentialsResponseObject); ok {
+		if err := validResponse.VisitGetSupabaseCredentialsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSupabaseFunctions operation middleware
+func (sh *strictHandler) ListSupabaseFunctions(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListSupabaseFunctionsParams) {
+	var request ListSupabaseFunctionsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSupabaseFunctions(ctx, request.(ListSupabaseFunctionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSupabaseFunctions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSupabaseFunctionsResponseObject); ok {
+		if err := validResponse.VisitListSupabaseFunctionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSupabaseFunction operation middleware
+func (sh *strictHandler) DeleteSupabaseFunction(w http.ResponseWriter, r *http.Request, cluster ClusterPath, name string, params DeleteSupabaseFunctionParams) {
+	var request DeleteSupabaseFunctionRequestObject
+
+	request.Cluster = cluster
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSupabaseFunction(ctx, request.(DeleteSupabaseFunctionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSupabaseFunction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSupabaseFunctionResponseObject); ok {
+		if err := validResponse.VisitDeleteSupabaseFunctionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSupabaseFunction operation middleware
+func (sh *strictHandler) GetSupabaseFunction(w http.ResponseWriter, r *http.Request, cluster ClusterPath, name string, params GetSupabaseFunctionParams) {
+	var request GetSupabaseFunctionRequestObject
+
+	request.Cluster = cluster
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSupabaseFunction(ctx, request.(GetSupabaseFunctionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSupabaseFunction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSupabaseFunctionResponseObject); ok {
+		if err := validResponse.VisitGetSupabaseFunctionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutSupabaseFunction operation middleware
+func (sh *strictHandler) PutSupabaseFunction(w http.ResponseWriter, r *http.Request, cluster ClusterPath, name string, params PutSupabaseFunctionParams) {
+	var request PutSupabaseFunctionRequestObject
+
+	request.Cluster = cluster
+	request.Name = name
+	request.Params = params
+
+	var body PutSupabaseFunctionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutSupabaseFunction(ctx, request.(PutSupabaseFunctionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutSupabaseFunction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutSupabaseFunctionResponseObject); ok {
+		if err := validResponse.VisitPutSupabaseFunctionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateSupabaseJWTSecret operation middleware
+func (sh *strictHandler) RotateSupabaseJWTSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RotateSupabaseJWTSecretParams) {
+	var request RotateSupabaseJWTSecretRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateSupabaseJWTSecret(ctx, request.(RotateSupabaseJWTSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateSupabaseJWTSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateSupabaseJWTSecretResponseObject); ok {
+		if err := validResponse.VisitRotateSupabaseJWTSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetSupabaseSMTPPassword operation middleware
+func (sh *strictHandler) SetSupabaseSMTPPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetSupabaseSMTPPasswordParams) {
+	var request SetSupabaseSMTPPasswordRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body SetSupabaseSMTPPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetSupabaseSMTPPassword(ctx, request.(SetSupabaseSMTPPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetSupabaseSMTPPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetSupabaseSMTPPasswordResponseObject); ok {
+		if err := validResponse.VisitSetSupabaseSMTPPasswordResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

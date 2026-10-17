@@ -15,6 +15,16 @@ export function engineRules(provider: string) {
     exposureLabel: 'Expose MongoDB publicly on port 27017',
     configHint: 'Merged into mongod/mongos configuration and validated by the server.',
   };
+  if (provider === 'postgres' || provider === 'supabase') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 5 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      single: { title: 'Single PostgreSQL member', description: 'One database member without failover. Maintenance causes downtime.' },
+      ha: { title: 'Highly available PostgreSQL', description: 'Three or five Patroni members with etcd quorum and a stable ProxySQL endpoint.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose PostgreSQL publicly on port 5432',
+    configHint: 'Configure supported PostgreSQL parameters under engine options.',
+  };
   if (provider === 'elasticsearch') return {
     resourceMinimums: { cpu: 1, ram: 1.5, disk: 0 },
     runtimeDisk: { min: 0, max: 0 },
@@ -35,6 +45,11 @@ export function engineRules(provider: string) {
 }
 
 export function engineConsequences(spec: Schemas['ClusterSpec']): string[] {
+  if (spec.provider === 'postgres' || spec.provider === 'supabase') return [
+    spec.topology.type === 'single' ? 'A single data member has no failover; maintenance interrupts database access.' : 'Patroni failover briefly interrupts writes. Three or five etcd voters maintain the data-member quorum.',
+    'ProxySQL is the application endpoint. Login-role passwords must be managed through Postgres access to synchronize proxy authentication; roles created directly in SQL are not routable through the proxy.',
+    spec.backup?.pitr?.enabled ? 'PITR archives WAL to registered backup storage. Coverage requires a completed full backup and a continuous WAL archive.' : 'PITR is disabled; recovery is limited to completed backups.',
+  ];
   if (spec.provider !== 'psmdb') return [];
   return [
     ...(spec.components.engine.replicas === 1 ? ['A single database member has no failover; maintenance makes its database unavailable.'] : []),

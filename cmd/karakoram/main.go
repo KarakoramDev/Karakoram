@@ -10,8 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agent"
-	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
 	elasticagent "github.com/KarakoramDev/Karakoram/internal/agent/elastic"
+	postgresagent "github.com/KarakoramDev/Karakoram/internal/agent/postgres"
+	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
+	supabaseagent "github.com/KarakoramDev/Karakoram/internal/agent/supabase"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -34,6 +36,14 @@ const usage = "Usage: karakoram server | agent [readiness [args...]] | version |
 var errUsage = errors.New("invalid arguments")
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "agent" {
+		if handled, code, err := agent.ReexecIfPID1(); handled {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "karakoram init:", err)
+			}
+			os.Exit(code)
+		}
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -74,13 +84,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		if len(args) > 1 {
 			opts, rest := readinessOptions(args[2:])
-			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine())
+			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{})
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {
 			return err
 		}
-		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine())
+		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{})
 	case "relay":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
 			return errUsage

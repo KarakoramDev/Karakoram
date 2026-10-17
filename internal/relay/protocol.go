@@ -28,6 +28,9 @@ const MaxPolicyTargets = 4096
 type Dial struct {
 	Type string `json:"type"`
 	Addr string `json:"addr"`
+	// Instance is an inventory-authorized runtime host selected by the hub.
+	// Addr remains the policy-allowed logical member and agent port.
+	Instance string `json:"instance,omitempty"`
 }
 
 // Agent introduces an inbound, opaque connection for the hub's internal listener.

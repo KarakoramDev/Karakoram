@@ -27,6 +27,7 @@ type Trigger interface{ Trigger(domain.ClusterRef) }
 // Options configures schedule persistence, clock, and reconciliation triggering.
 type Options struct {
 	Store          *store.Store
+	Registry       *engine.Registry
 	Trigger        Trigger
 	Clock          engine.Clock
 	ReloadInterval time.Duration
@@ -241,6 +242,7 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 		}
 		deleting[payload.Backup] = true
 	}
+	var candidates []domain.Backup
 	for _, spec := range c.Spec.Backup.Schedules {
 		if spec.RetainCount <= 0 {
 			continue
@@ -266,18 +268,28 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 			return at.Before(bt)
 		})
 		for i := 0; i < len(successful)-spec.RetainCount; i++ {
-			b := successful[i]
-			payload, _ := json.Marshal(map[string]string{"backup": b.Name})
-			op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationDeleteBackup, Payload: payload, Actor: "scheduler", CreatedAt: s.opts.Clock.Now()}
-			if err = s.opts.Store.EnqueueBackupDeletion(ctx, &b, &op); errors.Is(err, store.ErrConflict) {
-				continue
-			} else if err != nil {
-				return err
-			}
-			deleting[b.Name] = true
-			if s.opts.Trigger != nil {
-				s.opts.Trigger.Trigger(cluster)
-			}
+			candidates = append(candidates, successful[i])
+		}
+	}
+	if s.opts.Registry != nil {
+		provider, err := s.opts.Registry.Get(c.Spec.Provider)
+		if err != nil {
+			return err
+		}
+		if policy, ok := provider.(engine.RetentionPolicy); ok {
+			candidates = policy.FilterRetention(backups, candidates)
+		}
+	}
+	for _, b := range candidates {
+		payload, _ := json.Marshal(map[string]string{"backup": b.Name})
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationDeleteBackup, Payload: payload, Actor: "scheduler", CreatedAt: s.opts.Clock.Now()}
+		if err = s.opts.Store.EnqueueBackupDeletion(ctx, &b, &op); errors.Is(err, store.ErrConflict) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		if s.opts.Trigger != nil {
+			s.opts.Trigger.Trigger(cluster)
 		}
 	}
 	return nil

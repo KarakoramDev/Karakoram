@@ -26,10 +26,11 @@ import (
 
 // Client performs bearer-authenticated requests over pinned-CA HTTPS.
 type Client struct {
-	base   *url.URL
-	token  string
-	http   *http.Client
-	engine *http.Client
+	base         *url.URL
+	token        string
+	http         *http.Client
+	engine       *http.Client
+	dialInstance func(context.Context, string, string, string) (net.Conn, error)
 }
 
 // ClientOptions supplies the HTTPS endpoint, token, trust roots, and request deadlines.
@@ -42,6 +43,9 @@ type ClientOptions struct {
 	Timeout       time.Duration
 	EngineTimeout time.Duration
 	DialContext   func(context.Context, string, string) (net.Conn, error)
+	// DialInstanceContext authorizes and pins a runtime within the logical
+	// member's namespace. Arguments are network, logical host:port and instance host.
+	DialInstanceContext func(context.Context, string, string, string) (net.Conn, error)
 }
 
 // NewClient trusts only the supplied private CA and verifies the hostname.
@@ -77,8 +81,41 @@ func NewClient(opts ClientOptions) (*Client, error) {
 	engineTransport := transport.Clone()
 	engineTransport.ResponseHeaderTimeout = engineTimeout
 	engineClient := &http.Client{Transport: engineTransport, Timeout: engineTimeout, CheckRedirect: redirect}
-	return &Client{base: base, token: opts.Token, http: client, engine: engineClient}, nil
+	return &Client{base: base, token: opts.Token, http: client, engine: engineClient, dialInstance: opts.DialInstanceContext}, nil
 }
+
+// ForInstance pins connections to one runtime address while retaining the logical
+// member's HTTPS hostname, CA, bearer token and namespace transport. The caller
+// owns the returned client and must Close it; the original client is unchanged.
+func (c *Client) ForInstance(host string) (*Client, error) {
+	if net.ParseIP(host) == nil && !instanceHostname.MatchString(host) {
+		return nil, errors.New("invalid agent instance address")
+	}
+	port := c.base.Port()
+	if port == "" {
+		port = "443"
+	}
+	address := net.JoinHostPort(host, port)
+	pin := func(original *http.Client) *http.Client {
+		client := *original
+		transport := original.Transport.(*http.Transport).Clone()
+		dial := transport.DialContext
+		if dial == nil {
+			dial = (&net.Dialer{}).DialContext
+		}
+		transport.DialContext = func(ctx context.Context, network, logical string) (net.Conn, error) {
+			if c.dialInstance != nil {
+				return c.dialInstance(ctx, network, logical, host)
+			}
+			return dial(ctx, network, address)
+		}
+		client.Transport = transport
+		return &client
+	}
+	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine)}, nil
+}
+
+var instanceHostname = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,252}$`)
 
 // Close releases idle HTTPS connections.
 func (c *Client) Close() { c.http.CloseIdleConnections(); c.engine.CloseIdleConnections() }
@@ -121,7 +158,14 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 		_, err = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))
 		return err
 	}
-	return json.NewDecoder(io.LimitReader(res.Body, 16<<20)).Decode(output)
+	limit := int64(16 << 20)
+	if path == "/internal/agent/v1/config" {
+		// Supabase permits 100 functions with 1 MiB of source each. JSON escaping
+		// and source-file names can expand the admitted 7 MiB function envelope.
+		// Keep this larger allowance confined to the pinned control-plane pull.
+		limit = 768 << 20
+	}
+	return json.NewDecoder(io.LimitReader(res.Body, limit)).Decode(output)
 }
 
 // Config pulls the member configuration from the control plane.

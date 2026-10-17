@@ -165,7 +165,7 @@ func New(ctx context.Context, o Options) (*Registry, error) {
 	if !pool.AppendCertsFromPEM(p.CACert) {
 		return nil, errors.New("invalid relay CA")
 	}
-	r.Hub = relay.NewHub(relay.HubOptions{Certificate: cert, ClientCAs: pool, Authorize: r.authorizeStored, Logger: o.Logger, OnSession: func(ns string, e relay.SessionEvent) {
+	r.Hub = relay.NewHub(relay.HubOptions{Certificate: cert, ClientCAs: pool, Authorize: r.authorizeStored, AuthorizeInstance: r.authorizeInstance, Logger: o.Logger, OnSession: func(ns string, e relay.SessionEvent) {
 		select {
 		case r.notices <- sessionNotice{ns, e}:
 		default:
@@ -573,6 +573,31 @@ type hubDialer struct {
 
 func (d hubDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return d.hub.DialContext(ctx, d.ns, network, addr)
+}
+func (d hubDialer) DialInstanceContext(ctx context.Context, network, addr, instance string) (net.Conn, error) {
+	return d.hub.DialInstanceContext(ctx, d.ns, network, addr, instance)
+}
+
+// authorizeInstance binds an endpoint to a live runtime of the allowed logical
+// member in this namespace's backend. Never reuse inventory across dials.
+func (r *Registry) authorizeInstance(ctx context.Context, namespace, member, instance string) error {
+	b, err := r.Backend(namespace)
+	if err != nil {
+		return err
+	}
+	containers, err := b.Containers(ctx, member)
+	if err != nil {
+		return err
+	}
+	for _, container := range containers {
+		if container.Status != infra.ContainerActive && container.Status != infra.ContainerRunning {
+			continue
+		}
+		if instance != "" && instance != member && (instance == container.IPv4 || instance == container.IPv6 || instance == container.Hostname) {
+			return nil
+		}
+	}
+	return &relay.ErrRefused{Reason: "target is not in namespace policy"}
 }
 func (r *Registry) Dialer(ns string) engine.ContextDialer {
 	if ns == "" || ns == domain.DefaultNamespace {

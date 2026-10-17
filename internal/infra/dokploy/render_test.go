@@ -115,7 +115,7 @@ func TestRenderDockerfile(t *testing.T) {
 		t.Fatalf("zip entries = %d", len(files))
 	}
 	df := string(files["Dockerfile"])
-	ordered := []string{"FROM " + baseImage, `SHELL ["/bin/bash","-o","pipefail","-c"]`, "apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg", "USER karakoram\nWORKDIR /opt/karakoram\n", "RUN " + d.Runtime.Prepare[0] + "\n", "RUN " + d.Runtime.Prepare[1] + "\n", "RUN mkdir -p '/var/lib/karakoram/volumes/data-1'", `COPY --chown=karakoram:karakoram ["karakoram.tar.gz","/tmp/karakoram-artifact.tar.gz"]`, "RUN tar -xzf", `COPY --chown=karakoram:karakoram --chmod=0644 ["karakoram.env","/opt/karakoram/karakoram.env"]`, "STOPSIGNAL SIGTERM", "EXPOSE 9443/tcp", "EXPOSE 53/udp", "ENTRYPOINT ", "CMD "}
+	ordered := []string{"FROM " + baseImage, `SHELL ["/bin/bash","-o","pipefail","-c"]`, "apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg", "USER karakoram\nWORKDIR /opt/karakoram\n", "RUN " + renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", d.Runtime.Prepare[0]}) + "\n", "RUN " + renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", d.Runtime.Prepare[1]}) + "\n", "RUN mkdir -p '/var/lib/karakoram/volumes/data-1'", `COPY --chown=karakoram:karakoram ["karakoram.tar.gz","/tmp/karakoram-artifact.tar.gz"]`, "RUN tar -xzf", `COPY --chown=karakoram:karakoram --chmod=0644 ["karakoram.env","/opt/karakoram/karakoram.env"]`, "STOPSIGNAL SIGTERM", "EXPOSE 9443/tcp", "EXPOSE 53/udp", "ENTRYPOINT ", "CMD "}
 	rest := df
 	for _, s := range ordered {
 		i := strings.Index(rest, s)
@@ -146,6 +146,36 @@ func TestRenderDockerfile(t *testing.T) {
 	entry := string(files["karakoram-entrypoint"])
 	if !strings.Contains(entry, "sudo chown karakoram:karakoram '/var/lib/karakoram/volumes/data-1'") || strings.Contains(entry, "chown -R") || !strings.HasSuffix(entry, "exec \"$@\"\n") {
 		t.Fatalf("entrypoint:\n%s", entry)
+	}
+}
+
+func TestRenderMultilinePrepare(t *testing.T) {
+	for _, script := range []string{
+		"set -eu\numask 077\nprintf '%s\\n' 'quoted \"value\"' \\\n'continued'",
+		"cat <<'EOF'\nquoted \"value\"\ncontinued\nEOF",
+	} {
+		d := renderTestDeployment(t)
+		d.Runtime.Prepare = []string{script}
+		dockerfile := renderDockerfile(d)
+		var args []string
+		for _, line := range strings.Split(dockerfile, "\n") {
+			if strings.HasPrefix(line, "RUN [") {
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "RUN ")), &args); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		want := []string{"/bin/bash", "-o", "pipefail", "-c", script}
+		if !reflect.DeepEqual(args, want) {
+			t.Fatalf("prepare arguments = %q, want %q", args, want)
+		}
+		out, err := exec.Command(args[0], args[1:]...).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(out) != "quoted \"value\"\ncontinued\n" {
+			t.Fatalf("prepare output = %q", out)
+		}
 	}
 }
 

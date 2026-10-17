@@ -41,6 +41,10 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 
 func idempotencyCovered(id string) bool {
 	switch id {
+	case "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "createPostgresDatabase", "grantPostgresPrivileges":
+		return true
+	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
+		return true
 	case "createAPIToken", "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createAccount", "createNamespace", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
 		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
@@ -102,6 +106,10 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	}
 	namespace := ""
 	switch id {
+	case "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "createPostgresDatabase", "grantPostgresPrivileges":
+		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
+	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
+		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
 		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",

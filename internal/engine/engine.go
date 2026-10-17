@@ -46,6 +46,22 @@ type RetainedBackupDeleter interface {
 	DeleteRetainedBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error
 }
 
+// RetentionPolicy optionally protects recovery chains from scheduled expiration.
+// FilterRetention may only remove candidates; backups contains the full inventory.
+// Explicit user deletions are not subject to schedule retention policy.
+type RetentionPolicy interface {
+	FilterRetention(backups, candidates []domain.Backup) []domain.Backup
+}
+
+// OperationClaimPolicy optionally reserves ordinary convergence's maintenance
+// ownership before a pending operation is claimed. False leaves queued work
+// pending without consuming attempts or its execution retry budget. Opt-in
+// providers' imperative deadlines start at StartedAt, not time spent queued.
+// Running operations still resume before Sync.
+type OperationClaimPolicy interface {
+	CanClaimOperation(*domain.Cluster) (bool, error)
+}
+
 // OperationSyncPolicy optionally permits ordinary Sync after a nonterminal,
 // successful RunOperation call. Without this policy, Running operations exclude
 // Sync and Status, which may be unsafe while restore stops database processes.

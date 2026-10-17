@@ -70,6 +70,8 @@ OpenAPI's `x-karakoram-rbac` declares each operation's resource/action/object. L
 
 `GET /clusters/{cluster}/connection` is an explicit, audited reveal requiring `cluster-credentials:read`, with `Cache-Control: no-store`. It returns **provider-defined administrative credentials** and public CA, not an application identity. Ordinary cluster/status reads are password-free. Follow engine access procedures: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). Storage keys/private PEM inputs are write-only; generated application passwords and API-token secrets are creation responses, not later GET results.
 
+PostgreSQL and Supabase use [native PostgreSQL access](postgres/access-and-tls.md), not `/database-users` or `/database-roles`. Supabase's separate GET `/clusters/{cluster}/supabase/credentials` requires `cluster-credentials:read` and returns API/Studio URLs and sensitive service/dashboard keys with no-store; do not confuse this with a normal cluster read.
+
 ## Resource families
 
 Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{cluster}`. **All** remains subject to provider capabilities and RBAC. Use OpenAPI for exact paths, payloads and permissions.
@@ -85,10 +87,16 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Database identities | `/database-users`, `/database-roles` and identity paths | MongoDB only |
 | Native access | `/rabbitmq/vhosts`, `/rabbitmq/users`, `/rabbitmq/permissions`, `/rabbitmq/topic-permissions`, `/rabbitmq/policies`, `/rabbitmq/operator-policies` | RabbitMQ only |
 | Native access | `/elasticsearch/users`, `/elasticsearch/roles`, `/elasticsearch/api-keys` | Elasticsearch only |
+| Native PostgreSQL access | `/postgres/roles`, `/postgres/roles/{role}`, `/postgres/roles/{role}/password`, `/postgres/databases`, `/postgres/databases/{database}`, `/postgres/grants` | PostgreSQL and Supabase |
+| Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
 | Recovery | `/backup-storages`; cluster `/backups`, `/restores` | All |
-| Continuous recovery window | `/pitr` | MongoDB only |
+| Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase |
 | Activity/cleanup | `/operations`, `/operations/{operation}`, `/operations/{operation}/cancel`, `/events`, `/events/stream`, `/orphaned-volumes`; cluster `/operations` | All |
 | Observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` | All |
+
+PostgreSQL role PUT replaces attributes; PATCH changes only supplied fields. Database routes expose creation/read/deletion, not update; grants are bounded database/schema privileges. Generated login passwords are one-time no-store responses, with sealed idempotent replay. Native access uses `database-users` RBAC, with extra `clusters:update` authorization for privileged role/membership/password changes. See [payloads and limits](postgres/access-and-tls.md).
+
+Supabase function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
 
 ## Namespace parameters and lifecycle
 
@@ -102,7 +110,7 @@ Creation returns **201** after synchronous validation, then deploys a relay asyn
 
 ## Requests and asynchronous work
 
-Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec: {...}}` as a JSON merge patch. Arrays replace entirely. Name/status/generation/timestamps are server-owned. Unknown fields, wrong types, invalid enums/bounds and trailing JSON produce **400** with `details.field` and `details.reason`. Explicit zero counts/resources are invalid, not defaults. `spec.provider` is required; omitted version/topology/components/resources use that catalog's defaults. Go input fields use pointers: nil requests defaults, a pointer to zero does not.
+Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec: {...}}` as a JSON merge patch. Arrays replace entirely. Name/status/generation/timestamps are server-owned. Unknown fields, wrong types, invalid enums/bounds and trailing JSON produce **400** with `details.field` and `details.reason`. Explicit zero is not a request for defaults: resources and required member counts must satisfy their bounds, while optional component `replicas: 0` explicitly disables that component where the engine permits it. `spec.provider` is required; omitted version/topology/components/resources use that catalog's defaults. Go input fields use pointers: nil requests defaults, a pointer to zero does not.
 
 Cluster create, PUT and PATCH apply engine defaults and validation, then check the namespace backend's static capabilities before saving. A spec requiring an unavailable capability returns **400 `invalid_request`** naming the backend and missing capabilities (for example `publicTcp`); admission does not make a platform API request.
 

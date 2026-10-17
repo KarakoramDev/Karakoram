@@ -1,0 +1,51 @@
+diff --git a/config/runtime.exs b/config/runtime.exs
+--- a/config/runtime.exs
++++ b/config/runtime.exs
+@@ -308,3 +308,11 @@
+   config :logger,
+     backends: [LogflareLogger.HttpBackend]
+ end
++
++# Native leader-forwarder connections intentionally use CA-chain verification:
++# the loopback listener forwards the database certificate without terminating TLS.
++if ca_file = System.get_env("KARAKORAM_DB_CA_FILE") do
++  config :supavisor, Supavisor.Repo,
++    ssl: true,
++    ssl_opts: [verify: :verify_peer, cacertfile: Path.absname(ca_file), server_name_indication: :disable]
++end
+diff --git a/lib/cluster/strategy/postgres.ex b/lib/cluster/strategy/postgres.ex
+--- a/lib/cluster/strategy/postgres.ex
++++ b/lib/cluster/strategy/postgres.ex
+@@ -35,6 +35,16 @@
+       |> Keyword.put_new(:auto_reconnect, true)
+       |> Keyword.put_new(:ssl_opts, verify: :verify_none)
+       |> Keyword.put_new(:socket_options, state.config[:socket_options] || [])
++
++    opts =
++      if ca_file = System.get_env("KARAKORAM_DB_CA_FILE") do
++        Keyword.merge(opts,
++          ssl: true,
++          ssl_opts: [verify: :verify_peer, cacertfile: Path.absname(ca_file), server_name_indication: :disable]
++        )
++      else
++        opts
++      end
+ 
+     new_config =
+       state.config
+diff --git a/lib/supavisor/db_handler.ex b/lib/supavisor/db_handler.ex
+--- a/lib/supavisor/db_handler.ex
++++ b/lib/supavisor/db_handler.ex
+@@ -698,7 +698,11 @@
+             verify: :verify_peer,
+             cacerts: [conn_params.upstream_tls_ca],
+             # unclear behavior on pg14
+-            server_name_indication: conn_params.sni_hostname || conn_params.host,
++            server_name_indication:
++              if(System.get_env("KARAKORAM_DB_CA_FILE"),
++                do: :disable,
++                else: conn_params.sni_hostname || conn_params.host
++              ),
+             customize_hostname_check: [{:match_fun, fn _, _ -> true end}],
+             receiver_spawn_opts: [min_heap_size: 2048]
+           ]

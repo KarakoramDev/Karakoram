@@ -1,0 +1,142 @@
+{
+  "npm-11.12.1": {
+    "file": "npm-11.12.1.tgz",
+    "url": "https://registry.npmjs.org/npm/-/npm-11.12.1.tgz",
+    "sha256": "e679850e663b16f5f146ee425d0eb0e3442c1d2bda3d513bbfd7c81f5ee5db38",
+    "checksumURL": "https://registry.npmjs.org/npm/11.12.1",
+    "size": 2833345
+  },
+  "pnpm-11.13.1": {
+    "file": "pnpm-11.13.1.tgz",
+    "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.13.1.tgz",
+    "sha256": "10012b57d23b9673bc534168ff56b1ac655ba4a2737ff37f6d9d19a55144afaa",
+    "checksumURL": "https://registry.npmjs.org/pnpm/11.13.1",
+    "size": 8692720
+  },
+  "turbo-linux-64-2.9.14": {
+    "file": "turbo-linux-64-2.9.14.tgz",
+    "url": "https://registry.npmjs.org/@turbo/linux-64/-/linux-64-2.9.14.tgz",
+    "sha256": "b1973fcb98ab43a1cc4d24474bee832e9c0e7fdd86eedb9869517f5a4472eb48",
+    "checksumURL": "https://registry.npmjs.org/@turbo/linux-64/2.9.14",
+    "size": 15655079
+  },
+  "hex-2.5.3": {
+    "file": "hex-2.5.3.ez",
+    "url": "https://builds.hex.pm/installs/1.16.0/hex-2.5.3.ez",
+    "sha256": "7d765166e168fa002d8a30bfd287e01c68dd374c02b6e847b02b626ab33e78d7",
+    "checksumURL": "https://builds.hex.pm/installs/hex-1.x.csv",
+    "size": 1178898
+  },
+  "rebar3-3.24.0": {
+    "file": "rebar3-3.24.0",
+    "url": "https://builds.hex.pm/installs/1.18.3/rebar3-3.24.0-otp-27",
+    "sha256": "17b83296517b53ab70f362306de95493151fa63e61bbae8b852769735937d965",
+    "checksumURL": "https://builds.hex.pm/installs/rebar.csv",
+    "size": 848806
+  },
+  "node-22.23.3": {
+    "file": "node-v22.23.3-linux-x64.tar.xz",
+    "url": "https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz",
+    "sha256": "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de",
+    "checksumURL": "https://nodejs.org/dist/v22.23.3/SHASUMS256.txt",
+    "size": 31001304
+  },
+  "node-24.22.0": {
+    "file": "node-v24.22.0-linux-x64.tar.xz",
+    "url": "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.xz",
+    "sha256": "cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008",
+    "checksumURL": "https://nodejs.org/dist/v24.22.0/SHASUMS256.txt",
+    "size": 32015600
+  },
+  "go-1.26.0": {
+    "file": "go1.26.0.linux-amd64.tar.gz",
+    "url": "https://go.dev/dl/go1.26.0.linux-amd64.tar.gz",
+    "sha256": "aac1b08a0fb0c4e0a7c1555beb7b59180b05dfc5a3d62e40e9de90cd42f88235",
+    "checksumURL": "https://go.dev/dl/?mode=json&include=all",
+    "size": 66768540
+  },
+  "rust-1.98.0": {
+    "file": "rust-1.98.0-x86_64-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/rust-1.98.0-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "ed8ee2df70909c88cbaf87a6cfa3920dac00b537de12a6abe6906641e0f5952f",
+    "checksumURL": "https://static.rust-lang.org/dist/rust-1.98.0-x86_64-unknown-linux-gnu.tar.xz.sha256",
+    "size": 202502800
+  },
+  "rust-1.96.0": {
+    "file": "rust-1.96.0-x86_64-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/rust-1.96.0-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "c295047583a56238ea06b43f849f4b877fa12bfd4c7103f8d9a74c94c9c4e108",
+    "checksumURL": "https://static.rust-lang.org/dist/rust-1.96.0-x86_64-unknown-linux-gnu.tar.xz.sha256",
+    "size": 197935124
+  },
+  "rust-1.84.1": {
+    "file": "rust-1.84.1-x86_64-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/rust-1.84.1-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "e4f3331794f1a32c56f837030912d80b5a3d9669f4b497c91611d65bd6ada97b",
+    "checksumURL": "https://static.rust-lang.org/dist/rust-1.84.1-x86_64-unknown-linux-gnu.tar.xz.sha256",
+    "size": 182944280
+  },
+  "rust-1.81.0": {
+    "file": "rust-1.81.0-x86_64-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/rust-1.81.0-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "1a9ee8caaa18a3e433fef93cea8a55dc1ebd478ed761b2fef69d4565f9d00e7f",
+    "checksumURL": "https://static.rust-lang.org/dist/rust-1.81.0-x86_64-unknown-linux-gnu.tar.xz.sha256",
+    "size": 170439044
+  },
+  "rust-1.80.0": {
+    "file": "rust-1.80.0-x86_64-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/rust-1.80.0-x86_64-unknown-linux-gnu.tar.xz",
+    "sha256": "ea59f08e38ca4abed144be38de629c662a8f714548e7c061fca40b4a139f9170",
+    "checksumURL": "https://static.rust-lang.org/dist/rust-1.80.0-x86_64-unknown-linux-gnu.tar.xz.sha256",
+    "size": 167237928
+  },
+  "otp-28.5.0.4": {
+    "file": "otp_src_28.5.0.4.tar.gz",
+    "url": "https://github.com/erlang/otp/releases/download/OTP-28.5.0.4/otp_src_28.5.0.4.tar.gz",
+    "sha256": "efb045f96ee56d274f6c1fe3a9612b45caa01d2f82e35fe4e0ac9b0c501f6e53",
+    "checksumURL": "https://github.com/erlang/otp/releases/tag/OTP-28.5.0.4",
+    "size": 105345834
+  },
+  "otp-27.2.1": {
+    "file": "otp_src_27.2.1.tar.gz",
+    "url": "https://github.com/erlang/otp/releases/download/OTP-27.2.1/otp_src_27.2.1.tar.gz",
+    "sha256": "07982134e10637dde57cf9cdc6dda6f65425810229986136d184766d4db9eda3",
+    "checksumURL": "https://github.com/erlang/otp/releases/tag/OTP-27.2.1",
+    "size": 101359744
+  },
+  "otp-27.3.4.6": {
+    "file": "otp_src_27.3.4.6.tar.gz",
+    "url": "https://github.com/erlang/otp/releases/download/OTP-27.3.4.6/otp_src_27.3.4.6.tar.gz",
+    "sha256": "658529f94cc5b8833907aa680a5e979e67c32dd6ebba69ed3b90b95f526ccda2",
+    "checksumURL": "https://github.com/erlang/otp/releases/tag/OTP-27.3.4.6",
+    "size": 101473733
+  },
+  "elixir-1.19.5-otp-28": {
+    "file": "elixir-1.19.5-elixir-otp-28.zip",
+    "url": "https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-28.zip",
+    "sha256": "ca481510feb6dabc875bba43e44b25c7abafa53bd7a103639851b7aeace8a022",
+    "checksumURL": "https://github.com/elixir-lang/elixir/releases/tag/v1.19.5",
+    "size": 8251029
+  },
+  "elixir-1.19.5-otp-27": {
+    "file": "elixir-1.19.5-elixir-otp-27.zip",
+    "url": "https://github.com/elixir-lang/elixir/releases/download/v1.19.5/elixir-otp-27.zip",
+    "sha256": "1ab3154ec19adcd4b764cf96badecbe44df5ec6f358dc0fbe29c3749ff6c08de",
+    "checksumURL": "https://github.com/elixir-lang/elixir/releases/tag/v1.19.5",
+    "size": 8279412
+  },
+  "elixir-1.18.2-otp-27": {
+    "file": "elixir-1.18.2-elixir-otp-27.zip",
+    "url": "https://github.com/elixir-lang/elixir/releases/download/v1.18.2/elixir-otp-27.zip",
+    "sha256": "694e56534db9074e78a9e0b53c5f5281b60e8ea83c5abfcbdeed70c20387ddee",
+    "checksumURL": "https://github.com/elixir-lang/elixir/releases/tag/v1.18.2",
+    "size": 7939866
+  },
+  "bun-1.3.14": {
+    "file": "bun-1.3.14-linux-x64.zip",
+    "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip",
+    "sha256": "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f",
+    "checksumURL": "https://github.com/oven-sh/bun/releases/tag/bun-v1.3.14",
+    "size": 35969274
+  }
+}

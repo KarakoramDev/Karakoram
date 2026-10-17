@@ -196,6 +196,19 @@ func (f *fakeAPI) applyReplicas(a *fakeApplication, replicas int) {
 	f.shutdown(a)
 	a.taskPolls = 0
 	a.appliedPorts = fakeRowsCopy(a.ports)
+	// A custom EndpointSpec replaces Dokploy's separately configured ports.
+	if endpoint, ok := a.row["endpointSpecSwarm"].(map[string]any); ok {
+		a.appliedPorts = nil
+		if ports, ok := endpoint["Ports"].([]any); ok {
+			for _, raw := range ports {
+				p := raw.(map[string]any)
+				a.appliedPorts = append(a.appliedPorts, map[string]any{
+					"protocol": p["Protocol"], "targetPort": p["TargetPort"],
+					"publishedPort": p["PublishedPort"], "publishMode": p["PublishMode"],
+				})
+			}
+		}
+	}
 	// Supplying networkSwarm replaces, rather than augments, defaults.
 	a.appliedNetworks = []map[string]any{{"Target": "dokploy-network"}}
 	if networks, ok := a.row["networkSwarm"].([]any); ok {

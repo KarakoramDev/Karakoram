@@ -1,0 +1,37 @@
+[
+  {
+    "file": "studio-lib.deno.d.ts",
+    "url": "https://github.com/denoland/deno/releases/download/v1.45.0/lib.deno.d.ts",
+    "version": "v1.45.0",
+    "sha256": "9ee428ffa6713379614e182ecd206e86ddc11b05e73ef86b1becf7fac952e705",
+    "size": 563784,
+    "license": "MIT",
+    "selectionSource": "https://github.com/supabase/supabase/blob/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/apps/studio/scripts/deno-types.ts"
+  },
+  {
+    "file": "studio-edge-runtime.d.ts",
+    "url": "https://jsr.io/@supabase/functions-js/2.4.4/src/edge-runtime.d.ts",
+    "version": "2.4.4",
+    "sha256": "b6d26d83ae9dcfbb7ce46f173b828fa600bf44a6193efc1aaa1f5773842795ef",
+    "size": 1438,
+    "checksumURL": "https://jsr.io/@supabase/functions-js/2.4.4_meta.json",
+    "license": "MIT",
+    "selectionSource": "https://github.com/supabase/supabase/blob/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/apps/studio/scripts/deno-types.ts"
+  },
+  {
+    "file": "studio-deno-LICENSE",
+    "url": "https://raw.githubusercontent.com/denoland/deno/v1.45.0/LICENSE.md",
+    "sha256": "932ba4f75e7d7cceb4df9f52cc255c5337a6cc534dea3c42ee827c2aa7cdd656",
+    "size": 1074,
+    "license": "MIT",
+    "selectionSource": "https://github.com/supabase/supabase/blob/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/apps/studio/scripts/deno-types.ts"
+  },
+  {
+    "file": "studio-functions-js-LICENSE",
+    "url": "https://jsr.io/@supabase/functions-js/2.4.4/LICENSE",
+    "sha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936",
+    "size": 1065,
+    "license": "MIT",
+    "selectionSource": "https://github.com/supabase/supabase/blob/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/apps/studio/scripts/deno-types.ts"
+  }
+]

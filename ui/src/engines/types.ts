@@ -6,6 +6,7 @@ import type { Schemas } from '../api/client';
 import type { Action, Resource } from '../auth/permissions';
 
 export interface WizardSectionProps {
+  namespace?: string;
   provider: Schemas['Provider'];
   spec: Schemas['ClusterSpec'];
   onChange: (spec: Schemas['ClusterSpec']) => void;

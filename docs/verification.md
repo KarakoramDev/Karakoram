@@ -8,6 +8,7 @@ Verification checks contracts, real engine behavior and deployed workflows at di
 
 - **Local automated checks:** validation, authorization, state transitions, recovery checkpoints and generated-contract consistency.
 - **Docker integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not Zerops placement or provisioning.
+- **Native PostgreSQL/Supabase integration:** compiled test binaries run with real installed packages/artifacts in disposable Ubuntu 24.04 Incus/LXC system containers; no application-container runtime or image extraction is required for this path.
 - **Deployed checks:** paid platform resources, engine data paths and recovery under the configured prerequisites. Skipped capabilities are unverified, not successful.
 - **Browser checks:** rendered navigation, permissions and workflows. Static checks and backing-API scenarios are not browser automation; no automated browser-workflow suite is supplied.
 
@@ -20,7 +21,7 @@ Run from the repository root with Go 1.25+. Docker tests need daemon access/imag
 ```sh
 # Local unit/HTTP checks:
 go test ./...
-# All Docker integration checks, including internal tagged tests:
+# Integration-tagged checks; native cases skip without their explicit prerequisites:
 go test -tags integration -count=1 -timeout 30m ./...
 # UI and both executables:
 make build-all
@@ -52,6 +53,21 @@ go test -tags e2e -count=1 -v -timeout 4h ./test/e2e \
   -run '^TestRabbitMQCluster$/Restart$'
 ```
 
+### Native PostgreSQL and Supabase integration
+
+Compile on a compatible Linux host, then copy the test binaries into an isolated Ubuntu 24.04 Incus/LXC guest with native Percona packages and required locked artifacts. Run as an unprivileged runtime user, with private disposable data directories and an isolated network namespace: tests own fixed PostgreSQL/service loopback ports. Never run them against production data or alongside important host databases.
+
+```sh
+go test -c -tags integration -o /tmp/postgres-native.test ./internal/agent/postgres
+go test -c -tags integration -o /tmp/supabase-native.test ./internal/agent/supabase
+go test -c -tags integration -o /tmp/envoy-native.test ./internal/agent/supabase/gateway
+go test -c -tags integration -o /tmp/pgbackrest-inventory.test ./internal/backupstorage
+```
+
+Inside the prepared guest, set `KARAKORAM_PG_BIN_DIR` to the installed PostgreSQL bin directory. PostgreSQL cases additionally require the native utilities used by their selected scenario (including ProxySQL/pgBackRest); major-upgrade coverage needs both major packages and `KARAKORAM_PG_UPGRADE=1`. Supabase API cases require `KARAKORAM_SUPABASE_AUTH_DIR`, `KARAKORAM_SUPABASE_REST_DIR` and `KARAKORAM_SUPABASE_GATEWAY_DIR`. Gateway conformance uses `KARAKORAM_ENVOY_BIN`; Vector uses `KARAKORAM_SUPABASE_VECTOR_DIR`. Additional component cases select installed Storage/Realtime/meta/Studio directories with the corresponding `KARAKORAM_SUPABASE_*_DIR` variables and need their actual artifacts. Storage object tests also need securely injected `KARAKORAM_SUPABASE_S3_*` settings for a disposable S3 destination.
+
+Run the copied binary with its normal `-test.v`/`-test.run` options after provisioning these prerequisites. Consult the integration source for the exact selected case's inputs; missing variables mean **skipped**, not passed. Native artifact build/qualification commands and resource safeguards are in [native artifacts](native-artifacts.md). Remove disposable guests and objects after capturing private, redacted evidence. Native protocol tests do not establish backend provisioning, public networking, independent placement or complete restore/clone behavior; those need deployment-level scenarios.
+
 ## Capability matrix
 
 Coverage descriptions, not evidence that this checkout or deployment passed:
@@ -64,6 +80,9 @@ Coverage descriptions, not evidence that this checkout or deployment passed:
 | RabbitMQ: access/TLS/definitions/metrics | Local API/CLI/rendering; Docker TLS/metrics | Grants, definitions restore/clone, retention, fresh metrics | TLS modes/PKI, denied clients, public management, cleanup |
 | Elasticsearch/Stack: topology/security/lifecycle | Local contracts; Docker TLS/keystore/security APIs | Stack/dedicated masters, replacement, upgrades/scaling, suspend/resume | Component UI, external access, effective configuration |
 | Elasticsearch: snapshots/access/metrics | Local checkpoints; Docker snapshot APIs | Restore/clone, data/credentials, fresh metrics, deletion | Repository compatibility and independent cleanup |
+| PostgreSQL: access/TLS/proxy/lifecycle | Local contracts; native PostgreSQL/ProxySQL access/reload and upgrade cases | HA fencing/failover, scaling/replacement, resource changes and rolling lifecycle | Driver compatibility, external TLS/allowlists and client reconnection |
+| PostgreSQL: pgBackRest/PITR/restore/clone | Local recovery checkpoints; native inventory compatibility | S3 backup chains, expiry dependencies, PITR/in-place/clone and credential recovery | Conservative-window limits, offline-major rollback, retained-object cleanup |
+| Supabase: modular API/services | Local option/key/SQL/rendering contracts; native API, Envoy, Vector and available component cases | Enabled-component dependency/configuration, API data paths, service reconnect and logs | Credential/function/SMTP UI, object protection and unavailable-artifact rejection |
 | All: monitoring/API/CLI | Local handlers/auth/filtering; real agent integration | Namespace isolation, API/CLI workflows | Charts, events/logs, pending/error states |
 | Control plane: auth/RBAC/OIDC, namespaces/relays | Local identity/policy/transport | Accounts/OIDC, second-project management/recovery | Restricted direct navigation, group grants, relay health |
 | Installation/state/admin recovery | Local startup/recovery contracts | No dedicated installer scenario | Complete checklist below |

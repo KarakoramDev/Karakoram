@@ -17,6 +17,9 @@ import { QuorumCallout } from '@/engines/rabbitmq/QuorumCallout';
 import { kibanaReady } from '@/engines/elasticsearch/spec';
 import { ConnectionHelp } from '@/engines/elasticsearch/ConnectionHelp';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
+import { ConnectionHelp as PostgresConnectionHelp } from '@/engines/postgres/ConnectionHelp';
+import { SupabaseCredentialsReveal } from '@/engines/supabase/CredentialsReveal';
+import { isPostgres } from '@/engines/postgres/spec';
 
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -165,7 +168,7 @@ export function OverviewTab() {
                       <MemberHealthBadge member={m} suspended={suspended} />
                     </td>
                     {replicaSetDetails ? <td className="num small">{m.lagSeconds === undefined ? '—' : formatDuration(m.lagSeconds)}</td> : null}
-                    <td className="mono small">{m.version ?? '—'}</td>
+                    <td className="mono small">{m.componentVersion || m.version || '—'}</td>
                     <td>{m.cpuUsage === undefined ? '—' : <Meter value={m.cpuUsage} max={100} unit="%" compact />}</td>
                     <td className="small nowrap">{formatBytes(m.ramUsageBytes)}</td>
                     <td>{m.diskUsageBytes === undefined ? '—' : <Meter value={m.diskUsageBytes / 2 ** 30} max={m.diskTotalBytes ? m.diskTotalBytes / 2 ** 30 : undefined} unit="GiB" />}</td>
@@ -200,7 +203,7 @@ export function OverviewTab() {
         <Card title="Connection">
           {conn?.endpoints?.map((endpoint) => <div key={`${endpoint.name}:${endpoint.url}`} className="stack" style={{ marginBottom: 12 }}>
             <strong className="small">{endpoint.name} <Badge plain>{endpoint.public ? 'Public' : 'Private'}</Badge></strong>
-            {spec.provider === 'elasticsearch' && endpoint.name === 'kibana' && (suspended || !kibanaReady(list)) ? <span className="small muted">{suspended ? 'Kibana is suspended. Resume the cluster to make it available.' : 'Kibana is starting — retry shortly.'}</span> : <CodeLine value={endpoint.url} />}
+            {spec.provider === 'elasticsearch' && endpoint.name === 'kibana' && (suspended || !kibanaReady(list)) ? <span className="small muted">{suspended ? 'Kibana is suspended. Resume the cluster to make it available.' : 'Kibana is starting — retry shortly.'}</span> : <><CodeLine value={endpoint.url} />{spec.provider === 'supabase' && /supabase|studio|api|gateway/i.test(endpoint.name) && /^https?:\/\//.test(endpoint.url) ? <a href={endpoint.url} target="_blank" rel="noreferrer">Open {endpoint.name}</a> : null}</>}
           </div>)}
           {conn?.hosts?.length ? (
             <div className="stack">
@@ -220,6 +223,8 @@ export function OverviewTab() {
             conn?.endpoints?.length ? null : <p className="small muted">Connection details appear once the cluster is initialized.</p>
           )}
           {spec.provider === 'elasticsearch' ? <ConnectionHelp connection={conn} /> : null}
+          {isPostgres(spec.provider) ? <PostgresConnectionHelp connection={conn} tlsMode={spec.tls?.mode} /> : null}
+          {spec.provider === 'supabase' ? <SupabaseCredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} /> : null}
         </Card>
         <Card title="Specification">
           <KV
@@ -328,7 +333,7 @@ function CredentialsReveal({ namespace, name, base, provider, allowed }: { names
           Hide
         </Button>
       </div>
-      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
+      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
       <div className="table-wrap">
         <table className="table">
           <thead>

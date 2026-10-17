@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
@@ -48,6 +49,19 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	elasticRegistry := s.Registry
 	rabbitRegistry, err := engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
+		t.Fatal(err)
+	}
+	postgresRegistry, err := engine.NewRegistry(&fakePostgresAccess{roles: []postgres.Role{{Name: "custom", Login: true, ConnectionLimit: -1, MemberOf: []string{}}}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supabaseRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeSupabaseAccess{names: []string{"hello"}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supabaseCluster := domain.Cluster{Name: "supabase", Spec: domain.ClusterSpec{Provider: "supabase", Version: "17.11", Topology: domain.Topology{Type: "single"}}}
+	(&fakeProvider{}).ApplyDefaults(&supabaseCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &supabaseCluster); err != nil {
 		t.Fatal(err)
 	}
 	cluster, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
@@ -112,8 +126,18 @@ func TestEveryGETResponseConforms(t *testing.T) {
 				s.Registry = rabbitRegistry
 			}
 			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
+			if strings.Contains(path, "/postgres/") {
+				s.Registry = postgresRegistry
+				if operationID == "listPostgresGrants" {
+					url += "?database=app"
+				}
+			}
 			if strings.Contains(path, "/elasticsearch/") {
 				url = strings.Replace(url, "/clusters/prod/", "/clusters/search/", 1)
+			}
+			if strings.Contains(path, "/supabase/") {
+				s.Registry = supabaseRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/supabase/", 1)
 			}
 			if path == "/healthz" || path == "/metrics" {
 				url = path

@@ -86,7 +86,7 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		// cancellation, partial storage failure, or a control-plane restart.
 		return s.failure(err)
 	}
-	if b.RecoveryIdentity != "" {
+	if (b.Provider == "" || b.Provider == "psmdb") && b.RecoveryIdentity != "" {
 		if err := s.Context.Secrets.DeleteClusterSecret(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.RecoveryIdentity}, "users/userAdmin"); err != nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, engine.ErrNotFound) {
 			return s.failure(err)
 		}

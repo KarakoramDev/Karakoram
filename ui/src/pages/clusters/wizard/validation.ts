@@ -72,7 +72,7 @@ export function validateWizard(name: string, namespace: string, spec: Schemas['C
     const schedules = backup.schedules ?? [];
     if ((schedules.length || backup.pitr?.enabled) && !backup.storage) v.backups.push(hasCapability(provider, 'pitr') ? 'Choose a primary backup storage for schedules and PITR.' : 'Choose a primary backup storage for schedules.');
     v.backups.push(...validateSchedules(schedules));
-    if (backup.pitr?.enabled && (!Number.isInteger(backup.pitr.oplogSpanMinutes) || backup.pitr.oplogSpanMinutes < 1)) v.backups.push('Oplog span must be a whole number of at least 1 minute.');
+    if (backup.pitr?.enabled && (!Number.isInteger(backup.pitr.oplogSpanMinutes) || backup.pitr.oplogSpanMinutes < 1)) v.backups.push(`${spec.provider === 'psmdb' ? 'Oplog span' : 'WAL archive interval'} must be a whole number of at least 1 minute.`);
   }
   if (spec.dataSource) {
     if (!spec.dataSource.cluster) v.backups.push('Data source: choose a source cluster.');

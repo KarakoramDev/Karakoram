@@ -58,3 +58,22 @@ Credentials are only fetched on explicit "Reveal credentials" (`GET /clusters/{c
 the server gates on the `cluster-credentials:read` permission; they are never cached in the query
 store. Namespace tokens are write-only: the add and rotate dialogs clear the field on submit and
 nothing token-like is kept in the query cache or localStorage.
+
+## PostgreSQL and Supabase
+
+The PostgreSQL-family descriptors share single/HA topology, data-member and ProxySQL resource
+editors, catalog-driven PostgreSQL major choices, safe parameter options, TLS connection help
+and pgBackRest full/differential/incremental backup and WAL PITR controls. Application login
+roles must be managed through **Postgres access** to synchronize ProxySQL authentication;
+roles created directly in SQL are not proxy-routable. Database encoding and locale are immutable;
+the native database API offers list/get/create/delete, not update.
+
+Supabase adds catalog presets, dependency-aware component toggles and per-component resources,
+typed service options, registered object storage selection and catalog-allowlisted extensions.
+**Components** uses the same reviewed cluster merge-patch editor as topology/scaling.
+**Functions & SMTP** lists, edits, deploys and deletes relative-path source bundles and sets a
+write-only SMTP password after creation. Neither SMTP passwords nor API keys belong in
+`engineOptions`. Supabase credential reveal uses its native endpoint and the same explicit
+`cluster-credentials:read` permission boundary; returned secrets remain in local component state,
+not the query cache. Monitoring panels use the provider's canonical PostgreSQL series and
+per-component Supabase readiness; transaction counters are converted to rates by the server.

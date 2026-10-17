@@ -33,6 +33,8 @@ Use **Continue** or **Back**; validation keeps you on the affected step. Names a
 
 Engine-specific fields, presets, minimum resources and connection procedures belong in the [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch](elasticsearch/README.md) guides. Review aggregate capacity across every component against project capacity before submission. Footprint bounds are not initial allocations, a price quote or a host-separation guarantee; backup object storage is additional. Read [platform limitations](limitations.md).
 
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) add single/HA database topology, proxy resources, synchronous policy and engine-specific options. Supabase component versions are release-locked; the [current artifact inventory](supabase/components.md) can reject a catalog preset or component even when its configuration is otherwise valid.
+
 Creation acceptance starts asynchronous work. Follow cluster health and desired-generation convergence, not just the success notification; see [operations and status](clusters.md#operations-and-status).
 
 ## Cluster detail tabs
@@ -49,6 +51,9 @@ Tabs and actions are gated by engine capabilities and your permissions.
 | Users | Engine identities and roles | MongoDB |
 | Access | Engine-native access management | RabbitMQ |
 | Elastic Access | Engine-native access management | Elasticsearch |
+| Postgres access | PostgreSQL roles, databases and grants | PostgreSQL and Supabase |
+| Components | Supabase service topology/resources | Supabase |
+| Functions & SMTP | Source deployment/deletion and write-only SMTP password | Supabase |
 | Monitoring | Per-member time series and status context | All |
 | Events | Cluster activity and diagnostic messages with actor attribution | All |
 | Operations | Durable asynchronous work, progress, failure and initiating actor | All |
@@ -56,7 +61,13 @@ Tabs and actions are gated by engine capabilities and your permissions.
 
 In **Topology → Review & apply**, inspect **What will change** and expand **Merge patch to be sent** for the exact request. CPU-only changes do not move data, but platform resource changes may still restart a member. **Leaving** members remain visible during removal; active-member health ratios exclude them and show their count separately. **Upgrades** distinguishes observed running/member versions from the desired version; **not yet observed** is not deployment confirmation.
 
+PostgreSQL major upgrades (16→17 and 17→18) require **offline maintenance**, not a rolling restart: all data members stop for `pg_upgrade --link`, and database access remains unavailable through replica rebuild. Both the topology change review and upgrade confirmation describe this outage and require a recent successful backup. The in-progress warning retains the offline guidance while data members report mixed source/target majors during replica rebuild. Minor upgrades retain replica-first rolling maintenance (or downtime for a single member).
+
 **Reveal credentials** requires `cluster-credentials:read` and is audited. Revealed credentials are the engine's administrative identity, **not an application identity**. Use scoped application access: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). The response is not retained in the query cache. Keep copied passwords/URIs out of logs. Reveal also provides the public CA with copy/download controls; if clipboard access fails, use manual copy or download without losing PEM line breaks.
+
+Supabase adds a separately authorized API/dashboard credential reveal; do not expose service-role/secret keys to application browsers. [PostgreSQL access](postgres/access-and-tls.md) describes database identities and ProxySQL limits; [Supabase operations](supabase/operations.md) covers source visibility and key rotation. Functions source controls do not supply an absent runtime artifact.
+
+JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabase rotate-jwt-secret CLUSTER --yes` or POST `/api/v1/clusters/{cluster}/supabase/rotate-jwt-secret`; follow the [CLI/API rotation procedure](supabase/operations.md#credentials-and-rotation) and coordinate application key replacement.
 
 **Cluster → Backups → Backup now** requires a registered storage. Follow the operation and inventory to completion; acceptance does not mean a successful backup. Restore/clone dialogs can select a source namespace; see [backups and recovery](backups.md) for permissions and storage selection. For destructive retention choices, see [delete or suspend](clusters.md#delete-or-suspend).
 

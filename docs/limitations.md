@@ -21,7 +21,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **Deletion can leave charged storage.** Platform refusals can move verified owned volumes into [orphan inventory](operations.md#orphaned-platform-volumes); completing cluster deletion does not prove every volume is gone.
 - **No container-exec API.** Node work uses a bounded authenticated agent, not arbitrary remote SSH/exec. [Admin recovery](operations.md#recovering-local-admin-access) uses service secrets/restart or a trusted offline maintenance environment.
 - **Deployment environments are snapshots.** Secret changes require restart/redeploy; runtime YAML environment values override service secrets. Member provisioning imports infrastructure before artifact deployment. Resource updates send complete vertical/horizontal settings.
-- **Existing Zerops projects and cataloged engines only.** Karakoram does not create projects or manage other infrastructure backends; the system `core` service is outside its ownership. Public Git import requires a public repository; private source needs local deployment. Members use prebuilt artifacts.
+- **Existing targets and cataloged engines only.** Karakoram does not create infrastructure projects/clusters; Zerops is the reference backend, with experimental [Dokploy](dokploy.md) and [Nomad](nomad.md) backends. The system `core` service is outside its ownership. Public Git import requires a public repository; private source needs local deployment. Members use prebuilt artifacts.
 
 ## Namespaces and relays
 
@@ -51,3 +51,6 @@ These cross-engine constraints define the operating model; engine-specific limit
 - [MongoDB limits](mongodb/README.md#limits)
 - [RabbitMQ limits](rabbitmq/README.md#limits)
 - [Elasticsearch limits](elasticsearch/README.md#limits)
+- [PostgreSQL limits](postgres/README.md#limits): ProxySQL has protocol/driver restrictions; SQL-created users are not automatically proxy-routable. Strict synchronous HA can block writes, and major upgrades are offline and backup-gated.
+- [Supabase limits](supabase/README.md#options-and-limits): PostgreSQL 17 only; missing locked component/extension artifacts are rejected. Standard/full preset definitions do not imply available binaries. Database backups omit Storage objects and control-plane-held function/service secrets.
+- [Native artifacts](native-artifacts.md) currently target Linux amd64/Ubuntu 24.04. Development use of source-built locked artifacts needs a configured mirror; mirrors cannot add absent capabilities.

@@ -102,6 +102,7 @@ func (a *app) addCommands(root *cobra.Command) {
 	a.addAuth(root)
 	a.addConfig(root)
 	a.addElastic(root)
+	a.addSupabase(root)
 }
 func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if s.operation == "getVersion" {

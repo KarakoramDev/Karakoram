@@ -91,6 +91,12 @@ func TestScheduleAndRestoreParsing(t *testing.T) {
 	if s["name"] != "daily" || s["retainCount"] != 4 || s["type"] != "physical" {
 		t.Fatalf("%+v", s)
 	}
+	for _, typ := range []string{"full", "diff", "incr"} {
+		schedule, err := parseSchedule("postgres=0 1 * * *,type="+typ+",retain=2", "archive")
+		if err != nil || schedule["type"] != typ {
+			t.Fatalf("PostgreSQL schedule type %s: %v", typ, err)
+		}
+	}
 	for _, input := range []string{"bad", "x=bad", "x=0 1 * * *,retain=0", "x=0 1 * * *,type=unknown", "x=0 1 * * *,other=1"} {
 		if _, err = parseSchedule(input, "s3"); err == nil {
 			t.Errorf("accepted %q", input)
@@ -106,6 +112,10 @@ func TestScheduleAndRestoreParsing(t *testing.T) {
 	}
 	if _, err = restoreSource("source", "", "2026-01-01T00:00:00Z"); err != nil {
 		t.Fatal(err)
+	}
+	precise, err := restoreSource("source", "", "2026-01-01T02:17:37.112397+02:00")
+	if err != nil || precise["pitrTime"] != "2026-01-01T00:17:37.112397Z" {
+		t.Fatalf("fractional restore time lost: %v %v", precise, err)
 	}
 }
 

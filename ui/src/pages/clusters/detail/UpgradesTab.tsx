@@ -14,9 +14,10 @@ import { Badge, Callout, Card, ErrorBlock, KV, Loading } from '@/components/ui/P
 import { useToast } from '@/components/ui/Toast';
 import { OperationNotice } from '@/components/OperationNotice';
 import { useClusterContext } from './ClusterDetail';
-import { FCV_GUIDANCE, fcvObservation, latestSuccessfulBackup, maintenanceCopy, observedVersion, requireUpgradeBackup } from './detail-state';
+import { FCV_GUIDANCE, fcvObservation, latestSuccessfulBackup, maintenanceCopy, observedVersion, requireUpgradeBackup, upgradeType } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { hasCapability, supportsOperation } from '@/engines';
+import { isPostgres, postgresMajorUpgrade } from '@/engines/postgres/spec';
 
 export function UpgradesTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -42,6 +43,11 @@ export function UpgradesTab() {
   const fcv = hasCapability(provider, 'fcv');
   const currentMajor = provider?.versions.find((v) => v.version === current)?.major ?? current.split('.').slice(0, 2).join('.');
   const maintenance = maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas);
+  // Catalog selection needs one version, but maintenance must account for
+  // every observed data major while replicas rebuild behind the new writer.
+  const upgradeSource = isPostgres(cluster.spec.provider)
+    ? cluster.status.members.find((m) => (m.set === 'postgres' || ['primary', 'replica', 'standalone'].includes(m.role)) && m.version && postgresMajorUpgrade(m.version, cluster.spec.version))?.version ?? current
+    : current;
 
   const paths = useMemo(() => {
     if (!provider) return [];
@@ -131,10 +137,10 @@ export function UpgradesTab() {
         </Card>
       </div>
 
-      <Callout tone={cluster.spec.components.engine.replicas === 1 ? 'warn' : 'info'} title="Upgrade and restart availability">{maintenance}</Callout>
+      <Callout tone={cluster.spec.components.engine.replicas === 1 ? 'warn' : 'info'} title={isPostgres(cluster.spec.provider) ? 'Minor upgrade and restart availability' : 'Upgrade and restart availability'}>{maintenance}</Callout>
       {upgrading ? (
         <Callout tone="info" title="Upgrade in progress">
-          {maintenance} Watch per-member versions above and the Operations tab.
+          {maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, upgradeSource, cluster.spec.version)} Watch per-member versions above and the Operations tab.
         </Callout>
       ) : null}
 
@@ -161,7 +167,7 @@ export function UpgradesTab() {
                         {v.version}
                         {v.default ? <Badge plain tone="accent">default</Badge> : null}
                       </td>
-                      <td>{v.major === currentMajor ? 'Minor (rolling)' : fcv ? 'Major (rolling, FCV stays until raised)' : 'Major (rolling)'}</td>
+                      <td>{upgradeType(cluster.spec.provider, currentMajor, v.major, fcv)}</td>
                       <td className="small">
                         {[path.requiresBackup ? lastSuccessful ? 'recent backup required' : can('read', 'backups') ? 'successful backup required — create one first' : 'backup verification required — ask an administrator' : null, fcv && path.requiresFCV ? `FCV ≥ ${path.requiresFCV}` : null].filter(Boolean).join(' · ') || '—'}
                       </td>
@@ -213,7 +219,7 @@ export function UpgradesTab() {
       <ConfirmDialog open={target !== null} onClose={() => { setTarget(null); upgrade.reset(); submission.reset(); }} onConfirm={() => target && upgrade.mutateAsync(target)} title={`Upgrade to ${target ?? ''}`} confirmLabel="Start upgrade" busy={upgrade.isPending} error={upgrade.error}>
         <div className="stack">
           <p className="small">
-            <span className="mono">{running || 'not yet observed'}</span> → <span className="mono">{target}</span>. {maintenance}
+            <span className="mono">{running || 'not yet observed'}</span> → <span className="mono">{target}</span>. {maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, current, target ?? undefined)}
           </p>
           {targetPath?.path.requiresBackup ? (
             <Callout tone="warn">This path requires a recent backup. Last successful backup: {lastSuccessful?.name ?? 'none recorded'}. Confirm it is current enough for recovery before proceeding.</Callout>

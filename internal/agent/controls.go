@@ -90,19 +90,30 @@ func (a *nodeAgent) processAction(ctx context.Context, name, action string) erro
 	if _, ok := states[name]; !ok {
 		return errors.New("process is not configured")
 	}
-	controls := localControls{Maintenance: a.controls.Maintenance, Stopped: make(map[string]bool, len(a.controls.Stopped)+1)}
-	for process, stopped := range a.controls.Stopped {
-		controls.Stopped[process] = stopped
+	if action != "stop" {
+		c := a.config()
+		if err := (&Node{a: a, applyConfig: &c}).beforeStart(ctx, name); err != nil {
+			return err
+		}
 	}
-	if action == "stop" {
+	if err := a.setProcessStopped(name, action == "stop"); err != nil {
+		return err
+	}
+	return a.sup.action(ctx, name, action)
+}
+
+// setProcessStopped is called with applyMu held, before changing process state.
+func (a *nodeAgent) setProcessStopped(name string, stopped bool) error {
+	controls := localControls{Maintenance: a.controls.Maintenance, Stopped: make(map[string]bool, len(a.controls.Stopped)+1)}
+	for process, held := range a.controls.Stopped {
+		controls.Stopped[process] = held
+	}
+	if stopped {
 		controls.Stopped[name] = true
 	} else {
 		delete(controls.Stopped, name)
 	}
-	if err := a.saveControls(controls); err != nil {
-		return err
-	}
-	return a.sup.action(ctx, name, action)
+	return a.saveControls(controls)
 }
 func (a *nodeAgent) maintenance(enabled bool) error {
 	a.applyMu.Lock()

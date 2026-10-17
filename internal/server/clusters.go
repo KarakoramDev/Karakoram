@@ -601,6 +601,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if strings.Contains(name, "RabbitMQ") {
 		return s.rabbitmq(ctx, name, in, rc, p)
 	}
+	if strings.Contains(name, "Postgres") {
+		return s.postgres(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "Supabase") {
+		return s.supabase(ctx, name, in, rc, p)
+	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {
 		return s.failure(engine.ErrNotSupported)
@@ -744,6 +750,8 @@ func sameTLS(a, b domain.TLSConfig) bool {
 
 func operationKind(name string) string {
 	switch name {
+	case "RotateSupabaseJWTSecret":
+		return "rotate-jwt-secret"
 	case "RestartCluster":
 		return domain.OperationRestart
 	case "RotateClusterTLS":

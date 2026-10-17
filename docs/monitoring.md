@@ -58,6 +58,35 @@ Metric names, units, availability and engine-specific health interpretation live
 
 Use `rate()` for counters, not gauges; distinguish process availability from recovery coverage and application correctness.
 
+### PostgreSQL
+
+PostgreSQL members expose the following `karakoram_postgres_` metrics. Database
+series have a `database` label; ProxySQL pool series have `host` and `hostgroup`
+labels. Counters reset when their underlying PostgreSQL statistics or ProxySQL
+process resets. An unavailable SQL or Patroni endpoint omits its series rather
+than reporting a healthy zero.
+
+| Suffix | Type | Meaning |
+| --- | --- | --- |
+| `transactions_committed_total`, `transactions_rolled_back_total` | Counter | Database transactions committed or rolled back. |
+| `blocks_read_total`, `blocks_hit_total` | Counter | Database disk blocks read or found in the buffer cache. |
+| `tuples_returned_total`, `tuples_fetched_total`, `tuples_inserted_total`, `tuples_updated_total`, `tuples_deleted_total` | Counter | Database tuple activity from `pg_stat_database`. |
+| `connections`, `max_connections` | Gauge | Current database backends and the server connection limit. |
+| `database_size_bytes` | Gauge | Total size of each database. |
+| `replication_lag_bytes` | Gauge | Maximum primary-to-replica replay lag, or received-but-not-replayed WAL on a replica. Replica-local lag does not measure WAL that has not arrived. |
+| `archiver_failed_total` | Counter | Failed WAL archive attempts. |
+| `last_archived_age_seconds` | Gauge | Age of the last successful WAL archive; zero before the first archive. Correlate with archive status and backup configuration. |
+| `patroni_primary`, `patroni_timeline` | Gauge | Patroni's local primary role (1/0) and PostgreSQL timeline on HA members. |
+| `proxysql_connections_used`, `proxysql_connections_free` | Gauge | Used and idle backend pool connections. |
+| `proxysql_queries_total` | Counter | Queries sent through each backend pool. |
+
+PostgreSQL readiness means that local SQL accepts connections; proxy readiness
+means that its frontend TCP listener is open. Neither is a writable-primary or
+quorum guarantee. ProxySQL defaults to writer-only routing. Optional read/write
+split rules are deliberately simple and do not guarantee causal reads or
+classify every SQL construct. Native replication, LISTEN/NOTIFY and other
+session-sensitive protocols should connect directly to PostgreSQL.
+
 ## Events and event streams
 
 ```sh

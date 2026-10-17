@@ -192,20 +192,22 @@ type Condition struct {
 
 // MemberStatus reports the state and resource usage of one database member.
 type MemberStatus struct {
-	Name           string      `json:"name"`
-	Set            string      `json:"set"`
-	Role           string      `json:"role"`
-	State          string      `json:"state"`
-	Health         bool        `json:"health"`
-	Version        string      `json:"version"`
-	LagSeconds     float64     `json:"lagSeconds"`
-	Optime         time.Time   `json:"optime"`
-	Uptime         int64       `json:"uptime"`
-	CPUUsage       float64     `json:"cpuUsage"`
-	RAMUsage       float64     `json:"ramUsage"`
-	DiskUsage      float64     `json:"diskUsage"`
-	Agent          AgentStatus `json:"agent"`
-	PlacementGroup string      `json:"placementGroup,omitempty"`
+	Name    string `json:"name"`
+	Set     string `json:"set"`
+	Role    string `json:"role"`
+	State   string `json:"state"`
+	Health  bool   `json:"health"`
+	Version string `json:"version"`
+	// ComponentVersion is independently pinned and excluded from the database version.
+	ComponentVersion string      `json:"componentVersion,omitempty"`
+	LagSeconds       float64     `json:"lagSeconds"`
+	Optime           time.Time   `json:"optime"`
+	Uptime           int64       `json:"uptime"`
+	CPUUsage         float64     `json:"cpuUsage"`
+	RAMUsage         float64     `json:"ramUsage"`
+	DiskUsage        float64     `json:"diskUsage"`
+	Agent            AgentStatus `json:"agent"`
+	PlacementGroup   string      `json:"placementGroup,omitempty"`
 	// PublicHost is the member's public "host:port" when exposure is enabled.
 	PublicHost string `json:"publicHost,omitempty"`
 	// Resources are what the member's container currently has, as read by its
@@ -387,6 +389,8 @@ type Backup struct {
 	PBMName     string `json:"pbmName,omitempty"`
 	Provider    string `json:"provider,omitempty"`
 	Location    string `json:"location,omitempty"`
+	// Postgres records pgBackRest's immutable set and dependency metadata.
+	Postgres *PostgresBackup `json:"postgres,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -400,6 +404,19 @@ type Backup struct {
 	Size             int64      `json:"size"`
 	Error            string     `json:"error,omitempty"`
 	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+// PostgresBackup describes a consistent pgBackRest backup set.
+type PostgresBackup struct {
+	Label      string   `json:"label"`
+	Repository string   `json:"repository"`
+	Prior      string   `json:"prior,omitempty"`
+	References []string `json:"references,omitempty"`
+	WALStart   string   `json:"walStart,omitempty"`
+	WALStop    string   `json:"walStop,omitempty"`
+	SystemID   string   `json:"systemId"`
+	Version    string   `json:"version"`
+	RepoBytes  int64    `json:"repoBytes"`
 }
 
 // ProviderMatches reports whether a backup can be consumed by the target engine.

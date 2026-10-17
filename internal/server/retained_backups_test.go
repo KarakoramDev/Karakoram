@@ -18,6 +18,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -284,5 +285,49 @@ func TestRetainedRestorePreflight(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type retainedWithoutMongoIdentity struct {
+	engine.Provider
+	called bool
+}
+
+func (*retainedWithoutMongoIdentity) Name() string { return "native-test" }
+func (*retainedWithoutMongoIdentity) Describe() domain.ProviderInfo {
+	return domain.ProviderInfo{Name: "native-test"}
+}
+func (p *retainedWithoutMongoIdentity) DeleteRetainedBackup(context.Context, domain.BackupStorage, domain.Backup) error {
+	p.called = true
+	return nil
+}
+
+func TestRetainedNonMongoBackupDoesNotDeleteMongoRecoverySecret(t *testing.T) {
+	s, _, admin := testServer(t)
+	ctx := t.Context()
+	provider := &retainedWithoutMongoIdentity{}
+	if err := s.Registry.Register(provider); err != nil {
+		t.Fatal(err)
+	}
+	storage := &domain.BackupStorage{Name: "retained-native", Type: "s3", EndpointURL: "https://objects.example", Region: "region", Bucket: "bucket", Credentials: domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"}}
+	if err := s.Store.CreateBackupStorage(ctx, storage); err != nil {
+		t.Fatal(err)
+	}
+	backup := &domain.Backup{Name: "saved", Cluster: "deleted", Storage: storage.Name, Provider: provider.Name(), Location: "artifact", Phase: domain.PhaseSucceeded, RecoveryIdentity: "shared-identity"}
+	if err := s.Store.CreateBackup(ctx, backup); err != nil {
+		t.Fatal(err)
+	}
+	ref := domain.ClusterRef{Name: backup.RecoveryIdentity}
+	if err := s.Store.SetClusterSecret(ctx, ref, "users/userAdmin", []byte("mongo-owned")); err != nil {
+		t.Fatal(err)
+	}
+	if response := call(s, "DELETE", "/api/v1/clusters/deleted/backups/saved", "", admin); response.Code != http.StatusNoContent {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if !provider.called {
+		t.Fatal("provider retained deleter was not invoked")
+	}
+	if _, err := s.Store.GetClusterSecret(ctx, ref, "users/userAdmin"); err != nil {
+		t.Fatal("non-Mongo provider deleted a Mongo recovery credential", err)
 	}
 }

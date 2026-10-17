@@ -655,7 +655,7 @@ func TestPublicPortTransientFailureIsNotRejected(t *testing.T) {
 			}
 			transport := b.c.http.Transport
 			b.c.http.Transport = testRoundTripper(func(r *http.Request) (*http.Response, error) {
-				if r.Method == http.MethodDelete && r.URL.Path == "/v1/job/runtime" {
+				if r.Method == http.MethodPost && r.URL.Path == "/v1/jobs" {
 					return &http.Response{StatusCode: 503, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("temporarily unavailable"))}, nil
 				}
 				return transport.RoundTrip(r)
@@ -674,6 +674,7 @@ func TestPublicPortTransientFailureIsNotRejected(t *testing.T) {
 				t.Fatalf("transient failure lost persisted port intent: %+v %v", r, err)
 			}
 			b.c.http.Transport = transport
+			b.clock = func() time.Time { return r.Pending.Lease.Until.Add(restoreFence) }
 			awaitFake(t, b, encodeOp(*r.Pending))
 		})
 	}
@@ -739,6 +740,10 @@ func TestRestartRunningAllocationDoesNotReplaceJob(t *testing.T) {
 	b := fakeBackend(t, f, nil)
 	importFake(t, b, runtimeSpec("runtime", ""))
 	deployFake(t, b, "runtime", "")
+	original, err := b.require(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
 	before := len(f.requests())
 	op, err := b.Restart(t.Context(), "runtime")
 	if err != nil || op.ID != "" {
@@ -748,12 +753,17 @@ func TestRestartRunningAllocationDoesNotReplaceJob(t *testing.T) {
 	for _, call := range f.requests()[before:] {
 		if call.Method == http.MethodPost && strings.HasSuffix(call.Path, "/restart") {
 			restarts++
-		} else if call.Method != http.MethodGet {
+		} else if call.Method != http.MethodGet && !(call.Method == http.MethodPut && call.Path == "/v1/var/"+recordPrefix+"runtime") {
 			t.Fatalf("running restart replaced job: %+v", call)
 		}
 	}
 	if restarts != 1 {
 		t.Fatalf("allocation restart calls = %d", restarts)
+	}
+	current, err := b.require(t.Context(), "runtime")
+	if err != nil || current.RestartLease != nil || !current.Pending.Issued.Equal(original.Pending.Issued) ||
+		current.Pending.Action != original.Pending.Action || current.Pending.Phase != original.Pending.Phase {
+		t.Fatalf("allocation restart changed pending operation or retained lease: %+v %v", current, err)
 	}
 }
 

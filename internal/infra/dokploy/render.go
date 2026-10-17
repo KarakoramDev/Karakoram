@@ -166,7 +166,7 @@ func renderDockerfile(d infra.Deployment) string {
 	fmt.Fprintf(&b, "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg && rm -rf /var/lib/apt/lists/* && groupadd --gid 10001 karakoram && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash karakoram && printf 'karakoram ALL=(ALL) NOPASSWD:ALL\\n' > /etc/sudoers.d/karakoram && chmod 0440 /etc/sudoers.d/karakoram && mkdir -p %s %s && chown karakoram:karakoram %s %s\n", layout.AppDir, layout.VolumeRoot, layout.AppDir, layout.VolumeRoot)
 	fmt.Fprintf(&b, "USER %s\nWORKDIR %s\n", layout.User, layout.AppDir)
 	for _, command := range d.Runtime.Prepare {
-		fmt.Fprintf(&b, "RUN %s\n", command)
+		fmt.Fprintf(&b, "RUN %s\n", renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", command}))
 	}
 	if d.Runtime.Volume != "" {
 		fmt.Fprintf(&b, "RUN mkdir -p %s\n", renderShellQuote(layout.VolumePath(d.Runtime.Volume)))

@@ -12,6 +12,12 @@ import (
 )
 
 func destructive(op string) bool {
+	if op == "rotatePostgresRolePassword" || op == "revokePostgresPrivileges" {
+		return true
+	}
+	if op == "rotateSupabaseJWTSecret" {
+		return true
+	}
 	return strings.HasPrefix(op, "delete") || op == "invalidateElasticAPIKey" || op == "createRestore" || op == "replaceClusterMember" || op == "raiseClusterFCV" || op == "rotateSystemUser" || op == "rotateClusterTLS" || op == "rotateNamespaceToken" || op == "resetAccountPassword" || op == "cancelOperation"
 }
 

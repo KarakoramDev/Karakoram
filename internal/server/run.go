@@ -117,7 +117,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	schedules, err := scheduler.New(scheduler.Options{Store: st, Trigger: manager, Logger: logger})
+	schedules, err := scheduler.New(scheduler.Options{Store: st, Registry: registry, Trigger: manager, Logger: logger})
 	if err != nil {
 		return err
 	}

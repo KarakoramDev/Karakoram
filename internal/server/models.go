@@ -174,6 +174,7 @@ func connectionAPI(c domain.Connection) api.ConnectionSummary {
 func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api.Member {
 	usage := s.Monitoring.MemberUsage(cluster, m.Name)
 	a := api.Member{Name: m.Name, Set: m.Set, Role: memberRole(m), State: m.State, Health: m.Health, Version: &m.Version, LagSeconds: ptr(float32(m.LagSeconds)), Optime: &m.Optime, Uptime: &m.Uptime, RamUsageBytes: usage.RAMBytes, DiskUsageBytes: usage.DiskBytes, DiskTotalBytes: usage.DiskTotalBytes, PlacementGroup: &m.PlacementGroup, Agent: &api.AgentStatus{Connected: m.Agent.Healthy, ConfigVersion: &m.Agent.ConfigVersion, LastSeenAt: &m.Agent.LastSeen}}
+	a.ComponentVersion = optionalString(m.ComponentVersion)
 	if usage.CPUPercent != nil {
 		a.CpuUsage = ptr(float32(*usage.CPUPercent))
 	}
@@ -192,7 +193,9 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 
 func memberRole(m domain.MemberStatus) api.MemberRole {
 	switch m.Role {
-	case "broker", "master", "data", "master,data", "kibana", "logstash", "apm":
+	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector":
+		return api.MemberRole(m.Role)
+	case "broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
 		return api.MemberRole(m.Role)
 	}
 	if m.Role == "mongos" || m.Role == "router" {
@@ -281,6 +284,17 @@ func backupAPI(b domain.Backup) api.Backup {
 	}
 	if b.Location != "" {
 		a.Location = &b.Location
+	}
+	if metadata := b.Postgres; metadata != nil {
+		a.Postgres = &api.PostgresBackup{
+			Label: metadata.Label, Repository: metadata.Repository,
+			Prior:    optionalString(metadata.Prior),
+			WalStart: optionalString(metadata.WALStart), WalStop: optionalString(metadata.WALStop),
+			SystemId: metadata.SystemID, Version: metadata.Version, RepoBytes: metadata.RepoBytes,
+		}
+		if len(metadata.References) > 0 {
+			a.Postgres.References = &metadata.References
+		}
 	}
 	return a
 }

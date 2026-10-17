@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted PSMDB/PBM, RabbitMQ and Elasticsearch/Elastic Stack orchestration across existing Zerops projects through namespaces, without Kubernetes. The control plane remains in its own project; remote projects use outbound relays. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted MongoDB, RabbitMQ, Elasticsearch/Elastic Stack, PostgreSQL and modular Supabase orchestration through namespaces, without Kubernetes. Zerops is the reference backend; Dokploy and Nomad are experimental. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -39,6 +39,9 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0031](0031-engine-component-model.md) | Ordered component definitions, per-component resources and engine-owned lifecycle callbacks |
 | [0032](0032-dokploy-backend.md) | Experimental Dokploy/Swarm backend: alias DNS, built member images, pinned volumes and host anti-affinity |
 | [0033](0033-nomad-backend.md) | Experimental Nomad backend: isolated exec rootfs, routed CNI, native service discovery and fenced node-local volumes |
+| [0034](0034-postgres-engine.md) | Percona PostgreSQL, Patroni/etcd HA, ProxySQL, native access and pgBackRest recovery |
+| [0035](0035-supabase-engine.md) | Modular native Supabase over the PostgreSQL core, Envoy gateway and explicit artifact capabilities |
+| [0036](0036-native-artifacts.md) | Embedded native artifact lock, mirror precedence, source provenance and signed-release staging |
 
 ## References and verification
 
@@ -46,7 +49,8 @@ Use the [verification guide](../verification.md) for automated test coverage and
 
 Engine operating guides: [MongoDB](../mongodb/README.md), [replica sets](../mongodb/replica-sets.md)
 and [sharding](../mongodb/sharding.md), [RabbitMQ](../rabbitmq/README.md),
-and [Elasticsearch and Elastic Stack](../elasticsearch/README.md).
+and [Elasticsearch and Elastic Stack](../elasticsearch/README.md), [PostgreSQL](../postgres/README.md),
+and [Supabase](../supabase/README.md).
 
 Primary references: [Zerops API](https://docs.zerops.io/references/api.md), [Local Storage](https://docs.zerops.io/local-storage/overview.md), [public networking](https://docs.zerops.io/references/networking/public-access.md), [Percona system users](https://docs.percona.com/percona-operator-for-mongodb/latest/system-users.html), [PBM](https://docs.percona.com/percona-backup-mongodb/latest/), and [OpenEverest provider runtime](https://github.com/openeverest/openeverest/blob/main/provider-runtime/controller/interface.go).
 

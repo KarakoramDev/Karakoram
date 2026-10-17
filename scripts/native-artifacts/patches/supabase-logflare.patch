@@ -1,0 +1,34 @@
+diff --git a/config/runtime.exs b/config/runtime.exs
+--- a/config/runtime.exs
++++ b/config/runtime.exs
+@@ -705,3 +705,9 @@
+          :spool,
+          Keyword.merge(Application.get_env(:logflare, :spool, []), spool_overrides)
+ end
++
++# Verify the upstream database CA through the local, TLS-transparent forwarder.
++if ca_file = System.get_env("KARAKORAM_DB_CA_FILE") do
++  config :logflare, Logflare.Repo,
++    ssl: [verify: :verify_peer, cacertfile: Path.absname(ca_file), server_name_indication: :disable]
++end
+diff --git a/lib/logflare/backends/adaptor/postgres_adaptor/shared_repo.ex b/lib/logflare/backends/adaptor/postgres_adaptor/shared_repo.ex
+--- a/lib/logflare/backends/adaptor/postgres_adaptor/shared_repo.ex
++++ b/lib/logflare/backends/adaptor/postgres_adaptor/shared_repo.ex
+@@ -47,6 +47,17 @@
+     opts =
+       if Logflare.SingleTenant.single_tenant?() do
+         opts ++ [socket_options: config[:socket_options]]
++      else
++        opts
++      end
++
++    opts =
++      if ca_file = System.get_env("KARAKORAM_DB_CA_FILE") do
++        Keyword.put(opts, :ssl,
++          verify: :verify_peer,
++          cacertfile: Path.absname(ca_file),
++          server_name_indication: :disable
++        )
+       else
+         opts
+       end

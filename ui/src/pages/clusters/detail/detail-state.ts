@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
+import { isPostgres, POSTGRES_OFFLINE_UPGRADE, postgresMajorUpgrade } from '../../../engines/postgres/spec.ts';
+
 export function knownHost(name: string): boolean {
   return Boolean(name.trim()) && !['unknown', 'unavailable', 'pending'].includes(name.trim().toLowerCase());
 }
@@ -14,7 +16,11 @@ export function observedVersion(status: { version?: string; members: { version?:
   return versions.length ? versions.join(', ') : undefined;
 }
 
-export function maintenanceCopy(provider: string, replicas: number): string {
+export function maintenanceCopy(provider: string, replicas: number, current?: string, target?: string): string {
+  if (isPostgres(provider) && current && target && postgresMajorUpgrade(current, target)) return POSTGRES_OFFLINE_UPGRADE;
+  if (provider === 'postgres' || provider === 'supabase') return replicas === 1
+    ? 'Downtime: single-member PostgreSQL maintenance interrupts database access until it returns.'
+    : 'PostgreSQL replicas restart first, followed by a primary switchover. Failover briefly interrupts writes; availability requires the etcd voting quorum.';
   if (provider === 'elasticsearch') {
     const availability = replicas === 1
       ? 'Downtime: restarting or upgrading the only Elasticsearch data node interrupts service until it returns.'
@@ -24,6 +30,11 @@ export function maintenanceCopy(provider: string, replicas: number): string {
   if (replicas === 1) return 'Downtime: the only member becomes unavailable during upgrade or restart. Applications cannot use the database until it returns.';
   const neutral = 'Members restart one at a time; the cluster stays available if a majority/quorum remains.';
   return provider === 'psmdb' ? `${neutral} Secondaries restart first; a primary failover can briefly pause writes.` : neutral;
+}
+
+export function upgradeType(provider: string, currentMajor: string, targetMajor: string, fcv: boolean): string {
+  if (isPostgres(provider) && postgresMajorUpgrade(currentMajor, targetMajor)) return 'Major (OFFLINE maintenance)';
+  return targetMajor === currentMajor ? 'Minor (rolling)' : fcv ? 'Major (rolling, FCV stays until raised)' : 'Major (rolling)';
 }
 
 export const FCV_GUIDANCE = 'After a major upgrade, FCV keeps compatibility with the previous major until raised. Raising it enables new on-disk features. Binary downgrades are not supported, even before FCV is raised. Confirm backups are current first.';
@@ -99,7 +110,7 @@ export function psmdbConnect(uri: string): { shell: string; driver: string } {
 
 export function credentialDatabaseLabel(provider: string, credentials: { database: string }[]): string | undefined {
   if (!credentials.some((c) => Boolean(c.database))) return undefined;
-  const labels: Record<string, string> = { psmdb: 'Auth database', rabbitmq: 'Virtual host' };
+  const labels: Record<string, string> = { psmdb: 'Auth database', rabbitmq: 'Virtual host', postgres: 'Database', supabase: 'Database' };
   return labels[provider] ?? 'Context';
 }
 

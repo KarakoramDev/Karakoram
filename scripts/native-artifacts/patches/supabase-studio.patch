@@ -1,0 +1,35 @@
+diff --git a/apps/studio/next.config.ts b/apps/studio/next.config.ts
+--- a/apps/studio/next.config.ts
++++ b/apps/studio/next.config.ts
+@@ -57,6 +57,9 @@ const nextConfig = {
+   assetPrefix: getAssetPrefix(),
+   output: 'standalone',
+   experimental: {
++    cpus: 2,
++    webpackMemoryOptimizations: true,
++    webpackBuildWorker: true,
+     clientRouterFilter: false,
+     turbopackFileSystemCacheForBuild: false,
+   },
+@@ -200,6 +203,21 @@ const nextConfig = {
+       }),
+   transpilePackages: ['ui', 'ui-patterns', 'common', 'shared-data', 'api-types', 'icons'],
+   serverExternalPackages: ['libpg-query'],
++  // Preserve the upstream Turbopack raw-text rules in the bounded native build.
++  webpack(config) {
++    config.cache = false
++    config.parallelism = 1
++    config.resolve.alias = {
++      ...config.resolve.alias,
++      '@/public/deno/edge-runtime.d.ts$': `${process.cwd()}/public/deno/edge-runtime.d.ts`,
++      '@/public/deno/lib.deno.d.ts$': `${process.cwd()}/public/deno/lib.deno.d.ts`,
++    }
++    config.module.rules.push({
++      test: [/\.md$/, /(?:edge-runtime|lib\.deno)\.d\.ts$/],
++      use: 'raw-loader',
++    })
++    return config
++  },
+   turbopack: {
+     rules: {
+       '*.md': {

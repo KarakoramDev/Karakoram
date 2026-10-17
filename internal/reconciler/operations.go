@@ -38,7 +38,7 @@ type operationFailureCleanup interface {
 }
 
 func (m *Manager) failQueueOperation(p engine.Provider, op *domain.Operation, err error) bool {
-	if !m.operationFailure(op, err) {
+	if !m.operationFailureSince(op, err, m.operationStart(p, op)) {
 		return false
 	}
 	if cleanup, ok := p.(operationFailureCleanup); ok && cleanup.SupportsFailureCleanup(op) {
@@ -84,7 +84,23 @@ func (m *Manager) operationTimeout(op *domain.Operation) time.Duration {
 	return DefaultOperationTimeout
 }
 
+func (m *Manager) operationStart(p engine.Provider, op *domain.Operation) time.Time {
+	if _, ok := p.(engine.OperationClaimPolicy); ok {
+		if op.StartedAt != nil {
+			return *op.StartedAt
+		}
+		// An opt-in provider may reserve Sync for arbitrarily long maintenance.
+		// Queue wait is not execution time, even after maintenance finishes.
+		return m.opts.Context.Clock.Now()
+	}
+	return op.CreatedAt
+}
+
 func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
+	return m.operationFailureSince(op, err, op.CreatedAt)
+}
+
+func (m *Manager) operationFailureSince(op *domain.Operation, err error, start time.Time) bool {
 	if err != nil {
 		op.Message = boundedMessage(err.Error(), 1024)
 		op.LastError = op.Message
@@ -94,7 +110,7 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 	}
 	var field *domain.FieldError
 	permanent := errors.As(err, &field) || errors.Is(err, engine.ErrInvalid) || errors.Is(err, engine.ErrNotSupported)
-	expired := !m.opts.Context.Clock.Now().Before(op.CreatedAt.Add(m.operationTimeout(op)))
+	expired := !m.opts.Context.Clock.Now().Before(start.Add(m.operationTimeout(op)))
 	if !permanent && !expired && op.Failures < m.opts.OperationRetryLimit {
 		return false
 	}
@@ -121,7 +137,7 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 // trackingOperations do not own the imperative queue: ordinary Sync converges
 // desired state while these records observe the target generation. Failed tracking
 // does not discard desired state or stop eventual cleanup.
-func (m *Manager) trackingOperations(ctx context.Context, c *domain.Cluster, cause error, convergenceAttempted bool) error {
+func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *domain.Cluster, cause error, convergenceAttempted bool) error {
 	ops, err := m.opts.Store.ListOperations(ctx, c.Ref(), domain.PhasePending, domain.PhaseRunning)
 	if err != nil {
 		return err
@@ -131,7 +147,8 @@ func (m *Manager) trackingOperations(ctx context.Context, c *domain.Cluster, cau
 		op := &ops[i]
 		if !domain.IsConvergenceOperation(op.Kind) {
 			// Expire Pending work even if ordinary convergence keeps failing before claim.
-			if op.Phase == domain.PhasePending && m.operationFailure(op, nil) {
+			_, deferred := p.(engine.OperationClaimPolicy)
+			if op.Phase == domain.PhasePending && !deferred && m.operationFailure(op, nil) {
 				if err = m.opts.Store.UpdateOperation(ctx, op); err != nil {
 					return err
 				}

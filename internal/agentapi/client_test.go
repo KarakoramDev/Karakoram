@@ -10,10 +10,14 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -167,5 +171,143 @@ func TestRejectUnpinnedCA(t *testing.T) {
 	defer client.Close()
 	if _, err := client.Status(context.Background()); err == nil {
 		t.Fatal("untrusted certificate accepted")
+	}
+}
+
+func TestLargeMemberConfigDoesNotUseActionResponseLimit(t *testing.T) {
+	spec := json.RawMessage(`{"sources":"` + strings.Repeat("x", 17<<20) + `"}`)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/agent/v1/config" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(MemberConfig{Engine: "supabase", EngineSpec: spec})
+	}))
+	defer server.Close()
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	client, err := NewClient(ClientOptions{BaseURL: server.URL, Token: "member-token", CAPEM: ca})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	config, err := client.Config(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.EngineSpec) != len(spec) {
+		t.Fatal("large sealed function payload was truncated")
+	}
+}
+
+func TestInstanceClientPinsTransportWithoutChangingTrust(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !AuthenticateBearer(r, "member-token") || !strings.HasPrefix(r.Host, "example.com:") {
+			t.Error("instance lost logical hostname or bearer authentication")
+		}
+		w.Write([]byte(`{"configVersion":7}`))
+	}))
+	defer server.Close()
+	_, port, err := net.SplitHostPort(server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	var addresses []string
+	opts := ClientOptions{BaseURL: "https://example.com:" + port, Token: "member-token", CAPEM: ca,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			addresses = append(addresses, address)
+			return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+		},
+	}
+	client, err := NewClient(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	for _, host := range []string{"192.0.2.11", "2001:db8::11", "proxy.2.taskid"} {
+		instance, err := client.ForInstance(host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, err := instance.Status(t.Context())
+		if err != nil || status.ConfigVersion != 7 {
+			t.Fatalf("pinned status failed: %+v %v", status, err)
+		}
+		if err := instance.Engine(t.Context(), "postgres", "status", struct{}{}, nil); err != nil {
+			t.Fatal(err)
+		}
+		instance.Close()
+		for _, address := range addresses[len(addresses)-2:] {
+			if address != net.JoinHostPort(host, port) {
+				t.Fatalf("namespace transport did not receive instance address: %q", address)
+			}
+		}
+	}
+	if _, err := client.Status(t.Context()); err != nil || addresses[len(addresses)-1] != net.JoinHostPort("example.com", port) {
+		t.Fatalf("pinning changed the shared logical client: %v %v", addresses, err)
+	}
+	for _, host := range []string{"", "https://proxy", "proxy:9443", "proxy with spaces", "proxy/path"} {
+		if _, err := client.ForInstance(host); err == nil {
+			t.Fatalf("invalid address accepted: %q", host)
+		}
+	}
+	opts.BaseURL = "https://untrusted.invalid:" + port
+	untrusted, err := NewClient(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer untrusted.Close()
+	pinned, err := untrusted.ForInstance("192.0.2.11")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pinned.Close()
+	if _, err := pinned.Status(t.Context()); err == nil {
+		t.Fatal("instance pinning bypassed logical member hostname verification")
+	}
+}
+
+func TestInstanceClientUsesAuthorizedNamespaceSelector(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != "example.com:9443" || !AuthenticateBearer(r, "member-token") {
+			t.Error("instance selector changed logical TLS/HTTP identity")
+		}
+		w.Write([]byte(`{"configVersion":9}`))
+	}))
+	defer server.Close()
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	var selectors []string
+	client, err := NewClient(ClientOptions{BaseURL: "https://example.com:9443", Token: "member-token", CAPEM: ca,
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			t.Error("instance bypassed namespace selector")
+			return nil, errors.New("unexpected logical dial")
+		},
+		DialInstanceContext: func(ctx context.Context, network, logical, instance string) (net.Conn, error) {
+			if logical != "example.com:9443" {
+				t.Errorf("lost logical namespace target: %q", logical)
+			}
+			selectors = append(selectors, instance)
+			return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	for _, host := range []string{"192.0.2.11", "2001:db8::11", "proxy.2.taskid"} {
+		instance, err := client.ForInstance(host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status, err := instance.Status(t.Context()); err != nil || status.ConfigVersion != 9 {
+			t.Fatalf("authorized status failed: %+v %v", status, err)
+		}
+		if err := instance.Engine(t.Context(), "postgres", "status", struct{}{}, nil); err != nil {
+			t.Fatal(err)
+		}
+		instance.Close()
+		if selectors[len(selectors)-1] != host || selectors[len(selectors)-2] != host {
+			t.Fatal("both transports must carry the exact instance selector", selectors)
+		}
 	}
 }

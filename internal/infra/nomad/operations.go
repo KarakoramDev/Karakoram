@@ -20,6 +20,38 @@ import (
 
 const opPrefix = "nomad:v1:"
 const startupWindow = 15 * time.Minute
+const operationLeaseDuration = 120 * time.Second
+const operationRequestTimeout = 10 * time.Second
+
+type operationLease struct {
+	Owner string    `json:"owner"`
+	Until time.Time `json:"until"`
+}
+
+type operationAttempt struct{ uncertainMutation bool }
+type operationAttemptKey struct{}
+
+func operationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	work, cancel := context.WithTimeout(ctx, operationRequestTimeout)
+	return context.WithValue(work, operationAttemptKey{}, &operationAttempt{}), cancel
+}
+
+// Only an unacknowledged write needs delivery quarantine. In particular, a
+// failed observation after acknowledged writes cannot still change Nomad.
+func operationMutation(ctx context.Context, request func() error) error {
+	attempt, _ := ctx.Value(operationAttemptKey{}).(*operationAttempt)
+	if attempt == nil {
+		return request()
+	}
+	previous := attempt.uncertainMutation
+	attempt.uncertainMutation = true
+	err := request()
+	var apiErr *APIError
+	acknowledged := err == nil || errors.Is(err, infra.ErrConflict) ||
+		errors.As(err, &apiErr) && apiErr.Status >= 400 && apiErr.Status < 500
+	attempt.uncertainMutation = previous || !acknowledged
+	return err
+}
 
 type operation struct {
 	Action         string            `json:"action"`
@@ -34,12 +66,15 @@ type operation struct {
 	JobVersion     uint64            `json:"jobVersion,omitempty"`
 	JobModifyIndex uint64            `json:"jobModifyIndex,omitempty"`
 	Message        string            `json:"message,omitempty"`
+	Lease          *operationLease   `json:"lease,omitempty"`
 }
 
 func encodeOp(o operation) infra.Op {
 	if o.Issued.IsZero() {
 		o.Issued = time.Now().UTC()
 	}
+	// Handles identify the operation, not a particular poll's lease.
+	o.Lease = nil
 	data, _ := json.Marshal(o)
 	return infra.Op{ID: opPrefix + base64.RawURLEncoding.EncodeToString(data), Kind: o.Action, Hostname: o.Hostname, ServiceID: o.RecordID, Services: o.Services}
 }
@@ -85,16 +120,147 @@ func decodeOp(op infra.Op) (operation, error) {
 	return o, nil
 }
 func (b *Backend) begin(ctx context.Context, r *record, action string) (infra.Op, error) {
-	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping"}
-	// Persist the pending specification before stopping; polling can resume after a restart.
-	r.Pending = &o
-	if err := b.save(ctx, r); err != nil {
+	work, cancel := operationContext(ctx)
+	defer cancel()
+	if b.operationLeaseBlocked(r) {
+		return infra.Op{}, infra.ErrConflict
+	}
+	job, observed, err := b.operationJob(work, r)
+	if err != nil && !errors.Is(err, infra.ErrNotFound) {
 		return infra.Op{}, err
 	}
-	if err := ignoreNotFound(b.c.delete(ctx, "/v1/job/"+r.Hostname, nil, nil)); err != nil {
+	lease, err := b.newOperationLease()
+	if err != nil {
 		return infra.Op{}, err
+	}
+	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease}
+	// Claim exclusion and persist the pending specification before stopping.
+	r.Pending = &o
+	if err = b.save(work, r); err != nil {
+		return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
+	}
+	if job != nil {
+		if err = b.stopOperationJob(work, r, job, observed); err != nil {
+			return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
+		}
+	}
+	if err = b.releaseOperationLease(work, r); err != nil {
+		return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
 	}
 	return encodeOp(o), nil
+}
+
+// A failed/abandoned poll may still have a request in delivery. Even the same
+// instance waits until Until plus the delivery margin before retrying. A fully
+// acknowledged poll releases its lease immediately instead.
+func (b *Backend) operationLeaseBlocked(r *record) bool {
+	return r.RestartLease != nil && b.now().Before(r.RestartLease.Until.Add(restoreFence)) ||
+		r.Pending != nil && r.Pending.Lease != nil && b.now().Before(r.Pending.Lease.Until.Add(restoreFence))
+}
+
+func (b *Backend) newOperationLease() (*operationLease, error) {
+	if b.instance == "" {
+		id, err := newID()
+		if err != nil {
+			return nil, err
+		}
+		b.instance = id
+	}
+	return &operationLease{Owner: b.instance, Until: b.now().UTC().Add(operationLeaseDuration)}, nil
+}
+
+func (b *Backend) operationLeaseUsable(r *record) bool {
+	return b.leaseUsable(r.Pending.Lease)
+}
+
+func (b *Backend) leaseUsable(lease *operationLease) bool {
+	return lease != nil && lease.Owner == b.instance && !b.now().Add(operationRequestTimeout).After(lease.Until)
+}
+
+func (b *Backend) releaseOperationLease(ctx context.Context, r *record) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	r.Pending.Lease = nil
+	return b.save(ctx, r)
+}
+
+// Read-only failures and definitive mutation rejections have no delivery debt.
+func (b *Backend) releaseFailedOperation(ctx context.Context, attempted *record, ours *operationLease, failure error) error {
+	if attempt, _ := ctx.Value(operationAttemptKey{}).(*operationAttempt); attempt != nil && attempt.uncertainMutation {
+		return failure
+	}
+	return errors.Join(failure, b.releaseExactOperationLease(ctx, attempted, ours))
+}
+
+// Release only the exact acquired claim from fresh durable state, never the
+// failed attempt's unsaved phase/spec. Direct restarts keep Pending untouched.
+func (b *Backend) releaseExactOperationLease(ctx context.Context, attempted *record, ours *operationLease) error {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationRequestTimeout)
+	defer cancel()
+	current, err := b.load(cleanup, attempted.Hostname)
+	if err != nil {
+		return err
+	}
+	if current == nil || current.ID != attempted.ID {
+		return nil
+	}
+	restart := attempted.RestartLease != nil && attempted.RestartLease.Owner == ours.Owner && attempted.RestartLease.Until.Equal(ours.Until)
+	var lease *operationLease
+	if restart {
+		lease = current.RestartLease
+	} else {
+		if current.Pending == nil || attempted.Pending == nil || !current.Pending.Issued.Equal(attempted.Pending.Issued) {
+			return nil
+		}
+		lease = current.Pending.Lease
+	}
+	if lease == nil || lease.Owner != b.instance || lease.Owner != ours.Owner || !lease.Until.Equal(ours.Until) {
+		return nil
+	}
+	if restart {
+		current.RestartLease = nil
+	} else {
+		current.Pending.Lease = nil
+	}
+	return b.save(cleanup, current)
+}
+
+// Preserve the exact server jobspec (including integer indices) for an atomic
+// stop update; ownership is checked before either issuance or polling can stop.
+func (b *Backend) operationJob(ctx context.Context, r *record) (map[string]json.RawMessage, observedJob, error) {
+	var raw json.RawMessage
+	var observed observedJob
+	if _, err := b.c.get(ctx, "/v1/job/"+r.Hostname, nil, &raw); err != nil {
+		return nil, observed, err
+	}
+	if err := json.Unmarshal(raw, &observed); err != nil {
+		return nil, observed, silentFailure("cannot decode job ownership")
+	}
+	if !b.ownsJob(r, observed) {
+		return nil, observed, jobOwnershipConflict()
+	}
+	var job map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &job); err != nil {
+		return nil, observed, silentFailure("cannot decode job specification")
+	}
+	return job, observed, nil
+}
+
+func (b *Backend) stopOperationJob(ctx context.Context, r *record, job map[string]json.RawMessage, observed observedJob) error {
+	if !b.operationLeaseUsable(r) {
+		return infra.ErrConflict
+	}
+	job["Stop"] = json.RawMessage("true")
+	err := operationMutation(ctx, func() error {
+		return b.c.post(ctx, "/v1/jobs", nil, map[string]any{
+			"Job": job, "EnforceIndex": true, "JobModifyIndex": observed.JobModifyIndex,
+		}, nil)
+	})
+	if errors.Is(err, infra.ErrConflict) {
+		return nil // The exact observed job changed; re-observe on the next poll.
+	}
+	return err
 }
 func expired(o operation) infra.OpState {
 	return infra.OpState{Done: true, Failed: o.Action != "import", Expired: true, Status: "expired", Message: "operation outcome is no longer known"}
@@ -196,24 +362,86 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		state.Message = current.Message
 		return state, nil
 	}
+	if b.operationLeaseBlocked(r) {
+		state.Message = "waiting for lifecycle operation lease"
+		return state, nil
+	}
+	work, cancel := operationContext(ctx)
+	defer cancel()
+	lease, err := b.newOperationLease()
+	if err != nil {
+		return state, err
+	}
+	current.Lease = lease
+	if err = b.save(work, r); err != nil {
+		if errors.Is(err, infra.ErrConflict) {
+			return state, nil // Another process acquired or advanced the operation.
+		}
+		return state, b.releaseFailedOperation(work, r, lease, err)
+	}
+	state, err = b.advanceOperation(work, r, o, state)
+	if err == nil && !(o.Action == "delete" && state.Done) {
+		err = b.releaseOperationLease(work, r)
+	}
+	if err != nil {
+		err = b.releaseFailedOperation(work, r, lease, err)
+	}
+	return state, err
+}
+
+func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, state infra.OpState) (infra.OpState, error) {
+	current := r.Pending
 	as, err := b.allocations(ctx, r.Hostname)
 	if err != nil {
 		return state, err
 	}
 	if current.Phase == "stopping" {
+		// The CAS-saved restoration claim survives process reconstruction and
+		// every superseding save. Absence is not final while its POST can land.
+		if b.restorationFenced(r) {
+			state.Message = "waiting for restoration registration fence"
+			return state, nil
+		}
+		job, observed, jobErr := b.operationJob(ctx, r)
+		if jobErr != nil && !errors.Is(jobErr, infra.ErrNotFound) {
+			return state, jobErr
+		}
+		if jobErr == nil {
+			if observed.Meta["karakoram.operation"] == current.Issued.Format(time.RFC3339Nano) {
+				// A stale stopping poll must never revoke its own successor,
+				// even when a previous poll's phase-save response was lost.
+				latest, err := b.load(ctx, r.Hostname)
+				if latest != nil && latest.Pending != nil {
+					state.Status = latest.Pending.Phase
+				}
+				return state, err
+			}
+			if !observed.Stop {
+				state.Message = "waiting for previous job to stop"
+				return state, b.stopOperationJob(ctx, r, job, observed)
+			}
+		}
 		for _, a := range as {
 			if !allocationTerminal(a) {
 				state.Message = "waiting for previous allocations to stop"
-				// A persisted stop may precede its HTTP request after a process restart.
-				err = ignoreNotFound(b.c.delete(ctx, "/v1/job/"+r.Hostname, nil, nil))
+				return state, nil
+			}
+		}
+		if !b.operationLeaseUsable(r) {
+			return state, nil
+		}
+		if job != nil {
+			// Purge is safe only while registration is excluded by our lease,
+			// after an observed stop and terminal allocations.
+			if err = operationMutation(ctx, func() error {
+				return ignoreNotFound(b.c.delete(ctx, "/v1/job/"+r.Hostname, query("purge", "true"), nil))
+			}); err != nil {
 				return state, err
 			}
 		}
-		if err = ignoreNotFound(b.c.delete(ctx, "/v1/job/"+r.Hostname, query("purge", "true"), nil)); err != nil {
-			return state, err
-		}
 		if o.Action == "delete" {
-			if err = b.finishDelete(ctx, r); err != nil {
+			deleted, err := b.finishDelete(ctx, r)
+			if err != nil || !deleted {
 				return state, err
 			}
 			state.Done = true
@@ -271,7 +499,12 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 				EvalID         string
 				JobModifyIndex uint64
 			}
-			if err = b.c.post(ctx, "/v1/jobs", nil, job, &response); err != nil {
+			if !b.operationLeaseUsable(r) {
+				return state, nil
+			}
+			if err = operationMutation(ctx, func() error {
+				return b.c.post(ctx, "/v1/jobs", nil, job, &response)
+			}); err != nil {
 				return state, err
 			}
 			if response.EvalID == "" {

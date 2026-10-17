@@ -16,6 +16,7 @@ function object(value: unknown): Record<string, unknown> {
 export function resourceMinimums(provider: string, topology: Schemas['ProviderTopology'] | undefined, component: string): ResourceMinimums {
   const fallback = { ...engineRules(provider).resourceMinimums };
   if (provider === 'elasticsearch' && component in MIN_RAM) fallback.ram = MIN_RAM[component as ComponentName];
+  if ((provider === 'postgres' || provider === 'supabase') && component !== 'engine') { fallback.disk = 0; fallback.ram = 0.25; }
   const schema = object(topology?.componentSchemas[component]);
   const resources = object(object(schema.properties).resources);
   const properties = object(resources.properties);

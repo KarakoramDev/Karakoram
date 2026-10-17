@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -32,7 +33,13 @@ type record struct {
 	Desired                                                       string
 	Deployment                                                    *storedDeployment
 	Pending                                                       *operation
-	Index                                                         uint64 `json:"-"`
+	// Direct allocation restarts share exclusion without replacing Pending,
+	// including deployed legacy records that have no pending-operation handle.
+	RestartLease *operationLease `json:",omitempty"`
+	// Last restoration claim; superseding lifecycle saves must preserve it.
+	// Ordinary registrations use Pending.Started for their observation grace.
+	RegistrationIssued time.Time `json:",omitempty"`
+	Index              uint64    `json:"-"`
 }
 type variable struct {
 	Path, Namespace string
@@ -51,14 +58,18 @@ func (b *Backend) readVariable(ctx context.Context, path string) (variable, erro
 }
 func (b *Backend) writeVariable(ctx context.Context, v *variable) error {
 	var out variable
-	err := b.c.put(ctx, "/v1/var/"+v.Path, query("cas", strconv.FormatUint(v.ModifyIndex, 10)), map[string]any{"Path": v.Path, "Namespace": b.target.ID, "Items": v.Items}, &out)
+	err := operationMutation(ctx, func() error {
+		return b.c.put(ctx, "/v1/var/"+v.Path, query("cas", strconv.FormatUint(v.ModifyIndex, 10)), map[string]any{"Path": v.Path, "Namespace": b.target.ID, "Items": v.Items}, &out)
+	})
 	if err == nil {
 		v.ModifyIndex = out.ModifyIndex
 	}
 	return err
 }
 func (b *Backend) removeVariable(ctx context.Context, path string, index uint64) error {
-	err := b.c.delete(ctx, "/v1/var/"+path, query("cas", strconv.FormatUint(index, 10)), nil)
+	err := operationMutation(ctx, func() error {
+		return b.c.delete(ctx, "/v1/var/"+path, query("cas", strconv.FormatUint(index, 10)), nil)
+	})
 	if errors.Is(err, infra.ErrNotFound) {
 		return nil
 	}

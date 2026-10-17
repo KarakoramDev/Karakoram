@@ -4,6 +4,7 @@
 import type { Schemas } from '@/api/client';
 import { managementIsPublic, PLUGIN_GROUPS, selectedPluginGroups } from '../../../engines/rabbitmq/helpers.ts';
 import { readOptions } from '../../../engines/elasticsearch/spec.ts';
+import { configurationReviewRows as postgresReviewRows, isPostgres, object } from '../../../engines/postgres/spec.ts';
 import { engineRules } from './engine.ts';
 import { componentEntries } from './validation.ts';
 
@@ -17,7 +18,7 @@ export function totalFootprint(spec: Schemas['ClusterSpec']) {
     totals.maxCpu += count * component.resources.maxCpu;
     totals.minRam += count * component.resources.minRam;
     totals.maxRam += count * component.resources.maxRam;
-    if (name !== 'router') {
+    if (name !== 'router' && (!isPostgres(spec.provider) || name === 'engine')) {
       totals.volumes += count;
       totals.minDisk += count * component.resources.minDisk;
       totals.maxDisk += count * component.resources.maxDisk;
@@ -35,6 +36,7 @@ export function exposureSummary(spec: Schemas['ClusterSpec']): string {
   const database = exposure?.public
     ? `Public database (${exposure.ipType}), allowlist: ${(exposure.allowlist ?? []).join(', ') || 'missing (required)'}`
     : 'Database private to the selected Zerops project';
+  if (spec.provider === 'supabase') return `${database}; Gateway HTTPS ${object(spec.engineOptions?.gateway).publicHttps ? 'public (authentication required, independent of database allowlist)' : 'private'}`;
   if (spec.provider !== 'elasticsearch') return database;
   const options = readOptions(spec);
   const routes = (['kibana', 'apm'] as const).filter((name) => options[name].public);
@@ -50,6 +52,7 @@ export function exposureReviewRows(spec: Schemas['ClusterSpec']): [string, strin
 }
 
 export function configurationReviewRows(spec: Schemas['ClusterSpec']): [string, string][] {
+  if (isPostgres(spec.provider)) return postgresReviewRows(spec);
   const rows: [string, string][] = [['Engine configuration', spec.engineConfig?.trim() || 'Provider defaults']];
   if (spec.provider === 'rabbitmq') {
     const selected = selectedPluginGroups(spec.engineOptions);

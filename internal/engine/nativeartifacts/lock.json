@@ -1,0 +1,298 @@
+[
+  {
+    "name": "proxysql",
+    "version": "3.0.11",
+    "file": "proxysql_3.0.11-ubuntu24_amd64.deb",
+    "sha256": "cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff",
+    "size": 37952856,
+    "upstreamURL": "https://github.com/sysown/proxysql/releases/download/v3.0.11/proxysql_3.0.11-ubuntu24_amd64.deb",
+    "license": "GPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/sysown/proxysql",
+      "commit": "7c91137a465454dfc1a62b56f8c188c1ce59c130"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "supabase-auth",
+    "version": "2.197.0",
+    "file": "auth-v2.197.0-amd64.tar.xz",
+    "sha256": "b5c2991d1df760c9b099c1c2395a94bd1c2f83ed58901934921997179dc9f7ea",
+    "size": 9897464,
+    "upstreamURL": "https://github.com/supabase/auth/releases/download/v2.197.0/auth-v2.197.0-amd64.tar.xz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/supabase/auth",
+      "commit": "4eee58f296d9698a1c2c0ae14d7a0b379c7622d3"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "supabase-rest",
+    "version": "14.18",
+    "file": "postgrest-v14.18-linux-static-x86-64.tar.xz",
+    "sha256": "98de1c0be7787aea5f5e11a25f303ea0077634d6fc1000b687bfa825fd27d299",
+    "size": 4364832,
+    "upstreamURL": "https://github.com/PostgREST/postgrest/releases/download/v14.18/postgrest-v14.18-linux-static-x86-64.tar.xz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/PostgREST/postgrest",
+      "commit": "6fafa601d13b15f9875e3a70e733ddd6f38f633e"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "supabase-gateway",
+    "version": "1.39.1",
+    "file": "envoy-1.39.1-linux-x86_64",
+    "sha256": "002c6e1c69ed0fa0ea381887247cadadfaec9481375fa8d8d2b1731eeabf40b8",
+    "size": 105039832,
+    "upstreamURL": "https://github.com/envoyproxy/envoy/releases/download/v1.39.1/envoy-1.39.1-linux-x86_64",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/envoyproxy/envoy",
+      "commit": "b579d07d3ad7ee11d32b105e91a5a39ad24718d7"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "supabase-vector",
+    "version": "0.53.0",
+    "file": "vector-0.53.0-x86_64-unknown-linux-gnu.tar.gz",
+    "sha256": "5460f93310eb59cc9e7ee7717a179f1bf2ff8fbc046b7e3eb625159a5e8714bb",
+    "size": 52501342,
+    "upstreamURL": "https://github.com/vectordotdev/vector/releases/download/v0.53.0/vector-0.53.0-x86_64-unknown-linux-gnu.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/vectordotdev/vector",
+      "commit": "2b51b40a7a0b40996350d73cf46791c7e991fcb6"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "supabase-storage",
+    "version": "1.81.0",
+    "file": "supabase-storage-1.81.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "9e38a691f8e275bd9ab4f1482f0829b67d93b22380410b41277611744a3fccc8",
+    "size": 124207105,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/supabase/storage",
+      "commit": "f31599e188d7c9c854b1daa76a11b41c6d179462"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6"
+    ]
+  },
+  {
+    "name": "supabase-postgres-meta",
+    "version": "0.100.0",
+    "file": "supabase-postgres-meta-0.100.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "7befba8f5910bc5d77f876190977a4a969cebcf9440491306bfac81b5202cd87",
+    "size": 88048063,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/supabase/postgres-meta",
+      "commit": "9a2effd147f2f028fa36553ec2c7eeec80d7f8fc"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6"
+    ]
+  },
+  {
+    "name": "supabase-realtime",
+    "version": "2.143.3",
+    "file": "supabase-realtime-2.143.3-ubuntu24.04-amd64.tar.gz",
+    "sha256": "6790e0d3afc4847a916b989280faa72bbc2c4b83081e14f46f3ec1dea2312c77",
+    "size": 71018249,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/supabase/realtime",
+      "commit": "d46540b3a4a79113f40301d5e5cb690f41150b9b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6",
+      "libssl3t64",
+      "libncurses6",
+      "locales"
+    ]
+  },
+  {
+    "name": "supabase-imgproxy",
+    "version": "3.31.4",
+    "file": "supabase-imgproxy-3.31.4-ubuntu24.04-amd64.tar.gz",
+    "sha256": "679e22b8926dabde96137c65de580095ece22aca80c3d41ae73e0e29f12d7c28",
+    "size": 27590224,
+    "upstreamURL": "",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/imgproxy/imgproxy",
+      "commit": "8b0aa78279f191081054ba709b39f317f66ace78"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libvips42t64",
+      "fonts-dejavu-core"
+    ]
+  },
+  {
+    "name": "supabase-pg17-extensions",
+    "version": "17.11.1-1",
+    "file": "supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz",
+    "sha256": "346b262fc170192010ae39798299a38599fcf01d5e67f84c577079f0f4423b0b",
+    "size": 4080038,
+    "upstreamURL": "",
+    "license": "PostgreSQL AND MIT",
+    "source": {
+      "repo": "https://github.com/supabase/postgres",
+      "commit": "d156ba65c14694c12cc5e782bc15b9b8ed2d1376"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libcurl4t64",
+      "libsodium23",
+      "libssl3t64"
+    ],
+    "extensions": [
+      "hypopg",
+      "index_advisor",
+      "pg_graphql",
+      "pg_hashids",
+      "pg_jsonschema",
+      "pg_net",
+      "pgjwt",
+      "pgsodium",
+      "plpgsql_check",
+      "supabase_vault"
+    ],
+    "extensionFlags": {
+      "hypopg": {
+        "preload": false
+      },
+      "index_advisor": {
+        "preload": false
+      },
+      "pg_graphql": {
+        "preload": false
+      },
+      "pg_hashids": {
+        "preload": false
+      },
+      "pg_jsonschema": {
+        "preload": false
+      },
+      "pg_net": {
+        "preload": true
+      },
+      "pgjwt": {
+        "preload": false
+      },
+      "pgsodium": {
+        "preload": false,
+        "unavailableFeatures": [
+          "server-key-management",
+          "key-id",
+          "tce"
+        ]
+      },
+      "plpgsql_check": {
+        "preload": false
+      },
+      "supabase_vault": {
+        "preload": false
+      }
+    }
+  },
+  {
+    "name": "supabase-logflare",
+    "version": "1.50.15",
+    "file": "supabase-logflare-1.50.15-ubuntu24.04-amd64.tar.gz",
+    "sha256": "7c5dac4d2887b491334c9f0ca28493218e26b7e371749f60a5fced919a9bcdc6",
+    "size": 122141144,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/Logflare/logflare",
+      "commit": "01e25c0c8e48bcd92a48f0496c1d8cc33f1fc245"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6",
+      "libssl3t64",
+      "libncurses6",
+      "locales"
+    ]
+  },
+  {
+    "name": "supabase-edge-runtime",
+    "version": "1.77.4",
+    "file": "supabase-edge-runtime-1.77.4-ubuntu24.04-amd64.tar.gz",
+    "sha256": "0fde2f39eee0ce4dd8d7b2b4e2edd73f9e0b2d1ae247e607ecf1dc1b108e43c0",
+    "size": 292927834,
+    "upstreamURL": "",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/supabase/edge-runtime",
+      "commit": "d4a4f606a90e8c66864219c9b1d31ef0e3e3f626"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libssl3t64",
+      "libblas3",
+      "liblapack3",
+      "libopenblas0"
+    ]
+  },
+  {
+    "name": "supabase-supavisor",
+    "version": "2.9.13",
+    "file": "supabase-supavisor-2.9.13-ubuntu24.04-amd64.tar.gz",
+    "sha256": "ee3aad0698fe8472a349b251613b4477c7486b25f88a765dd94ca49613237676",
+    "size": 30281034,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/supabase/supavisor",
+      "commit": "5a51fbfadaa6d6286c1fee0a95d4c629e81a2750"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6",
+      "libssl3t64",
+      "libncurses6",
+      "locales"
+    ]
+  },
+  {
+    "name": "supabase-studio",
+    "version": "2026.10.12-bc27d2661edd",
+    "file": "supabase-studio-2026.10.12-bc27d2661edd-ubuntu24.04-amd64.tar.gz",
+    "sha256": "5601379d98f6170eaf4a573888960b6b76c1cbe54ee44c8a902a47b48db5a24d",
+    "size": 135365641,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/supabase/supabase",
+      "commit": "bc27d2661edd09a5d0b8d76ce33da6d4071a756e"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6"
+    ]
+  }
+]

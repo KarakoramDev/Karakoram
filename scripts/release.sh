@@ -80,7 +80,7 @@ build() {
     git rev-parse -q --verify "refs/tags/$version^{commit}" >/dev/null || die "tag $version does not exist; run make release-prepare first"
     [ "$(git show "$version:$PIN" 2>/dev/null)" = "$version" ] || die "$PIN at tag $version does not pin $version"
     [ -r "$KEY" ] || die "signing key $KEY not found (set KARAKORAM_RELEASE_SIGNING_KEY)"
-    for tool in go npm gzip sha256sum ssh-keygen; do command -v "$tool" >/dev/null || die "$tool is required"; done
+    for tool in go npm gzip sha256sum ssh-keygen python3; do command -v "$tool" >/dev/null || die "$tool is required"; done
     tar --version 2>/dev/null | grep -q 'GNU tar' || die 'GNU tar is required for reproducible archives'
 
     local commit epoch build_date work
@@ -138,7 +138,11 @@ build() {
             die "server binary reports unexpected version: $("$host_server" version)"
     fi
 
-    (cd "$out" && sha256sum -- karakoram-* karactl-* >checksums.txt)
+    log 'staging verified native artifacts from the tagged lock'
+    python3 "$work/scripts/native-artifacts/release.py" "$work/internal/engine/nativeartifacts/lock.json" \
+        "$root/dist/native-artifacts" "$out" || die 'native artifact staging failed'
+
+    (cd "$out" && sha256sum -- * >checksums.txt)
     log "signing checksums.txt with $KEY"
     ssh-keygen -q -Y sign -f "$KEY" -n "$NAMESPACE" "$out/checksums.txt"
     verify_dir "$out" "$work/$SIGNERS"

@@ -304,6 +304,17 @@ func (b *Backend) update(ctx context.Context, a *application, m metadata, settin
 	if settings == nil {
 		settings = map[string]any{}
 	}
+	if m.Kind == infra.KindRuntime {
+		// Private peer DNS must resolve the task address, not a Swarm VIP:
+		// mutually authenticated peers can verify source addresses against DNS.
+		// A custom EndpointSpec also overrides Dokploy's port list. Public
+		// ingress must use its default VIP endpoint and separate port settings.
+		var endpoint any
+		if len(m.PublicPorts) == 0 {
+			endpoint = map[string]any{"Mode": "dnsrr"}
+		}
+		settings["endpointSpecSwarm"] = endpoint
+	}
 	settings["applicationId"] = a.ID
 	settings["description"] = m.description()
 	return b.c.post(ctx, "application.update", settings, nil)

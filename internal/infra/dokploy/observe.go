@@ -30,14 +30,23 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	}
 	out := []infra.Container{}
 	for _, t := range ts {
-		if !strings.EqualFold(t.State, "running") {
+		running := strings.HasPrefix(strings.ToLower(t.CurrentState), "running")
+		if !strings.EqualFold(t.State, "running") && !running {
 			continue
 		}
 		status := infra.StatusCreating
-		if strings.HasPrefix(strings.ToLower(t.CurrentState), "running") {
+		if running {
 			status = infra.ContainerRunning
 		}
-		out = append(out, infra.Container{ID: t.ID, Hostname: hostname, Status: status, PlacementGroup: t.Node})
+		// The API returns docker service ps --no-trunc: containerId is the
+		// Swarm task ID and name is service.slot. Their combination is the
+		// individual task's overlay DNS name, not the load-balanced service.
+		taskHostname := ""
+		if t.Name != "" && t.ID != "" {
+			name := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(t.Name), `\_`))
+			taskHostname = name + "." + t.ID
+		}
+		out = append(out, infra.Container{ID: t.ID, Hostname: taskHostname, Status: status, PlacementGroup: t.Node})
 	}
 	return out, nil
 }

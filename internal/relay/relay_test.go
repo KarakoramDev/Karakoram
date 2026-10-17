@@ -441,7 +441,7 @@ func TestResolvedAddressRestrictions(t *testing.T) {
 			}
 			r := runtime{o: o}
 			s := &relaySession{targets: map[string]struct{}{"member:27017": {}}}
-			if _, err := r.target(context.Background(), s, "member:27017"); err == nil || dialed.Load() {
+			if _, err := r.target(context.Background(), s, "member:27017", ""); err == nil || dialed.Load() {
 				t.Fatal("prohibited resolution dialed")
 			}
 		})
@@ -460,14 +460,14 @@ func TestEnginePortAllowlist(t *testing.T) {
 	r := runtime{o: o}
 	for _, port := range []string{"9443", "27017", "5671", "5672", "15671", "15672", "9200", "5601"} {
 		s := &relaySession{targets: map[string]struct{}{"member:" + port: {}}}
-		_, _ = r.target(context.Background(), s, "member:"+port)
+		_, _ = r.target(context.Background(), s, "member:"+port, "")
 	}
 	if len(dialed) != 8 {
 		t.Fatalf("allowed engine ports not dialed: %v", dialed)
 	}
 	for _, port := range []string{"4369", "25672", "15692", "22"} {
 		s := &relaySession{targets: map[string]struct{}{"member:" + port: {}}}
-		if _, err := r.target(context.Background(), s, "member:"+port); err == nil || !strings.Contains(err.Error(), "port is not allowed") {
+		if _, err := r.target(context.Background(), s, "member:"+port, ""); err == nil || !strings.Contains(err.Error(), "port is not allowed") {
 			t.Fatalf("port %s accepted: %v", port, err)
 		}
 	}

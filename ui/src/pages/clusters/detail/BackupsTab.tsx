@@ -247,7 +247,7 @@ export function CreateBackupDialog({ namespace, cluster, provider, storages, def
         options={backupTypes.map((t) => ({
           value: t,
           title: t.charAt(0).toUpperCase() + t.slice(1),
-          description: t === 'logical' ? 'Dump via the wire protocol; portable, slower for large data.' : t === 'physical' ? 'Copies data files; fast for large datasets, same engine major required on restore.' : undefined,
+          description: t === 'logical' ? 'Dump via the wire protocol; portable, slower for large data.' : t === 'physical' ? 'Copies data files; fast for large datasets, same engine major required on restore.' : t === 'full' ? 'Complete PostgreSQL data backup; base for differential, incremental and WAL recovery.' : t === 'diff' ? 'Changes since the latest full backup; requires that full backup.' : t === 'incr' ? 'Changes since the previous backup; requires its full backup chain.' : undefined,
         }))}
       />
       <SelectField label="Storage" value={storage} onChange={(e) => setStorage(e.target.value)} required>
@@ -364,7 +364,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
               <Switch label={pitrEnabled ? 'Enabled' : 'Disabled'} checked={pitrEnabled} disabled={!storage} onChange={(e) => setPitrEnabled(e.target.checked)} />
             </div>
           </div> : null}
-          {pitr ? <TextField label="Oplog slice (minutes)" type="number" min={1} value={span} disabled={!pitrEnabled} onChange={(e) => setSpan(Math.max(1, Number(e.target.value) || 10))} /> : null}
+          {pitr ? <TextField label={cluster.spec.provider === 'psmdb' ? 'Oplog slice (minutes)' : 'WAL archive interval (minutes)'} type="number" min={1} value={span} disabled={!pitrEnabled} onChange={(e) => setSpan(Math.max(1, Number(e.target.value) || 10))} /> : null}
         </div>
         <div className="section-title">Schedules</div>
         <SchedulesEditor value={schedules} onChange={setSchedules} storages={storageNames} defaultStorage={storage || undefined} backupTypes={backupTypes} provider={cluster.spec.provider} />

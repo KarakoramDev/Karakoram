@@ -1,0 +1,302 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+)
+
+var sharedMemoryKeys = [...]string{"max_connections", "max_prepared_transactions", "max_locks_per_transaction", "max_wal_senders", "max_worker_processes"}
+
+type rollingPhase struct {
+	Direction string          `json:"direction"`
+	Options   json.RawMessage `json:"options"`
+}
+
+// Every member renders the same phase, including members not yet restarted:
+// a cached configuration pull must not patch an earlier value back into DCS.
+type rollingState struct {
+	Target   json.RawMessage `json:"target"`
+	Phases   []rollingPhase  `json:"phases"`
+	Phase    int             `json:"phase"`
+	Version  int64           `json:"version,omitempty"`
+	Primary  string          `json:"primary,omitempty"`
+	Timeline int             `json:"timeline,omitempty"`
+	Barrier  string          `json:"barrier,omitempty"`
+}
+
+func sharedMemoryValue(parameters map[string]string, key string) (int64, error) {
+	value, _ := pgspec.SharedMemoryDefault(key)
+	if raw, ok := parameters[key]; ok {
+		var err error
+		value, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			return 0, engine.Invalid("PostgreSQL parameter %s requires a nonnegative integer", key)
+		}
+	}
+	return value, nil
+}
+
+func (p *Core) sharedMemoryOptions(raw json.RawMessage) (EngineOptions, error) {
+	options, err := p.parseOptions(raw)
+	if err != nil || p.options.Flavour == nil {
+		return options, err
+	}
+	for key, value := range p.options.Flavour.Parameters() {
+		if _, ok := pgspec.SharedMemoryDefault(key); ok {
+			if options.Parameters == nil {
+				options.Parameters = map[string]string{}
+			}
+			options.Parameters[key] = value
+		}
+	}
+	return options, nil
+}
+
+func (p *Core) planSharedMemory(rc *engine.Context, s *state) (*rollingState, error) {
+	next, err := p.sharedMemoryOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return nil, err
+	}
+	peak := make(map[string]int64, len(sharedMemoryKeys))
+	for _, key := range sharedMemoryKeys {
+		peak[key], err = sharedMemoryValue(next.Parameters, key)
+		if err != nil {
+			return nil, err
+		}
+	}
+	increase, decrease := false, false
+	for _, m := range s.data() {
+		old, err := p.sharedMemoryOptions(m.Options)
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range sharedMemoryKeys {
+			before, err := sharedMemoryValue(old.Parameters, key)
+			if err != nil {
+				return nil, err
+			}
+			after, _ := sharedMemoryValue(next.Parameters, key)
+			increase = increase || after > before
+			decrease = decrease || after < before
+			if before > peak[key] {
+				peak[key] = before
+			}
+		}
+	}
+	if !increase && !decrease {
+		return nil, nil
+	}
+	journal := &rollingState{Target: append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)}
+	for _, direction := range []string{"increase", "decrease"} {
+		if direction == "increase" && !increase || direction == "decrease" && !decrease {
+			continue
+		}
+		options, err := p.sharedMemoryOptions(rc.Cluster.Spec.EngineOptions)
+		if err != nil {
+			return nil, err
+		}
+		if options.Parameters == nil {
+			options.Parameters = map[string]string{}
+		}
+		for _, key := range sharedMemoryKeys {
+			value, _ := sharedMemoryValue(next.Parameters, key)
+			if direction == "increase" {
+				value = peak[key]
+			}
+			options.Parameters[key] = strconv.FormatInt(value, 10)
+		}
+		raw, err := json.Marshal(options)
+		if err != nil {
+			return nil, err
+		}
+		journal.Phases = append(journal.Phases, rollingPhase{Direction: direction, Options: raw})
+	}
+	return journal, nil
+}
+
+func sharedMemoryMatches(st pgspec.StatusResponse, parameters map[string]string) bool {
+	for _, key := range sharedMemoryKeys {
+		expected, err := sharedMemoryValue(parameters, key)
+		actual, ok := st.SharedMemoryParameters[key]
+		if err != nil || !ok || actual != expected {
+			return false
+		}
+	}
+	return true
+}
+
+func walAtLeast(position, barrier string) bool {
+	parse := func(value string) (uint64, error) {
+		hi, lo, ok := strings.Cut(value, "/")
+		if !ok {
+			return 0, fmt.Errorf("invalid WAL position")
+		}
+		h, err := strconv.ParseUint(hi, 16, 32)
+		if err != nil {
+			return 0, err
+		}
+		l, err := strconv.ParseUint(lo, 16, 32)
+		return h<<32 | l, err
+	}
+	actual, err := parse(position)
+	if err != nil {
+		return false
+	}
+	expected, err := parse(barrier)
+	return err == nil && actual >= expected
+}
+
+func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	if s.Rolling == nil {
+		if !s.Formed || s.Topology != "ha" || s.Replacement != nil {
+			return false, nil
+		}
+		for _, m := range s.data() {
+			if m.Stage != "joined" || m.Removing || m.Retirement != "" {
+				return false, nil
+			}
+		}
+		var err error
+		s.Rolling, err = p.planSharedMemory(rc, s)
+		if err != nil || s.Rolling == nil {
+			return false, err
+		}
+		return true, nil // Persist direction and both mixed-change phases first.
+	}
+	journal := s.Rolling
+	if journal.Phase >= len(journal.Phases) {
+		for _, m := range s.data() {
+			m.Options = append(json.RawMessage(nil), journal.Target...)
+		}
+		s.Rolling = nil
+		s.ConfigVersion++ // Let ordinary convergence apply newer intent/proxy changes.
+		return true, nil
+	}
+	phase := journal.Phases[journal.Phase]
+	options, err := ParseOptions(phase.Options)
+	if err != nil {
+		return true, err
+	}
+	if journal.Version == 0 {
+		s.ConfigVersion++
+		journal.Version = s.ConfigVersion
+		for _, m := range s.data() {
+			m.ConfigVersion = journal.Version
+		}
+		return true, nil
+	}
+	// Acknowledging every pull also rules out a delayed old-phase PATCH before
+	// any restart. All periodic pulls now render this journal's phase options.
+	for _, m := range s.data() {
+		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+		if err != nil {
+			return true, err
+		}
+		status, err := a.Status(ctx)
+		if err != nil {
+			return true, err
+		}
+		if status.ConfigVersion < journal.Version {
+			return true, reloadPublished(ctx, rc, s, m)
+		}
+	}
+	statuses := make(map[string]pgspec.StatusResponse, len(s.data()))
+	primary := ""
+	for _, m := range s.data() {
+		st, err := live(ctx, rc, m.Name)
+		if err != nil {
+			return true, err
+		}
+		if !st.Running || len(st.SharedMemoryParameters) != len(sharedMemoryKeys) {
+			return true, nil
+		}
+		statuses[m.Name] = st
+		if st.Role == "primary" && st.Leader == m.Name && st.EtcdHealthy {
+			if primary != "" {
+				return true, engine.ErrUnavailable
+			}
+			primary = m.Name
+		} else if st.Role != "replica" || !st.Streaming {
+			return true, nil
+		}
+	}
+	if primary == "" {
+		return true, engine.ErrUnavailable
+	}
+	writer := statuses[primary]
+	if phase.Direction == "decrease" {
+		if !sharedMemoryMatches(writer, options.Parameters) {
+			journal.Primary, journal.Barrier, journal.Timeline = "", "", 0
+			return true, pgAction(ctx, rc, primary, pgspec.ActionRestart, pgspec.RestartRequest{PrimaryFirst: true}, nil)
+		}
+		if journal.Primary != primary || journal.Timeline != writer.Timeline || journal.Barrier == "" {
+			if writer.Timeline <= 0 || !walAtLeast(writer.WALPosition, "0/0") {
+				return true, nil
+			}
+			journal.Primary, journal.Timeline, journal.Barrier = primary, writer.Timeline, writer.WALPosition
+			return true, nil
+		}
+	}
+	for _, m := range s.data() {
+		st := statuses[m.Name]
+		if m.Name == primary || sharedMemoryMatches(st, options.Parameters) {
+			continue
+		}
+		if phase.Direction == "decrease" && (st.Timeline != journal.Timeline || !walAtLeast(st.WALPosition, journal.Barrier)) {
+			return true, nil
+		}
+		return true, pgAction(ctx, rc, m.Name, pgspec.ActionRestart, pgspec.RestartRequest{}, nil)
+	}
+	if !sharedMemoryMatches(writer, options.Parameters) {
+		// Every standby is already at the increased values. Only those peers
+		// may take over before restarting the former primary as a replica.
+		return true, switchAway(ctx, rc, s, primary)
+	}
+	journal.Phase++
+	journal.Version, journal.Primary, journal.Timeline, journal.Barrier = 0, "", 0, ""
+	if journal.Phase == len(journal.Phases) {
+		for _, m := range s.data() {
+			m.Options = append(json.RawMessage(nil), journal.Target...)
+		}
+		s.Rolling = nil
+		s.ConfigVersion++
+	}
+	return true, nil
+}
+
+// needsDisruption distinguishes reloadable config (including proxy-only changes
+// and certificates) from changes that require moving the writable primary.
+func needsDisruption(p *Core, rc *engine.Context, m *member, desired domain.ComponentSpec) bool {
+	if m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources) {
+		return true
+	}
+	old, err := p.parseOptions(m.Options)
+	if err != nil {
+		return true
+	}
+	next, err := p.parseOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return true
+	}
+	for _, key := range sharedMemoryKeys {
+		if old.Parameters[key] != next.Parameters[key] {
+			return true
+		}
+	}
+	for _, key := range []string{"shared_buffers", "wal_buffers"} {
+		if old.Parameters[key] != next.Parameters[key] {
+			return true
+		}
+	}
+	return false
+}

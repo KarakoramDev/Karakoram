@@ -3,6 +3,7 @@
 
 import type { Schemas } from '@/api/client';
 import { normalizeOptions } from '../../../engines/elasticsearch/spec.ts';
+import { normalizeSpec } from '../../../engines/postgres/spec.ts';
 
 export const STEPS = [
   { id: 'basics', label: 'Basics' },
@@ -39,7 +40,8 @@ export function clearDisabledFlags<T extends object>(settings: T, dependencies: 
 }
 
 export function normalizeWizardSpec(spec: Schemas['ClusterSpec']): Schemas['ClusterSpec'] {
-  spec = normalizeOptions(spec);
+  if (spec.provider === 'elasticsearch') spec = normalizeOptions(spec);
+  spec = normalizeSpec(spec);
   const pitr = spec.backup?.pitr;
   if (!pitr) return spec;
   const normalized = clearDisabledFlags(pitr, { enabled: Boolean(spec.backup?.storage) });

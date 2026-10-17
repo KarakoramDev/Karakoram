@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is self-hosted MongoDB, RabbitMQ and Elasticsearch orchestration inside your Zerops projects, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; Zerops supplies infrastructure, while you operate the installation, credentials, data and recovery procedures.
+Karakoram is self-hosted MongoDB, RabbitMQ, Elasticsearch, PostgreSQL and modular Supabase orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend; Dokploy and Nomad are experimental.
 
 ## Engines
 
@@ -13,6 +13,8 @@ Versions below are catalog defaults; each engine section lists supported version
 | MongoDB | Percona Server for MongoDB 8.0.32-14; Percona Backup for MongoDB (PBM) 2.16.0-1 | Replica sets; sharded clusters | Logical/physical; point-in-time recovery (PITR) | [MongoDB](docs/mongodb/README.md) |
 | RabbitMQ | RabbitMQ 4.3.6 | 1/3/5/7 brokers | Definitions only; no messages or PITR | [RabbitMQ](docs/rabbitmq/README.md) |
 | Elasticsearch | Elasticsearch 9.5.5; optional same-version Kibana, Logstash and APM Server | Combined nodes; dedicated masters | Native S3 snapshots | [Elasticsearch](docs/elasticsearch/README.md) |
+| PostgreSQL | Percona PostgreSQL 17.11.1 default; majors 16/17/18 | Single; Patroni/etcd HA (3/5); ProxySQL client service | pgBackRest full/diff/incr and PITR | [PostgreSQL](docs/postgres/README.md) |
+| Supabase | PostgreSQL 17 plus release-locked native services | Same database topologies; modular services | PostgreSQL data only; separate S3 object protection required | [Supabase](docs/supabase/README.md) |
 
 ## Across engines
 
@@ -35,7 +37,7 @@ Requires Go **1.25+**, Node **22.6+**, npm and Make:
 ```sh
 make build-all             # web UI and both Go executables
 make test                  # Go unit/handler tests
-# Docker-backed integration packages:
+# Integration-tagged tests (some require Docker; PostgreSQL/Supabase use native LXC):
 go test -tags integration -count=1 -timeout 30m ./...
 ```
 
@@ -51,7 +53,9 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 - **MongoDB:** [Overview](docs/mongodb/README.md) · [Replica sets](docs/mongodb/replica-sets.md) · [Sharding](docs/mongodb/sharding.md) · [Users, roles and TLS](docs/mongodb/access-and-tls.md) · [Backups and PITR](docs/mongodb/backups.md) · [Operations](docs/mongodb/operations.md)
 - **RabbitMQ:** [Overview](docs/rabbitmq/README.md) · [Access and TLS](docs/rabbitmq/access-and-tls.md) · [Definitions backups](docs/rabbitmq/backups.md) · [Operations](docs/rabbitmq/operations.md)
 - **Elasticsearch:** [Overview](docs/elasticsearch/README.md) · [Kibana, Logstash and APM](docs/elasticsearch/stack.md) · [Access and security](docs/elasticsearch/access-and-security.md) · [Snapshots](docs/elasticsearch/snapshots.md) · [Operations](docs/elasticsearch/operations.md)
-- **Reference:** [Architecture decisions](docs/adr/README.md) · [Verification](docs/verification.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
+- **PostgreSQL:** [Overview](docs/postgres/README.md) · [Access and TLS](docs/postgres/access-and-tls.md) · [Backups and PITR](docs/postgres/backups.md) · [Operations](docs/postgres/operations.md)
+- **Supabase:** [Overview](docs/supabase/README.md) · [Components and availability](docs/supabase/components.md) · [Operations](docs/supabase/operations.md)
+- **Reference:** [Architecture decisions](docs/adr/README.md) · [Native artifacts](docs/native-artifacts.md) · [Verification](docs/verification.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Acknowledgements
 

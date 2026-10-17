@@ -55,6 +55,11 @@ variable "artifact_checksum" {
   type = string
 }
 
+variable "native_artifact_mirror" {
+  type    = string
+  default = ""
+}
+
 variable "nomad_address" {
   type = string
 }
@@ -229,6 +234,7 @@ job "karakoram" {
         KARAKORAM_NOMAD_PUBLIC_IPV4         = var.public_ipv4
         KARAKORAM_NOMAD_PUBLIC_IPV6         = var.public_ipv6
         KARAKORAM_NOMAD_ARTIFACT_URL        = var.artifact_url
+        KARAKORAM_ARTIFACT_MIRROR          = var.native_artifact_mirror
         KARAKORAM_NOMAD_CACERT              = "/secrets/nomad-ca.pem"
         KARAKORAM_NOMAD_CLIENT_CERT         = "/secrets/nomad-client-cert.pem"
         KARAKORAM_NOMAD_CLIENT_KEY          = "/secrets/nomad-client-key.pem"

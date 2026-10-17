@@ -22,9 +22,9 @@ type allocationTaskState struct {
 
 type allocation struct {
 	ID, JobID, NodeID, NodeName, ClientStatus string
-	JobVersion                              uint64
-	CreateIndex                             uint64
-	NetworkStatus                           struct {
+	JobVersion                                uint64
+	CreateIndex                               uint64
+	NetworkStatus                             struct {
 		Address, AddressIPv6 string
 	}
 	TaskStates map[string]allocationTaskState

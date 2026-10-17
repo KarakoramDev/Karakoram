@@ -8,7 +8,11 @@
 import { engines } from './index';
 import { rabbitmqUI } from './rabbitmq/index.ts';
 import { elasticsearchUI } from './elasticsearch';
+import { postgresUI } from './postgres';
+import { supabaseUI } from './supabase';
 
 engines.rabbitmq = rabbitmqUI;
 
 engines.elasticsearch = elasticsearchUI;
+engines.postgres = postgresUI;
+engines.supabase = supabaseUI;

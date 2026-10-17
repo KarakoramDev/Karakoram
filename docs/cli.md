@@ -46,6 +46,7 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. A supplied file defines the body instead of convenience body flags. Use protected files for secrets. Exceptions: `rbac policy set` takes raw CSV; engine-native role/key commands use their documented definitions.
 - Cluster create files contain `{name, spec}`. `edit` replaces the complete `{spec}` and can open the configured editor without a file. `patch`, `scale` and `upgrade` files contain `{spec: {...}}` merge patches; arrays replace the previous array, not append to it.
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
+- PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
 - Cluster mutation `--wait` reports acceptance/operation ID on stderr, then phase changes and a fifteen-second heartbeat. The default timeout is **30m**. It waits for the operation and observed cluster generation; an **Error or Degraded cluster fails the wait**. `clusters wait NAME` observes the current desired generation or deletion/suspension without resubmitting.
 - `operations wait ID` succeeds on **Succeeded**, even when the cluster is Degraded; **Failed/Cancelled** fail. Operation success is not a health guarantee. See [operations and status](clusters.md#operations-and-status).
@@ -66,7 +67,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `accounts` | Local control-plane accounts | list, get, create, set, delete, reset-password, change-password | All |
 | `auth` | Advanced cookie/OIDC flows | refresh, oidc-login, oidc-callback | All |
 | `backends` | Registered infrastructure kinds and capabilities | list | All |
-| `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window MongoDB only |
+| `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window MongoDB/PostgreSQL/Supabase |
 | `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, restart, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
 | `completion` | Generate shell scripts | bash, zsh, fish, powershell | Local |
 | `config` | Save connection contexts | set-context | Local |
@@ -84,6 +85,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `operations` | Observe/cancel asynchronous work | list, cluster, get, wait, cancel | All; cancellation capability varies |
 | `orphaned-volumes` | Inspect pending platform cleanup | list | All |
 | `permissions` | Current effective permissions | — | All |
+| `postgres` | Native database access | roles list/get/create/update/patch/delete/rotate-password, databases list/get/create/delete, grants list/grant/revoke | PostgreSQL and Supabase |
 | `providers` | Catalogs/defaults/limits | list, get | All |
 | `rabbitmq` | Native access | vhosts, users, permissions, topic-permissions, policies, operator-policies | RabbitMQ only |
 | `rbac` | Permission checks and policy | can, policy get/set | All |
@@ -91,11 +93,13 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `settings` | Sign-in configuration | get, set-oidc | All |
 | `storages` | S3 destination registration/probe | list, get, create, set, delete, verify | All |
 | `system-users` | Provider-managed identities | list, rotate | Provider-supported identities |
+| `supabase` | API credentials, SMTP and edge functions | credentials, smtp-password set, functions list/get/deploy/delete, rotate-jwt-secret | Supabase only |
 | `tokens` | Control-plane API tokens | list, get, create, set, delete (alias revoke) | All |
 | `version` | Client/server build metadata | — | All |
 | `whoami` | Authenticated identity | — | All |
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes).
+PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
 
 ## Global flags
 
@@ -131,6 +135,46 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `events watch` | Same scope filters; `--cursor`, `--last-event-id`; no list limit/order |
 | `operations list/cluster` | `--phase`, `--limit`, `--cursor`; list also `--cluster` |
 | `operations wait/cancel ID` | wait: `--timeout` (30m); cancel: `--yes` |
+
+### Supabase native access
+
+`karactl supabase credentials CLUSTER` masks API keys, the dashboard password and JWT secret in every output format. Pass `--show-secrets` only when sensitive terminal or redirected output is protected. The endpoint requires the separate `cluster-credentials:read` grant and returns `Cache-Control: no-store`.
+
+`karactl supabase smtp-password set CLUSTER` reads the password through a hidden terminal prompt or the first stdin line; passwords are never accepted as command arguments. For example, pipe a secret manager's output directly into this command.
+
+Use `karactl supabase functions list CLUSTER`, `functions get CLUSTER NAME`, `functions deploy CLUSTER NAME DIR_OR_FILE`, and `functions delete CLUSTER NAME`. Deploy sends a map of relative file paths to source text; directories are recursive and require a nonempty `index.ts` entrypoint. A standalone source file is deployed as `index.ts`. Symlinks and special files are rejected, and source text is limited to 1 MiB per function. A cluster supports at most 100 functions. Names match `[a-z0-9][a-z0-9_-]{0,62}`; `main` is reserved for the runtime dispatcher, and parent traversal is forbidden. Sources are stored sealed but remain readable to callers with cluster-read permission, so do not embed application secrets in source files.
+
+Function deletion and `karactl supabase rotate-jwt-secret CLUSTER` require confirmation (or `--yes`). Rotation queues a durable `rotate-jwt-secret` operation; track the returned ID with `karactl operations get` or `operations wait`. SMTP and function mutations require cluster-update permission; audit events contain identifiers, never passwords or source text.
+
+### PostgreSQL native access
+
+The `postgres` command group also works with Supabase clusters, which share the PostgreSQL core:
+
+```sh
+karactl postgres roles list CLUSTER
+karactl postgres roles get CLUSTER ROLE
+karactl postgres roles create CLUSTER -f role.json
+karactl postgres roles update CLUSTER ROLE -f role.json
+karactl postgres roles rotate-password CLUSTER ROLE --yes
+karactl postgres databases create CLUSTER -f database.json
+karactl postgres databases list CLUSTER
+karactl postgres databases get CLUSTER DATABASE
+karactl postgres grants list CLUSTER --database DATABASE
+karactl postgres grants grant CLUSTER -f grant.json
+karactl postgres grants revoke CLUSTER -f grant.json --yes
+karactl postgres databases delete CLUSTER DATABASE --force --yes
+karactl postgres roles delete CLUSTER ROLE --yes
+```
+
+A role document contains `name`, `login` (default true), `createdb`, `createrole`, `connectionLimit` (default -1), `memberOf`, optional RFC3339 `validUntil`, and optional `password`. Omitted passwords on login-role creation are generated and returned once as `generatedPassword`; rotation returns a new generated password. Responses are `no-store`; an identical request with the same idempotency key safely replays its sealed result. Never put passwords in command arguments or commit credential-bearing request documents. Privileged `superuser`, `replication`, and `bypassrls` flags, privileged memberships, and changes to existing privileged role passwords additionally require cluster-update permission. Engine system roles are hidden and immutable; Supabase service roles are protected too.
+
+A database document contains `name`, `owner`, optional `encoding` (UTF8), `locale` (C.UTF-8), and `allowConnections` (true). Encoding and locale cannot be changed after creation. A grant document contains `role`, `database`, `privileges`, and optional `schema`: database privileges are CONNECT/CREATE/TEMP; schema privileges are USAGE/CREATE. Predefined memberships include pg_read_all_data, pg_write_all_data, pg_monitor, pg_read_all_stats, and pg_signal_backend.
+
+Managed login passwords are sealed and synchronized to every ProxySQL member without restarting PostgreSQL. Roles created directly in SQL are not routable through ProxySQL. Use the proxy hostname, cluster CA, and `sslmode=verify-full` for TLS connections; public endpoints are advertised when enabled and configured by the infrastructure backend. Direct data-member endpoints remain private. Role/database deletion, grant revocation, and password rotation require confirmation (or `--yes`).
+
+Access operations use authenticated internal POST actions on a freshly resolved primary. HA members also require the Patroni leader lock; no writable primary produces HTTP 503. Only a precomputed SCRAM-SHA-256 verifier crosses the role-action protocol, never the plaintext password in SQL. Membership replacement is transactional; schema grants connect to the requested database. `roles patch CLUSTER ROLE -f patch.json` changes only supplied fields; `roles update` replaces role attributes.
+
+ProxySQL does not implement every PostgreSQL protocol feature. In particular, clients requesting different result formats per column must select a uniform format (for pgx, use simple protocol or request text results). Supabase's internal services bypass ProxySQL for features such as LISTEN/NOTIFY and logical replication.
 
 ## Safety and exit statuses
 
