@@ -10,11 +10,15 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 // auditAction records identifiers and explicitly selected options, never request
 // bodies or responses: both may contain passwords, tokens or private keys.
 func (s *Server) auditAction(ctx context.Context, name string, in input, result response) error {
+	if strings.HasPrefix(name, "DryRun") {
+		return nil
+	}
 	rule, exists := api.OperationRBAC[operationID(name)]
 	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection" && name != "GetSupabaseCredentials") {
 		return nil
@@ -26,7 +30,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 	if p == nil {
 		return nil
 	}
-	e := domain.Event{Cluster: in.Cluster, Resource: rule.Resource, Actor: p.Actor(), Type: "Normal", Reason: name + "Succeeded"}
+	e := domain.Event{Cluster: in.Cluster, Resource: rule.Resource, Actor: store.Actor(ctx), Type: "Normal", Reason: name + "Succeeded"}
 	if in.Cluster != "" || rule.Resource == "clusters" || rule.Resource == "backup-storages" {
 		e.Namespace = domain.NormalizedNamespace(namespaceFilter(ctx))
 	}

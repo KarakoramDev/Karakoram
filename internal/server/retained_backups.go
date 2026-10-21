@@ -51,7 +51,7 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 		return ok(backupAPI(*b))
 	}
 	if b.PBMName == "" && b.Location == "" && b.Postgres == nil && (b.Phase == domain.PhaseFailed || b.Phase == domain.PhasePending) {
-		op := &domain.Operation{Namespace: b.Namespace, Cluster: b.Cluster, Kind: domain.OperationDeleteBackup, Actor: principal(ctx).Actor()}
+		op := &domain.Operation{Namespace: b.Namespace, Cluster: b.Cluster, Kind: domain.OperationDeleteBackup, Actor: store.Actor(ctx)}
 		if err = s.Store.EnqueueBackupDeletion(ctx, b, op); err != nil {
 			return s.failure(err)
 		}

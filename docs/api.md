@@ -6,6 +6,8 @@ The public contract is [api/openapi.yaml](../api/openapi.yaml), OpenAPI 3.0.3; u
 
 Most routes are under `/api/v1`. `/healthz` and authenticated `/metrics` are installation-root exceptions. The specification download is public, served as `application/yaml` and cacheable for five minutes; there is no bundled Swagger UI. Relay and agent protocols are not public management APIs.
 
+Agents can use the embedded [MCP server](mcp.md) at `/mcp`, with the same REST enforcement and API tokens.
+
 ## Authentication
 
 Scripts use a Karakoram API token, **not a backend infrastructure credential** (such as a Zerops integration token):
@@ -17,6 +19,15 @@ Authorization: Bearer <karakoram-token>
 Bearer tokens use their owner's current permissions and need no CSRF header. Local `POST /auth/login` takes `{username, password}`, sets session cookies and returns `{account, csrfToken, expiresAt}`. Cookie-authenticated unsafe methods require **`X-Karakoram-CSRF`** matching the session token/readable CSRF cookie; login itself does not. `GET /auth/me` returns the current cookie session's CSRF token, including after OIDC. `POST /auth/refresh` rotates refresh credentials; reusing an older refresh token revokes that family. Complete mandatory password changes and reauthenticate before creating tokens or ordinary work.
 
 OIDC uses `/auth/oidc/login` and `/auth/oidc/callback` with redirects/state/PKCE, not device-code login. Successful OIDC redirects to the installation root; `returnTo` currently does not change that. Account/password rules, token expiry/revocation and SSO setup live in [access control](access-control.md); cookie protections live in [security](security.md).
+
+`POST /api-tokens` accepts optional immutable `restrictions`: `readOnly`,
+`namespaces`, `clusters` (`namespace/name`), `permissions` (`resource:action`,
+action may be `*`) and `allowCredentialReveal`. Token metadata returns the same
+fields. Omission is unrestricted; an explicit object defaults credential reveal
+to false. Updates accept only name/expiry. Restrictions intersect owner RBAC on
+every route and returned object, including replay and streams; permission
+discovery reports effective authority. See [restricted API tokens](access-control.md#restricted-api-tokens)
+for the subset issuance rule and OIDC group limitations.
 
 The UI bounds ordinary API requests to **30 seconds**, excluding SSE. Network/5xx failures preserve the session and offer retry. A 401 after a successful refresh, or a new 401 within **ten seconds** of that refresh, ends the session rather than repeatedly rotating credentials.
 
@@ -72,6 +83,35 @@ OpenAPI's `x-karakoram-rbac` declares each operation's resource/action/object. L
 
 PostgreSQL and Supabase use [native PostgreSQL access](postgres/access-and-tls.md), not `/database-users` or `/database-roles`. Supabase's separate GET `/clusters/{cluster}/supabase/credentials` requires `cluster-credentials:read` and returns API/Studio URLs and sensitive service/dashboard keys with no-store; do not confuse this with a normal cluster read.
 
+## Operation safety metadata
+
+Every OpenAPI operation declares `x-karakoram-agent` immediately after its
+`x-karakoram-rbac` block. `go generate ./api/...` validates this inventory and
+emits `internal/api/agentmap.gen.go`; CI's `make openapi-check` rejects missing,
+invalid or stale metadata.
+
+| Field | Contract |
+| --- | --- |
+| `tool` | Unique resource/verb snake_case name, 1–64 characters, starting with a lowercase letter. PUT uses `replace`; PATCH uses `update`. |
+| `exposed`, `reason` | Exposure defaults to true. Browser-session, streaming and API-description operations use `exposed: false`, a nonempty reason and no tool. |
+| `risk`, `confirm` | `read` and `write` require `none`. `destructive` requires `confirm` or `name` (type the target's name). |
+| `secret` | Response can reveal credentials; defaults to false. Write-only inputs, namespace token status and password-free connection summaries do not count. |
+| `async` | `none`, `operation` (poll an Operation), `generation` (observe cluster convergence), or `record` (poll a backup/restore record). |
+| `idempotent` | Repeating identical arguments has no additional effect; defaults to false. This is not proof of side-effect freedom. |
+| `untrusted` | Response carries engine or end-user content; defaults to false. Treat it as data, not instructions. |
+
+A non-GET `read` requires `idempotent: true` and a reviewed
+operation-ID/method/path entry in `agentgen`'s side-effect-free allowlist.
+The allowlist covers permission checks and the four validation-only dry-run
+routes. Authentication observability is not a domain mutation.
+
+Status, member, operation, event and log responses are untrusted, including
+nested engine messages in cluster and namespace responses. Restore and storage
+verification messages also receive this classification. Backup deletion uses
+`async: operation` because its asynchronous response is an Operation, while
+backup and restore creation use `record`. Namespace deletion returns no
+Operation or record, so it uses `none`; observe its lifecycle separately.
+
 ## Resource families
 
 Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{cluster}`. **All** remains subject to provider capabilities and RBAC. Use OpenAPI for exact paths, payloads and permissions.
@@ -123,6 +163,32 @@ Send the declared Content-Type: usually `application/json`, but cluster PATCH us
 Accepted cluster mutations have durable Operations. Cluster/backup/restore responses expose `operationId`; operation-bearing responses also set **`Karakoram-Operation-Id`**. Imperative work commonly returns **202**; cluster creation returns **201**, not completed provisioning. Cluster DELETE returns **202 with an Operation body**. Poll `/operations/{id}` and resource status/inventory. HTTP acceptance, terminal Operation phase and cluster health are distinct; see [operations and status](clusters.md#operations-and-status). A wait timeout/disconnect does not cancel work.
 
 Cancellation uses **`POST /operations/{operation}/cancel`**, requiring `clusters/update` on the operation's persisted namespace/cluster; no namespace override is needed. Acceptance returns **202 Operation** plus the operation header. Pending work becomes Cancelled immediately. Supported Running checkpoints set `cancelRequested: true` and can remain Running during cleanup. Terminal/unsafe states return **409 conflict**, `details.reason: invalid_state`. Poll the same ID; cancellation is neither rollback nor reversal of accepted desired state. Engine guides define safe checkpoints.
+
+## Server-side dry-run
+
+Preview cluster creation with `POST /dry-run/clusters`, replacement or merge
+patches with `PUT` / `PATCH /dry-run/clusters/{cluster}`, and restores with
+`POST /dry-run/clusters/{cluster}/restores` (all relative to `/api/v1`).
+Use the corresponding mutation's body, content type and `namespace` query.
+The same authentication, cookie CSRF, RBAC (including recovery-source
+permissions), defaults, provider validation and read-only admission checks apply.
+
+A successful preview returns **200 DryRunResult**: `operation` is `create`,
+`replace`, `patch` or `restore`; `cluster` contains the normalized candidate
+(the current target for restore), and `restore` is the prospective record when
+applicable. `changes` contains dot paths under `spec` with before/after values;
+create and restore return an empty changes list. Sensitive diff values are
+masked. `effects` describes generic version, member, resource, exposure, TLS,
+backup and recovery consequences; it does not predict engine-specific restarts.
+`warnings` contains applicable admission caveats.
+
+Dry-run does not persist clusters, secrets, operations, restores or audit events,
+publish events, trigger reconciliation, or reserve/replay `Idempotency-Key`.
+Normal authentication may still update token last-used metadata. No operation
+ID is allocated, and an existing cluster's generation is unchanged. Admission
+is a point-in-time observation, not a reservation or guarantee that a later
+mutation or restore will succeed. `karactl` exposes these endpoints with
+[`--dry-run`](cli.md).
 
 ## Safe retries with Idempotency-Key
 

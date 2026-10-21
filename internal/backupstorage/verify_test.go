@@ -187,17 +187,17 @@ func verifyLocal(t *testing.T, storage domain.BackupStorage, credentials domain.
 func TestEndpointAddressPolicy(t *testing.T) {
 	for _, address := range []string{"127.0.0.1", "::1", "0.0.0.0", "::", "169.254.169.254", "fe80::1", "224.0.0.1", "::ffff:127.0.0.1", "100.100.100.200", "fd00:ec2::254", "168.63.129.16", "192.0.0.192"} {
 		for _, allowPrivate := range []bool{false, true} {
-			if endpointAddressAllowed(netip.MustParseAddr(address), allowPrivate) {
+			if EndpointAddressAllowed(netip.MustParseAddr(address), allowPrivate) {
 				t.Fatalf("admitted forbidden address %s", address)
 			}
 		}
 	}
 	for _, address := range []string{"10.0.0.1", "192.168.1.1", "172.16.1.1", "fd00::1"} {
-		if endpointAddressAllowed(netip.MustParseAddr(address), false) || !endpointAddressAllowed(netip.MustParseAddr(address), true) {
+		if EndpointAddressAllowed(netip.MustParseAddr(address), false) || !EndpointAddressAllowed(netip.MustParseAddr(address), true) {
 			t.Fatal("private endpoint policy", address)
 		}
 	}
-	if !endpointAddressAllowed(netip.MustParseAddr("8.8.8.8"), false) {
+	if !EndpointAddressAllowed(netip.MustParseAddr("8.8.8.8"), false) {
 		t.Fatal("public endpoints must be permitted by default")
 	}
 }

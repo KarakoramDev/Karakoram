@@ -30,6 +30,7 @@ import { NamespacesPage } from '@/pages/settings/Namespaces';
 import { AccountsPage } from '@/pages/settings/Accounts';
 import { RbacPage } from '@/pages/settings/Rbac';
 import { ApiTokensPage } from '@/pages/settings/ApiTokens';
+import { ConnectedAppsPage } from '@/pages/settings/ConnectedApps';
 import { SsoPage } from '@/pages/settings/Sso';
 import { MonitoringSettingsPage } from '@/pages/settings/Monitoring';
 import { OperationDetailPage } from '@/pages/OperationDetail';
@@ -82,6 +83,7 @@ const pageRoutes: RouteObject[] = [
               { path: 'accounts', element: <AccountsPage /> },
               { path: 'rbac', element: <RbacPage /> },
               { path: 'api-tokens', element: <ApiTokensPage /> },
+              { path: 'connected-apps', element: <ConnectedAppsPage /> },
               { path: 'sso', element: <SsoPage /> },
               { path: 'monitoring', element: <MonitoringSettingsPage /> },
             ],

@@ -28,6 +28,8 @@ var commandSpecs = append(append([]commandSpec{
 	{"tokens create", "createAPIToken", 0, true, []queryFlag{}},
 	{"tokens set <id>", "replaceAPIToken", 1, true, []queryFlag{}},
 	{"tokens delete <id>", "deleteAPIToken", 1, false, []queryFlag{}},
+	{"oauth-grants list", "listOAuthGrants", 0, false, []queryFlag{}},
+	{"oauth-grants delete <id>", "deleteOAuthGrant", 1, false, []queryFlag{}},
 	{"providers list", "listProviders", 0, false, []queryFlag{}},
 	{"providers get <provider>", "getProvider", 1, false, []queryFlag{}},
 	{"backends list", "listBackends", 0, false, []queryFlag{}},

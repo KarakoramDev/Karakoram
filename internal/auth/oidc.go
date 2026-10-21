@@ -139,6 +139,7 @@ type oidcState struct {
 	Verifier   string `json:"verifier"`
 	OIDCIssuer string `json:"oi"`
 	ClientID   string `json:"ci"`
+	ReturnTo   string `json:"returnTo,omitempty"`
 }
 
 // oidcHTTPError uses the same secret-safe error envelope as the management API.
@@ -155,6 +156,17 @@ func oidcHTTPError(w http.ResponseWriter, message string, status int) {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	}{code, message})
+}
+
+// oidcReturnPath only resumes the embedded OAuth consent flow. Parse and require
+// the exact absolute-path spelling so encoded separators and network-path URLs
+// cannot turn the callback into an open redirect.
+func oidcReturnPath(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || !strings.HasPrefix(raw, "/oauth/authorize?") || u.IsAbs() || u.Host != "" || u.User != nil || u.Fragment != "" || u.Path != "/oauth/authorize" || u.RawPath != "" || strings.ContainsAny(raw, "\\\r\n") {
+		return "/"
+	}
+	return raw
 }
 
 // OIDCLoginHandler sends state, nonce and S256 PKCE to the verified issuer. The
@@ -179,6 +191,7 @@ func (s *Service) OIDCLoginHandler(w http.ResponseWriter, r *http.Request) {
 	verifier := oauth2.GenerateVerifier()
 	now := s.now()
 	claims := oidcState{RegisteredClaims: jwt.RegisteredClaims{Issuer: s.o.Issuer, Audience: jwt.ClaimStrings{"karakoram-oidc-state"}, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute))}, State: state, Nonce: nonce, Verifier: verifier, OIDCIssuer: cfg.IssuerURL, ClientID: cfg.ClientID}
+	claims.ReturnTo = oidcReturnPath(r.URL.Query().Get("returnTo"))
 	signed, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims).SignedString(s.key)
 	if err != nil {
 		oidcHTTPError(w, "authentication unavailable", 500)
@@ -289,5 +302,5 @@ func (s *Service) OIDCCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	http.Redirect(w, r, strings.TrimRight(s.o.PublicURL, "/")+"/", http.StatusFound)
+	http.Redirect(w, r, strings.TrimRight(s.o.PublicURL, "/")+oidcReturnPath(state.ReturnTo), http.StatusFound)
 }

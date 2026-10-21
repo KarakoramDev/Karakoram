@@ -16,6 +16,10 @@ import (
 func TestEveryOperationHasImplementedHandler(t *testing.T) {
 	s, token := namespaceTestServer(t)
 	routes := []struct{ name, method, path, body string }{
+		{"DryRunCreateCluster", "POST", "/api/v1/dry-run/clusters", `{"name":"preview","spec":{"provider":"psmdb"}}`},
+		{"DryRunReplaceCluster", "PUT", "/api/v1/dry-run/clusters/prod", `{"spec":{"provider":"psmdb"}}`},
+		{"DryRunPatchCluster", "PATCH", "/api/v1/dry-run/clusters/prod", `{"spec":{"version":"8.0"}}`},
+		{"DryRunCreateRestore", "POST", "/api/v1/dry-run/clusters/prod/restores", `{"name":"preview","source":{"backup":"missing"}}`},
 		{"GetSupabaseCredentials", "GET", "/api/v1/clusters/prod/supabase/credentials", ""},
 		{"SetSupabaseSMTPPassword", "PUT", "/api/v1/clusters/prod/supabase/smtp-password", `{"password":"test-password"}`},
 		{"ListSupabaseFunctions", "GET", "/api/v1/clusters/prod/supabase/functions", ""},
@@ -57,6 +61,8 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"ReplaceAccount", "PUT", "/api/v1/accounts/other", "{\"enabled\":true,\"mustChangePassword\":false}"},
 		{"ResetAccountPassword", "POST", "/api/v1/accounts/other/reset-password", "{\"password\":\"new-test-password\"}"},
 		{"ListAPITokens", "GET", "/api/v1/api-tokens", ""},
+		{"ListOAuthGrants", "GET", "/api/v1/oauth-grants", ""},
+		{"DeleteOAuthGrant", "DELETE", "/api/v1/oauth-grants/test-grant", ""},
 		{"CreateAPIToken", "POST", "/api/v1/api-tokens", "{\"name\":\"inventory\"}"},
 		{"DeleteAPIToken", "DELETE", "/api/v1/api-tokens/test-token", ""},
 		{"GetAPIToken", "GET", "/api/v1/api-tokens/test-token", ""},

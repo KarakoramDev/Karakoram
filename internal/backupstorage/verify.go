@@ -250,7 +250,9 @@ var (
 	metadataOracle     = netip.MustParseAddr("192.0.0.192")
 )
 
-func endpointAddressAllowed(ip netip.Addr, privateAllowed bool) bool {
+// EndpointAddressAllowed is the shared outbound address policy. OAuth metadata
+// calls it with privateAllowed=false, independently of the backup allowlist.
+func EndpointAddressAllowed(ip netip.Addr, privateAllowed bool) bool {
 	ip = ip.Unmap()
 	if !ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
 		return false
@@ -293,7 +295,7 @@ func endpointDialer(endpoint *url.URL, allowlist string) func(context.Context, s
 			return nil, errors.New("S3 endpoint has no addresses")
 		}
 		for _, ip := range addresses {
-			if !endpointAddressAllowed(ip, approved) {
+			if !EndpointAddressAllowed(ip, approved) {
 				return nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 endpoint address is not permitted")}
 			}
 		}

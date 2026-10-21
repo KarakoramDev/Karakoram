@@ -6,9 +6,11 @@ import { useAuth } from '@/auth/session';
 import { PageHeader } from '@/components/ui/Primitives';
 import { useNamespace } from '@/namespaces/useNamespace';
 import { scopedPath } from '@/components/ui/presentation';
+import { useOAuthGrants } from './ConnectedApps';
 
 export function SettingsLayout() {
   const auth = useAuth();
+  const grants = useOAuthGrants();
   const { namespace } = useNamespace();
   const items = [
     { to: '/settings/namespaces', label: 'Namespaces', show: auth.can('namespaces', 'read') },
@@ -17,6 +19,7 @@ export function SettingsLayout() {
     { to: '/settings/accounts', label: 'Accounts', show: auth.can('accounts', 'read') },
     { to: '/settings/rbac', label: 'Roles & permissions', show: auth.can('rbac', 'read') },
     { to: '/settings/api-tokens', label: 'API tokens', show: true },
+    { to: '/settings/connected-apps', label: 'Connected apps', show: grants.data?.enabled === true },
     { to: '/settings/sso', label: 'Single sign-on', show: auth.can('settings', 'read') },
     { to: '/settings/monitoring', label: 'Monitoring', show: true },
   ].filter((i) => i.show);

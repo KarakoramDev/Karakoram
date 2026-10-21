@@ -113,7 +113,7 @@ func (s *Server) validationMiddleware(next http.Handler) http.Handler {
 		}
 		if route.Operation.RequestBody != nil {
 			kind, _, e := mime.ParseMediaType(r.Header.Get("Content-Type"))
-			if e == nil && route.Operation.OperationID == "patchCluster" && kind == "application/json" {
+			if e == nil && (route.Operation.OperationID == "patchCluster" || route.Operation.OperationID == "dryRunPatchCluster") && kind == "application/json" {
 				// Older clients encoded merge patches as JSON. Normalize only this
 				// operation; the wire format and merge semantics are identical.
 				kind = "application/merge-patch+json"

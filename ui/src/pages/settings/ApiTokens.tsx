@@ -8,10 +8,10 @@ import { keys } from '@/api/keys';
 import { useAuth } from '@/auth/session';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
-import { TextField } from '@/components/ui/Field';
+import { Checkbox, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, CodeLine, ErrorBlock, Loading, Menu, MenuItem, Time } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
-import { tokenNameError, tokenExpiry, tokenSubmission } from './token-form';
+import { buildTokenRestrictions, tokenNameError, tokenExpiry, tokenRestrictionSummary, tokenSubmission, type TokenRestrictionInput, type TokenSubmission } from './token-form';
 
 type Token = Schemas['APIToken'];
 
@@ -46,7 +46,7 @@ export function ApiTokensPage() {
             <Callout tone="warn">This is the only time the secret is shown. Store it in your CLI config or secret manager.</Callout>
             <CodeLine value={created.secret} />
             <p className="small muted">
-              Use as <code>Authorization: Bearer {created.secret.slice(0, 6)}…</code>. Token <span className="mono">{created.token.name}</span> acts with your permissions.
+              Use as <code>Authorization: Bearer {created.secret.slice(0, 6)}…</code>. Token <span className="mono">{created.token.name}</span> acts within your permissions and its restrictions.
             </p>
             <p className="small muted">For the CLI, supply the secret through your secure runtime environment:</p>
             <CodeLine value={`export KARAKORAM_SERVER=${window.location.origin}\nexport KARAKORAM_TOKEN='${created.secret}'\nkaractl clusters list`} />
@@ -82,6 +82,7 @@ export function ApiTokensPage() {
                   <th>Name</th>
                   <th>ID</th>
                   <th>Owner</th>
+                  <th>Restrictions</th>
                   <th>Created</th>
                   <th>Last used</th>
                   <th>Expires</th>
@@ -94,6 +95,7 @@ export function ApiTokensPage() {
                     <td title={t.name} style={{ maxWidth: 240, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.name}</td>
                     <td className="mono small" title={t.id} style={{ maxWidth: 160, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{t.id}</td>
                     <td className="mono small">{t.owner}</td>
+                    <td className="small" style={{ maxWidth: 260, whiteSpace: 'normal' }}><Badge plain>{tokenRestrictionSummary(t.restrictions)}</Badge></td>
                     <td className="small">
                       <Time iso={t.createdAt} />
                     </td>
@@ -155,20 +157,24 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
   const toast = useToast();
   const [name, setName] = useState(existing?.name ?? '');
   const [expires, setExpires] = useState(toLocalInput(existing?.expiresAt));
+  const [restrictionInput, setRestrictionInput] = useState<TokenRestrictionInput>({
+    readOnly: false, namespaces: '', clusters: '', permissions: '', allowCredentialReveal: false,
+  });
+  const restrictionForm = buildTokenRestrictions(restrictionInput);
   const [error, setError] = useState<string | null>(null);
   const expiry = tokenExpiry(expires);
   const expiresAt = expiry.expiresAt;
   const nameProblem = tokenNameError(name);
-  const valid = !nameProblem && !expiry.error;
+  const valid = !nameProblem && !expiry.error && (!!existing || Object.keys(restrictionForm.errors).length === 0);
   const submission = useRef(tokenSubmission());
 
   const save = useMutation({
-    mutationFn: async (submitted: { name: string; expiresAt?: string; key: string }) => {
+    mutationFn: async (submitted: TokenSubmission) => {
       if (existing) {
         await unwrap(api.PUT('/api-tokens/{token}', { params: { path: { token: existing.id } }, body: { name: submitted.name, expiresAt: submitted.expiresAt ?? null } }));
         return null;
       }
-      return unwrap(api.POST('/api-tokens', { headers: { 'Idempotency-Key': submitted.key }, body: { name: submitted.name, ...(submitted.expiresAt ? { expiresAt: submitted.expiresAt } : {}) } }));
+      return unwrap(api.POST('/api-tokens', { headers: { 'Idempotency-Key': submitted.key }, body: { name: submitted.name, ...(submitted.expiresAt ? { expiresAt: submitted.expiresAt } : {}), ...(submitted.restrictions ? { restrictions: submitted.restrictions } : {}) } }));
     },
     onSuccess: (c) => {
       if (c) onCreated?.(c);
@@ -189,7 +195,7 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
       title={existing ? `Edit token ${existing.name}` : 'Create API token'}
       onSubmit={() => {
         if (!valid) return false;
-        const submitted = submission.current.begin(name, expiresAt);
+        const submitted = submission.current.begin(name, expiresAt, existing ? undefined : restrictionForm.restrictions);
         if (!submitted) return false;
         setError(null);
         return save.mutateAsync(submitted).catch(() => undefined);
@@ -206,7 +212,37 @@ function TokenDialog({ existing, onClose, onCreated, onSaved }: { existing?: Tok
       {error ? <Callout tone="danger">{error}</Callout> : null}
       <TextField label="Name" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="ci-deploy" hint="1–128 characters after trimming; duplicate names are allowed." error={nameProblem} />
       <TextField label="Expires (optional)" type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} hint="Leave empty for a non-expiring token." error={expiry.error} />
-      {existing ? null : <p className="xs faint">The token inherits your permissions and is shown exactly once after creation.</p>}
+      {existing ? (
+        <div className="stack">
+          <p className="small muted">Restrictions are fixed at creation and cannot be changed. Create a new token to use different restrictions.</p>
+          <dl className="kv">
+            <dt>Restrictions</dt><dd>{tokenRestrictionSummary(existing.restrictions)}</dd>
+            {existing.restrictions ? <>
+              <dt>Read-only</dt><dd>{existing.restrictions.readOnly ? 'Yes' : 'No'}</dd>
+              <dt>Namespaces</dt><dd>{existing.restrictions.namespaces?.join(', ') || 'All permitted by your RBAC'}</dd>
+              <dt>Clusters</dt><dd>{existing.restrictions.clusters?.join(', ') || 'All permitted by your RBAC'}</dd>
+              <dt>Permissions</dt><dd>{existing.restrictions.permissions?.join(', ') || 'All permitted by your RBAC'}</dd>
+              <dt>Credential reveal</dt><dd>{existing.restrictions.allowCredentialReveal ? 'Allowed within your RBAC' : 'Denied'}</dd>
+            </> : null}
+          </dl>
+        </div>
+      ) : (
+        <>
+          <details>
+            <summary className="small">Restrictions</summary>
+            <div className="stack" style={{ marginTop: 12 }}>
+              <p className="small muted">Optional limits only remove permissions; they never grant access. Leave everything empty and unchecked for an unrestricted token. Restrictions cannot be changed later.</p>
+              <Checkbox label="Read-only" checked={restrictionInput.readOnly} onChange={(e) => setRestrictionInput({ ...restrictionInput, readOnly: e.target.checked })} />
+              <TextAreaField label="Namespaces" rows={2} mono value={restrictionInput.namespaces} onChange={(e) => setRestrictionInput({ ...restrictionInput, namespaces: e.target.value })} placeholder="production, staging" hint="Comma- or newline-separated namespace names. Empty allows all namespaces within your other limits." error={restrictionForm.errors.namespaces} />
+              <TextAreaField label="Clusters" rows={2} mono value={restrictionInput.clusters} onChange={(e) => setRestrictionInput({ ...restrictionInput, clusters: e.target.value })} placeholder="production/database" hint="Comma- or newline-separated namespace/name pairs. Empty allows all clusters within your other limits." error={restrictionForm.errors.clusters} />
+              <TextAreaField label="Permissions" rows={2} mono value={restrictionInput.permissions} onChange={(e) => setRestrictionInput({ ...restrictionInput, permissions: e.target.value })} placeholder="clusters:read, backups:*" hint="Comma- or newline-separated resource:action pairs; action may be *. Empty keeps your permissions within the other limits." error={restrictionForm.errors.permissions} />
+              <Checkbox label="Allow credential reveal" description="Warning: allows revealing credentials and other secret responses within your permissions." checked={restrictionInput.allowCredentialReveal} onChange={(e) => setRestrictionInput({ ...restrictionInput, allowCredentialReveal: e.target.checked })} />
+              <p className="xs faint">Restricted tokens deny credential reveal unless explicitly allowed above.</p>
+            </div>
+          </details>
+          <p className="xs faint">The token inherits your permissions subject to these restrictions and is shown exactly once after creation.</p>
+        </>
+      )}
     </Dialog>
   );
 }

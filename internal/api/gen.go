@@ -142,6 +142,28 @@ const (
 	CreatedRabbitMQUserTagsPolicymaker   CreatedRabbitMQUserTags = "policymaker"
 )
 
+// Defines values for DryRunResultEffectsKind.
+const (
+	BackupsDisabled DryRunResultEffectsKind = "backups-disabled"
+	Clone           DryRunResultEffectsKind = "clone"
+	InPlaceRestore  DryRunResultEffectsKind = "in-place-restore"
+	MemberAddition  DryRunResultEffectsKind = "member-addition"
+	MemberRemoval   DryRunResultEffectsKind = "member-removal"
+	PublicExposure  DryRunResultEffectsKind = "public-exposure"
+	ResourceChange  DryRunResultEffectsKind = "resource-change"
+	RestartRequired DryRunResultEffectsKind = "restart-required"
+	TlsDowngrade    DryRunResultEffectsKind = "tls-downgrade"
+	VersionUpgrade  DryRunResultEffectsKind = "version-upgrade"
+)
+
+// Defines values for DryRunResultOperation.
+const (
+	DryRunResultOperationCreate  DryRunResultOperation = "create"
+	DryRunResultOperationPatch   DryRunResultOperation = "patch"
+	DryRunResultOperationReplace DryRunResultOperation = "replace"
+	DryRunResultOperationRestore DryRunResultOperation = "restore"
+)
+
 // Defines values for ExposureIpType.
 const (
 	ExposureIpTypeIPV4 ExposureIpType = "IPV4"
@@ -1208,6 +1230,29 @@ type DatabaseUserList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// DryRunResult defines model for DryRunResult.
+type DryRunResult struct {
+	Changes []struct {
+		After  *interface{} `json:"after,omitempty"`
+		Before *interface{} `json:"before,omitempty"`
+		Path   string       `json:"path"`
+	} `json:"changes"`
+	Cluster Cluster `json:"cluster"`
+	Effects []struct {
+		Kind    DryRunResultEffectsKind `json:"kind"`
+		Message string                  `json:"message"`
+	} `json:"effects"`
+	Operation DryRunResultOperation `json:"operation"`
+	Restore   *Restore              `json:"restore,omitempty"`
+	Warnings  []string              `json:"warnings"`
+}
+
+// DryRunResultEffectsKind defines model for DryRunResult.Effects.Kind.
+type DryRunResultEffectsKind string
+
+// DryRunResultOperation defines model for DryRunResult.Operation.
+type DryRunResultOperation string
+
 // ElasticAPIKey Only API keys created through Karakoram are visible.
 type ElasticAPIKey struct {
 	Creation    int64  `json:"creation"`
@@ -1670,6 +1715,26 @@ type NamespaceTokenRotate struct {
 type NamespaceUpdate struct {
 	// Description New description; an empty string clears the description.
 	Description string `json:"description"`
+}
+
+// OAuthGrant defines model for OAuthGrant.
+type OAuthGrant struct {
+	ClientHost string     `json:"clientHost"`
+	ClientId   string     `json:"clientId"`
+	ClientName string     `json:"clientName"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  time.Time  `json:"expiresAt"`
+	Id         string     `json:"id"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Namespaces []string   `json:"namespaces"`
+	Owner      string     `json:"owner"`
+	Scopes     []string   `json:"scopes"`
+}
+
+// OAuthGrantList defines model for OAuthGrantList.
+type OAuthGrantList struct {
+	Enabled bool         `json:"enabled"`
+	Items   []OAuthGrant `json:"items"`
 }
 
 // OIDCConfig Client secret is write-only; omission on update retains the stored secret.
@@ -4329,6 +4394,42 @@ type RotateSystemUserParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// DryRunCreateClusterParams defines parameters for DryRunCreateCluster.
+type DryRunCreateClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DryRunPatchClusterParams defines parameters for DryRunPatchCluster.
+type DryRunPatchClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DryRunReplaceClusterParams defines parameters for DryRunReplaceCluster.
+type DryRunReplaceClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DryRunCreateRestoreParams defines parameters for DryRunCreateRestore.
+type DryRunCreateRestoreParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -4450,6 +4551,12 @@ type RotateNamespaceTokenParams struct {
 
 // ValidateNamespaceParams defines parameters for ValidateNamespace.
 type ValidateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteOAuthGrantParams defines parameters for DeleteOAuthGrant.
+type DeleteOAuthGrantParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -4632,6 +4739,18 @@ type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
 
 // SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
 type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
+
+// DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
+type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
+
+// DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody defines body for DryRunPatchCluster for application/merge-patch+json ContentType.
+type DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody = ClusterMergePatch
+
+// DryRunReplaceClusterJSONRequestBody defines body for DryRunReplaceCluster for application/json ContentType.
+type DryRunReplaceClusterJSONRequestBody = ReplaceClusterRequest
+
+// DryRunCreateRestoreJSONRequestBody defines body for DryRunCreateRestore for application/json ContentType.
+type DryRunCreateRestoreJSONRequestBody = CreateRestoreRequest
 
 // CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
 type CreateNamespaceJSONRequestBody = NamespaceCreate
@@ -5253,6 +5372,18 @@ type ServerInterface interface {
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateSystemUserParams)
+	// Preview validation and effects without domain side effects
+	// (POST /dry-run/clusters)
+	DryRunCreateCluster(w http.ResponseWriter, r *http.Request, params DryRunCreateClusterParams)
+	// Preview validation and effects without domain side effects
+	// (PATCH /dry-run/clusters/{cluster})
+	DryRunPatchCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DryRunPatchClusterParams)
+	// Preview validation and effects without domain side effects
+	// (PUT /dry-run/clusters/{cluster})
+	DryRunReplaceCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DryRunReplaceClusterParams)
+	// Preview validation and effects without domain side effects
+	// (POST /dry-run/clusters/{cluster}/restores)
+	DryRunCreateRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DryRunCreateRestoreParams)
 	// List the durable authorization-filtered event log
 	// (GET /events)
 	ListEvents(w http.ResponseWriter, r *http.Request, params ListEventsParams)
@@ -5286,6 +5417,12 @@ type ServerInterface interface {
 	// Revalidate a namespace token and project
 	// (POST /namespaces/{namespace}/validate)
 	ValidateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params ValidateNamespaceParams)
+	// List connected OAuth applications (own grants unless administrator)
+	// (GET /oauth-grants)
+	ListOAuthGrants(w http.ResponseWriter, r *http.Request)
+	// Revoke a connected application grant
+	// (DELETE /oauth-grants/{grant})
+	DeleteOAuthGrant(w http.ResponseWriter, r *http.Request, grant string, params DeleteOAuthGrantParams)
 	// Download this server's authoritative OpenAPI specification
 	// (GET /openapi.yaml)
 	GetOpenAPISpec(w http.ResponseWriter, r *http.Request)
@@ -14135,6 +14272,257 @@ func (siw *ServerInterfaceWrapper) RotateSystemUser(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// DryRunCreateCluster operation middleware
+func (siw *ServerInterfaceWrapper) DryRunCreateCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DryRunCreateClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DryRunCreateCluster(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DryRunPatchCluster operation middleware
+func (siw *ServerInterfaceWrapper) DryRunPatchCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DryRunPatchClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DryRunPatchCluster(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DryRunReplaceCluster operation middleware
+func (siw *ServerInterfaceWrapper) DryRunReplaceCluster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DryRunReplaceClusterParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DryRunReplaceCluster(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DryRunCreateRestore operation middleware
+func (siw *ServerInterfaceWrapper) DryRunCreateRestore(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DryRunCreateRestoreParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DryRunCreateRestore(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListEvents operation middleware
 func (siw *ServerInterfaceWrapper) ListEvents(w http.ResponseWriter, r *http.Request) {
 
@@ -14749,6 +15137,85 @@ func (siw *ServerInterfaceWrapper) ValidateNamespace(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ValidateNamespace(w, r, namespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOAuthGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListOAuthGrants(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOAuthGrants(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOAuthGrant operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOAuthGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "grant" -------------
+	var grant string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "grant", r.PathValue("grant"), &grant, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grant", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOAuthGrantParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOAuthGrant(w, r, grant, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15494,6 +15961,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/supabase/smtp-password", wrapper.SetSupabaseSMTPPassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/system-users", wrapper.ListSystemUsers)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/system-users/{user}/rotate", wrapper.RotateSystemUser)
+	m.HandleFunc("POST "+options.BaseURL+"/dry-run/clusters", wrapper.DryRunCreateCluster)
+	m.HandleFunc("PATCH "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunPatchCluster)
+	m.HandleFunc("PUT "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunReplaceCluster)
+	m.HandleFunc("POST "+options.BaseURL+"/dry-run/clusters/{cluster}/restores", wrapper.DryRunCreateRestore)
 	m.HandleFunc("GET "+options.BaseURL+"/events", wrapper.ListEvents)
 	m.HandleFunc("GET "+options.BaseURL+"/events/stream", wrapper.StreamEvents)
 	m.HandleFunc("GET "+options.BaseURL+"/healthz", wrapper.GetHealth)
@@ -15505,6 +15976,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/namespaces/{namespace}", wrapper.UpdateNamespace)
 	m.HandleFunc("PUT "+options.BaseURL+"/namespaces/{namespace}/token", wrapper.RotateNamespaceToken)
 	m.HandleFunc("POST "+options.BaseURL+"/namespaces/{namespace}/validate", wrapper.ValidateNamespace)
+	m.HandleFunc("GET "+options.BaseURL+"/oauth-grants", wrapper.ListOAuthGrants)
+	m.HandleFunc("DELETE "+options.BaseURL+"/oauth-grants/{grant}", wrapper.DeleteOAuthGrant)
 	m.HandleFunc("GET "+options.BaseURL+"/openapi.yaml", wrapper.GetOpenAPISpec)
 	m.HandleFunc("GET "+options.BaseURL+"/operations", wrapper.ListOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/operations/{operation}", wrapper.GetOperation)
@@ -29207,6 +29680,457 @@ func (response RotateSystemUser500JSONResponse) VisitRotateSystemUserResponse(w 
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type DryRunCreateClusterRequestObject struct {
+	Params DryRunCreateClusterParams
+	Body   *DryRunCreateClusterJSONRequestBody
+}
+
+type DryRunCreateClusterResponseObject interface {
+	VisitDryRunCreateClusterResponse(w http.ResponseWriter) error
+}
+
+type DryRunCreateCluster200JSONResponse DryRunResult
+
+func (response DryRunCreateCluster200JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunCreateCluster400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DryRunCreateCluster400JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DryRunCreateCluster401JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DryRunCreateCluster403JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DryRunCreateCluster404JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DryRunCreateCluster409JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DryRunCreateCluster413JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DryRunCreateCluster415JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DryRunCreateCluster422JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateCluster500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DryRunCreateCluster500JSONResponse) VisitDryRunCreateClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchClusterRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  DryRunPatchClusterParams
+	Body    *DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody
+}
+
+type DryRunPatchClusterResponseObject interface {
+	VisitDryRunPatchClusterResponse(w http.ResponseWriter) error
+}
+
+type DryRunPatchCluster200JSONResponse DryRunResult
+
+func (response DryRunPatchCluster200JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunPatchCluster400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DryRunPatchCluster400JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DryRunPatchCluster401JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DryRunPatchCluster403JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DryRunPatchCluster404JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DryRunPatchCluster409JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DryRunPatchCluster413JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DryRunPatchCluster415JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DryRunPatchCluster422JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunPatchCluster500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DryRunPatchCluster500JSONResponse) VisitDryRunPatchClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceClusterRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  DryRunReplaceClusterParams
+	Body    *DryRunReplaceClusterJSONRequestBody
+}
+
+type DryRunReplaceClusterResponseObject interface {
+	VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error
+}
+
+type DryRunReplaceCluster200JSONResponse DryRunResult
+
+func (response DryRunReplaceCluster200JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunReplaceCluster400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DryRunReplaceCluster400JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DryRunReplaceCluster401JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DryRunReplaceCluster403JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DryRunReplaceCluster404JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DryRunReplaceCluster409JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DryRunReplaceCluster413JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DryRunReplaceCluster415JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DryRunReplaceCluster422JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunReplaceCluster500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DryRunReplaceCluster500JSONResponse) VisitDryRunReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestoreRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  DryRunCreateRestoreParams
+	Body    *DryRunCreateRestoreJSONRequestBody
+}
+
+type DryRunCreateRestoreResponseObject interface {
+	VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error
+}
+
+type DryRunCreateRestore200JSONResponse DryRunResult
+
+func (response DryRunCreateRestore200JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DryRunCreateRestore400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DryRunCreateRestore400JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DryRunCreateRestore401JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DryRunCreateRestore403JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DryRunCreateRestore404JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DryRunCreateRestore409JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DryRunCreateRestore413JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DryRunCreateRestore415JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DryRunCreateRestore422JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DryRunCreateRestore500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DryRunCreateRestore500JSONResponse) VisitDryRunCreateRestoreResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ListEventsRequestObject struct {
 	Params ListEventsParams
 }
@@ -30500,6 +31424,109 @@ func (response ValidateNamespace422JSONResponse) VisitValidateNamespaceResponse(
 type ValidateNamespace500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ValidateNamespace500JSONResponse) VisitValidateNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOAuthGrantsRequestObject struct {
+}
+
+type ListOAuthGrantsResponseObject interface {
+	VisitListOAuthGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListOAuthGrants200JSONResponse OAuthGrantList
+
+func (response ListOAuthGrants200JSONResponse) VisitListOAuthGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListOAuthGrants401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListOAuthGrants401JSONResponse) VisitListOAuthGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOAuthGrants403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListOAuthGrants403JSONResponse) VisitListOAuthGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOAuthGrants500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListOAuthGrants500JSONResponse) VisitListOAuthGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOAuthGrantRequestObject struct {
+	Grant  string `json:"grant"`
+	Params DeleteOAuthGrantParams
+}
+
+type DeleteOAuthGrantResponseObject interface {
+	VisitDeleteOAuthGrantResponse(w http.ResponseWriter) error
+}
+
+type DeleteOAuthGrant204Response struct {
+}
+
+func (response DeleteOAuthGrant204Response) VisitDeleteOAuthGrantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOAuthGrant401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteOAuthGrant401JSONResponse) VisitDeleteOAuthGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOAuthGrant403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteOAuthGrant403JSONResponse) VisitDeleteOAuthGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOAuthGrant404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteOAuthGrant404JSONResponse) VisitDeleteOAuthGrantResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOAuthGrant500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteOAuthGrant500JSONResponse) VisitDeleteOAuthGrantResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
@@ -32414,6 +33441,18 @@ type StrictServerInterface interface {
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(ctx context.Context, request RotateSystemUserRequestObject) (RotateSystemUserResponseObject, error)
+	// Preview validation and effects without domain side effects
+	// (POST /dry-run/clusters)
+	DryRunCreateCluster(ctx context.Context, request DryRunCreateClusterRequestObject) (DryRunCreateClusterResponseObject, error)
+	// Preview validation and effects without domain side effects
+	// (PATCH /dry-run/clusters/{cluster})
+	DryRunPatchCluster(ctx context.Context, request DryRunPatchClusterRequestObject) (DryRunPatchClusterResponseObject, error)
+	// Preview validation and effects without domain side effects
+	// (PUT /dry-run/clusters/{cluster})
+	DryRunReplaceCluster(ctx context.Context, request DryRunReplaceClusterRequestObject) (DryRunReplaceClusterResponseObject, error)
+	// Preview validation and effects without domain side effects
+	// (POST /dry-run/clusters/{cluster}/restores)
+	DryRunCreateRestore(ctx context.Context, request DryRunCreateRestoreRequestObject) (DryRunCreateRestoreResponseObject, error)
 	// List the durable authorization-filtered event log
 	// (GET /events)
 	ListEvents(ctx context.Context, request ListEventsRequestObject) (ListEventsResponseObject, error)
@@ -32447,6 +33486,12 @@ type StrictServerInterface interface {
 	// Revalidate a namespace token and project
 	// (POST /namespaces/{namespace}/validate)
 	ValidateNamespace(ctx context.Context, request ValidateNamespaceRequestObject) (ValidateNamespaceResponseObject, error)
+	// List connected OAuth applications (own grants unless administrator)
+	// (GET /oauth-grants)
+	ListOAuthGrants(ctx context.Context, request ListOAuthGrantsRequestObject) (ListOAuthGrantsResponseObject, error)
+	// Revoke a connected application grant
+	// (DELETE /oauth-grants/{grant})
+	DeleteOAuthGrant(ctx context.Context, request DeleteOAuthGrantRequestObject) (DeleteOAuthGrantResponseObject, error)
 	// Download this server's authoritative OpenAPI specification
 	// (GET /openapi.yaml)
 	GetOpenAPISpec(ctx context.Context, request GetOpenAPISpecRequestObject) (GetOpenAPISpecResponseObject, error)
@@ -36416,6 +37461,141 @@ func (sh *strictHandler) RotateSystemUser(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// DryRunCreateCluster operation middleware
+func (sh *strictHandler) DryRunCreateCluster(w http.ResponseWriter, r *http.Request, params DryRunCreateClusterParams) {
+	var request DryRunCreateClusterRequestObject
+
+	request.Params = params
+
+	var body DryRunCreateClusterJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DryRunCreateCluster(ctx, request.(DryRunCreateClusterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DryRunCreateCluster")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DryRunCreateClusterResponseObject); ok {
+		if err := validResponse.VisitDryRunCreateClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DryRunPatchCluster operation middleware
+func (sh *strictHandler) DryRunPatchCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DryRunPatchClusterParams) {
+	var request DryRunPatchClusterRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DryRunPatchCluster(ctx, request.(DryRunPatchClusterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DryRunPatchCluster")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DryRunPatchClusterResponseObject); ok {
+		if err := validResponse.VisitDryRunPatchClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DryRunReplaceCluster operation middleware
+func (sh *strictHandler) DryRunReplaceCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DryRunReplaceClusterParams) {
+	var request DryRunReplaceClusterRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body DryRunReplaceClusterJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DryRunReplaceCluster(ctx, request.(DryRunReplaceClusterRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DryRunReplaceCluster")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DryRunReplaceClusterResponseObject); ok {
+		if err := validResponse.VisitDryRunReplaceClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DryRunCreateRestore operation middleware
+func (sh *strictHandler) DryRunCreateRestore(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params DryRunCreateRestoreParams) {
+	var request DryRunCreateRestoreRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body DryRunCreateRestoreJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DryRunCreateRestore(ctx, request.(DryRunCreateRestoreRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DryRunCreateRestore")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DryRunCreateRestoreResponseObject); ok {
+		if err := validResponse.VisitDryRunCreateRestoreResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListEvents operation middleware
 func (sh *strictHandler) ListEvents(w http.ResponseWriter, r *http.Request, params ListEventsParams) {
 	var request ListEventsRequestObject
@@ -36718,6 +37898,57 @@ func (sh *strictHandler) ValidateNamespace(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ValidateNamespaceResponseObject); ok {
 		if err := validResponse.VisitValidateNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOAuthGrants operation middleware
+func (sh *strictHandler) ListOAuthGrants(w http.ResponseWriter, r *http.Request) {
+	var request ListOAuthGrantsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOAuthGrants(ctx, request.(ListOAuthGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOAuthGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOAuthGrantsResponseObject); ok {
+		if err := validResponse.VisitListOAuthGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOAuthGrant operation middleware
+func (sh *strictHandler) DeleteOAuthGrant(w http.ResponseWriter, r *http.Request, grant string, params DeleteOAuthGrantParams) {
+	var request DeleteOAuthGrantRequestObject
+
+	request.Grant = grant
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOAuthGrant(ctx, request.(DeleteOAuthGrantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOAuthGrant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOAuthGrantResponseObject); ok {
+		if err := validResponse.VisitDeleteOAuthGrantResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

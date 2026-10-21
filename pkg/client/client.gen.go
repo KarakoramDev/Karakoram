@@ -144,6 +144,28 @@ const (
 	CreatedRabbitMQUserTagsPolicymaker   CreatedRabbitMQUserTags = "policymaker"
 )
 
+// Defines values for DryRunResultEffectsKind.
+const (
+	BackupsDisabled DryRunResultEffectsKind = "backups-disabled"
+	Clone           DryRunResultEffectsKind = "clone"
+	InPlaceRestore  DryRunResultEffectsKind = "in-place-restore"
+	MemberAddition  DryRunResultEffectsKind = "member-addition"
+	MemberRemoval   DryRunResultEffectsKind = "member-removal"
+	PublicExposure  DryRunResultEffectsKind = "public-exposure"
+	ResourceChange  DryRunResultEffectsKind = "resource-change"
+	RestartRequired DryRunResultEffectsKind = "restart-required"
+	TlsDowngrade    DryRunResultEffectsKind = "tls-downgrade"
+	VersionUpgrade  DryRunResultEffectsKind = "version-upgrade"
+)
+
+// Defines values for DryRunResultOperation.
+const (
+	DryRunResultOperationCreate  DryRunResultOperation = "create"
+	DryRunResultOperationPatch   DryRunResultOperation = "patch"
+	DryRunResultOperationReplace DryRunResultOperation = "replace"
+	DryRunResultOperationRestore DryRunResultOperation = "restore"
+)
+
 // Defines values for ExposureIpType.
 const (
 	ExposureIpTypeIPV4 ExposureIpType = "IPV4"
@@ -1210,6 +1232,29 @@ type DatabaseUserList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// DryRunResult defines model for DryRunResult.
+type DryRunResult struct {
+	Changes []struct {
+		After  *interface{} `json:"after,omitempty"`
+		Before *interface{} `json:"before,omitempty"`
+		Path   string       `json:"path"`
+	} `json:"changes"`
+	Cluster Cluster `json:"cluster"`
+	Effects []struct {
+		Kind    DryRunResultEffectsKind `json:"kind"`
+		Message string                  `json:"message"`
+	} `json:"effects"`
+	Operation DryRunResultOperation `json:"operation"`
+	Restore   *Restore              `json:"restore,omitempty"`
+	Warnings  []string              `json:"warnings"`
+}
+
+// DryRunResultEffectsKind defines model for DryRunResult.Effects.Kind.
+type DryRunResultEffectsKind string
+
+// DryRunResultOperation defines model for DryRunResult.Operation.
+type DryRunResultOperation string
+
 // ElasticAPIKey Only API keys created through Karakoram are visible.
 type ElasticAPIKey struct {
 	Creation    int64  `json:"creation"`
@@ -1672,6 +1717,26 @@ type NamespaceTokenRotate struct {
 type NamespaceUpdate struct {
 	// Description New description; an empty string clears the description.
 	Description string `json:"description"`
+}
+
+// OAuthGrant defines model for OAuthGrant.
+type OAuthGrant struct {
+	ClientHost string     `json:"clientHost"`
+	ClientId   string     `json:"clientId"`
+	ClientName string     `json:"clientName"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  time.Time  `json:"expiresAt"`
+	Id         string     `json:"id"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Namespaces []string   `json:"namespaces"`
+	Owner      string     `json:"owner"`
+	Scopes     []string   `json:"scopes"`
+}
+
+// OAuthGrantList defines model for OAuthGrantList.
+type OAuthGrantList struct {
+	Enabled bool         `json:"enabled"`
+	Items   []OAuthGrant `json:"items"`
 }
 
 // OIDCConfig Client secret is write-only; omission on update retains the stored secret.
@@ -4331,6 +4396,42 @@ type RotateSystemUserParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// DryRunCreateClusterParams defines parameters for DryRunCreateCluster.
+type DryRunCreateClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DryRunPatchClusterParams defines parameters for DryRunPatchCluster.
+type DryRunPatchClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DryRunReplaceClusterParams defines parameters for DryRunReplaceCluster.
+type DryRunReplaceClusterParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DryRunCreateRestoreParams defines parameters for DryRunCreateRestore.
+type DryRunCreateRestoreParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -4452,6 +4553,12 @@ type RotateNamespaceTokenParams struct {
 
 // ValidateNamespaceParams defines parameters for ValidateNamespace.
 type ValidateNamespaceParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteOAuthGrantParams defines parameters for DeleteOAuthGrant.
+type DeleteOAuthGrantParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
@@ -4634,6 +4741,18 @@ type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
 
 // SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
 type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
+
+// DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
+type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
+
+// DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody defines body for DryRunPatchCluster for application/merge-patch+json ContentType.
+type DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody = ClusterMergePatch
+
+// DryRunReplaceClusterJSONRequestBody defines body for DryRunReplaceCluster for application/json ContentType.
+type DryRunReplaceClusterJSONRequestBody = ReplaceClusterRequest
+
+// DryRunCreateRestoreJSONRequestBody defines body for DryRunCreateRestore for application/json ContentType.
+type DryRunCreateRestoreJSONRequestBody = CreateRestoreRequest
 
 // CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
 type CreateNamespaceJSONRequestBody = NamespaceCreate
@@ -5416,6 +5535,26 @@ type ClientInterface interface {
 	// RotateSystemUser request
 	RotateSystemUser(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DryRunCreateClusterWithBody request with any body
+	DryRunCreateClusterWithBody(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	DryRunCreateCluster(ctx context.Context, params *DryRunCreateClusterParams, body DryRunCreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DryRunPatchClusterWithBody request with any body
+	DryRunPatchClusterWithBody(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	DryRunPatchClusterWithApplicationMergePatchPlusJSONBody(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, body DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DryRunReplaceClusterWithBody request with any body
+	DryRunReplaceClusterWithBody(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	DryRunReplaceCluster(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, body DryRunReplaceClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DryRunCreateRestoreWithBody request with any body
+	DryRunCreateRestoreWithBody(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	DryRunCreateRestore(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, body DryRunCreateRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEvents request
 	ListEvents(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5454,6 +5593,12 @@ type ClientInterface interface {
 
 	// ValidateNamespace request
 	ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOAuthGrants request
+	ListOAuthGrants(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOAuthGrant request
+	DeleteOAuthGrant(ctx context.Context, grant string, params *DeleteOAuthGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOpenAPISpec request
 	GetOpenAPISpec(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7616,6 +7761,102 @@ func (c *Client) RotateSystemUser(ctx context.Context, cluster ClusterPath, user
 	return c.Client.Do(req)
 }
 
+func (c *Client) DryRunCreateClusterWithBody(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunCreateClusterRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunCreateCluster(ctx context.Context, params *DryRunCreateClusterParams, body DryRunCreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunCreateClusterRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunPatchClusterWithBody(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunPatchClusterRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunPatchClusterWithApplicationMergePatchPlusJSONBody(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, body DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunPatchClusterRequestWithApplicationMergePatchPlusJSONBody(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunReplaceClusterWithBody(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunReplaceClusterRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunReplaceCluster(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, body DryRunReplaceClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunReplaceClusterRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunCreateRestoreWithBody(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunCreateRestoreRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DryRunCreateRestore(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, body DryRunCreateRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDryRunCreateRestoreRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListEvents(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListEventsRequest(c.Server, params)
 	if err != nil {
@@ -7774,6 +8015,30 @@ func (c *Client) RotateNamespaceToken(ctx context.Context, namespace NamespacePa
 
 func (c *Client) ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewValidateNamespaceRequest(c.Server, namespace, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListOAuthGrants(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOAuthGrantsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteOAuthGrant(ctx context.Context, grant string, params *DeleteOAuthGrantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOAuthGrantRequest(c.Server, grant, params)
 	if err != nil {
 		return nil, err
 	}
@@ -18092,6 +18357,335 @@ func NewRotateSystemUserRequest(server string, cluster ClusterPath, user string,
 	return req, nil
 }
 
+// NewDryRunCreateClusterRequest calls the generic DryRunCreateCluster builder with application/json body
+func NewDryRunCreateClusterRequest(server string, params *DryRunCreateClusterParams, body DryRunCreateClusterJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDryRunCreateClusterRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewDryRunCreateClusterRequestWithBody generates requests for DryRunCreateCluster with any type of body
+func NewDryRunCreateClusterRequestWithBody(server string, params *DryRunCreateClusterParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/dry-run/clusters")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDryRunPatchClusterRequestWithApplicationMergePatchPlusJSONBody calls the generic DryRunPatchCluster builder with application/merge-patch+json body
+func NewDryRunPatchClusterRequestWithApplicationMergePatchPlusJSONBody(server string, cluster ClusterPath, params *DryRunPatchClusterParams, body DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDryRunPatchClusterRequestWithBody(server, cluster, params, "application/merge-patch+json", bodyReader)
+}
+
+// NewDryRunPatchClusterRequestWithBody generates requests for DryRunPatchCluster with any type of body
+func NewDryRunPatchClusterRequestWithBody(server string, cluster ClusterPath, params *DryRunPatchClusterParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/dry-run/clusters/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDryRunReplaceClusterRequest calls the generic DryRunReplaceCluster builder with application/json body
+func NewDryRunReplaceClusterRequest(server string, cluster ClusterPath, params *DryRunReplaceClusterParams, body DryRunReplaceClusterJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDryRunReplaceClusterRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewDryRunReplaceClusterRequestWithBody generates requests for DryRunReplaceCluster with any type of body
+func NewDryRunReplaceClusterRequestWithBody(server string, cluster ClusterPath, params *DryRunReplaceClusterParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/dry-run/clusters/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDryRunCreateRestoreRequest calls the generic DryRunCreateRestore builder with application/json body
+func NewDryRunCreateRestoreRequest(server string, cluster ClusterPath, params *DryRunCreateRestoreParams, body DryRunCreateRestoreJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDryRunCreateRestoreRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewDryRunCreateRestoreRequestWithBody generates requests for DryRunCreateRestore with any type of body
+func NewDryRunCreateRestoreRequestWithBody(server string, cluster ClusterPath, params *DryRunCreateRestoreParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/dry-run/clusters/%s/restores", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListEventsRequest generates requests for ListEvents
 func NewListEventsRequest(server string, params *ListEventsParams) (*http.Request, error) {
 	var err error
@@ -18870,6 +19464,82 @@ func NewValidateNamespaceRequest(server string, namespace NamespacePath, params 
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListOAuthGrantsRequest generates requests for ListOAuthGrants
+func NewListOAuthGrantsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth-grants")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteOAuthGrantRequest generates requests for DeleteOAuthGrant
+func NewDeleteOAuthGrantRequest(server string, grant string, params *DeleteOAuthGrantParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "grant", runtime.ParamLocationPath, grant)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth-grants/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -20024,6 +20694,26 @@ type ClientWithResponsesInterface interface {
 	// RotateSystemUserWithResponse request
 	RotateSystemUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*RotateSystemUserResponse, error)
 
+	// DryRunCreateClusterWithBodyWithResponse request with any body
+	DryRunCreateClusterWithBodyWithResponse(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunCreateClusterResponse, error)
+
+	DryRunCreateClusterWithResponse(ctx context.Context, params *DryRunCreateClusterParams, body DryRunCreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunCreateClusterResponse, error)
+
+	// DryRunPatchClusterWithBodyWithResponse request with any body
+	DryRunPatchClusterWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunPatchClusterResponse, error)
+
+	DryRunPatchClusterWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, body DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunPatchClusterResponse, error)
+
+	// DryRunReplaceClusterWithBodyWithResponse request with any body
+	DryRunReplaceClusterWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunReplaceClusterResponse, error)
+
+	DryRunReplaceClusterWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, body DryRunReplaceClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunReplaceClusterResponse, error)
+
+	// DryRunCreateRestoreWithBodyWithResponse request with any body
+	DryRunCreateRestoreWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunCreateRestoreResponse, error)
+
+	DryRunCreateRestoreWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, body DryRunCreateRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunCreateRestoreResponse, error)
+
 	// ListEventsWithResponse request
 	ListEventsWithResponse(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*ListEventsResponse, error)
 
@@ -20062,6 +20752,12 @@ type ClientWithResponsesInterface interface {
 
 	// ValidateNamespaceWithResponse request
 	ValidateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*ValidateNamespaceResponse, error)
+
+	// ListOAuthGrantsWithResponse request
+	ListOAuthGrantsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOAuthGrantsResponse, error)
+
+	// DeleteOAuthGrantWithResponse request
+	DeleteOAuthGrantWithResponse(ctx context.Context, grant string, params *DeleteOAuthGrantParams, reqEditors ...RequestEditorFn) (*DeleteOAuthGrantResponse, error)
 
 	// GetOpenAPISpecWithResponse request
 	GetOpenAPISpecWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOpenAPISpecResponse, error)
@@ -24010,6 +24706,130 @@ func (r RotateSystemUserResponse) StatusCode() int {
 	return 0
 }
 
+type DryRunCreateClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DryRunResult
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DryRunCreateClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DryRunCreateClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DryRunPatchClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DryRunResult
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DryRunPatchClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DryRunPatchClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DryRunReplaceClusterResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DryRunResult
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DryRunReplaceClusterResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DryRunReplaceClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DryRunCreateRestoreResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DryRunResult
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DryRunCreateRestoreResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DryRunCreateRestoreResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListEventsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -24340,6 +25160,56 @@ func (r ValidateNamespaceResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ValidateNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListOAuthGrantsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OAuthGrantList
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOAuthGrantsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOAuthGrantsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteOAuthGrantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOAuthGrantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOAuthGrantResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -26305,6 +27175,74 @@ func (c *ClientWithResponses) RotateSystemUserWithResponse(ctx context.Context, 
 	return ParseRotateSystemUserResponse(rsp)
 }
 
+// DryRunCreateClusterWithBodyWithResponse request with arbitrary body returning *DryRunCreateClusterResponse
+func (c *ClientWithResponses) DryRunCreateClusterWithBodyWithResponse(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunCreateClusterResponse, error) {
+	rsp, err := c.DryRunCreateClusterWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunCreateClusterResponse(rsp)
+}
+
+func (c *ClientWithResponses) DryRunCreateClusterWithResponse(ctx context.Context, params *DryRunCreateClusterParams, body DryRunCreateClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunCreateClusterResponse, error) {
+	rsp, err := c.DryRunCreateCluster(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunCreateClusterResponse(rsp)
+}
+
+// DryRunPatchClusterWithBodyWithResponse request with arbitrary body returning *DryRunPatchClusterResponse
+func (c *ClientWithResponses) DryRunPatchClusterWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunPatchClusterResponse, error) {
+	rsp, err := c.DryRunPatchClusterWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunPatchClusterResponse(rsp)
+}
+
+func (c *ClientWithResponses) DryRunPatchClusterWithApplicationMergePatchPlusJSONBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunPatchClusterParams, body DryRunPatchClusterApplicationMergePatchPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunPatchClusterResponse, error) {
+	rsp, err := c.DryRunPatchClusterWithApplicationMergePatchPlusJSONBody(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunPatchClusterResponse(rsp)
+}
+
+// DryRunReplaceClusterWithBodyWithResponse request with arbitrary body returning *DryRunReplaceClusterResponse
+func (c *ClientWithResponses) DryRunReplaceClusterWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunReplaceClusterResponse, error) {
+	rsp, err := c.DryRunReplaceClusterWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunReplaceClusterResponse(rsp)
+}
+
+func (c *ClientWithResponses) DryRunReplaceClusterWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunReplaceClusterParams, body DryRunReplaceClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunReplaceClusterResponse, error) {
+	rsp, err := c.DryRunReplaceCluster(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunReplaceClusterResponse(rsp)
+}
+
+// DryRunCreateRestoreWithBodyWithResponse request with arbitrary body returning *DryRunCreateRestoreResponse
+func (c *ClientWithResponses) DryRunCreateRestoreWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunCreateRestoreResponse, error) {
+	rsp, err := c.DryRunCreateRestoreWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunCreateRestoreResponse(rsp)
+}
+
+func (c *ClientWithResponses) DryRunCreateRestoreWithResponse(ctx context.Context, cluster ClusterPath, params *DryRunCreateRestoreParams, body DryRunCreateRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*DryRunCreateRestoreResponse, error) {
+	rsp, err := c.DryRunCreateRestore(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDryRunCreateRestoreResponse(rsp)
+}
+
 // ListEventsWithResponse request returning *ListEventsResponse
 func (c *ClientWithResponses) ListEventsWithResponse(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*ListEventsResponse, error) {
 	rsp, err := c.ListEvents(ctx, params, reqEditors...)
@@ -26426,6 +27364,24 @@ func (c *ClientWithResponses) ValidateNamespaceWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseValidateNamespaceResponse(rsp)
+}
+
+// ListOAuthGrantsWithResponse request returning *ListOAuthGrantsResponse
+func (c *ClientWithResponses) ListOAuthGrantsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOAuthGrantsResponse, error) {
+	rsp, err := c.ListOAuthGrants(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOAuthGrantsResponse(rsp)
+}
+
+// DeleteOAuthGrantWithResponse request returning *DeleteOAuthGrantResponse
+func (c *ClientWithResponses) DeleteOAuthGrantWithResponse(ctx context.Context, grant string, params *DeleteOAuthGrantParams, reqEditors ...RequestEditorFn) (*DeleteOAuthGrantResponse, error) {
+	rsp, err := c.DeleteOAuthGrant(ctx, grant, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOAuthGrantResponse(rsp)
 }
 
 // GetOpenAPISpecWithResponse request returning *GetOpenAPISpecResponse
@@ -37048,6 +38004,362 @@ func ParseRotateSystemUserResponse(rsp *http.Response) (*RotateSystemUserRespons
 	return response, nil
 }
 
+// ParseDryRunCreateClusterResponse parses an HTTP response from a DryRunCreateClusterWithResponse call
+func ParseDryRunCreateClusterResponse(rsp *http.Response) (*DryRunCreateClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DryRunCreateClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DryRunResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDryRunPatchClusterResponse parses an HTTP response from a DryRunPatchClusterWithResponse call
+func ParseDryRunPatchClusterResponse(rsp *http.Response) (*DryRunPatchClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DryRunPatchClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DryRunResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDryRunReplaceClusterResponse parses an HTTP response from a DryRunReplaceClusterWithResponse call
+func ParseDryRunReplaceClusterResponse(rsp *http.Response) (*DryRunReplaceClusterResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DryRunReplaceClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DryRunResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDryRunCreateRestoreResponse parses an HTTP response from a DryRunCreateRestoreWithResponse call
+func ParseDryRunCreateRestoreResponse(rsp *http.Response) (*DryRunCreateRestoreResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DryRunCreateRestoreResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DryRunResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListEventsResponse parses an HTTP response from a ListEventsWithResponse call
 func ParseListEventsResponse(rsp *http.Response) (*ListEventsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -37979,6 +39291,100 @@ func ParseValidateNamespaceResponse(rsp *http.Response) (*ValidateNamespaceRespo
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOAuthGrantsResponse parses an HTTP response from a ListOAuthGrantsWithResponse call
+func ParseListOAuthGrantsResponse(rsp *http.Response) (*ListOAuthGrantsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOAuthGrantsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OAuthGrantList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOAuthGrantResponse parses an HTTP response from a DeleteOAuthGrantWithResponse call
+func ParseDeleteOAuthGrantResponse(rsp *http.Response) (*DeleteOAuthGrantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOAuthGrantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError

@@ -87,6 +87,9 @@ type Principal struct {
 // Actor returns the persisted account identity scoped to its OIDC issuer,
 // distinguishing API tokens by public name and ID without credential material.
 func (p Principal) Actor() string {
+	if p.Via == "oauth" {
+		return p.Account + " (mcp: " + p.TokenName + ")"
+	}
 	if p.Via == "token" {
 		if p.OIDCIssuer != "" {
 			if p.TokenName == "" {

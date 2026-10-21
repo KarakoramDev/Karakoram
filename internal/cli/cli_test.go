@@ -449,6 +449,13 @@ func TestLoginAndLogout(t *testing.T) {
 			http.SetCookie(w, &http.Cookie{Name: "karakoram_access", Value: "session", Path: "/"})
 			fmt.Fprint(w, `{"csrfToken":"csrf","account":{"name":"admin"}}`)
 		case "/api/v1/api-tokens":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			if _, restricted := body["restrictions"]; restricted {
+				t.Error("login token must remain unrestricted")
+			}
 			if r.Header.Get("X-Karakoram-CSRF") != "csrf" {
 				t.Error("missing CSRF")
 			}

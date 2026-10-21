@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE, ApiError, errorMessage } from '@/api/client';
 import { useVersion } from '@/api/hooks';
@@ -31,8 +31,14 @@ export function LoginPage() {
   const returnTo = safeReturnTo(params.get('returnTo'));
   const ssoError = params.get('error');
   const passwordChanged = params.get('passwordChanged') === '1';
+  useEffect(() => {
+    if (auth.status === 'authenticated' && !auth.user?.mustChangePassword && returnTo.startsWith('/oauth/authorize?')) {
+      window.location.replace(returnTo);
+    }
+  }, [auth.status, auth.user?.mustChangePassword, returnTo]);
 
   if (auth.status === 'authenticated') {
+    if (!auth.user?.mustChangePassword && returnTo.startsWith('/oauth/authorize?')) return null;
     return <Navigate to={auth.user?.mustChangePassword ? '/change-password' : returnTo} replace />;
   }
 
@@ -42,7 +48,8 @@ export function LoginPage() {
     setError(null);
     try {
       const user = await auth.login(username.trim(), password);
-      navigate(user.mustChangePassword ? '/change-password' : returnTo, { replace: true });
+      if (!user.mustChangePassword && returnTo.startsWith('/oauth/authorize?')) window.location.assign(returnTo);
+      else navigate(user.mustChangePassword ? '/change-password' : returnTo, { replace: true });
     } catch (err) {
       setError(loginFailureMessage(errorMessage(err), err instanceof ApiError ? err.details : undefined));
     } finally {

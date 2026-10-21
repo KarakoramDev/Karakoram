@@ -274,7 +274,7 @@ func (s *Server) stream(ctx context.Context) response {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			p, err := s.Auth.Authenticate(request(ctx))
+			p, err := s.authenticate(request(ctx))
 			if err != nil {
 				if canceled := ctx.Err(); canceled != nil {
 					return canceled

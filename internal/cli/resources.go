@@ -20,6 +20,8 @@ import (
 
 func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	switch {
+	case s.operation == "createAPIToken":
+		tokenFlags(c)
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -105,6 +107,9 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 }
 
 func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error) {
+	if s.operation == "createAPIToken" {
+		return a.tokenBody(cmd)
+	}
 	if strings.HasPrefix(s.path, "namespaces ") {
 		return a.namespaceBody(cmd, s.operation)
 	}
@@ -124,7 +129,7 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 				return
 			}
 			switch flag.Name {
-			case "file", "wait", "timeout", "yes", "into-new":
+			case "file", "wait", "timeout", "yes", "into-new", "dry-run":
 				return
 			}
 			for _, query := range s.query {
@@ -572,9 +577,17 @@ func (a *app) clone(cmd *cobra.Command, cluster, name string, body any) error {
 		}
 	}
 	spec["dataSource"] = dataSource
-	result, err := a.request(cmd.Context(), "createCluster", nil, nil, map[string]any{"name": name, "spec": spec})
+	op := "createCluster"
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	if dryRun {
+		op = dryRunOperation(op)
+	}
+	result, err := a.request(cmd.Context(), op, nil, nil, map[string]any{"name": name, "spec": spec})
 	if err != nil {
 		return err
+	}
+	if dryRun {
+		return a.printDryRun(result)
 	}
 	return a.print(result)
 }

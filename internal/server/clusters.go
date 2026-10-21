@@ -80,7 +80,7 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	if err != nil {
 		return s.failure(err)
 	}
-	actor := principal(ctx).Actor()
+	actor := store.Actor(ctx)
 	op := domain.Operation{Namespace: ref.Namespace, Cluster: ref.Name, Kind: kind, Payload: data, Actor: actor}
 	if err = s.Store.EnqueueOperation(ctx, &op); err != nil {
 		return s.failure(err)
@@ -129,6 +129,12 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 }
 
 func (s *Server) cluster(ctx context.Context, name string, in input) response {
+	// Preview and mutation deliberately share every normalization and validation
+	// branch. Preview exits only at the durable admission boundary.
+	dryRun := strings.HasPrefix(name, "DryRun")
+	if dryRun {
+		name = strings.TrimPrefix(name, "DryRun")
+	}
 	switch name {
 	case "ListProviders":
 		out := []api.Provider{}
@@ -218,7 +224,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		op := domain.Operation{Kind: domain.OperationCreate, Actor: principal(ctx).Actor()}
+		if dryRun {
+			if err := s.Store.CheckCreateCluster(ctx, &c); err != nil {
+				return s.failure(err)
+			}
+			return s.dryRunResult("create", nil, &c, nil)
+		}
+		op := domain.Operation{Kind: domain.OperationCreate, Actor: store.Actor(ctx)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := c
 			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
@@ -237,7 +249,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
 			if err = s.recordAudit(ctx, domain.Event{
 				Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
-				Actor: principal(ctx).Actor(), Type: "Warning", Reason: "DeprecatedVersion",
+				Actor: store.Actor(ctx), Type: "Warning", Reason: "DeprecatedVersion",
 				Message: rabbitMQ435Warning,
 			}); err != nil {
 				return s.failure(err)
@@ -264,6 +276,19 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.failure(err)
 	}
 	c := rc.Cluster
+	// Providers may normalize maps and pointer fields during validation.
+	// Isolate both the validation snapshot and candidate from shared state.
+	if dryRun {
+		data, copyErr := json.Marshal(c)
+		if copyErr != nil {
+			return s.failure(copyErr)
+		}
+		c = new(domain.Cluster)
+		if copyErr = json.Unmarshal(data, c); copyErr != nil {
+			return s.failure(copyErr)
+		}
+		rc.Cluster = c
+	}
 	ctx = store.WithClusterSnapshot(ctx, c)
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
 		return s.unsupportedClusterAction(name, p)
@@ -375,7 +400,18 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		} else if !sameTLS(c.Spec.TLS, next.Spec.TLS) || len(values) != 0 {
 			kind = domain.OperationTLS
 		}
-		op := domain.Operation{Kind: kind, Actor: principal(ctx).Actor()}
+		if dryRun {
+			preview := domain.Operation{Kind: kind}
+			if err := s.Store.CheckClusterSpec(store.WithOperation(ctx, &preview), c.Ref(), next.Spec, len(values) != 0); err != nil {
+				return s.failure(err)
+			}
+			operation := "replace"
+			if name == "PatchCluster" {
+				operation = "patch"
+			}
+			return s.dryRunResult(operation, c, &next, nil)
+		}
+		op := domain.Operation{Kind: kind, Actor: store.Actor(ctx)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := next
 			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
@@ -384,7 +420,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		ctx = store.WithOperation(ctx, &op)
 		audit := &store.SpecUpdateAudit{Build: func(before, after domain.ClusterSpec, generation int64, secrets []store.SpecSecretChange) domain.Event {
 			e := clusterSpecAuditEvent(c.Name, generation, before, after, secrets)
-			e.Namespace, e.Actor, e.Operation = c.Namespace, principal(ctx).Actor(), op.ID
+			e.Namespace, e.Actor, e.Operation = c.Namespace, store.Actor(ctx), op.ID
 			return e
 		}}
 		ctx = store.WithSpecUpdateAudit(ctx, audit)
@@ -401,7 +437,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "DeleteCluster":
 		q := request(ctx).URL.Query()
 		opts := domain.DeleteOptions{KeepVolumes: q.Get("keepVolumes") == "true", KeepBackups: q.Get("keepBackups") == "true"}
-		op := domain.Operation{Kind: domain.OperationDelete, Actor: principal(ctx).Actor()}
+		op := domain.Operation{Kind: domain.OperationDelete, Actor: store.Actor(ctx)}
 		ctx = store.WithOperation(ctx, &op)
 		if err = s.Store.MarkClusterDeleting(ctx, clusterRef(ctx, c.Name), opts); err != nil {
 			return s.failure(err)
@@ -409,7 +445,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: operationAPI(op), operationID: op.ID}
 	case "ResumeCluster":
-		op := domain.Operation{Kind: domain.OperationResume, Actor: principal(ctx).Actor()}
+		op := domain.Operation{Kind: domain.OperationResume, Actor: store.Actor(ctx)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := *c
 			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
@@ -439,7 +475,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return fail(409, "conflict", "No platform deployments are in DeploymentRetriesExhausted for the current retry epoch")
 		}
 		slices.Sort(exhausted)
-		op := domain.Operation{Kind: domain.OperationUpdate, Actor: principal(ctx).Actor()}
+		op := domain.Operation{Kind: domain.OperationUpdate, Actor: store.Actor(ctx)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := *c
 			accepted.Spec.RetryEpoch++
@@ -450,7 +486,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		audit := &store.SpecUpdateAudit{Build: func(before, after domain.ClusterSpec, generation int64, _ []store.SpecSecretChange) domain.Event {
 			return domain.Event{
 				Namespace: c.Namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
-				Actor: principal(ctx).Actor(), Operation: op.ID, Type: "Normal", Reason: "DeploymentRetriesRearmed",
+				Actor: store.Actor(ctx), Operation: op.ID, Type: "Normal", Reason: "DeploymentRetriesRearmed",
 				Message: fmt.Sprintf("Deployment retry epoch %d -> %d; re-armed members/components: %s", before.RetryEpoch, after.RetryEpoch, strings.Join(exhausted, ", ")),
 			}
 		}}
@@ -562,7 +598,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if c.Spec.Provider != "psmdb" {
 			v.Provider = c.Spec.Provider
 		}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup", Actor: store.Actor(ctx), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			return response{status: 202, body: backupAPI(v), operationID: op.ID}
 		})
@@ -576,7 +612,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "delete-backup", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "delete-backup", Actor: store.Actor(ctx), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
 		if err = s.Store.EnqueueBackupDeletion(ctx, b, &op); err != nil {
 			return s.failure(err)
 		}
@@ -662,7 +698,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 		}
 		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: source}, Phase: domain.PhasePending}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
+		if dryRun {
+			if err := s.Store.CheckRestore(ctx, &r); err != nil {
+				return s.failure(err)
+			}
+			return s.dryRunResult("restore", c, c, &r)
+		}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: store.Actor(ctx), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 		})
@@ -924,7 +966,7 @@ func (s *Server) backupDependencyFailure(err error, source domain.ClusterRef, na
 }
 
 func (s *Server) crossNamespaceRestoreEvents(ctx context.Context, target, source domain.ClusterRef, kind, operation string) error {
-	actor := principal(ctx).Actor()
+	actor := store.Actor(ctx)
 	message := "Cross-namespace " + kind + " from " + clusterObject(source.Namespace, source.Name) + " to " + clusterObject(target.Namespace, target.Name)
 	for _, ref := range []domain.ClusterRef{target, source} {
 		if err := s.recordAudit(ctx, domain.Event{Namespace: ref.Namespace, Cluster: ref.Name, Resource: "restores", Target: clusterObject(target.Namespace, target.Name), Type: "Audit", Reason: "CrossNamespaceRestore", Message: message, Actor: actor, Operation: operation}); err != nil {

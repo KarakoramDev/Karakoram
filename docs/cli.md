@@ -45,7 +45,8 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - `-o table` is the default; detail output uses sections and list output summarizes nested fields. `-o json` and `-o yaml` preserve complete structured responses.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. A supplied file defines the body instead of convenience body flags. Use protected files for secrets. Exceptions: `rbac policy set` takes raw CSV; engine-native role/key commands use their documented definitions.
 - Cluster create files contain `{name, spec}`. `edit` replaces the complete `{spec}` and can open the configured editor without a file. `patch`, `scale` and `upgrade` files contain `{spec: {...}}` merge patches; arrays replace the previous array, not append to it.
-- Complete request files reject explicitly supplied convenience body flags (usage error, exit 2), on every command accepting such a file: creation/source flags, scale resource/replica/topology/component flags, upgrade/FCV version, balancer settings and RBAC permission fields must go in the file rather than silently overriding or being ignored. Put initial cluster provenance in `spec.dataSource` (`cluster`, optional `namespace`, and exactly one of `backup` or `pitrTime`); put restore provenance in `source`/`sourceNamespace`. Defaults do not override file fields. Execution controls such as namespace/output selection, API query flags and cluster `--wait`/`--timeout` remain supported; `restores create --file FILE --into-new NAME` still clones using the source recorded in the file. Elasticsearch-native role/API-key definition files retain their documented merge/conflict behavior.
+- Complete request files reject explicitly supplied convenience body flags (usage error, exit 2), on every command accepting such a file: creation/source flags, scale resource/replica/topology/component flags, upgrade/FCV version, balancer settings and RBAC permission fields must go in the file rather than silently overriding or being ignored. Put initial cluster provenance in `spec.dataSource` (`cluster`, optional `namespace`, and exactly one of `backup` or `pitrTime`); put restore provenance in `source`/`sourceNamespace`. Defaults do not override file fields. Execution controls such as namespace/output selection, API query flags, `--dry-run` and cluster `--wait`/`--timeout` remain supported; `restores create --file FILE --into-new NAME` still clones using the source recorded in the file. Elasticsearch-native role/API-key definition files retain their documented merge/conflict behavior.
+- `--dry-run` previews `clusters create`, `edit`, `patch`, `scale`, `upgrade` and `restores create` on the server using the same request body and namespace, without applying changes. `restores create --into-new --dry-run` previews creation of the cloned cluster. Table output has changes (paths and compact JSON before → after), effects and warnings; `-o json`/`-o yaml` preserves the complete plan. A valid plan exits 0; API validation failures keep the normal error exit status. Dry runs never prompt for destructive confirmation (including `-f -`) and cannot be combined with `--wait`.
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
 - PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
@@ -80,8 +81,10 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `help` | Runtime help | any command path | Local |
 | `login` | Password login and saved API token | — | All |
 | `logout` | Revoke saved token/remove credentials | — | All |
+| `mcp` | Stdio MCP bridge and dedicated client configuration | config | Control-plane management; server policy applies |
 | `metrics` | Prometheus exposition | — | All |
 | `namespaces` | Project registration/token/relay health | list, get, create, update, validate, rotate-token, delete | All |
+| `oauth-grants` | Connected OAuth application grants | list, delete | Control-plane accounts; administrators may manage all grants |
 | `openapi` | Download server specification | — | All |
 | `operations` | Observe/cancel asynchronous work | list, cluster, get, wait, cancel | All; cancellation capability varies |
 | `orphaned-volumes` | Inspect pending platform cleanup | list | All |
@@ -103,6 +106,25 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes).
 PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
+
+## MCP clients
+
+`karactl --context production mcp` bridges a local stdio MCP client to the control plane's `/mcp` using the same server/token resolution as other commands. Standard output contains MCP messages only; diagnostics go to stderr. Tool lists, calls, progress, cancellation, server instructions and human confirmation remain server-controlled. Narrow discovery with `--toolsets Clusters,Backups,Workflows`; this is not an authorization boundary.
+
+Mint a dedicated restricted token and print configuration for your client:
+
+```sh
+karactl --context production mcp config --client cursor --namespace production
+karactl --context production mcp config --client vscode --expires-in 30d --output /secure/path/mcp.json
+karactl --context production mcp config --client codex --stdio
+```
+
+Clients: `claude-code` (shell command), `cursor`, `vscode`, `codex` (TOML), or `json` (generic JSON, default). Tokens default to read-only with a 90-day expiry; `--write` permits mutations only where owner permissions and server mode allow them. Repeat `--namespace` to scope the token, choose `--token-name` to override `mcp-CLIENT-DATE`, and use `--expires-in` with days (`30d`) or a Go duration (`720h`).
+
+Remote snippets contain the newly minted token once; protect the output and heed the stderr warning. `--stdio` instead prints a command using the selected saved context, with no embedded token, and reveals the newly minted dedicated token once on stderr for separate provisioning. It does not replace the saved context's token. No files are written unless `mcp config --output FILE` is supplied; this command-specific flag writes configuration with mode 0600, rather than selecting the global output format. See [MCP security and confirmation](mcp.md).
+
+For [OAuth-connected applications](mcp.md#connect-with-oauth), use `karactl oauth-grants list -o json` to inspect visible grants and `karactl oauth-grants delete GRANT_ID` to revoke a connection. Non-administrators see their own grants; administrators with the required API-token permissions may inspect and revoke all accounts' grants. Deletion uses the normal destructive confirmation; pass `--yes` for noninteractive automation. These commands manage account-level grants, not namespace resources.
+
 
 ## Global flags
 
@@ -133,7 +155,8 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `restores create CLUSTER [NAME]` | `-f`, `--backup`, `--time` (RFC3339, where supported), `--source-cluster`, `--source-namespace`, `--into-new`, `--yes` |
 | `namespaces create` | `--name`, `--project-id` (backend target ID), `--token-file`, `--description`, `--backend` (zerops), repeatable `--config key=value` (non-secret backend settings; Zerops accepts none, its API URL is operator-only); no `-f` |
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |
-| `tokens create/set` | `-f`; list has `--limit`, `--cursor`; delete/revoke has `--yes` |
+| `tokens create` | `-f` OR `--name`, `--expires` (RFC3339 or duration), `--read-only`, repeatable `--scope-namespace`, `--scope-cluster ns/name`, `--permission resource:action`, `--allow-credential-reveal` |
+| `tokens set` | `-f` (name/expiry only); list has `--limit`, `--cursor`; delete/revoke has `--yes` |
 | `events list` | `--cluster`, `--type`, `--operation`, `--actor`, `--resource`, `--order asc\|desc`, `--limit`, `--cursor` |
 | `events watch` | Same scope filters; `--cursor`, `--last-event-id`; no list limit/order |
 | `operations list/cluster` | `--phase`, `--limit`, `--cursor`; list also `--cluster` |
@@ -178,6 +201,26 @@ Managed login passwords are sealed and synchronized to every ProxySQL member wit
 Access operations use authenticated internal POST actions on a freshly resolved primary. HA members also require the Patroni leader lock; no writable primary produces HTTP 503. Only a precomputed SCRAM-SHA-256 verifier crosses the role-action protocol, never the plaintext password in SQL. Membership replacement is transactional; schema grants connect to the requested database. `roles patch CLUSTER ROLE -f patch.json` changes only supplied fields; `roles update` replaces role attributes.
 
 ProxySQL does not implement every PostgreSQL protocol feature. In particular, clients requesting different result formats per column must select a uniform format (for pgx, use simple protocol or request text results). Supabase's internal services bypass ProxySQL for features such as LISTEN/NOTIFY and logical replication.
+
+### Restricted API tokens
+
+```sh
+karactl tokens create --name inventory --expires 720h --read-only \
+  --scope-namespace prod --permission clusters:read
+```
+
+Without `-f`, creation requires `--name`; combining a request file with any token
+creation flag is a usage error (exit 2). Repeat scope/permission flags to add entries.
+`--scope-namespace` restricts the new token; persistent `--namespace/-n` remains
+the request's REST scope. `--expires` accepts an RFC3339 timestamp or a positive
+Go duration relative to creation.
+
+Omitting all restriction flags creates an unrestricted token. Supplying any
+restriction flag creates an immutable deny overlay; credential reveal defaults
+to disabled, including on otherwise read-only tokens. List/get/create table output
+summarizes restrictions; JSON/YAML retain the full fields. `karactl login` creates
+an unrestricted token. See [restricted API tokens](access-control.md#restricted-api-tokens)
+for scope, permission, issuance and OIDC rules.
 
 ## Safety and exit statuses
 

@@ -45,6 +45,10 @@ For source builds select `zeropsSetup: karakoram-source` in imports, `--source` 
 | `KARAKORAM_PUBLIC_URL` | Pipeline derives HTTPS origin from injected `zeropsSubdomain`. |
 | `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` | Optional trusted private/nonstandard-port S3-verifier destinations; see [Backups and storage](backups.md). Normally unset for Zerops storage. |
 | `KARAKORAM_ZEROPS_API_URL` | Optional non-default Zerops API endpoint. |
+| `KARAKORAM_OAUTH` | `on` or `off` (default `off`): embedded OAuth authorization for MCP. |
+| `KARAKORAM_OAUTH_DCR` | `on` or `off` (default `off`): public dynamic client registration, only effective with OAuth on. |
+| `KARAKORAM_OAUTH_CLIENT_HOSTS` | Optional comma-separated host allowlist for HTTPS client ID metadata documents; never permits private destinations. |
+| `KARAKORAM_MCP` | Embedded [MCP server](mcp.md): `off`, `readonly` (default), or `readwrite`; invalid values fail startup. |
 
 Zerops reserves `ZEROPS_`: user secrets named `ZEROPS_TOKEN` or `ZEROPS_PROJECT_ID` fail with `userDataZeropsPrefixForbidden`. Use `KARAKORAM_ZEROPS_*`.
 

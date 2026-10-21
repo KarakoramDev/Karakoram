@@ -21,6 +21,23 @@ The model protects normal API reads from accidental secret disclosure, applies o
 
 On the **Zerops backend**, public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. Dokploy uses its configured public ingress; Nomad needs an operator-managed HTTPS proxy. Agent transport has independent end-to-end TLS on every backend.
 
+## OAuth MCP authorization
+
+The optional embedded authorization server issues opaque, hashed-at-rest tokens
+for `/mcp` only; they are not REST API credentials. Authorization codes require
+S256 PKCE, expire in 60 seconds and can be consumed once. Access tokens expire in
+10 minutes. Refresh tokens rotate; reuse revokes the whole grant. Grants expire
+within 30 days, and account disablement, password changes and revocation are
+checked against persistent state on each request.
+
+Consent is always interactive, browser-session and CSRF protected, and cannot be
+framed. Client metadata retrieval pins resolved public addresses, rejects
+redirects, and bounds response size and duration. DCR is separately opt-in.
+Operators should restrict client metadata hosts where possible and review
+connected applications regularly. Database restores restore grants as well;
+revoke restored grants if their former credentials must no longer work.
+
+
 ## Relay threat model
 
 Additional projects connect outbound to `/relay/v1/connect` over verified HTTPS with **inner mTLS 1.3**, preserving tunnel confidentiality across L7 termination. A dedicated relay CA, namespace identity and enrolled certificate serial authorize admission; WebSocket Upgrade alone grants no usable session. Default-project routing remains direct.

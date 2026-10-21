@@ -21,6 +21,30 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 	}
 	_ = q
 	switch op {
+	case "dryRunCreateCluster":
+		var p client.DryRunCreateClusterParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.DryRunCreateClusterWithBody(ctx, &p, "application/json", bytes.NewReader(body))
+	case "dryRunReplaceCluster":
+		var p client.DryRunReplaceClusterParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.DryRunReplaceClusterWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
+	case "dryRunPatchCluster":
+		var p client.DryRunPatchClusterParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.DryRunPatchClusterWithBody(ctx, args[0], &p, "application/merge-patch+json", bytes.NewReader(body))
+	case "dryRunCreateRestore":
+		var p client.DryRunCreateRestoreParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.DryRunCreateRestoreWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "getSupabaseCredentials", "setSupabaseSMTPPassword", "listSupabaseFunctions", "getSupabaseFunction", "putSupabaseFunction", "deleteSupabaseFunction", "rotateSupabaseJWTSecret":
 		return dispatchSupabase(ctx, c, op, args, q, body)
 	case "listElasticUsers", "getElasticUser", "createElasticUser", "updateElasticUser", "deleteElasticUser", "listElasticRoles", "getElasticRole", "createElasticRole", "updateElasticRole", "deleteElasticRole", "listElasticAPIKeys", "createElasticAPIKey", "invalidateElasticAPIKey":
@@ -57,6 +81,14 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 			return nil, err
 		}
 		return c.CheckPermissionWithBody(ctx, &p, "application/json", bytes.NewReader(body))
+	case "listOAuthGrants":
+		return c.ListOAuthGrants(ctx)
+	case "deleteOAuthGrant":
+		var p client.DeleteOAuthGrantParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.DeleteOAuthGrant(ctx, args[0], &p)
 	case "createAPIToken":
 		var p client.CreateAPITokenParams
 		if err = json.Unmarshal(q, &p); err != nil {

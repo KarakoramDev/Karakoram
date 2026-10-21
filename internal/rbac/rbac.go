@@ -83,6 +83,8 @@ func vocabulary() map[string]map[string]bool {
 	}
 	// Export is checked alongside restore/clone permissions, not by a route.
 	out["backups"]["export"] = true
+	// Data MCP is authorized by the gateway, not an OpenAPI route.
+	out["cluster-data"] = map[string]bool{"read": true, "write": true}
 	for _, r := range api.AdditionalRBAC {
 		if out[r.Resource] == nil {
 			out[r.Resource] = map[string]bool{}

@@ -15,6 +15,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
+	"github.com/KarakoramDev/Karakoram/internal/oauth"
 	"github.com/KarakoramDev/Karakoram/internal/orphanvolumes"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/reconciler"
@@ -150,7 +151,11 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		}
 		return out, nil
 	}})
-	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger})
+	var oauthServer *oauth.Service
+	if c.OAuth == "on" {
+		oauthServer = oauth.New(oauth.Options{Store: st, Auth: a, PublicURL: c.PublicURL, DCR: c.OAuthDCR == "on", ClientHosts: c.OAuthClientHosts})
+	}
+	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPSealer: sealer, OAuth: oauthServer})
 	if err != nil {
 		return err
 	}

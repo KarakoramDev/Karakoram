@@ -22,6 +22,9 @@ type Config struct {
 	Backend                                                                                                                             string
 	DataDir, PublicListen, InternalListen, PublicURL, AdvertiseURL, Hostname, AdminPassword, ZeropsToken, ZeropsProjectID, ZeropsAPIURL string
 	RecoveryAccount, RecoveryPassword                                                                                                   string
+	OAuth, OAuthDCR                                                                                                                     string
+	OAuthClientHosts                                                                                                                    []string
+	MCP                                                                                                                                 string
 }
 
 // ConfigFromEnv loads deployment settings and validates every endpoint before opening the DB.
@@ -40,6 +43,14 @@ func ConfigFromEnv() (Config, error) {
 	}
 	c := Config{DataDir: envDefault("KARAKORAM_DATA_DIR", "/mnt/karakoramdata"), PublicListen: envDefault("KARAKORAM_LISTEN", ":8080"), InternalListen: envDefault("KARAKORAM_INTERNAL_LISTEN", ":9443"), PublicURL: public, AdvertiseURL: envDefault("KARAKORAM_ADVERTISE_URL", "https://"+net.JoinHostPort(hostname, "9443")), Hostname: hostname, AdminPassword: os.Getenv("KARAKORAM_ADMIN_PASSWORD"), ZeropsToken: os.Getenv("KARAKORAM_ZEROPS_TOKEN"), ZeropsProjectID: envDefault("KARAKORAM_ZEROPS_PROJECT_ID", os.Getenv("projectId")), ZeropsAPIURL: envDefault("KARAKORAM_ZEROPS_API_URL", "https://api.app-prg1.zerops.io/api/rest/public")}
 	c.Backend = envDefault("KARAKORAM_BACKEND", "zerops")
+	c.OAuth = envDefault("KARAKORAM_OAUTH", "off")
+	c.OAuthDCR = envDefault("KARAKORAM_OAUTH_DCR", "off")
+	if hosts := os.Getenv("KARAKORAM_OAUTH_CLIENT_HOSTS"); hosts != "" {
+		for _, host := range strings.Split(hosts, ",") {
+			c.OAuthClientHosts = append(c.OAuthClientHosts, strings.TrimSpace(host))
+		}
+	}
+	c.MCP = envDefault("KARAKORAM_MCP", "readonly")
 	registry, err := backendRegistry(c)
 	if err != nil {
 		return Config{}, err
@@ -63,6 +74,19 @@ func (c Config) DatabasePath() string { return filepath.Join(c.DataDir, "karakor
 
 // Validate rejects missing credentials and endpoints with userinfo/query/fragment components.
 func (c Config) Validate() error {
+	for name, value := range map[string]string{"KARAKORAM_OAUTH": c.OAuth, "KARAKORAM_OAUTH_DCR": c.OAuthDCR} {
+		if value != "" && value != "on" && value != "off" {
+			return fmt.Errorf("%s must be on or off", name)
+		}
+	}
+	for _, host := range c.OAuthClientHosts {
+		if host == "" || strings.ContainsAny(host, "/\\:@?# *") {
+			return errors.New("KARAKORAM_OAUTH_CLIENT_HOSTS must contain host names")
+		}
+	}
+	if c.MCP != "" && c.MCP != "off" && c.MCP != "readonly" && c.MCP != "readwrite" {
+		return errors.New("KARAKORAM_MCP must be off, readonly or readwrite")
+	}
 	if c.RecoveryPassword != "" {
 		if err := auth.ValidatePassword(c.RecoveryPassword); err != nil {
 			return fmt.Errorf("KARAKORAM_RECOVERY_PASSWORD: %w", err)

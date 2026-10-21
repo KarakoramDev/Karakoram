@@ -118,10 +118,14 @@ func newIssuer(t *testing.T) *issuer {
 	})
 	return p
 }
-func oidcCallback(t *testing.T, s *Service, p *issuer, mutateState bool) *httptest.ResponseRecorder {
+func oidcCallback(t *testing.T, s *Service, p *issuer, mutateState bool, returnTo ...string) *httptest.ResponseRecorder {
 	t.Helper()
 	loginW := httptest.NewRecorder()
-	s.OIDCLoginHandler(loginW, httptest.NewRequest("GET", "https://karakoram.example/api/v1/auth/oidc/login", nil))
+	loginURL := "https://karakoram.example/api/v1/auth/oidc/login"
+	if len(returnTo) != 0 {
+		loginURL += "?returnTo=" + url.QueryEscape(returnTo[0])
+	}
+	s.OIDCLoginHandler(loginW, httptest.NewRequest("GET", loginURL, nil))
 	if loginW.Code != 302 {
 		t.Fatalf("login: %d %s", loginW.Code, loginW.Body.String())
 	}
@@ -222,5 +226,29 @@ func TestOIDCAutoCreateDisabledAndSettingsValidation(t *testing.T) {
 	}
 	if err := s.UpdateSettings(t.Context(), OIDCSettings{IssuerURL: "http://not-loopback.example", ClientID: "client"}); err == nil {
 		t.Fatal("insecure issuer")
+	}
+}
+
+func TestOIDCOAuthConsentReturn(t *testing.T) {
+	s := setup(t)
+	p := newIssuer(t)
+	if err := s.UpdateSettings(t.Context(), OIDCSettings{IssuerURL: p.server.URL, ClientID: "client", ClientSecret: "test-client-secret", AutoCreate: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ path, want string }{
+		{"/oauth/authorize?client_id=https%3A%2F%2Fclient.example%2Fmetadata&state=connector", "/oauth/authorize?client_id=https%3A%2F%2Fclient.example%2Fmetadata&state=connector"},
+		{"https://attacker.example/oauth/authorize?x=1", "/"},
+		{"//attacker.example/oauth/authorize?x=1", "/"},
+		{"/oauth/authorize/../other?x=1", "/"},
+		{"/oauth/authorize?x=1#fragment", "/"},
+		{"/oauth/authorize?x=1\r\nLocation: https://attacker.example", "/"},
+		{"/clusters", "/"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			w := oidcCallback(t, s, p, false, test.path)
+			if w.Code != http.StatusFound || w.Header().Get("Location") != "https://karakoram.example"+test.want {
+				t.Fatalf("callback redirect: %d %q", w.Code, w.Header().Get("Location"))
+			}
+		})
 	}
 }

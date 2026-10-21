@@ -6,6 +6,17 @@ Karakoram accounts, roles and tokens authorize control-plane actions, independen
 
 The server enforces policy; hidden UI controls are not an authorization boundary. Engine identities belong in [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md) and [Elasticsearch](elasticsearch/access-and-security.md).
 
+## Connected OAuth applications
+
+When [OAuth for MCP](mcp.md#connect-with-oauth) is enabled, every connection requires
+interactive consent. Grants intersect the account's current RBAC with approved
+scopes and optional namespace limits; they do not inherit browser OIDC group
+bindings. **Settings → Connected apps** lists and revokes your grants.
+`listOAuthGrants` and `deleteOAuthGrant` provide the same self-service API;
+`api-tokens:read` / `api-tokens:delete` allow administrators to manage others'
+grants. Revocation invalidates every access and refresh token in the grant.
+
+
 ## Local accounts and first login
 
 An empty account store creates `admin` from `KARAKORAM_ADMIN_PASSWORD`. Set it through a protected service secret; the [security model](security.md) describes the generated-password logging fallback. The initial account must change its password: sign in at the HTTPS UI, change it, then sign in again before privileged work/token creation. Changing the bootstrap environment variable later does not reset an existing account.
@@ -137,7 +148,7 @@ Test-only issuer instructions live in the [end-to-end suite guide](../test/e2e/R
 
 ## API tokens and browser sessions
 
-Tokens exercise their **owner's current permissions**, not independently scoped permissions. Use a dedicated least-privilege automation account. Tokens begin `kk_`, are returned once and stored as SHA-256 hashes; disabled/deleted owners and forced password changes cannot retain ordinary token authority.
+Tokens exercise their **owner's current permissions**, optionally narrowed by immutable restrictions. Use a dedicated least-privilege automation account. Tokens begin `kk_`, are returned once and stored as SHA-256 hashes; disabled/deleted owners and forced password changes cannot retain ordinary token authority.
 
 Password-current authenticated users may create/list/read/update/revoke their own tokens without `api-tokens` grants. Global read/update/delete grants permit the corresponding actions on other owners' tokens. Creation always binds the caller; lists otherwise show only owned tokens.
 
@@ -164,3 +175,46 @@ state on each request. Public version discovery reads its settings snapshot
 without waiting for the identity mutation mutex.
 
 Browsers use rotating cookie sessions, not automation tokens; [cookie/CSRF guarantees](security.md) are separate from token permissions. The UI refreshes expired access automatically; network/5xx errors preserve the session and offer retry. Repeated authentication rejection after refresh signs out instead of looping. See [CLI](cli.md) and [API](api.md).
+
+## Restricted API tokens
+
+Set `restrictions` when creating a token through the API, CLI flags or the UI's
+**Restrictions** section. Omitted restrictions preserve the owner's full authority;
+an explicit empty object is restricted and does not permit credential reveal.
+Restrictions only remove authority: owner RBAC and token restrictions must both
+allow an action, including after policy changes.
+
+| Field | Effect |
+| --- | --- |
+| `readOnly` | Only `read` actions are allowed. |
+| `namespaces` | Allowlisted namespaces for namespace, cluster and storage objects. |
+| `clusters` | Exact allowlist of `namespace/cluster` for cluster-scoped resources only. Namespace metadata and other namespaced objects, such as backup storages, are visible in the listed clusters' namespaces regardless of their own names. Combined namespace and cluster namespace constraints intersect. |
+| `permissions` | Allowlisted `resource:action` pairs; action may be `*`. Empty means all owner permissions. Names and actions are validated against the generated RBAC vocabulary. |
+| `allowCredentialReveal` | Defaults to false; blocks `cluster-credentials` and operations marked as returning secrets, including token creation. |
+
+Namespace/cluster-scoped tokens cannot access global objects. Collection routes
+remain available when their action is allowed, but filter each returned object.
+The same restrictions apply to events, SSE, metrics, operations, permission
+discovery and idempotent request replay. A read-only token may still be denied a
+read that returns credentials.
+
+Restrictions cannot be changed with token update; mint a replacement instead.
+A restricted caller can mint only a subset of its own restrictions, never an
+unrestricted token. Token creation also requires credential-reveal permission and
+the route's action/scope. Browser sessions and unrestricted tokens may choose any
+restrictions.
+A restricted caller with an expiring token must give every child token an expiry
+at or before its own; omitting/removing expiry is denied. Updating a token also
+requires its restrictions to be a subset of the caller's and the resulting expiry
+to obey the same bound. A restricted caller therefore cannot rename or extend a
+broader sibling token. Browser sessions and unrestricted tokens retain the
+ordinary name/expiry update rules.
+
+```sh
+karactl tokens create --name inventory --read-only \
+  --scope-namespace prod --permission clusters:read
+```
+
+OIDC group grants apply to browser sessions, not tokens: token authentication uses
+the owner's user/role subjects. Give automation accounts explicit user or role
+bindings. See [ADR 0041](adr/0041-restricted-api-tokens.md).

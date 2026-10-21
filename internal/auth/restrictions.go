@@ -9,6 +9,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/rbac"
 )
 
 // CloneRestrictions takes an independent authentication snapshot.
@@ -83,7 +84,7 @@ func RestrictionAllows(r *domain.TokenRestrictions, resource, action, object str
 	if len(r.Permissions) > 0 && !slices.Contains(r.Permissions, resource+":"+action) && !slices.Contains(r.Permissions, resource+":*") {
 		return false
 	}
-	return restrictionScopeAllows(r, object)
+	return restrictionScopeAllows(r, object, rbac.ResourceObjectParam(resource) == "cluster")
 }
 
 // RestrictionAllowsOperation checks collections without granting global-object access.
@@ -102,7 +103,7 @@ func RestrictionAllowsOperation(r *domain.TokenRestrictions, resource, action, o
 	return RestrictionAllows(r, resource, action, object)
 }
 
-func restrictionScopeAllows(r *domain.TokenRestrictions, object string) bool {
+func restrictionScopeAllows(r *domain.TokenRestrictions, object string, clusterObject bool) bool {
 	if len(r.Namespaces) == 0 && len(r.Clusters) == 0 {
 		return true
 	}
@@ -116,7 +117,7 @@ func restrictionScopeAllows(r *domain.TokenRestrictions, object string) bool {
 	if len(r.Clusters) == 0 {
 		return true
 	}
-	if namespaced {
+	if namespaced && clusterObject {
 		return slices.Contains(r.Clusters, object)
 	}
 	for _, cluster := range r.Clusters {
@@ -149,7 +150,7 @@ func RestrictionsSubset(child, parent *domain.TokenRestrictions) bool {
 	// A finite cluster scope can narrow either a namespace or a cluster scope.
 	if len(child.Clusters) > 0 {
 		for _, cluster := range child.Clusters {
-			if restrictionScopeAllows(child, cluster) && !restrictionScopeAllows(parent, cluster) {
+			if restrictionScopeAllows(child, cluster, true) && !restrictionScopeAllows(parent, cluster, true) {
 				return false
 			}
 		}

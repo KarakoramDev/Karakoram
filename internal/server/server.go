@@ -29,33 +29,40 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/events"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
+	"github.com/KarakoramDev/Karakoram/internal/oauth"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/KarakoramDev/Karakoram/internal/ui"
 )
 
 // Options supplies the real control-plane dependencies; providers remain independently testable.
 type Options struct {
-	Store        *store.Store
-	Auth         *auth.Service
-	RBAC         *rbac.Enforcer
-	Registry     *engine.Registry
-	Backends     *infra.Registry
-	Context      engine.Context
-	Trigger      interface{ Trigger(domain.ClusterRef) }
-	Hub          *events.Hub
-	Monitoring   *monitoring.Collector
-	PublicURL    string
-	Logger       *slog.Logger
-	Namespaces   engine.Namespaces
-	RelayHandler http.Handler
+	Store               *store.Store
+	Auth                *auth.Service
+	RBAC                *rbac.Enforcer
+	Registry            *engine.Registry
+	Backends            *infra.Registry
+	Context             engine.Context
+	Trigger             interface{ Trigger(domain.ClusterRef) }
+	Hub                 *events.Hub
+	Monitoring          *monitoring.Collector
+	PublicURL           string
+	Logger              *slog.Logger
+	Namespaces          engine.Namespaces
+	RelayHandler        http.Handler
+	OAuth               *oauth.Service
+	MCPMode             string
+	MCPSealer           *secrets.Sealer
+	MCPResourceMetadata string
 }
 
 // Server implements all generated strict operations.
 type Server struct {
 	Options
 	namespaces engine.Namespaces
+	mcpHandler http.Handler
 }
 
 // New assembles HTTP handlers over initialized dependencies.
@@ -78,7 +85,13 @@ func New(o Options) (*Server, error) {
 	if o.Namespaces == nil {
 		o.Namespaces = engine.StaticNamespaces{DefaultBackend: o.Context.Backend, DefaultAgentURL: o.Context.AgentURL}
 	}
-	return &Server{Options: o, namespaces: o.Namespaces}, nil
+	s := &Server{Options: o, namespaces: o.Namespaces}
+	handler, err := s.newMCPHandler()
+	if err != nil {
+		return nil, err
+	}
+	s.mcpHandler = handler
+	return s, nil
 }
 
 type requestKey struct{}
@@ -207,7 +220,7 @@ func request(ctx context.Context) *http.Request {
 }
 func (s *Server) allowed(ctx context.Context, res, act, obj string) bool {
 	p := principal(ctx)
-	return p != nil && s.RBAC.Can(p.Subjects, res, act, obj)
+	return p != nil && s.RBAC.Can(p.Subjects, res, act, obj) && auth.RestrictionAllows(p.Restrictions, res, act, obj)
 }
 
 // namespaceAllowed checks grants without looking up namespace registration.
@@ -217,7 +230,7 @@ func (s *Server) namespaceAllowed(ctx context.Context, namespace string) bool {
 	if p == nil {
 		return false
 	}
-	for _, rule := range s.RBAC.Permissions(p.Subjects) {
+	for _, rule := range s.effectivePermissionRules(ctx) {
 		v := rule.Values
 		if len(v) < 5 || v[4] != "allow" {
 			continue
@@ -230,7 +243,7 @@ func (s *Server) namespaceAllowed(ctx context.Context, namespace string) bool {
 			}
 			object += "/" + name
 		}
-		if s.RBAC.Can(p.Subjects, v[1], v[2], object) {
+		if s.allowed(ctx, v[1], v[2], object) {
 			return true
 		}
 	}
@@ -239,7 +252,7 @@ func (s *Server) namespaceAllowed(ctx context.Context, namespace string) bool {
 func operationID(name string) string { return strings.ToLower(name[:1]) + name[1:] }
 func selfService(id string) bool {
 	switch id {
-	case "getCurrentUser", "logout", "refreshSession", "changePassword", "getPermissions", "checkPermission", "createAPIToken", "listAPITokens", "getAPIToken", "replaceAPIToken", "deleteAPIToken":
+	case "getCurrentUser", "logout", "refreshSession", "changePassword", "getPermissions", "checkPermission", "createAPIToken", "listAPITokens", "getAPIToken", "replaceAPIToken", "deleteAPIToken", "listOAuthGrants", "deleteOAuthGrant":
 		return true
 	}
 	return false
@@ -303,7 +316,7 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 			// Cookie logout and refresh authenticate their refresh family and CSRF
 			// themselves; bearer logout still requires a valid token.
 			if id != "refreshSession" && !(id == "logout" && r.Header.Get("Authorization") == "") {
-				p, err := s.Auth.Authenticate(r)
+				p, err := s.authenticate(r)
 				if err != nil {
 					if errors.Is(err, auth.ErrCSRF) {
 						return fail(403, "forbidden", "CSRF validation failed"), nil
@@ -332,12 +345,20 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 						obj = namespace + "/" + q.Body.Name
 					}
 				}
+				if id == "dryRunCreateCluster" {
+					if q, yes := v.(api.DryRunCreateClusterRequestObject); yes && q.Body != nil {
+						obj = namespace + "/" + q.Body.Name
+					}
+				}
 				if id == "createBackupStorage" {
 					if q, yes := v.(api.CreateBackupStorageRequestObject); yes && q.Body != nil {
 						obj = namespace + "/" + q.Body.Name
 					}
 				}
-				if !selfService(id) && !collection(id) && !s.RBAC.Can(p.Subjects, rule.Resource, rule.Action, obj) {
+				if !auth.RestrictionAllowsOperation(p.Restrictions, rule.Resource, rule.Action, obj, collection(id), api.OperationAgent[id].Secret) {
+					return fail(403, "forbidden", "API token restrictions deny this operation"), nil
+				}
+				if !selfService(id) && !collection(id) && !s.allowed(ctx, rule.Resource, rule.Action, obj) {
 					return failDetails(403, "forbidden", fmt.Sprintf("Permission denied: %s %s on %q; ask an administrator to grant access", rule.Resource, rule.Action, obj), map[string]any{"resource": rule.Resource, "action": rule.Action, "object": obj}), nil
 				}
 			}
@@ -348,6 +369,9 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 			if failure := s.requireNamespace(ctx, namespace); failure != nil {
 				return *failure, nil
 			}
+		}
+		if strings.HasPrefix(name, "DryRun") {
+			return next(ctx, w, r.WithContext(ctx), v)
 		}
 		return s.idempotent(next, id, ctx, w, r.WithContext(ctx), v)
 	}
@@ -432,6 +456,13 @@ func (s *Server) Handler() http.Handler {
 		},
 	})
 	mux := http.NewServeMux()
+	if s.OAuth != nil {
+		s.OAuth.Mount(mux)
+	} else {
+		for _, path := range []string{"/oauth/", "/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-authorization-server"} {
+			mux.HandleFunc(path, http.NotFound)
+		}
+	}
 	// Relay authentication is performed by its inner mutual-TLS tunnel, not API RBAC.
 	if s.RelayHandler != nil {
 		mux.Handle("GET /relay/v1/connect", s.RelayHandler)
@@ -443,6 +474,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		_ = fail(404, "not_found", "API route not found").write(w)
 	})
+	mux.Handle("/mcp", s.mcpHandler)
 	mux.Handle("/", ui.Handler())
 	validated := s.validationMiddleware(routes)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -614,7 +646,11 @@ func (s *Server) handle(ctx context.Context, name string, in input) response {
 	var pending domain.ClusterRef
 	ctx = context.WithValue(ctx, triggerKey{}, &pending)
 	if p := principal(ctx); p != nil {
-		ctx = store.WithActor(ctx, p.Actor())
+		actor := p.Actor()
+		if auth.IsMCPTraffic(ctx) && p.Via != "oauth" {
+			actor += " (mcp)"
+		}
+		ctx = store.WithActor(ctx, actor)
 	}
 	result := s.dispatch(ctx, name, in)
 	if err := s.auditAction(ctx, name, in, result); err != nil {
@@ -635,6 +671,8 @@ func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 		}
 	}
 	switch name {
+	case "ListOAuthGrants", "DeleteOAuthGrant":
+		return s.oauthGrants(ctx, name, in)
 	case "ListElasticUsers", "GetElasticUser", "CreateElasticUser", "UpdateElasticUser", "DeleteElasticUser", "ListElasticRoles", "GetElasticRole", "CreateElasticRole", "UpdateElasticRole", "DeleteElasticRole", "ListElasticAPIKeys", "CreateElasticAPIKey", "InvalidateElasticAPIKey":
 		return s.elasticAccess(ctx, name, in)
 	case "GetHealth":

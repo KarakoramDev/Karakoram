@@ -43,6 +43,9 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0035](0035-supabase-engine.md) | Modular native Supabase over the PostgreSQL core, Envoy gateway and explicit artifact capabilities |
 | [0036](0036-native-artifacts.md) | Embedded native artifact lock, mirror precedence, source provenance and signed-release staging |
 | [0037](0037-runtime-data-identity.md) | Shared desired-running runtime convergence, durable volume identity and safe replica replacement |
+| [0040](0040-agent-interface-mcp.md) | Agent operation metadata, server-side dry-run and the embedded dual-era MCP server with server-enforced confirmation |
+| [0041](0041-restricted-api-tokens.md) | Restricted API tokens as a deny overlay intersected with owner RBAC |
+| [0042](0042-oauth-authorization-server.md) | Embedded OAuth 2.1 authorization server with per-authorization consent for MCP clients |
 
 ## References and verification
 

@@ -87,6 +87,11 @@ func (s *Store) CreateClusterWithSecrets(ctx context.Context, c *domain.Cluster,
 	if err = namespaceForInsert(ctx, tx, c.Namespace); err != nil {
 		return err
 	}
+	if d := c.Spec.DataSource; d != nil {
+		if err = admitRestoreBackup(ctx, tx, c.Ref(), domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, d.Backup, d.PITRTime != nil); err != nil {
+			return err
+		}
+	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy); err != nil {
 		return typed(err)
 	}

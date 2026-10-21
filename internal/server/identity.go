@@ -13,7 +13,34 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// oauthTokenIssuanceDenied keeps OAuth connections from minting or changing
+// API tokens: such credentials would escape the grant's /mcp audience and
+// survive revocation of the connected app.
+func oauthTokenIssuanceDenied() response {
+	return fail(403, "forbidden", "OAuth connections cannot create or change API tokens; use karactl or the web UI")
+}
+
+// restrictedTokenLifetime prevents a short-lived credential from creating or
+// extending credentials that survive it. Sessions and unrestricted tokens retain
+// the ordinary expiry rules. OAuth principals never reach this check.
+func (s *Server) restrictedTokenLifetime(ctx context.Context, p *auth.Principal, expires *time.Time) *response {
+	if p.Restrictions == nil {
+		return nil
+	}
+	issuer, err := s.Auth.GetToken(ctx, p.TokenID)
+	if err != nil {
+		failure := s.failure(err)
+		return &failure
+	}
+	if limit := issuer.ExpiresAt; limit != nil && (expires == nil || expires.After(*limit)) {
+		failure := fail(403, "forbidden", "A restricted token cannot issue or extend a token beyond its own expiry")
+		return &failure
+	}
+	return nil
+}
 
 func accountAPI(a domain.Account) api.Account {
 	updated := a.UpdatedAt
@@ -203,7 +230,20 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 		return listResponse(s, ctx, out, err)
 	case "CreateAPIToken":
 		b := in.Body.(*api.CreateAPITokenRequest)
-		secret, t, err := s.Auth.CreateToken(ctx, p.Account, b.Name, b.ExpiresAt, restrictionsDomain(b.Restrictions))
+		if p.Via == "oauth" {
+			return oauthTokenIssuanceDenied()
+		}
+		restrictions, err := auth.NormalizeRestrictions(restrictionsDomain(b.Restrictions))
+		if err != nil {
+			return s.failure(err)
+		}
+		if !auth.RestrictionsSubset(restrictions, p.Restrictions) {
+			return fail(403, "forbidden", "A token cannot grant wider authority than its issuer")
+		}
+		if failure := s.restrictedTokenLifetime(ctx, p, b.ExpiresAt); failure != nil {
+			return *failure
+		}
+		secret, t, err := s.Auth.CreateToken(ctx, p.Account, b.Name, b.ExpiresAt, restrictions)
 		if err != nil {
 			return s.failure(err)
 		}
@@ -219,9 +259,18 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 		return ok(tokenAPI(*t))
 	case "ReplaceAPIToken":
 		b := in.Body.(*api.UpdateAPITokenRequest)
+		if p.Via == "oauth" {
+			return oauthTokenIssuanceDenied()
+		}
 		t, err := s.Auth.GetToken(ctx, in.Token)
 		if err != nil {
 			return s.failure(err)
+		}
+		if !auth.RestrictionsSubset(t.Restrictions, p.Restrictions) {
+			return fail(403, "forbidden", "A restricted token cannot update a token with wider authority")
+		}
+		if failure := s.restrictedTokenLifetime(ctx, p, b.ExpiresAt); failure != nil {
+			return *failure
 		}
 		t.Name = b.Name
 		t.ExpiresAt = b.ExpiresAt
@@ -247,7 +296,7 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 		return response{status: 204}
 	case "GetPermissions":
 		out := api.Permissions{Subject: "user:" + p.Account, Groups: currentUser(p).Groups, Permissions: []api.Permission{}}
-		for _, rule := range s.RBAC.Permissions(p.Subjects) {
+		for _, rule := range s.effectivePermissionRules(ctx) {
 			v := rule.Values
 			if rule.PType == "p" && len(v) >= 5 {
 				out.Permissions = append(out.Permissions, api.Permission{Resource: v[1], Action: v[2], Object: v[3], Effect: api.PermissionEffect(v[4])})
@@ -263,7 +312,7 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 			}
 			subjects = []string{*b.Subject}
 		}
-		return ok(api.CanResponse{Allowed: s.RBAC.Can(subjects, b.Resource, string(b.Action), b.Object)})
+		return ok(api.CanResponse{Allowed: s.RBAC.Can(subjects, b.Resource, string(b.Action), b.Object) && auth.RestrictionAllows(p.Restrictions, b.Resource, string(b.Action), b.Object)})
 	case "GetRBACPolicy":
 		return ok(api.RBACPolicy{Policy: s.RBAC.Policy()})
 	case "ReplaceRBACPolicy":

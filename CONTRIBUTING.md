@@ -24,6 +24,8 @@ AI assistance is allowed, but a human must submit, understand and take responsib
 
 Disclose meaningful AI use in the pull request: tool and purpose. Check generated material for incompatible licenses, secrets and private data. Private AI self-review is allowed; do not post AI review bots into human review threads. Maintainers may request clarification or decline contributions. This policy is adapted from [Cloud Hypervisor's guidelines](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/CONTRIBUTING.md#aillm-assistance--generated-code).
 
+Coding agents must also read [AGENTS.md](AGENTS.md) for repository layout, commands and invariants.
+
 ## Development setup
 
 Requirements: **Go 1.25+**, Make, **Node 22.6+** and npm. The UI test runner uses Node's built-in TypeScript support. Agent integration tests require Docker and Linux host networking; unit tests need no Zerops account.

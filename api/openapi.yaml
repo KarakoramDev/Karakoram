@@ -59,6 +59,13 @@ paths:
         - General
       summary: Download this server's authoritative OpenAPI specification
       x-karakoram-rbac: public
+      x-karakoram-agent:
+        exposed: false
+        reason: API description document.
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       security: []
       responses:
         '200':
@@ -82,6 +89,13 @@ paths:
       summary: Create a local-account cookie session
       description: After five failed attempts, account/source backoff starts at one second and doubles to fifteen minutes. While throttled, correct and incorrect passwords receive the same 429 response and retry delay.
       x-karakoram-rbac: public
+      x-karakoram-agent:
+        exposed: false
+        reason: Browser-session plumbing or password input.
+        risk: write
+        confirm: none
+        secret: true
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -148,6 +162,12 @@ paths:
         resource: accounts
         action: update
         object: '*'
+      x-karakoram-agent:
+        exposed: false
+        reason: Browser-session plumbing or password input.
+        risk: write
+        confirm: none
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -187,6 +207,13 @@ paths:
         resource: accounts
         action: update
         object: '*'
+      x-karakoram-agent:
+        exposed: false
+        reason: Browser-session plumbing or password input.
+        risk: write
+        confirm: none
+        secret: true
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -230,6 +257,12 @@ paths:
         resource: accounts
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: current_user_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -271,6 +304,12 @@ paths:
         resource: accounts
         action: update
         object: '*'
+      x-karakoram-agent:
+        exposed: false
+        reason: Browser-session plumbing or password input.
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -313,6 +352,13 @@ paths:
         - Auth
       summary: Begin OIDC authorization code login with PKCE
       x-karakoram-rbac: public
+      x-karakoram-agent:
+        exposed: false
+        reason: Browser-session plumbing or password input.
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -356,6 +402,13 @@ paths:
         - Auth
       summary: Exchange OIDC authorization code and establish a cookie session
       x-karakoram-rbac: public
+      x-karakoram-agent:
+        exposed: false
+        reason: Browser-session plumbing or password input.
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -408,6 +461,12 @@ paths:
         - General
       summary: Read server build and API version
       x-karakoram-rbac: public
+      x-karakoram-agent:
+        tool: version_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -446,6 +505,12 @@ paths:
         - General
       summary: Read control-plane health
       x-karakoram-rbac: public
+      x-karakoram-agent:
+        tool: health_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -490,6 +555,12 @@ paths:
         resource: settings
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: settings_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -529,6 +600,12 @@ paths:
         resource: settings
         action: update
         object: '*'
+      x-karakoram-agent:
+        tool: settings_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -577,6 +654,12 @@ paths:
         resource: rbac
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: permissions_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -618,6 +701,12 @@ paths:
         resource: rbac
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: rbac_policy_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -657,6 +746,12 @@ paths:
         resource: rbac
         action: update
         object: '*'
+      x-karakoram-agent:
+        tool: rbac_policy_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -705,6 +800,12 @@ paths:
         resource: rbac
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: permission_check
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -754,6 +855,12 @@ paths:
         resource: accounts
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: accounts_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -796,6 +903,11 @@ paths:
         resource: accounts
         action: create
         object: '*'
+      x-karakoram-agent:
+        tool: account_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -855,6 +967,12 @@ paths:
         resource: accounts
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: account_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -894,6 +1012,12 @@ paths:
         resource: accounts
         action: update
         object: '*'
+      x-karakoram-agent:
+        tool: account_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -941,6 +1065,12 @@ paths:
         resource: accounts
         action: delete
         object: '*'
+      x-karakoram-agent:
+        tool: account_delete
+        risk: destructive
+        confirm: name
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -987,6 +1117,11 @@ paths:
         resource: accounts
         action: update
         object: '*'
+      x-karakoram-agent:
+        tool: account_password_reset
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1021,6 +1156,70 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ResetPasswordRequest'
+  /oauth-grants:
+    get:
+      operationId: listOAuthGrants
+      tags: [APITokens]
+      summary: List connected OAuth applications (own grants unless administrator)
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: read
+        object: '*'
+      x-karakoram-agent:
+        tool: oauth_grants_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
+      responses:
+        '200':
+          description: OAuth configuration and visible grants.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthGrantList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /oauth-grants/{grant}:
+    delete:
+      operationId: deleteOAuthGrant
+      tags: [APITokens]
+      summary: Revoke a connected application grant
+      x-karakoram-rbac:
+        resource: api-tokens
+        action: delete
+        object: '*'
+      x-karakoram-agent:
+        tool: oauth_grant_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+      parameters:
+        - name: grant
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204':
+          description: Grant revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api-tokens:
     get:
       operationId: listAPITokens
@@ -1031,6 +1230,12 @@ paths:
         resource: api-tokens
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: api_tokens_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1073,6 +1278,12 @@ paths:
         resource: api-tokens
         action: create
         object: '*'
+      x-karakoram-agent:
+        tool: api_token_create
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1132,6 +1343,12 @@ paths:
         resource: api-tokens
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: api_token_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1171,6 +1388,12 @@ paths:
         resource: api-tokens
         action: update
         object: '*'
+      x-karakoram-agent:
+        tool: api_token_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1218,6 +1441,12 @@ paths:
         resource: api-tokens
         action: delete
         object: '*'
+      x-karakoram-agent:
+        tool: api_token_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1256,6 +1485,12 @@ paths:
         resource: providers
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: providers_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1304,6 +1539,12 @@ paths:
         resource: providers
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: provider_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1341,6 +1582,12 @@ paths:
       summary: List available infrastructure backends
       description: Requires authentication and namespaces/read on global '*'; unlike namespace listing, this endpoint does not filter items by per-namespace grants.
       x-karakoram-rbac: {resource: namespaces, action: read, object: '*'}
+      x-karakoram-agent:
+        tool: backends_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '200':
           description: Available backend kinds and their capabilities.
@@ -1369,6 +1616,13 @@ paths:
       summary: List readable project namespaces
       description: Filters each namespace by namespaces/read on its name before pagination; a global wildcard grant is not required.
       x-karakoram-rbac: {resource: namespaces, action: read, object: '*'}
+      x-karakoram-agent:
+        tool: namespaces_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
@@ -1404,6 +1658,12 @@ paths:
       summary: Register a project namespace and deploy its relay
       description: Requires namespaces/create on '*'. Validates the credential and backend target synchronously, then deploys a relay asynchronously when required by that backend. Missing fields, unknown backend/config keys and invalid name syntax return 400. Reserved default and duplicate names return 409 conflict with reason already_exists. Each backend target may belong to only one namespace.
       x-karakoram-rbac: {resource: namespaces, action: create, object: '*'}
+      x-karakoram-agent:
+        tool: namespace_create
+        risk: destructive
+        confirm: confirm
+        async: none
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1453,6 +1713,13 @@ paths:
       tags: [Namespaces]
       summary: Read namespace project, token status and relay health
       x-karakoram-rbac: {resource: namespaces, action: read, object: namespace}
+      x-karakoram-agent:
+        tool: namespace_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -1487,6 +1754,12 @@ paths:
       summary: Update a namespace description
       description: Changes only description. Name, project identity, token and relay status cannot be changed by this patch.
       x-karakoram-rbac: {resource: namespaces, action: update, object: namespace}
+      x-karakoram-agent:
+        tool: namespace_update
+        risk: destructive
+        confirm: confirm
+        async: none
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -1533,6 +1806,12 @@ paths:
       summary: Remove an empty namespace and its relay
       description: Returns 409 for default or while any cluster (including deleting), backup storage, retained backup record or pending orphaned-volume record exists. Once accepted, deletes the relay service before removing the namespace and its sealed token and relay secrets.
       x-karakoram-rbac: {resource: namespaces, action: delete, object: namespace}
+      x-karakoram-agent:
+        tool: namespace_delete
+        risk: destructive
+        confirm: name
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -1568,6 +1847,13 @@ paths:
       summary: Validate and atomically rotate a namespace token
       description: The new token must see the same projectId. Rotation does not restart the relay. The default namespace token is environment-managed; returns 409 and must instead be rotated by updating the service secret and restarting.
       x-karakoram-rbac: {resource: namespaces, action: update, object: namespace}
+      x-karakoram-agent:
+        tool: namespace_token_rotate
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -1616,6 +1902,12 @@ paths:
       tags: [Namespaces]
       summary: Revalidate a namespace token and project
       x-karakoram-rbac: {resource: namespaces, action: update, object: namespace}
+      x-karakoram-agent:
+        tool: namespace_validate
+        risk: write
+        confirm: none
+        async: none
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -1648,6 +1940,197 @@ paths:
           $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalError'
+  /dry-run/clusters:
+    parameters:
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: dryRunCreateCluster
+      tags: [DryRun]
+      summary: Preview validation and effects without domain side effects
+      x-karakoram-rbac: {resource: clusters, action: create, object: '*'}
+      x-karakoram-agent:
+        tool: cluster_create_dry_run
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        secret: false
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClusterRequest'
+      responses:
+        '200':
+          description: Validated preview; no domain state is changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DryRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /dry-run/clusters/{cluster}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    put:
+      operationId: dryRunReplaceCluster
+      tags: [DryRun]
+      summary: Preview validation and effects without domain side effects
+      x-karakoram-rbac: {resource: clusters, action: update, object: 'cluster'}
+      x-karakoram-agent:
+        tool: cluster_replace_dry_run
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        secret: false
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceClusterRequest'
+      responses:
+        '200':
+          description: Validated preview; no domain state is changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DryRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: dryRunPatchCluster
+      tags: [DryRun]
+      summary: Preview validation and effects without domain side effects
+      x-karakoram-rbac: {resource: clusters, action: update, object: 'cluster'}
+      x-karakoram-agent:
+        tool: cluster_update_dry_run
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        secret: false
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/ClusterMergePatch'
+      responses:
+        '200':
+          description: Validated preview; no domain state is changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DryRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /dry-run/clusters/{cluster}/restores:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: dryRunCreateRestore
+      tags: [DryRun]
+      summary: Preview validation and effects without domain side effects
+      x-karakoram-rbac: {resource: restores, action: create, object: 'cluster'}
+      x-karakoram-agent:
+        tool: restore_create_dry_run
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        secret: false
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRestoreRequest'
+      responses:
+        '200':
+          description: Validated preview; no domain state is changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DryRunResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /clusters:
     parameters:
       - $ref: '#/components/parameters/NamespaceQuery'
@@ -1660,6 +2143,13 @@ paths:
         resource: clusters
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: clusters_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1703,6 +2193,12 @@ paths:
         resource: clusters
         action: create
         object: '*'
+      x-karakoram-agent:
+        tool: cluster_create
+        risk: write
+        confirm: none
+        async: generation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1763,6 +2259,13 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1803,6 +2306,13 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_replace
+        risk: destructive
+        confirm: confirm
+        async: generation
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1868,6 +2378,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_update
+        risk: destructive
+        confirm: confirm
+        async: generation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1932,6 +2448,13 @@ paths:
         resource: clusters
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_delete
+        risk: destructive
+        confirm: name
+        async: operation
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -1990,6 +2513,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_resume
+        risk: write
+        confirm: none
+        async: generation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2038,6 +2567,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_restart
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2083,6 +2618,12 @@ paths:
       summary: Re-arm platform deployments stopped by the retry limit
       description: Increments the server-managed retry epoch and reconciles exhausted members/components with a fresh deployment budget. Returns 409 when no deployment is exhausted in the current epoch. Replaying an Idempotency-Key returns the original response without granting another budget.
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: cluster_deployments_retry
+        risk: write
+        confirm: none
+        async: operation
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2129,6 +2670,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_fcv_raise
+        risk: destructive
+        confirm: name
+        async: operation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2192,6 +2739,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_member_replace
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2240,6 +2793,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_tls_rotate
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2289,6 +2848,12 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: system_users_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2339,6 +2904,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: system_user_rotate
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2387,6 +2958,13 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_members_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2437,6 +3015,13 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_member_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2480,6 +3065,13 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_status_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2523,6 +3115,13 @@ paths:
         resource: cluster-credentials
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_connection_get
+        risk: read
+        confirm: none
+        secret: true
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2570,6 +3169,12 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_placement_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2613,6 +3218,12 @@ paths:
         resource: clusters
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_balancer_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2654,6 +3265,12 @@ paths:
         resource: clusters
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_balancer_replace
+        risk: write
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -2701,6 +3318,13 @@ paths:
       tags: [Supabase]
       summary: Reveal Supabase endpoints and credentials
       x-karakoram-rbac: {resource: cluster-credentials, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_credentials_get
+        risk: read
+        confirm: none
+        secret: true
+        async: none
+        idempotent: true
       responses:
         '200':
           description: Credentials must not be cached.
@@ -2726,6 +3350,12 @@ paths:
       tags: [Supabase]
       summary: Set the write-only SMTP password
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_smtp_password_set
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2754,6 +3384,12 @@ paths:
       tags: [Supabase]
       summary: List deployed edge function names
       x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_functions_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '200':
           description: Function names.
@@ -2780,6 +3416,12 @@ paths:
       tags: [Supabase]
       summary: Read edge function source files
       x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_function_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '200':
           description: Relative file paths mapped to source text; not cached.
@@ -2802,6 +3444,12 @@ paths:
       summary: Deploy or replace an edge function
       description: At most 100 functions per cluster and 1 MiB of source text per function. A nonempty index.ts entrypoint is required; main is reserved for the runtime dispatcher. Paths must be relative, without dot or parent components or backslashes.
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_function_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2826,6 +3474,12 @@ paths:
       tags: [Supabase]
       summary: Delete an edge function
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_function_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -2846,6 +3500,12 @@ paths:
       tags: [Supabase]
       summary: Queue JWT signing secret and API key rotation
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: supabase_jwt_secret_rotate
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2874,6 +3534,12 @@ paths:
       tags: [Postgres]
       summary: List application PostgreSQL roles
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_roles_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -2896,6 +3562,12 @@ paths:
       tags: [Postgres]
       summary: Create a PostgreSQL role
       x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_role_create
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -2937,6 +3609,12 @@ paths:
       tags: [Postgres]
       summary: Read a PostgreSQL application role
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_role_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -2955,6 +3633,12 @@ paths:
       tags: [Postgres]
       summary: Replace PostgreSQL role attributes and optionally its password
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_role_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -2987,6 +3671,11 @@ paths:
       tags: [Postgres]
       summary: Update selected PostgreSQL role attributes
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_role_update
+        risk: destructive
+        confirm: confirm
+        async: none
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -3019,6 +3708,12 @@ paths:
       tags: [Postgres]
       summary: Delete a PostgreSQL application role
       x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_role_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -3045,6 +3740,12 @@ paths:
       tags: [Postgres]
       summary: Generate and rotate a login role password
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_role_password_rotate
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -3082,6 +3783,12 @@ paths:
       tags: [Postgres]
       summary: List PostgreSQL application databases
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_databases_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -3104,6 +3811,11 @@ paths:
       tags: [Postgres]
       summary: Create a database from template0 with immutable encoding and locale
       x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_database_create
+        risk: write
+        confirm: none
+        async: none
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -3137,6 +3849,12 @@ paths:
       tags: [Postgres]
       summary: Read a PostgreSQL application database
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_database_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -3155,6 +3873,12 @@ paths:
       tags: [Postgres]
       summary: Delete a PostgreSQL application database
       x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_database_delete
+        risk: destructive
+        confirm: name
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - {name: force, in: query, schema: {type: boolean, default: false}}
@@ -3176,6 +3900,12 @@ paths:
       tags: [Postgres]
       summary: List explicit database and schema grants in a database
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_grants_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       parameters:
         - {name: database, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 63}}
       responses:
@@ -3200,6 +3930,11 @@ paths:
       tags: [Postgres]
       summary: Grant whitelisted database or schema privileges
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_privileges_grant
+        risk: destructive
+        confirm: confirm
+        async: none
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -3224,6 +3959,12 @@ paths:
       tags: [Postgres]
       summary: Revoke whitelisted database or schema privileges
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_privileges_revoke
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -3254,6 +3995,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_vhosts_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3281,6 +4028,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_vhost_create
+        risk: write
+        confirm: none
+        async: none
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3328,6 +4080,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_vhost_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3355,6 +4113,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_vhost_replace
+        risk: write
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3391,6 +4155,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_vhost_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3420,6 +4190,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_users_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3452,6 +4228,12 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_user_create
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       x-karakoram-rbac-extra:
         resource: clusters
         action: update
@@ -3502,6 +4284,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_user_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3535,6 +4323,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_user_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       x-karakoram-rbac-extra:
         resource: clusters
         action: update
@@ -3575,6 +4369,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_user_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3604,6 +4404,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_permissions_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3631,6 +4437,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_permission_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3684,6 +4495,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_permission_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3711,6 +4528,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_permission_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3747,6 +4570,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_permission_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3776,6 +4605,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_topic_permissions_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3803,6 +4638,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_topic_permission_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3856,6 +4696,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_topic_permission_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3883,6 +4729,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_topic_permission_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3919,6 +4771,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_topic_permission_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3948,6 +4806,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_policies_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -3975,6 +4839,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_policy_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4028,6 +4897,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_policy_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4055,6 +4930,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_policy_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4091,6 +4972,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_policy_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4120,6 +5007,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_operator_policies_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4147,6 +5040,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_operator_policy_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4200,6 +5098,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_operator_policy_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4227,6 +5131,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_operator_policy_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4263,6 +5173,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: rabbitmq_operator_policy_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -4293,6 +5209,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: database_users_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4337,6 +5259,12 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: database_user_create
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4407,6 +5335,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: database_user_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4448,6 +5382,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: database_user_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4496,6 +5436,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: database_user_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4537,6 +5483,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: database_roles_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4582,6 +5534,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: database_role_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4650,6 +5607,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: database_role_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4691,6 +5654,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: database_role_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4740,6 +5709,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: database_role_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -4780,6 +5755,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_users_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4805,6 +5786,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_user_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4846,6 +5832,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_user_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4868,6 +5860,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_user_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4899,6 +5897,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_user_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4923,6 +5927,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_roles_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4948,6 +5958,11 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_role_create
+        risk: destructive
+        confirm: confirm
+        async: none
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -4989,6 +6004,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_role_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -5011,6 +6032,12 @@ paths:
         resource: database-users
         action: update
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_role_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -5042,6 +6069,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_role_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -5066,6 +6099,12 @@ paths:
         resource: database-users
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_api_keys_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -5091,6 +6130,12 @@ paths:
         resource: database-users
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_api_key_create
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -5138,6 +6183,12 @@ paths:
         resource: database-users
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: elasticsearch_api_key_invalidate
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -5163,6 +6214,13 @@ paths:
         resource: clusters
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: orphaned_volumes_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5203,6 +6261,12 @@ paths:
         resource: backups
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: backups_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5245,6 +6309,11 @@ paths:
         resource: backups
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: backup_create
+        risk: write
+        confirm: none
+        async: record
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5309,6 +6378,12 @@ paths:
         resource: backups
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: backup_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5349,6 +6424,13 @@ paths:
         resource: backups
         action: delete
         object: cluster
+      x-karakoram-agent:
+        tool: backup_delete
+        risk: destructive
+        confirm: name
+        async: operation
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5405,6 +6487,13 @@ paths:
         resource: backups
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: pitr_window_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5448,6 +6537,13 @@ paths:
         resource: restores
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: restores_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5490,6 +6586,12 @@ paths:
         resource: restores
         action: create
         object: cluster
+      x-karakoram-agent:
+        tool: restore_create
+        risk: destructive
+        confirm: name
+        async: record
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5554,6 +6656,13 @@ paths:
         resource: restores
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: restore_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5596,6 +6705,13 @@ paths:
         resource: backup-storages
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: backup_storages_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5638,6 +6754,12 @@ paths:
         resource: backup-storages
         action: create
         object: '*'
+      x-karakoram-agent:
+        tool: backup_storage_create
+        risk: destructive
+        confirm: confirm
+        async: none
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5700,6 +6822,13 @@ paths:
         resource: backup-storages
         action: read
         object: storage
+      x-karakoram-agent:
+        tool: backup_storage_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5739,6 +6868,13 @@ paths:
         resource: backup-storages
         action: update
         object: storage
+      x-karakoram-agent:
+        tool: backup_storage_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5787,6 +6923,12 @@ paths:
         resource: backup-storages
         action: delete
         object: storage
+      x-karakoram-agent:
+        tool: backup_storage_delete
+        risk: destructive
+        confirm: name
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5835,6 +6977,12 @@ paths:
         resource: backup-storages
         action: update
         object: storage
+      x-karakoram-agent:
+        tool: backup_storage_verify
+        risk: write
+        confirm: none
+        async: none
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5879,6 +7027,13 @@ paths:
         resource: operations
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: operations_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5937,6 +7092,13 @@ paths:
         resource: operations
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_operations_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -5992,6 +7154,13 @@ paths:
         resource: operations
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: operation_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -6038,6 +7207,12 @@ paths:
         resource: clusters
         action: update
         object: '*'
+      x-karakoram-agent:
+        tool: operation_cancel
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -6074,6 +7249,13 @@ paths:
         resource: events
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: events_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       description: Cluster events require events:read or audit:read on '<namespace>/<cluster>'. Namespace lifecycle and mutation events require audit:read on '<namespace>'; global audit entries require audit:read on '*'. Namespace, actor and resource filters compose; actor and resource use exact matches.
       x-karakoram-rbac-extra:
         resource: audit
@@ -6161,6 +7343,13 @@ paths:
         resource: events
         action: read
         object: '*'
+      x-karakoram-agent:
+        exposed: false
+        reason: Server-sent event stream; use events_list.
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       x-karakoram-rbac-extra:
         resource: audit
         action: read
@@ -6262,6 +7451,12 @@ paths:
         resource: monitoring
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: cluster_metrics_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -6327,6 +7522,13 @@ paths:
         resource: monitoring
         action: read
         object: cluster
+      x-karakoram-agent:
+        tool: member_logs_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -6391,6 +7593,12 @@ paths:
         resource: monitoring
         action: read
         object: '*'
+      x-karakoram-agent:
+        tool: prometheus_metrics_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
@@ -6624,6 +7832,43 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
+    DryRunResult:
+      type: object
+      additionalProperties: false
+      required: [operation, cluster, changes, effects, warnings]
+      properties:
+        operation:
+          type: string
+          enum: [create, replace, patch, restore]
+        cluster:
+          $ref: '#/components/schemas/Cluster'
+        restore:
+          $ref: '#/components/schemas/Restore'
+        changes:
+          type: array
+          items:
+            type: object
+            required: [path]
+            properties:
+              path:
+                type: string
+              before: {}
+              after: {}
+        effects:
+          type: array
+          items:
+            type: object
+            required: [kind, message]
+            properties:
+              kind:
+                type: string
+                enum: [version-upgrade, member-removal, member-addition, resource-change, public-exposure, tls-downgrade, backups-disabled, in-place-restore, clone, restart-required]
+              message:
+                type: string
+        warnings:
+          type: array
+          items:
+            type: string
     NamespaceName:
       type: string
       pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'
@@ -7218,6 +8463,49 @@ components:
             pattern: '^[a-z][a-z-]*:([a-z][a-z-]*|\*)$'
         allowCredentialReveal:
           type: boolean
+    OAuthGrant:
+      type: object
+      additionalProperties: false
+      required: [id, owner, clientId, clientName, clientHost, scopes, namespaces, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+        owner:
+          type: string
+        clientId:
+          type: string
+        clientName:
+          type: string
+        clientHost:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        namespaces:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+    OAuthGrantList:
+      type: object
+      additionalProperties: false
+      required: [enabled, items]
+      properties:
+        enabled:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OAuthGrant'
     APIToken:
       type: object
       additionalProperties: false

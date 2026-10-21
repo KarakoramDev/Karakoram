@@ -73,6 +73,10 @@ func (a *app) addCommands(root *cobra.Command) {
 		if strings.HasPrefix(s.path, "restores create") {
 			annotate(c, s.operation, "getCluster", "createCluster")
 		}
+		if dryRunOperation(s.operation) != "" {
+			c.Flags().Bool("dry-run", false, "Validate and preview changes on the server without applying them")
+			c.Annotations[operationAnnotation] += "," + dryRunOperation(s.operation)
+		}
 		if s.body {
 			c.Flags().StringP("file", "f", "", "API request YAML/JSON file ('-' for stdin)")
 		}
@@ -103,6 +107,7 @@ func (a *app) addCommands(root *cobra.Command) {
 	a.addConfig(root)
 	a.addElastic(root)
 	a.addSupabase(root)
+	addMCPCommands(a, root)
 }
 func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if s.operation == "getVersion" {
@@ -140,17 +145,24 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 		return a.waitCluster(cmd.Context(), "observe", args[0], 0, nil, timeout)
 	}
 	op := s.operation
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	if dryRun {
+		if wait, _ := cmd.Flags().GetBool("wait"); wait {
+			return usageError("--dry-run cannot be combined with --wait")
+		}
+		op = dryRunOperation(s.operation)
+	}
 	if s.operation == "listClusterMembers" && len(args) == 2 {
 		op = "getClusterMember"
 	}
-	if err := a.checkConfirmationInput(cmd, s.operation); err != nil {
+	if err := a.checkConfirmationInput(cmd, op); err != nil {
 		return err
 	}
 	body, err := a.body(cmd, s, args)
 	if err != nil {
 		return err
 	}
-	if err := a.confirm(cmd, s.operation, args); err != nil {
+	if err := a.confirm(cmd, op, args); err != nil {
 		return err
 	}
 	if s.operation == "getClusterConnection" && s.path != "clusters ca <cluster>" {
@@ -174,6 +186,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	result, err := a.request(cmd.Context(), op, args, q, body)
 	if err != nil {
 		return err
+	}
+	if dryRun {
+		return a.printDryRun(result)
 	}
 	if s.path == "clusters ca <cluster>" {
 		pem, _ := nested(result, "caCertificate").(string)
@@ -209,6 +224,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	}
 	if (op == "getProvider" || op == "listProviders") && a.format == "table" {
 		return a.providersTable(result, op == "listProviders")
+	}
+	if (op == "listAPITokens" || op == "getAPIToken" || op == "createAPIToken") && a.format == "table" {
+		return a.tokensTable(result)
 	}
 	return a.print(result)
 }

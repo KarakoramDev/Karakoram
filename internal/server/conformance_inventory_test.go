@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	specification "github.com/KarakoramDev/Karakoram/api"
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
@@ -39,6 +40,8 @@ func (w cancelOnFlushRecorder) Flush() {
 // Populated inventories ensure item schemas are exercised, not just envelopes.
 func TestEveryGETResponseConforms(t *testing.T) {
 	s, token := namespaceTestServer(t)
+	enableTestOAuth(t, s)
+	oauthFixtureGrant(t, s, "conformance", "admin", "kko_conformance", time.Now().Add(time.Minute))
 	ctx := t.Context()
 	var err error
 	inventoryElastic := newInventoryElasticProvider(t, s)

@@ -45,6 +45,8 @@ type Sealer struct {
 	aead                   cipher.AEAD
 	idempotencyBodyKey     [32]byte
 	idempotencyIdentityKey [32]byte
+	mcpConfirmKey          [32]byte
+	mcpIdempotencyKey      [32]byte
 }
 
 // New derives a sealer from a master key of at least 32 characters.
@@ -71,6 +73,8 @@ func New(masterKey string) (*Sealer, error) {
 	}{
 		{"idempotency-body/HMAC-SHA256", s.idempotencyBodyKey[:]},
 		{"idempotency-identity/HMAC-SHA256", s.idempotencyIdentityKey[:]},
+		{"mcp-confirm/HMAC-SHA256", s.mcpConfirmKey[:]},
+		{"mcp-idempotency/HMAC-SHA256", s.mcpIdempotencyKey[:]},
 	} {
 		if _, err := io.ReadFull(hkdf.New(sha256.New, []byte(masterKey), []byte("karakoram/secrets/v1"), []byte(subkey.label)), subkey.key); err != nil {
 			return nil, err
@@ -127,6 +131,16 @@ func (s *Sealer) IdempotencyBodyHash(body []byte) string {
 // IdempotencyIdentityHash hides caller-provided retry keys using a separate key.
 func (s *Sealer) IdempotencyIdentityHash(scope []byte) string {
 	return KeyedHash(s.idempotencyIdentityKey[:], scope)
+}
+
+// MCPConfirmationHash authenticates MCP confirmation state with a dedicated key.
+func (s *Sealer) MCPConfirmationHash(value []byte) string {
+	return KeyedHash(s.mcpConfirmKey[:], value)
+}
+
+// MCPIdempotencyHash derives retry identities independently of confirmation state.
+func (s *Sealer) MCPIdempotencyHash(value []byte) string {
+	return KeyedHash(s.mcpIdempotencyKey[:], value)
 }
 
 // KeyedHash returns a versioned HMAC-SHA256 receipt. Callers must use a secret
