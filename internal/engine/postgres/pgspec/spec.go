@@ -185,9 +185,10 @@ type Proxy struct {
 
 // Spec is the PostgreSQL engine payload for one member.
 type Spec struct {
-	Role     string `json:"role"`
-	Topology string `json:"topology"`
-	Flavour  string `json:"flavour,omitempty"`
+	DataAccess *DataAccessRoles `json:"dataAccess,omitempty"`
+	Role       string           `json:"role"`
+	Topology   string           `json:"topology"`
+	Flavour    string           `json:"flavour,omitempty"`
 	// Scope is the Patroni scope / etcd key namespace (cluster identity).
 	Scope string `json:"scope"`
 	// Major is the PostgreSQL major version; BinDir its binaries.

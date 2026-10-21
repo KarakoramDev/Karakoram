@@ -36,7 +36,7 @@ const (
 	secretFileRealm          = "filerealm/users"
 )
 
-var clusterSecretKeys = []string{secretCA, secretCAKey, secretAdmin, secretMonitor, secretElastic, secretLogstash, secretAPM, secretKibanaToken, secretKibanaTokenName, secretKibanaSecurity, secretKibanaSavedObjects, secretKibanaReporting, secretAPMToken, secretFileRealm}
+var clusterSecretKeys = []string{secretCA, secretCAKey, secretAdmin, secretMonitor, secretElastic, secretLogstash, secretAPM, secretKibanaToken, secretKibanaTokenName, secretKibanaSecurity, secretKibanaSavedObjects, secretKibanaReporting, secretAPMToken, secretFileRealm, secretDataAccessRead, secretDataAccessReadWrite}
 
 func missing(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.Is(err, engine.ErrNotFound)

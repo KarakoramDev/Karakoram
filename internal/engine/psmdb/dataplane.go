@@ -70,6 +70,11 @@ func (*Provider) SystemUsers(_ context.Context, rc *engine.Context) ([]domain.Sy
 	for _, u := range users.SystemUserDefs() {
 		out = append(out, domain.SystemUser{Name: u.Name, Roles: u.Roles, LastRotatedAt: s.LastRotatedAt[u.Name]})
 	}
+	for _, name := range []string{engine.DataAccessReadUser, engine.DataAccessReadWriteUser} {
+		if roles := s.DataAccessUsers[name]; roles != nil {
+			out = append(out, domain.SystemUser{Name: name, Roles: roles, LastRotatedAt: s.LastRotatedAt[name]})
+		}
+	}
 	return out, nil
 }
 func (p *Provider) userClient(ctx context.Context, rc *engine.Context) (*mongo.Client, error) {

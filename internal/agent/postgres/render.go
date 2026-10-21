@@ -69,6 +69,9 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 	for k, v := range map[string]any{"listen_addresses": "*", "port": 5432, "unix_socket_directories": p.socket, "password_encryption": "scram-sha-256", "archive_mode": "on", "archive_command": "/bin/true", "archive_timeout": archiveTimeout(s), "hba_file": filepath.Join(p.root, "pg_hba.conf")} {
 		m[k] = v
 	}
+	if s.ListenHost != "" {
+		m["listen_addresses"] = s.ListenHost
+	}
 	if len(s.Postgres.SharedPreloadLibraries) > 0 {
 		m["shared_preload_libraries"] = strings.Join(s.Postgres.SharedPreloadLibraries, ",")
 	}

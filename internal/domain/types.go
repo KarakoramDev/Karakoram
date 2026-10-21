@@ -79,6 +79,7 @@ type ClusterSpec struct {
 	Exposure      Exposure         `json:"exposure"`
 	Monitoring    MonitoringConfig `json:"monitoring"`
 	DataSource    *DataSource      `json:"dataSource,omitempty"`
+	DataMcp       *DataMcpSpec     `json:"dataMcp,omitempty"`
 }
 
 // Topology selects a provider's deployment layout and optional shard count.
@@ -194,6 +195,7 @@ type ClusterStatus struct {
 	// conditions (which suspension may rewrite). It is internal control-plane
 	// state; API projections expose its diagnostic conditions/events instead.
 	InitialDataSource *InitialDataSourceLifecycle `json:"initialDataSource,omitempty"`
+	DataMcp           *DataMcpStatus              `json:"dataMcp,omitempty"`
 }
 
 // InitialDataSourceLifecycle distinguishes a failed convergence tracker from a

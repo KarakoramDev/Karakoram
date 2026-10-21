@@ -88,8 +88,14 @@ func (p *Provider) Connection(ctx context.Context, rc *engine.Context) (domain.C
 	}
 	return out, nil
 }
-func (*Provider) SystemUsers(context.Context, *engine.Context) ([]domain.SystemUser, error) {
-	return []domain.SystemUser{{Name: "karakoram", Roles: []domain.RoleRef{{Role: "administrator", DB: "/"}}}, {Name: "admin", Roles: []domain.RoleRef{{Role: "administrator", DB: "/"}}}}, nil
+func (*Provider) SystemUsers(_ context.Context, rc *engine.Context) ([]domain.SystemUser, error) {
+	users := []domain.SystemUser{{Name: "karakoram", Roles: []domain.RoleRef{{Role: "administrator", DB: "/"}}}, {Name: "admin", Roles: []domain.RoleRef{{Role: "administrator", DB: "/"}}}}
+	if rc != nil {
+		for _, name := range dataAccessUsers(rc.Cluster) {
+			users = append(users, domain.SystemUser{Name: name, Roles: []domain.RoleRef{{Role: "monitoring"}}})
+		}
+	}
+	return users, nil
 }
 func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Placement, error) {
 	s, e := loadState(rc.Cluster)

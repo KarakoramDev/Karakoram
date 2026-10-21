@@ -149,6 +149,11 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 			return err
 		}
 	}
+	for _, u := range dataAccessUsers(rc.Cluster) {
+		if err = ensureSecret(ctx, rc, "users/"+u, secrets.Password); err != nil {
+			return err
+		}
+	}
 	ips, err := memberIPs(ctx, rc)
 	if err != nil {
 		return err
@@ -263,7 +268,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	if err != nil {
 		return v, err
 	}
-	for _, u := range []string{"karakoram", "admin", "monitor"} {
+	for _, u := range append([]string{"karakoram", "admin", "monitor"}, dataAccessUsers(rc.Cluster)...) {
 		key := "users/" + u
 		if m.ChangeAction == "password" && m.TargetConfig == u {
 			key = m.TargetVersion

@@ -48,7 +48,7 @@ func SystemUserDefs() []SystemUserDef {
 // IsSystemUser reports whether name is reserved for a provider-managed user.
 func IsSystemUser(name string) bool {
 	switch name {
-	case "clusterAdmin", "userAdmin", "clusterMonitor", "backup", "databaseAdmin":
+	case "clusterAdmin", "userAdmin", "clusterMonitor", "backup", "databaseAdmin", engine.DataAccessReadUser, engine.DataAccessReadWriteUser:
 		return true
 	}
 	return false

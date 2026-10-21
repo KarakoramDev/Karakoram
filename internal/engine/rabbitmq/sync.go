@@ -330,6 +330,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	// Access repair uses the cookie-authenticated CLI. It must run before
 	// formation/recovery gates that now require the managed HTTP account.
 	accessErr := p.reconcileManagedAccess(ctx, rc, s)
+	if accessErr == nil {
+		accessErr = p.reconcileDataAccess(ctx, rc, s)
+	}
 	// A missing native quorum may also need the runtime/rolling recovery below.
 	// Preserve the repair error without preventing that work from progressing.
 	defer func() { err = errors.Join(err, accessErr) }()

@@ -104,6 +104,7 @@ func (*Core) Describe() domain.ProviderInfo {
 		Operations: []string{
 			domain.OperationRestart, domain.OperationReplaceMember, "reinit-member",
 			domain.OperationRotateTLS, domain.OperationBackup,
+			domain.OperationRotateSystemUser,
 			domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore",
 		},
 		Processes: []string{"postgres", "patroni", "etcd", "proxysql"},
@@ -203,6 +204,9 @@ func (*Core) ApplyDefaults(s *domain.ClusterSpec) {
 func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if n == nil {
 		return engine.Invalid("cluster is nil")
+	}
+	if _, err := p.DataMcp(n); err != nil {
+		return err
 	}
 	s := n.Spec
 	if !clusterName.MatchString(n.Name) {

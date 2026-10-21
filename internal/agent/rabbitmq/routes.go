@@ -239,7 +239,7 @@ func validateRequest(v any) error {
 			return errors.New("timeout must be between 1 and 120 seconds (0 uses default)")
 		}
 	case *rmqspec.SetPasswordRequest:
-		if r.User != "karakoram" && r.User != "admin" && r.User != "monitor" {
+		if r.User != "karakoram" && r.User != "admin" && r.User != "monitor" && r.User != "karakoram-mcp-ro" && r.User != "karakoram-mcp-rw" {
 			return errors.New("only system users may be rotated")
 		}
 	case *rmqspec.StreamReplicasRequest:

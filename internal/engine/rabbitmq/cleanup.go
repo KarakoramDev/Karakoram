@@ -169,7 +169,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 				return false, e
 			}
 		}
-		for _, key := range []string{"erlang-cookie", "users/karakoram", "users/admin", "users/monitor", "tls/ca.crt", "tls/ca.key", "tls/user.crt", "tls/user.key"} {
+		for _, key := range []string{"erlang-cookie", "users/karakoram", "users/admin", "users/monitor", "users/" + engine.DataAccessReadUser, "users/" + engine.DataAccessReadWriteUser, "tls/ca.crt", "tls/ca.key", "tls/user.crt", "tls/user.key"} {
 			if e = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key); e != nil && !missing(e) {
 				return false, e
 			}

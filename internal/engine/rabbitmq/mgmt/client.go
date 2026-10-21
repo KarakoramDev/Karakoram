@@ -53,6 +53,16 @@ func New(baseURL, username, password string, client *http.Client) (*Client, erro
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 
 func (c *Client) request(ctx context.Context, method string, parts []string, body any, out any) error {
+	return c.requestBounded(ctx, method, parts, nil, body, out, 64<<20)
+}
+
+// DataRequest performs a path-segment-escaped Management API request with a
+// bounded response. Query parameters cannot alter the resource path.
+func (c *Client) DataRequest(ctx context.Context, method string, parts []string, query url.Values, body, out any) error {
+	return c.requestBounded(ctx, method, parts, query, body, out, 4<<20)
+}
+
+func (c *Client) requestBounded(ctx context.Context, method string, parts []string, query url.Values, body, out any, limit int64) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	var b []byte
@@ -70,6 +80,9 @@ func (c *Client) request(ctx context.Context, method string, parts []string, bod
 		escaped[i] = url.PathEscape(p)
 	}
 	target := strings.TrimRight(c.base.String(), "/") + "/api/" + strings.Join(escaped, "/")
+	if len(query) != 0 {
+		target += "?" + query.Encode()
+	}
 	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(b))
 	if err != nil {
 		return err
@@ -130,14 +143,14 @@ func (c *Client) request(ctx context.Context, method string, parts []string, bod
 		return &HTTPError{StatusCode: resp.StatusCode, Cause: sentinel}
 	}
 	if out == nil {
-		_, err = io.Copy(io.Discard, resp.Body)
+		_, err = io.Copy(io.Discard, io.LimitReader(resp.Body, limit+1))
 		return err
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, (64<<20)+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return err
 	}
-	if len(data) > 64<<20 {
+	if int64(len(data)) > limit {
 		return fmt.Errorf("RabbitMQ Management API response too large")
 	}
 	if raw, ok := out.(*[]byte); ok {

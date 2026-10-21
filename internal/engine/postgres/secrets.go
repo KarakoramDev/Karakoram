@@ -37,6 +37,9 @@ func putSecret(ctx context.Context, rc *engine.Context, key string, b []byte) er
 }
 
 func (p *Core) ensureSecrets(ctx context.Context, rc *engine.Context, s *state) error {
+	if err := ensureDataSecrets(ctx, rc); err != nil {
+		return err
+	}
 	_, err := secret(ctx, rc, "tls/ca.crt")
 	if missing(err) {
 		if rc.Cluster.Spec.TLS.CA == "userProvided" {

@@ -189,6 +189,9 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if n == nil {
 		return invalid("cluster is nil")
 	}
+	if _, err := p.DataMcp(n); err != nil {
+		return err
+	}
 	s := n.Spec
 	if !ValidClusterName(n.Name) {
 		return invalid("cluster name must be 2..12 lowercase alphanumeric characters starting with a letter")

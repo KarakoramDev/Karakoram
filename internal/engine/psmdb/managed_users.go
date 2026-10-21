@@ -45,7 +45,7 @@ func (p *Provider) reconcileManagedUsers(ctx context.Context, rc *engine.Context
 			return fmt.Errorf("managed system users in %s require repair; verify userAdmin privileges: %w", set, err)
 		}
 	}
-	return nil
+	return p.reconcileDataAccessUsers(ctx, rc, s)
 }
 
 // Inspect typed server errors, including write-concern errors nested in a

@@ -27,17 +27,20 @@ import (
 )
 
 type Runner struct {
-	mu               sync.RWMutex
-	current          pgspec.Spec
-	dir              string
-	credentialsHash  [32]byte
-	rolesApplied     bool
-	roleSQL          []string
-	roleSQLHash      [32]byte
-	proxyRestartHash [32]byte
-	proxyAdmin       pgspec.Credentials
-	configured       bool
-	watermark        archiveWatermark
+	mu                sync.RWMutex
+	current           pgspec.Spec
+	dir               string
+	credentialsHash   [32]byte
+	rolesApplied      bool
+	roleSQL           []string
+	roleSQLHash       [32]byte
+	dataAccessHash    [32]byte
+	dataAccessApplied bool
+	dataGrants        dataGrantCache
+	proxyRestartHash  [32]byte
+	proxyAdmin        pgspec.Credentials
+	configured        bool
+	watermark         archiveWatermark
 }
 
 func New() *Runner                  { return &Runner{} }
@@ -166,6 +169,11 @@ func roleStatements(s pgspec.Spec) ([]string, error) {
 	for _, function := range []string{"pg_catalog.pg_ls_dir(text,boolean,boolean)", "pg_catalog.pg_stat_file(text,boolean)", "pg_catalog.pg_read_binary_file(text)", "pg_catalog.pg_read_binary_file(text,bigint,bigint,boolean)"} {
 		result = append(result, "GRANT EXECUTE ON FUNCTION "+function+" TO "+sqlIdent(s.Rewind.Username))
 	}
+	dataSQL, err := dataRoleStatements(s.DataAccess)
+	if err != nil {
+		return nil, err
+	}
+	result = append(result, dataSQL...)
 	return result, nil
 }
 func bootstrapRoles(ctx context.Context, c *pgx.Conn, s pgspec.Spec) error {
@@ -191,7 +199,10 @@ func bootstrapRoles(ctx context.Context, c *pgx.Conn, s pgspec.Spec) error {
 			return errors.New("system role bootstrap failed")
 		}
 	}
-	return tx.Commit(ctx)
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	return reconcileDataGrants(ctx, c, s.DataAccess)
 }
 func initSingle(ctx context.Context, n *agent.Node, s pgspec.Spec, p paths) error {
 	if s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
@@ -288,7 +299,7 @@ func (e *Runner) systemRoleSQL(s pgspec.Spec) ([]string, error) {
 	if s.Role != pgspec.RoleData {
 		return nil, nil
 	}
-	digest := hash([]pgspec.Credentials{s.Superuser, s.Monitor, s.Replication, s.Rewind})
+	digest := hash([]any{s.Superuser, s.Monitor, s.Replication, s.Rewind, dataAccessDefinition(s.DataAccess)})
 	if e.roleSQL == nil || e.roleSQLHash != digest {
 		statements, err := roleStatements(s)
 		if err != nil {
@@ -445,7 +456,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 				return nil, err
 			}
 			defer conn.Close(ctx)
-			credentialsHash := hash([]any{s.Superuser, s.Monitor, s.Replication, s.Rewind})
+			credentialsHash := hash([]any{s.Superuser, s.Monitor, s.Replication, s.Rewind, dataAccessDefinition(s.DataAccess)})
 			if !e.rolesApplied || e.credentialsHash != credentialsHash || recoveryCredentialsPending(s, p) {
 				if err = bootstrapRoles(ctx, conn, s); err != nil {
 					return nil, err
@@ -457,6 +468,13 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 				}
 				e.rolesApplied = true
 				e.credentialsHash = credentialsHash
+				e.mu.Lock()
+				e.dataAccessApplied, e.dataAccessHash = true, hash(dataAccessDefinition(s.DataAccess))
+				e.dataGrants = dataGrantCache{digest: hash(s.DataAccess), appliedAt: time.Now()}
+				e.mu.Unlock()
+			}
+			if err = e.refreshDataAccess(ctx, conn, s, time.Now()); err != nil {
+				return nil, err
 			}
 		}
 	} else {

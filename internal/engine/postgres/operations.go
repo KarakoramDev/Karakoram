@@ -89,6 +89,8 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		}
 	}
 	switch op.Kind {
+	case domain.OperationRotateSystemUser:
+		return p.rotateDataUser(ctx, rc, op)
 	case domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore":
 		return p.runBackupOperation(ctx, rc, op)
 	case domain.OperationReplaceMember:

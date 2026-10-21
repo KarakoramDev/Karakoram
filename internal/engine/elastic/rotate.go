@@ -53,6 +53,10 @@ func (p *Provider) runRotateTLS(ctx context.Context, rc *engine.Context, s *stat
 
 func rotationTarget(user string) (key, kind string) {
 	switch user {
+	case engine.DataAccessReadUser:
+		return secretDataAccessRead, ""
+	case engine.DataAccessReadWriteUser:
+		return secretDataAccessReadWrite, ""
 	case "elastic":
 		return "users/elastic", ""
 	case "karakoram-monitor":

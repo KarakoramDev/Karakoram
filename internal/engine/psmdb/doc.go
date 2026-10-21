@@ -57,6 +57,24 @@ for one node is written as one atomic combined-PEM secret. Per-node backup
 and monitor credential snapshots prevent a rotation from propagating to all
 agents during a periodic configuration pull.
 
+# Data MCP identities
+
+DataMcpProvider selects mongodb-mcp-server and accepts only application database
+scope. Sync reconciles karakoram-mcp-ro and opt-in karakoram-mcp-rw in admin
+(through mongos for sharded clusters), with read/readWrite grants for scoped
+databases or readAnyDatabase/readWriteAnyDatabase for empty scope. Scope changes
+replace grants; disabling drops users and sealed users/<name> secrets. Native
+provisioning records effective grants in dataAccessUsers, used by SystemUsers
+and DataAccessCredentials.
+
+MCP passwords never enter MemberConfig. rotate-system-user updates the native
+identity and sealed secret without incrementing member configVersion or reloading
+members. Companion credential fingerprints must include the password returned
+by DataAccessCredentials, so rotation replaces their sessions. TLS selection
+follows dial: disabled/allowTLS use plaintext, preferTLS/requireTLS use TLS with
+tls/ca.crt. Credential rendering does not probe connections to perform dial's
+preferTLS transient plaintext fallback.
+
 # Sync paths
 
 Creation starts with a stable UID/prefix and topology plan. The next call

@@ -1110,7 +1110,11 @@ func TestDedicatedMasterPayloadAndRollingOrder(t *testing.T) {
 // pass. Keep the assertions sensitive to every other native mutation.
 func disruptiveMutations(es *coreES) []string {
 	return slices.DeleteFunc(slices.Clone(es.mutations), func(call string) bool {
-		return strings.HasPrefix(call, "PUT /_security/role/") || strings.HasPrefix(call, "PUT /_security/user/")
+		return strings.HasPrefix(call, "PUT /_security/role/") || strings.HasPrefix(call, "PUT /_security/user/") ||
+			call == "DELETE /_security/user/"+engine.DataAccessReadUser ||
+			call == "DELETE /_security/user/"+engine.DataAccessReadWriteUser ||
+			call == "DELETE /_security/role/"+DataAccessReadRole ||
+			call == "DELETE /_security/role/"+DataAccessReadWriteRole
 	})
 }
 

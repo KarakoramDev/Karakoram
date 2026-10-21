@@ -218,6 +218,9 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if n == nil {
 		return invalid("cluster is nil")
 	}
+	if _, err := p.DataMcp(n); err != nil {
+		return err
+	}
 	s := n.Spec
 	if !clusterName.MatchString(n.Name) {
 		return invalid("cluster name must match %s", clusterName)

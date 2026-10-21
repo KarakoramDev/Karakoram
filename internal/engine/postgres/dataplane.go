@@ -34,10 +34,17 @@ func (p *Core) Connection(ctx context.Context, rc *engine.Context) (domain.Conne
 	u.User = url.UserPassword("postgres", string(password))
 	return domain.ConnectionDetails{Connection: conn, CACertificate: string(ca), Credentials: []domain.ConnectionCredential{{Username: "postgres", Password: string(password), Database: "postgres", URI: u.String()}}}, nil
 }
-func (*Core) SystemUsers(context.Context, *engine.Context) ([]domain.SystemUser, error) {
+func (*Core) SystemUsers(_ context.Context, rc *engine.Context) ([]domain.SystemUser, error) {
 	users := make([]domain.SystemUser, 0, len(systemNames))
 	for _, name := range systemNames {
 		users = append(users, domain.SystemUser{Name: name, Roles: []domain.RoleRef{}})
+	}
+	ro, rw := engine.DataAccessLevels(rc.Cluster)
+	if ro {
+		users = append(users, domain.SystemUser{Name: engine.DataAccessReadUser, Roles: []domain.RoleRef{}})
+	}
+	if rw {
+		users = append(users, domain.SystemUser{Name: engine.DataAccessReadWriteUser, Roles: []domain.RoleRef{}})
 	}
 	return users, nil
 }

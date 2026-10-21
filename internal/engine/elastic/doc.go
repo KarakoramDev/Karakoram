@@ -41,4 +41,9 @@
 // Historical superseded creates without restore evidence remain nonReady and
 // never enqueue a replacement restore. Their ordinary runtime, access, backup
 // storage and exposure reconciliation continues without the old source dependency.
+//
+// Data MCP uses native, scoped read-only and opt-in document-write identities.
+// Their roles exclude restricted indices, but wildcard grants still match
+// non-restricted dot indices: the native gateway must independently exclude all
+// dot indices and prevent alias or wildcard expansion from reaching them.
 package elastic

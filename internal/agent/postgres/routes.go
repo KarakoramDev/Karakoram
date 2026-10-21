@@ -188,6 +188,14 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 				out.Role = "starting"
 			}
 		}
+		// Patroni startup must not wait for a database before the other DCS
+		// members have started. Reconcile scoped ACLs once the local primary
+		// is observed, before reporting it ready to the control plane.
+		if (out.Role == "primary" || out.Role == "standalone") && s.DataAccess != nil {
+			if err := e.refreshDataAccess(ctx, c, s, time.Now()); err != nil {
+				out.Running = false
+			}
+		}
 		_ = c.QueryRow(ctx, "SELECT timeline_id FROM pg_catalog.pg_control_checkpoint()").Scan(&out.Timeline)
 		out.ArchiveStatusKnown = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.to_char(last_archived_time AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),''), COALESCE(last_failed_time > last_archived_time, last_failed_time IS NOT NULL) FROM pg_catalog.pg_stat_archiver").Scan(&out.LastArchivedAt, &out.ArchiveFailing) == nil
 		if recovery {

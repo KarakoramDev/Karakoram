@@ -6,6 +6,14 @@
 // infrastructure descriptions and the backend's application and volume layout.
 // Public TCP, allowlists, public HTTPS and disk growth require backend support.
 // Unsupported requests are surfaced without scheduling platform retries.
+//
+// Data MCP uses the native-rabbitmq gateway and accepts only vhost scopes.
+// Reserved karakoram-mcp-ro/rw identities have the monitoring tag, never
+// administrator: configure is denied, read is allowed, and write is allowed
+// only for rw. Management API reconciliation repairs credentials and grants,
+// removes disabled identities and stale scoped grants, and discovers new vhosts
+// when scope is empty. Passwords remain sealed and use system-user rotation.
+// Gateway credentials select healthy members' private management HTTP(S) URLs.
 // Names use monotonically increasing member
 // indexes; hostname matches alone never establish infrastructure ownership.
 // Recorded service IDs, IDs returned by the member's own import, non-sensitive

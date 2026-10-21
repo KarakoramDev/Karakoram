@@ -248,6 +248,10 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		if !users.IsSystemUser(user) {
 			return result, invalid("unknown system user")
 		}
+		dataUser := isDataAccessUser(user)
+		if dataUser && s.DataAccessUsers[user] == nil {
+			return result, invalid("data access user %q is not provisioned", user)
+		}
 		key := "rotations/" + op.ID
 		if e = ensureSecret(ctx, rc, key, secrets.Password); e != nil {
 			return result, e
@@ -261,7 +265,11 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 		if cp.Stage == "" || cp.Stage == "passwords" {
 			cp.Stage = "passwords"
-			for set, st := range s.Sets {
+			sets := s.Sets
+			if dataUser && rc.Cluster.Spec.Topology.Type == "sharded" {
+				sets = map[string]*setState{"router": {Stage: "ready"}}
+			}
+			for set, st := range sets {
 				if st.Stage != "ready" || slices.Contains(cp.Done, set) {
 					continue
 				}
@@ -286,8 +294,10 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			}
 			cp.Stage = "reload"
 			cp.Done = nil
-			s.ConfigVersion++
-			cp.ConfigVersion = s.ConfigVersion
+			if !dataUser {
+				s.ConfigVersion++
+				cp.ConfigVersion = s.ConfigVersion
+			}
 			return opResult(cp, false, "password-persisted")
 		}
 		if user == "backup" || user == "clusterMonitor" {

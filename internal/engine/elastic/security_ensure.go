@@ -158,6 +158,9 @@ func (p *Provider) ensureSecurity(ctx context.Context, rc *engine.Context, s *st
 			return err
 		}
 	}
+	if err = p.ensureDataAccess(ctx, rc, c); err != nil {
+		return err
+	}
 	s.SecurityHash = hash
 	return nil
 }

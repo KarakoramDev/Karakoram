@@ -92,7 +92,7 @@ func accessName(name string) error {
 	return nil
 }
 func protectedUser(name string) bool {
-	return name == "karakoram" || name == "admin" || name == "guest" || name == "monitor"
+	return name == "karakoram" || name == "admin" || name == "guest" || name == "monitor" || name == engine.DataAccessReadUser || name == engine.DataAccessReadWriteUser
 }
 
 func protectedUserError(name string) error {

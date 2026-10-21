@@ -143,8 +143,8 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return opResult(cp, true, "member-replaced")
 	case domain.OperationRotateSystemUser:
 		user := payload["user"]
-		if user != "karakoram" && user != "admin" {
-			return result, invalid("rotatable system user must be karakoram or admin")
+		if user != "karakoram" && user != "admin" && !slices.Contains(dataAccessUsers(rc.Cluster), user) {
+			return result, invalid("rotatable system user must be karakoram, admin or an enabled data-access user")
 		}
 		key := "rotations/" + op.ID
 		if cp.Stage == "" {
