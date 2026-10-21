@@ -1,5 +1,19 @@
 [
   {
+    "name": "pgedge-postgres-mcp",
+    "version": "1.1.0",
+    "file": "pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz",
+    "sha256": "ca79e3054455b5505d3ac4ed4bc5d4cd074a57f108b8fe9ddcd3e24d16c5452a",
+    "size": 8483086,
+    "upstreamURL": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz",
+    "license": "PostgreSQL",
+    "source": {
+      "repo": "https://github.com/pgEdge/pgedge-postgres-mcp",
+      "commit": "25c2aaed03398584ceea0dd71f7f67631c3dff4e"
+    },
+    "build": "upstream-release"
+  },
+  {
     "name": "proxysql",
     "version": "3.0.11",
     "file": "proxysql_3.0.11-ubuntu24_amd64.deb",
@@ -288,6 +302,24 @@
     "source": {
       "repo": "https://github.com/supabase/supabase",
       "commit": "bc27d2661edd09a5d0b8d76ce33da6d4071a756e"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "ca-certificates",
+      "libstdc++6"
+    ]
+  },
+  {
+    "name": "mongodb-mcp-server",
+    "version": "3.1.0",
+    "file": "mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "a5c6f723b4c4eaf87ecbc3da336a5c1ec784e47a087e351e89aff65e70018242",
+    "size": 239960287,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/mongodb-js/mongodb-mcp-server",
+      "commit": "f369482783bdef116c35d352fd9d92f6c984242f"
     },
     "build": "native-v1",
     "runtimeDeps": [

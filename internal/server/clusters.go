@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/api"
+	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
@@ -88,6 +89,59 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	s.trigger(ctx, ref)
 	return response{status: 202, body: operationAPI(op), operationID: op.ID}
 }
+func validateDataMcp(p engine.Provider, c *domain.Cluster) error {
+	spec := c.Spec.DataMcp
+	if !spec.DataMcpEnabled() {
+		return nil
+	}
+	if spec.Access == "" {
+		spec.Access = domain.DataMcpAccessRead
+	}
+	if spec.Access != domain.DataMcpAccessRead && spec.Access != domain.DataMcpAccessReadWrite {
+		return engine.InvalidField("spec.dataMcp.access", domain.ReasonInvalid, "access must be read or readWrite")
+	}
+	provider, ok := p.(engine.DataMcpProvider)
+	if !ok {
+		return engine.InvalidField("spec.dataMcp.enabled", domain.ReasonUnsupported, "engine %q does not support data MCP", c.Spec.Provider)
+	}
+	if len(spec.Tools.Deny) > 64 {
+		return engine.InvalidField("spec.dataMcp.tools.deny", domain.ReasonInvalid, "at most 64 denied tools are allowed")
+	}
+	seen := make(map[string]bool, len(spec.Tools.Deny))
+	for _, name := range spec.Tools.Deny {
+		if strings.TrimSpace(name) == "" || len(name) > 64 || seen[name] {
+			return engine.InvalidField("spec.dataMcp.tools.deny", domain.ReasonInvalid, "denied tools must be unique non-empty names of at most 64 bytes")
+		}
+		seen[name] = true
+	}
+	for _, scope := range []struct {
+		name   string
+		values []string
+	}{
+		{"databases", spec.Scope.Databases},
+		{"schemas", spec.Scope.Schemas},
+		{"indexPatterns", spec.Scope.IndexPatterns},
+		{"vhosts", spec.Scope.Vhosts},
+	} {
+		if len(scope.values) > 64 {
+			return engine.InvalidField("spec.dataMcp.scope."+scope.name, domain.ReasonInvalid, "at most 64 scope entries are allowed")
+		}
+		for _, entry := range scope.values {
+			if strings.TrimSpace(entry) == "" || len(entry) > 256 {
+				return engine.InvalidField("spec.dataMcp.scope."+scope.name, domain.ReasonInvalid, "scope entries must be non-empty and at most 256 bytes")
+			}
+		}
+	}
+	backend, err := provider.DataMcp(c)
+	if err != nil {
+		return err
+	}
+	if backend.Kind == engine.DataMcpCompanion {
+		return companion.Validate(c, backend)
+	}
+	return nil
+}
+
 func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster, previousExposure *domain.Exposure) *response {
 	kind := "zerops"
 	namespace := domain.NormalizedNamespace(c.Namespace)
@@ -211,6 +265,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
+		if err = validateDataMcp(p, &c); err != nil {
+			return s.failure(err)
+		}
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
 		}
@@ -293,6 +350,15 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
 		return s.unsupportedClusterAction(name, p)
 	}
+	if name == "RotateSystemUser" && (p.Name() == "postgres" || p.Name() == "supabase") {
+		// PostgreSQL rotates only the Data MCP identities; managed roles stay engine-owned.
+		if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
+			return s.unsupportedClusterAction(name, p)
+		}
+		if read, readWrite := engine.DataAccessLevels(c); in.User == engine.DataAccessReadUser && !read || in.User == engine.DataAccessReadWriteUser && !readWrite {
+			return s.failure(engine.Invalid("rotation requires an enabled data-access system user"))
+		}
+	}
 	switch name {
 	case "GetCluster":
 		return ok(s.clusterAPI(*c))
@@ -363,6 +429,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 		}
 		next.Spec.Exposure.AllowAllAddresses = next.Spec.Exposure.Public && domain.ExposureCoversFamily(next.Spec.Exposure)
+		if err = validateDataMcp(p, &next); err != nil {
+			return s.failure(err)
+		}
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
 		}

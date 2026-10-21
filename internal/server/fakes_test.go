@@ -264,6 +264,7 @@ func testServerWithDatabase(t *testing.T, path string) (*Server, *secrets.Sealer
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = s.Close() })
 	token, _, err := a.CreateToken(ctx, "admin", "testing", nil, nil)
 	if err != nil {
 		t.Fatal(err)

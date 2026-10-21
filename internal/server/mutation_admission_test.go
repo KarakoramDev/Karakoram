@@ -115,6 +115,13 @@ func TestUnsupportedPostgresActionNamesEngineAndSupportedRoleAPI(t *testing.T) {
 	if response.Code != 409 || body.Details == nil || (*body.Details)["resource"] != "operation" || (*body.Details)["name"] != domain.OperationRotateSystemUser || (*body.Details)["reason"] != domain.ReasonUnsupported || !strings.Contains(body.Message, "postgres") || !strings.Contains(body.Message, "non-reserved") || !strings.Contains(body.Message, "/postgres/roles/{role}/password") || !strings.Contains(body.Message, "engine-owned") {
 		t.Fatalf("unsupported action stayed opaque/misleading: %d %s", response.Code, response.Body.String())
 	}
+	// Data MCP identities rotate only while enabled; nothing is queued otherwise.
+	if response = call(s, "POST", "/api/v1/clusters/"+c.Name+"/system-users/karakoram-mcp-ro/rotate", "", token); response.Code != 400 {
+		t.Fatalf("disabled data-access rotation: %d %s", response.Code, response.Body.String())
+	}
+	if ops, err := s.Store.ListOperations(t.Context(), c.Ref()); err != nil || len(ops) != 0 {
+		t.Fatalf("rejected rotations queued operations: %+v %v", ops, err)
+	}
 	response = call(s, "POST", "/api/v1/clusters/"+c.Name+"/raise-fcv", `{"version":"8.0"}`, token)
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)

@@ -3,6 +3,11 @@
 # Copyright 2026 The Karakoram Authors
 set -euo pipefail
 name=$1 source=$2 node_version=$3
+if [ "$name" = mongodb-mcp-server ]; then
+    rm -rf "/stage/$name"
+    python3 /root/mongodb_mcp.py --stage "/stage/$name" --node "/opt/node-$node_version"
+    exit
+fi
 stage=/stage/$name
 rm -rf "$stage"
 if [ "$name" = supabase-pg17-extensions ]; then

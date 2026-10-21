@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/events"
@@ -97,15 +98,17 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	}
 	hub := events.NewHub(128)
 	recorder := events.NewRecorder(st, hub)
+	companionController := &companion.Controller{Registry: registry, InternalCAPEM: ca}
 	relayTargets := func(c *domain.Cluster) []string {
 		p, err := registry.Get(c.Spec.Provider)
 		if err != nil {
 			return nil
 		}
+		targets := companionController.RelayTargets(c)
 		if p, ok := p.(engine.RelayTargeter); ok {
-			return p.RelayTargets(c)
+			targets = append(targets, p.RelayTargets(c)...)
 		}
-		return nil
+		return targets
 	}
 	namespaceRegistry, err := namespaces.New(ctx, namespaces.Options{Store: st, DefaultBackend: backend, Backends: backends, DefaultTarget: target, PublicURL: c.PublicURL, AdvertiseURL: c.AdvertiseURL, RelayHostname: relayHostname, Events: recorder, Logger: logger, RelayTargets: relayTargets})
 	if err != nil {
@@ -116,7 +119,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	defer dialer.Close()
 	// Generate provenance once, before either the observer or API starts.
 	rc := engine.Context{Namespace: domain.DefaultNamespace, AgentURL: c.AdvertiseURL, Backend: backend, Secrets: st, Store: st, Events: recorder, Agents: dialer, Artifact: engine.ExecutableArtifact{}, Logger: logger, Clock: engine.RealClock{}, ObservationEpoch: rand.Text()}
-	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Namespaces: namespaceRegistry, Context: rc})
+	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Namespaces: namespaceRegistry, Context: rc, Companion: companionController})
 	if err != nil {
 		return err
 	}
@@ -159,6 +162,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	defer server.Close()
 	publicListener, err := net.Listen("tcp", c.PublicListen)
 	if err != nil {
 		return err

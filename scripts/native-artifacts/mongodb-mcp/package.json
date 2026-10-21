@@ -1,0 +1,8 @@
+{
+  "name": "karakoram-mongodb-mcp-bundle",
+  "version": "3.1.0",
+  "private": true,
+  "dependencies": {
+    "mongodb-mcp-server": "3.1.0"
+  }
+}

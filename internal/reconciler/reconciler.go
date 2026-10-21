@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -40,6 +41,7 @@ type Options struct {
 	Registry              *engine.Registry
 	Namespaces            engine.Namespaces
 	Context               engine.Context
+	Companion             *companion.Controller
 	ResyncInterval        time.Duration
 	BackoffMin            time.Duration
 	BackoffMax            time.Duration
@@ -96,6 +98,9 @@ func New(opts Options) (*Manager, error) {
 	}
 	if opts.Context.Secrets == nil {
 		opts.Context.Secrets = opts.Store
+	}
+	if opts.Companion == nil {
+		opts.Companion = &companion.Controller{Registry: opts.Registry}
 	}
 	if opts.Namespaces == nil {
 		opts.Namespaces = engine.StaticNamespaces{DefaultBackend: opts.Context.Backend, DefaultAgentURL: opts.Context.AgentURL}
@@ -308,7 +313,7 @@ func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRe
 	if err := m.resolve(ctx, &rc); err != nil {
 		return err
 	}
-	status, _ := engine.ObserveStatus(ctx, p, &rc)
+	status, _ := m.observeStatus(ctx, p, &rc)
 	status.ObservedGeneration = c.Status.ObservedGeneration
 	engine.ApplyDeploymentStatus(&rc, &status)
 	preservePublishedEndpointFailure(c.Status.Conditions, &status)
@@ -510,6 +515,9 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			return 0, err
 		}
 		done, cleanupErr := p.Cleanup(ctx, &rc, c.DeleteOptions)
+		companionDone, companionErr := m.opts.Companion.Cleanup(ctx, &rc)
+		done = done && companionDone
+		cleanupErr = errors.Join(cleanupErr, companionErr)
 		cleanupErr = errors.Join(cleanupErr, engine.ObserveRuntimeStops(ctx, &rc, &c.Status, true))
 		convergenceErr = cleanupErr
 		if err = m.opts.Store.UpdateClusterState(ctx, c); err != nil {
@@ -706,7 +714,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	// Publish health before any recovery/platform work can block. This runs on
 	// the existing per-cluster worker/operation lease, not a second observer.
 	if rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded {
-		status, _ := engine.ObserveStatus(ctx, p, rc)
+		status, _ := m.observeStatus(ctx, p, rc)
 		status.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)
 		preservePublishedEndpointFailure(rc.Cluster.Status.Conditions, &status)
@@ -757,6 +765,14 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	if syncErr == nil {
 		result, syncErr = p.Sync(ctx, rc)
 	}
+	if _, supportsDataMcp := p.(engine.DataMcpProvider); syncErr == nil && !recoveringInitial && supportsDataMcp {
+		companionResult, companionErr := m.opts.Companion.Sync(ctx, rc)
+		syncErr = companionErr
+		if companionResult.RequeueAfter > 0 && (result.RequeueAfter == 0 || companionResult.RequeueAfter < result.RequeueAfter) {
+			result.RequeueAfter = companionResult.RequeueAfter
+		}
+		result.ConvergenceError = errors.Join(result.ConvergenceError, companionResult.ConvergenceError)
+	}
 	if recoveringInitial {
 		syncErr = errors.Join(syncErr, initialFailure, exposureErr)
 	}
@@ -791,7 +807,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	if err := m.resolve(ctx, rc); err != nil {
 		return result, errors.Join(syncErr, err)
 	}
-	status, statusErr := engine.ObserveStatus(ctx, p, rc)
+	status, statusErr := m.observeStatus(ctx, p, rc)
 	engine.ApplyDeploymentStatus(rc, &status)
 	if exposureCondition.Type != "" {
 		status.Conditions = append(status.Conditions, exposureCondition)
@@ -1110,7 +1126,12 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		if dependenciesResolved {
 			availability := *rc
 			availability.AvailabilityOnly = true
-			status, _ = engine.ObserveStatus(ctx, p, &availability)
+			status, _ = m.observeStatus(ctx, p, &availability)
+		}
+		if !dependenciesResolved && status.DataMcp != nil {
+			snapshot := *status.DataMcp
+			snapshot.Phase, snapshot.Message = domain.DataMcpPhaseDegraded, "Namespace unavailable"
+			status.DataMcp = &snapshot
 		}
 		status.ObservedGeneration = c.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)

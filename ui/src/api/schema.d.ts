@@ -2523,6 +2523,7 @@ export type components = {
         ClusterInputSpec: {
             backup?: components["schemas"]["BackupSpecInput"];
             components?: components["schemas"]["ComponentsInput"];
+            dataMcp?: components["schemas"]["DataMcpSpec"];
             dataSource?: components["schemas"]["DataSource"];
             /** @description Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...). */
             engineConfig?: string;
@@ -2562,6 +2563,7 @@ export type components = {
         ClusterPatchSpec: {
             backup?: components["schemas"]["BackupSpecPatch"];
             components?: components["schemas"]["ComponentsPatch"];
+            dataMcp?: components["schemas"]["DataMcpSpecPatch"];
             dataSource?: components["schemas"]["DataSourcePatch"];
             /** @description Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...). */
             engineConfig?: string | null;
@@ -2579,6 +2581,7 @@ export type components = {
         ClusterSpec: {
             backup?: components["schemas"]["BackupSpec"];
             components: components["schemas"]["Components"];
+            dataMcp?: components["schemas"]["DataMcpSpec"];
             dataSource?: components["schemas"]["DataSource"];
             /** @description Provider-specific configuration overrides (mongod/mongos YAML for psmdb, rabbitmq.conf for rabbitmq, ...). */
             engineConfig?: string;
@@ -2602,6 +2605,7 @@ export type components = {
             backup?: components["schemas"]["ClusterBackupStatus"];
             conditions: components["schemas"]["Condition"][];
             connection?: components["schemas"]["ConnectionSummary"];
+            dataMcp?: components["schemas"]["DataMcpStatus"];
             fcv?: string;
             members: components["schemas"]["Member"][];
             message?: string;
@@ -2800,6 +2804,57 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
+        DataMcpScope: {
+            databases?: string[];
+            indexPatterns?: string[];
+            schemas?: string[];
+            vhosts?: string[];
+        };
+        DataMcpScopePatch: {
+            databases?: string[] | null;
+            indexPatterns?: string[] | null;
+            schemas?: string[] | null;
+            vhosts?: string[] | null;
+        } | null;
+        /** @description Opt-in per-cluster data access. Disabled configurations retain their scope and tool settings. Writes additionally require explicit token, owner RBAC and installation grants. */
+        DataMcpSpec: {
+            /** @enum {string} */
+            access?: "read" | "readWrite";
+            /** @description Include query arguments in audit records instead of only their hash. */
+            auditQueryText?: boolean;
+            enabled?: boolean;
+            resources?: components["schemas"]["ResourcesInput"];
+            scope?: components["schemas"]["DataMcpScope"];
+            tools?: components["schemas"]["DataMcpTools"];
+        };
+        DataMcpSpecPatch: {
+            /** @enum {string|null} */
+            access?: "read" | "readWrite" | null;
+            auditQueryText?: boolean | null;
+            enabled?: boolean | null;
+            resources?: components["schemas"]["ResourcesPatch"];
+            scope?: components["schemas"]["DataMcpScopePatch"];
+            tools?: components["schemas"]["DataMcpToolsPatch"];
+        } | null;
+        DataMcpStatus: {
+            /** @enum {string} */
+            access?: "read" | "readWrite";
+            /** @enum {string} */
+            kind?: "companion" | "native";
+            message?: string;
+            /** @enum {string} */
+            phase: "Disabled" | "Provisioning" | "Ready" | "Degraded";
+            upstream?: string;
+            upstreamVersion?: string;
+        };
+        DataMcpTools: {
+            confirmWrites?: boolean;
+            deny?: string[];
+        };
+        DataMcpToolsPatch: {
+            confirmWrites?: boolean | null;
+            deny?: string[] | null;
+        } | null;
         /** @description Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time. */
         DataSource: {
             backup?: string;

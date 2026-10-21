@@ -69,6 +69,15 @@ func TestGenerateDeterministicAndCompilable(t *testing.T) {
 	}
 }
 
+func TestDataMcpVocabulary(t *testing.T) {
+	for _, action := range []string{"read", "write"} {
+		source := strings.Replace(validSpec, "resource: cluster-credentials, action: read", "resource: cluster-data, action: "+action, 1)
+		if _, err := generate([]byte(source)); err != nil {
+			t.Fatalf("cluster-data:%s: %v", action, err)
+		}
+	}
+}
+
 func TestRejectInvalidMetadata(t *testing.T) {
 	tests := []struct{ name, source, message string }{
 		{"wrong version", strings.Replace(validSpec, "3.0.3", "3.1.0", 1), "expected OpenAPI"},

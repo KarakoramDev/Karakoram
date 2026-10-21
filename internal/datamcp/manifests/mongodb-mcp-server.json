@@ -1,0 +1,187 @@
+{
+  "upstream": "mongodb-mcp-server",
+  "version": "3.1.0",
+  "wrapsUntrusted": true,
+  "tools": {
+    "find": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "count": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "explain": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "aggregate": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "aggregate-db": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "collection-indexes": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "collection-schema": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "collection-storage-size": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "db-stats": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "list-collections": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "list-databases": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "mongodb-logs": {
+      "class": "read",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "create-collection": {
+      "class": "write",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "create-index": {
+      "class": "write",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "insert-many": {
+      "class": "write",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "rename-collection": {
+      "class": "write",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "update-many": {
+      "class": "write",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "delete-many": {
+      "class": "destructive",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "drop-collection": {
+      "class": "destructive",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "drop-database": {
+      "class": "destructive",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "drop-index": {
+      "class": "destructive",
+      "args": [{"name":"connectionId","defaultString":"preconfigured","allow":["preconfigured"]}]
+    },
+    "connect": {
+      "class": "deny"
+    },
+    "disconnect": {
+      "class": "deny"
+    },
+    "list-connections": {
+      "class": "deny"
+    },
+    "export": {
+      "class": "deny"
+    },
+    "atlas-connect-cluster": {
+      "class": "deny"
+    },
+    "atlas-create-access-list": {
+      "class": "deny"
+    },
+    "atlas-create-cluster": {
+      "class": "deny"
+    },
+    "atlas-create-db-user": {
+      "class": "deny"
+    },
+    "atlas-create-free-cluster": {
+      "class": "deny"
+    },
+    "atlas-create-project": {
+      "class": "deny"
+    },
+    "atlas-streams-build": {
+      "class": "deny"
+    },
+    "atlas-get-performance-advisor": {
+      "class": "deny"
+    },
+    "atlas-get-regions": {
+      "class": "deny"
+    },
+    "atlas-inspect-access-list": {
+      "class": "deny"
+    },
+    "atlas-inspect-cluster": {
+      "class": "deny"
+    },
+    "atlas-list-alerts": {
+      "class": "deny"
+    },
+    "atlas-list-clusters": {
+      "class": "deny"
+    },
+    "atlas-list-db-users": {
+      "class": "deny"
+    },
+    "atlas-list-orgs": {
+      "class": "deny"
+    },
+    "atlas-list-projects": {
+      "class": "deny"
+    },
+    "atlas-streams-discover": {
+      "class": "deny"
+    },
+    "atlas-load-sample-dataset": {
+      "class": "deny"
+    },
+    "atlas-pause-resume-cluster": {
+      "class": "deny"
+    },
+    "atlas-streams-manage": {
+      "class": "deny"
+    },
+    "atlas-upgrade-cluster": {
+      "class": "deny"
+    },
+    "atlas-streams-teardown": {
+      "class": "deny"
+    },
+    "atlas-local-connect-deployment": {
+      "class": "deny"
+    },
+    "atlas-local-create-deployment": {
+      "class": "deny"
+    },
+    "atlas-local-delete-deployment": {
+      "class": "deny"
+    },
+    "atlas-local-list-deployments": {
+      "class": "deny"
+    },
+    "list-knowledge-sources": {
+      "class": "deny"
+    },
+    "search-knowledge": {
+      "class": "deny"
+    }
+  }
+}

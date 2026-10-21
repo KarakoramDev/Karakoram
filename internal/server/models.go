@@ -58,10 +58,58 @@ func extraResourcesDomain(r *api.ExtraResourcesInput) domain.Resources {
 	}
 	return o
 }
+func dataMcpDomain(a *api.DataMcpSpec) *domain.DataMcpSpec {
+	if a == nil {
+		return nil
+	}
+	s := &domain.DataMcpSpec{Enabled: value(a.Enabled), Access: string(value(a.Access)), AuditQueryText: value(a.AuditQueryText)}
+	if a.Scope != nil {
+		s.Scope = domain.DataMcpScope{Databases: value(a.Scope.Databases), Schemas: value(a.Scope.Schemas), IndexPatterns: value(a.Scope.IndexPatterns), Vhosts: value(a.Scope.Vhosts)}
+	}
+	if a.Tools != nil {
+		s.Tools = domain.DataMcpTools{Deny: value(a.Tools.Deny), ConfirmWrites: value(a.Tools.ConfirmWrites)}
+	}
+	if a.Resources != nil {
+		s.Resources = ptr(resourcesDomain(a.Resources))
+	}
+	return s
+}
+
+func dataMcpAPI(s *domain.DataMcpSpec) *api.DataMcpSpec {
+	if s == nil {
+		return nil
+	}
+	a := &api.DataMcpSpec{
+		Enabled: ptr(s.Enabled), AuditQueryText: ptr(s.AuditQueryText),
+		Scope: &api.DataMcpScope{Databases: ptr(nonNil(s.Scope.Databases)), Schemas: ptr(nonNil(s.Scope.Schemas)), IndexPatterns: ptr(nonNil(s.Scope.IndexPatterns)), Vhosts: ptr(nonNil(s.Scope.Vhosts))},
+		Tools: &api.DataMcpTools{Deny: ptr(nonNil(s.Tools.Deny)), ConfirmWrites: ptr(s.Tools.ConfirmWrites)},
+	}
+	if s.Access != "" {
+		a.Access = ptr(api.DataMcpSpecAccess(s.Access))
+	}
+	if r := s.Resources; r != nil {
+		resourceValue := func(v float64) *float32 {
+			if v == 0 {
+				return nil
+			}
+			return ptr(float32(v))
+		}
+		a.Resources = &api.ResourcesInput{MinCpu: resourceValue(r.MinCPU), MaxCpu: resourceValue(r.MaxCPU), MinRam: resourceValue(r.MinRAM), MaxRam: resourceValue(r.MaxRAM), MinDisk: resourceValue(r.MinDisk), MaxDisk: resourceValue(r.MaxDisk)}
+		if r.CPUMode != "" {
+			a.Resources.CpuMode = ptr(api.ResourcesInputCpuMode(r.CPUMode))
+		}
+		if r.StartCPU != nil {
+			a.Resources.StartCpu = ptr(float32(*r.StartCPU))
+		}
+	}
+	return a
+}
+
 func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	// Presence is retained in the generated input model: the validator rejects
 	// explicit zero before conversion, while nil values remain provider defaults.
 	s := domain.ClusterSpec{Provider: a.Provider, Version: value(a.Version), EngineConfig: value(a.EngineConfig)}
+	s.DataMcp = dataMcpDomain(a.DataMcp)
 	if a.Topology != nil {
 		s.Topology = domain.Topology{Type: string(value(a.Topology.Type)), Shards: value(a.Topology.Shards)}
 	}
@@ -152,6 +200,7 @@ func nonNil[T any](v []T) []T {
 func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	a := api.ClusterSpec{Provider: s.Provider, Version: s.Version, Topology: api.Topology{Type: api.TopologyType(s.Topology.Type)}, Components: api.Components{Engine: componentAPI(s.Components.Engine)}, EngineConfig: optionalString(s.EngineConfig), Tls: &api.TLS{Mode: api.TLSMode(s.TLS.Mode), Ca: api.TLSCa(s.TLS.CA)}, Exposure: &api.Exposure{Public: s.Exposure.Public, Allowlist: ptr(nonNil(s.Exposure.Allowlist))}, Monitoring: &api.MonitoringSpec{Enabled: s.Monitoring.Enabled}}
 	a.RetryEpoch = ptr(s.RetryEpoch)
+	a.DataMcp = dataMcpAPI(s.DataMcp)
 	if s.Exposure.IPType != "" {
 		a.Exposure.IpType = ptr(api.ExposureIpType(s.Exposure.IPType))
 	}
@@ -300,6 +349,15 @@ func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatu
 	status.Message = redact.Diagnostic(status.Message)
 	status = s.freshStatus(status)
 	a := api.ClusterStatus{Phase: api.ClusterStatusPhase(status.Phase), Message: optionalString(status.Message), ObservedGeneration: status.ObservedGeneration, Version: optionalString(status.Version), Fcv: optionalString(status.FCV), Connection: ptr(connectionAPI(status.Connection)), Placement: ptr(placementAPI(status.Placement)), Conditions: []api.Condition{}, Members: []api.Member{}}
+	if d := status.DataMcp; d != nil {
+		a.DataMcp = &api.DataMcpStatus{Phase: api.DataMcpStatusPhase(d.Phase), Upstream: optionalString(d.Upstream), UpstreamVersion: optionalString(d.UpstreamVersion), Message: optionalString(d.Message)}
+		if d.Kind != "" {
+			a.DataMcp.Kind = ptr(api.DataMcpStatusKind(d.Kind))
+		}
+		if d.Access != "" {
+			a.DataMcp.Access = ptr(api.DataMcpStatusAccess(d.Access))
+		}
+	}
 	for _, c := range status.Conditions {
 		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: redact.Diagnostic(c.Message), LastTransitionTime: c.LastTransitionTime})
 	}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/datamcp"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/events"
@@ -56,6 +57,8 @@ type Options struct {
 	MCPMode             string
 	MCPSealer           *secrets.Sealer
 	MCPResourceMetadata string
+	// DataMcpUpstreams overrides provider-backed upstreams, primarily for embedding.
+	DataMcpUpstreams datamcp.UpstreamFactory
 }
 
 // Server implements all generated strict operations.
@@ -63,6 +66,7 @@ type Server struct {
 	Options
 	namespaces engine.Namespaces
 	mcpHandler http.Handler
+	dataMcp    *datamcp.Gateway
 }
 
 // New assembles HTTP handlers over initialized dependencies.
@@ -91,6 +95,9 @@ func New(o Options) (*Server, error) {
 		return nil, err
 	}
 	s.mcpHandler = handler
+	if err := s.initDataMcp(); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -467,6 +474,7 @@ func (s *Server) Handler() http.Handler {
 	if s.RelayHandler != nil {
 		mux.Handle("GET /relay/v1/connect", s.RelayHandler)
 	}
+	mux.Handle("/mcp/clusters/", s.dataMcp)
 	routes := operationMux{mux}
 	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{BaseURL: "/api/v1", BaseRouter: routes, ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 		_ = parameterFailure(err).write(w)

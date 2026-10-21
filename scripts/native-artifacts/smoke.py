@@ -24,6 +24,19 @@ def jwt(role, secret):
 
 
 name, health = sys.argv[1:]
+if name == 'mongodb-mcp-server':
+    import mongodb_mcp
+    import tempfile
+    import shutil
+    try:
+        with tempfile.TemporaryDirectory() as temporary:
+            mongod = mongodb_mcp.fixture(temporary)
+            mongodb_mcp.qualify('/opt/artifact', mongod, '/tmp')
+    finally:
+        log = Path('/tmp/mongodb-mcp-server.smoke.log')
+        if log.exists():
+            shutil.copy2(log, '/tmp/native-smoke.log')
+    raise SystemExit(0)
 env = os.environ | {'NODE_ENV':'production','HOSTNAME':'127.0.0.1','ERL_FLAGS':'+S 2:2 +SDcpu 1 +SDio 1','LANG':'C.UTF-8'}
 fixture = json.loads(Path('/root/smoke-env.json').read_text())
 env['PATH'] = '/opt/artifact/bin:'+env.get('PATH','')

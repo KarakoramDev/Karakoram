@@ -1,0 +1,41 @@
+{
+  "upstream": "pgedge-postgres-mcp",
+  "version": "v1.1.0",
+  "wrapsUntrusted": false,
+  "tools": {
+    "query_database": {
+      "class": "read",
+      "writeAlias": "query_database_write"
+    },
+    "get_schema_info": {
+      "class": "read"
+    },
+    "count_rows": {
+      "class": "read"
+    },
+    "execute_explain": {
+      "class": "read"
+    },
+    "read_resource": {
+      "class": "read"
+    },
+    "similarity_search": {
+      "class": "deny"
+    },
+    "generate_embedding": {
+      "class": "deny"
+    },
+    "search_knowledgebase": {
+      "class": "deny"
+    },
+    "list_database_connections": {
+      "class": "deny"
+    },
+    "select_database_connection": {
+      "class": "deny"
+    },
+    "llm_connection_selection": {
+      "class": "deny"
+    }
+  }
+}

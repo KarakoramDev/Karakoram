@@ -8988,6 +8988,166 @@ components:
       description: Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
       required:
         - cluster
+    DataMcpScope:
+      type: object
+      additionalProperties: false
+      properties:
+        databases:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        schemas:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        indexPatterns:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        vhosts:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+    DataMcpTools:
+      type: object
+      additionalProperties: false
+      properties:
+        deny:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        confirmWrites:
+          type: boolean
+    DataMcpSpec:
+      type: object
+      additionalProperties: false
+      description: Opt-in per-cluster data access. Disabled configurations retain their scope and tool settings. Writes additionally require explicit token, owner RBAC and installation grants.
+      properties:
+        enabled:
+          type: boolean
+        access:
+          type: string
+          enum: [read, readWrite]
+        scope:
+          $ref: '#/components/schemas/DataMcpScope'
+        tools:
+          $ref: '#/components/schemas/DataMcpTools'
+        auditQueryText:
+          type: boolean
+          description: Include query arguments in audit records instead of only their hash.
+        resources:
+          $ref: '#/components/schemas/ResourcesInput'
+    DataMcpScopePatch:
+      type: object
+      nullable: true
+      additionalProperties: false
+      properties:
+        databases:
+          type: array
+          nullable: true
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        schemas:
+          type: array
+          nullable: true
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        indexPatterns:
+          type: array
+          nullable: true
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        vhosts:
+          type: array
+          nullable: true
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+    DataMcpToolsPatch:
+      type: object
+      nullable: true
+      additionalProperties: false
+      properties:
+        deny:
+          type: array
+          nullable: true
+          maxItems: 64
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        confirmWrites:
+          type: boolean
+          nullable: true
+    DataMcpSpecPatch:
+      type: object
+      nullable: true
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          nullable: true
+        access:
+          type: string
+          enum: [read, readWrite]
+          nullable: true
+        scope:
+          $ref: '#/components/schemas/DataMcpScopePatch'
+        tools:
+          $ref: '#/components/schemas/DataMcpToolsPatch'
+        auditQueryText:
+          type: boolean
+          nullable: true
+        resources:
+          $ref: '#/components/schemas/ResourcesPatch'
+    DataMcpStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        phase:
+          type: string
+          enum: [Disabled, Provisioning, Ready, Degraded]
+        kind:
+          type: string
+          enum: [companion, native]
+        upstream:
+          type: string
+        upstreamVersion:
+          type: string
+        access:
+          type: string
+          enum: [read, readWrite]
+        message:
+          type: string
+      required: [phase]
     ClusterSpec:
       type: object
       additionalProperties: false
@@ -9023,6 +9183,8 @@ components:
           $ref: '#/components/schemas/MonitoringSpec'
         dataSource:
           $ref: '#/components/schemas/DataSource'
+        dataMcp:
+          $ref: '#/components/schemas/DataMcpSpec'
       required:
         - provider
         - version
@@ -9363,6 +9525,8 @@ components:
           $ref: '#/components/schemas/ClusterBackupStatus'
         placement:
           $ref: '#/components/schemas/Placement'
+        dataMcp:
+          $ref: '#/components/schemas/DataMcpStatus'
       required:
         - phase
         - observedGeneration
@@ -10401,6 +10565,12 @@ components:
             - Running
             - Succeeded
             - Failed
+          # Keep the published Go constant names independent of new enum collisions.
+          x-enum-varnames:
+            - RestorePhasePending
+            - RestorePhaseRunning
+            - RestorePhaseSucceeded
+            - RestorePhaseFailed
         startedAt:
           type: string
           format: date-time
@@ -11263,6 +11433,8 @@ components:
           $ref: '#/components/schemas/MonitoringSpec'
         dataSource:
           $ref: '#/components/schemas/DataSource'
+        dataMcp:
+          $ref: '#/components/schemas/DataMcpSpec'
       additionalProperties: false
       required:
         - provider
@@ -11469,6 +11641,8 @@ components:
           $ref: '#/components/schemas/MonitoringSpecPatch'
         dataSource:
           $ref: '#/components/schemas/DataSourcePatch'
+        dataMcp:
+          $ref: '#/components/schemas/DataMcpSpecPatch'
       additionalProperties: false
     BackupSpecPatch:
       type: object

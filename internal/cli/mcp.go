@@ -45,6 +45,11 @@ func addMCPCommands(a *app, root *cobra.Command) {
 		write, _ := cmd.Flags().GetBool("write")
 		client, _ := cmd.Flags().GetString("client")
 		if cluster != "" {
+			for _, flag := range []string{"namespace", "stdio", "output"} {
+				if cmd.Flags().Changed(flag) {
+					return usageError("--%s cannot be combined with --cluster", flag)
+				}
+			}
 			return dataMCPConfig(cmd, a, cluster, write, client)
 		}
 		return a.managementMCPConfig(cmd, client, write)

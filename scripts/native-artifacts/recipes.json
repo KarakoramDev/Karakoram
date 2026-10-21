@@ -1,4 +1,5 @@
 {
+  "mongodb-mcp-server": {"repo":"mongodb-js/mongodb-mcp-server","commit":"f369482783bdef116c35d352fd9d92f6c984242f","version":"3.1.0","license":"Apache-2.0","node":"22.23.3","runtimeDeps":["ca-certificates","libstdc++6"],"health":"mcp"},
   "supabase-storage": {"repo":"supabase/storage","commit":"f31599e188d7c9c854b1daa76a11b41c6d179462","version":"1.81.0","license":"Apache-2.0","node":"24.22.0","runtimeDeps":["ca-certificates","libstdc++6"],"health":"http://127.0.0.1:5000/status"},
   "supabase-postgres-meta": {"repo":"supabase/postgres-meta","commit":"9a2effd147f2f028fa36553ec2c7eeec80d7f8fc","version":"0.100.0","license":"Apache-2.0","node":"22.23.3","runtimeDeps":["ca-certificates","libstdc++6"],"health":"http://127.0.0.1:8080/health"},
   "supabase-studio": {"repo":"supabase/supabase","commit":"bc27d2661edd09a5d0b8d76ce33da6d4071a756e","version":"2026.10.12-bc27d2661edd","license":"Apache-2.0","node":"22.23.3","runtimeDeps":["ca-certificates","libstdc++6"],"health":"http://127.0.0.1:3000/api/platform/profile"},

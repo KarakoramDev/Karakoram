@@ -144,6 +144,38 @@ const (
 	CreatedRabbitMQUserTagsPolicymaker   CreatedRabbitMQUserTags = "policymaker"
 )
 
+// Defines values for DataMcpSpecAccess.
+const (
+	DataMcpSpecAccessRead      DataMcpSpecAccess = "read"
+	DataMcpSpecAccessReadWrite DataMcpSpecAccess = "readWrite"
+)
+
+// Defines values for DataMcpSpecPatchAccess.
+const (
+	DataMcpSpecPatchAccessRead      DataMcpSpecPatchAccess = "read"
+	DataMcpSpecPatchAccessReadWrite DataMcpSpecPatchAccess = "readWrite"
+)
+
+// Defines values for DataMcpStatusAccess.
+const (
+	DataMcpStatusAccessRead      DataMcpStatusAccess = "read"
+	DataMcpStatusAccessReadWrite DataMcpStatusAccess = "readWrite"
+)
+
+// Defines values for DataMcpStatusKind.
+const (
+	Companion DataMcpStatusKind = "companion"
+	Native    DataMcpStatusKind = "native"
+)
+
+// Defines values for DataMcpStatusPhase.
+const (
+	DataMcpStatusPhaseDegraded     DataMcpStatusPhase = "Degraded"
+	DataMcpStatusPhaseDisabled     DataMcpStatusPhase = "Disabled"
+	DataMcpStatusPhaseProvisioning DataMcpStatusPhase = "Provisioning"
+	DataMcpStatusPhaseReady        DataMcpStatusPhase = "Ready"
+)
+
 // Defines values for DryRunResultEffectsKind.
 const (
 	BackupsDisabled DryRunResultEffectsKind = "backups-disabled"
@@ -848,6 +880,9 @@ type ClusterInputSpec struct {
 	Backup     *BackupSpecInput `json:"backup,omitempty"`
 	Components *ComponentsInput `json:"components,omitempty"`
 
+	// DataMcp Opt-in per-cluster data access. Disabled configurations retain their scope and tool settings. Writes additionally require explicit token, owner RBAC and installation grants.
+	DataMcp *DataMcpSpec `json:"dataMcp,omitempty"`
+
 	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 	DataSource *DataSource `json:"dataSource,omitempty"`
 
@@ -890,8 +925,9 @@ type ClusterMetrics struct {
 
 // ClusterPatchSpec defines model for ClusterPatchSpec.
 type ClusterPatchSpec struct {
-	Backup     *BackupSpecPatch `json:"backup"`
-	Components *ComponentsPatch `json:"components"`
+	Backup     *BackupSpecPatch  `json:"backup"`
+	Components *ComponentsPatch  `json:"components"`
+	DataMcp    *DataMcpSpecPatch `json:"dataMcp"`
 
 	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 	DataSource *DataSourcePatch `json:"dataSource"`
@@ -915,6 +951,9 @@ type ClusterPatchSpec struct {
 type ClusterSpec struct {
 	Backup     *BackupSpec `json:"backup,omitempty"`
 	Components Components  `json:"components"`
+
+	// DataMcp Opt-in per-cluster data access. Disabled configurations retain their scope and tool settings. Writes additionally require explicit token, owner RBAC and installation grants.
+	DataMcp *DataMcpSpec `json:"dataMcp,omitempty"`
 
 	// DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.
 	DataSource *DataSource `json:"dataSource,omitempty"`
@@ -942,6 +981,7 @@ type ClusterStatus struct {
 	Backup             *ClusterBackupStatus `json:"backup,omitempty"`
 	Conditions         []Condition          `json:"conditions"`
 	Connection         *ConnectionSummary   `json:"connection,omitempty"`
+	DataMcp            *DataMcpStatus       `json:"dataMcp,omitempty"`
 	Fcv                *string              `json:"fcv,omitempty"`
 	Members            []Member             `json:"members"`
 	Message            *string              `json:"message,omitempty"`
@@ -1179,6 +1219,81 @@ type CurrentUser struct {
 	MustChangePassword bool     `json:"mustChangePassword"`
 	Name               string   `json:"name"`
 	Subject            string   `json:"subject"`
+}
+
+// DataMcpScope defines model for DataMcpScope.
+type DataMcpScope struct {
+	Databases     *[]string `json:"databases,omitempty"`
+	IndexPatterns *[]string `json:"indexPatterns,omitempty"`
+	Schemas       *[]string `json:"schemas,omitempty"`
+	Vhosts        *[]string `json:"vhosts,omitempty"`
+}
+
+// DataMcpScopePatch defines model for DataMcpScopePatch.
+type DataMcpScopePatch struct {
+	Databases     *[]string `json:"databases"`
+	IndexPatterns *[]string `json:"indexPatterns"`
+	Schemas       *[]string `json:"schemas"`
+	Vhosts        *[]string `json:"vhosts"`
+}
+
+// DataMcpSpec Opt-in per-cluster data access. Disabled configurations retain their scope and tool settings. Writes additionally require explicit token, owner RBAC and installation grants.
+type DataMcpSpec struct {
+	Access *DataMcpSpecAccess `json:"access,omitempty"`
+
+	// AuditQueryText Include query arguments in audit records instead of only their hash.
+	AuditQueryText *bool           `json:"auditQueryText,omitempty"`
+	Enabled        *bool           `json:"enabled,omitempty"`
+	Resources      *ResourcesInput `json:"resources,omitempty"`
+	Scope          *DataMcpScope   `json:"scope,omitempty"`
+	Tools          *DataMcpTools   `json:"tools,omitempty"`
+}
+
+// DataMcpSpecAccess defines model for DataMcpSpec.Access.
+type DataMcpSpecAccess string
+
+// DataMcpSpecPatch defines model for DataMcpSpecPatch.
+type DataMcpSpecPatch struct {
+	Access         *DataMcpSpecPatchAccess `json:"access"`
+	AuditQueryText *bool                   `json:"auditQueryText"`
+	Enabled        *bool                   `json:"enabled"`
+	Resources      *ResourcesPatch         `json:"resources"`
+	Scope          *DataMcpScopePatch      `json:"scope"`
+	Tools          *DataMcpToolsPatch      `json:"tools"`
+}
+
+// DataMcpSpecPatchAccess defines model for DataMcpSpecPatch.Access.
+type DataMcpSpecPatchAccess string
+
+// DataMcpStatus defines model for DataMcpStatus.
+type DataMcpStatus struct {
+	Access          *DataMcpStatusAccess `json:"access,omitempty"`
+	Kind            *DataMcpStatusKind   `json:"kind,omitempty"`
+	Message         *string              `json:"message,omitempty"`
+	Phase           DataMcpStatusPhase   `json:"phase"`
+	Upstream        *string              `json:"upstream,omitempty"`
+	UpstreamVersion *string              `json:"upstreamVersion,omitempty"`
+}
+
+// DataMcpStatusAccess defines model for DataMcpStatus.Access.
+type DataMcpStatusAccess string
+
+// DataMcpStatusKind defines model for DataMcpStatus.Kind.
+type DataMcpStatusKind string
+
+// DataMcpStatusPhase defines model for DataMcpStatus.Phase.
+type DataMcpStatusPhase string
+
+// DataMcpTools defines model for DataMcpTools.
+type DataMcpTools struct {
+	ConfirmWrites *bool     `json:"confirmWrites,omitempty"`
+	Deny          *[]string `json:"deny,omitempty"`
+}
+
+// DataMcpToolsPatch defines model for DataMcpToolsPatch.
+type DataMcpToolsPatch struct {
+	ConfirmWrites *bool     `json:"confirmWrites"`
+	Deny          *[]string `json:"deny"`
 }
 
 // DataSource Exactly one of backup and pitrTime is required. Seeds a new cluster from a consistent backup or point in time.

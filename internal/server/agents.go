@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
@@ -119,12 +120,14 @@ func (s *Server) InternalHandler() http.Handler {
 			_ = failure.write(w)
 			return
 		}
-		source, yes := p.(engine.AgentConfigSource)
-		if !yes {
-			_ = s.failure(engine.ErrNotSupported).write(w)
-			return
+		var cfg agentapi.MemberConfig
+		if token.Member == companion.Member(rc.Cluster.Name) {
+			cfg, err = companion.MemberConfig(r.Context(), rc, token.Member)
+		} else if source, yes := p.(engine.AgentConfigSource); yes {
+			cfg, err = source.MemberConfig(r.Context(), rc, token.Member)
+		} else {
+			err = engine.ErrNotSupported
 		}
-		cfg, err := source.MemberConfig(r.Context(), rc, token.Member)
 		if err != nil {
 			_ = s.failure(err).write(w)
 			return

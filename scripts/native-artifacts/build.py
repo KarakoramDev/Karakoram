@@ -35,6 +35,7 @@ def build_input_fingerprint(name):
     inputs = {'recipe': RECIPES[name], 'files': {}}
     paths = [path for pattern in ('*.py', '*.sh', '*.json') for path in HERE.glob(pattern)
              if path.name != 'recipes.json' and not path.name.startswith('test_')]
+    paths.extend((HERE/'mongodb-mcp').glob('*.json'))
     paths.extend(path for path in (HERE/'patches').rglob('*') if path.is_file())
     for path in sorted(paths):
         inputs['files'][path.relative_to(HERE).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -222,6 +223,8 @@ def push_build_inputs():
         run('incus','file','push',str(HERE/filename),BUILDER+'/root/'+filename)
     for patch in (HERE/'patches').glob('*.patch'):
         run('incus','file','push',str(patch),BUILDER+'/root/'+patch.name)
+    run('incus', 'file', 'push', str(HERE/'mongodb_mcp.py'), BUILDER+'/root/mongodb_mcp.py')
+    run('incus', 'file', 'push', '-r', str(HERE/'mongodb-mcp'), BUILDER+'/root/')
 
 
 def get_instances():
@@ -287,6 +290,8 @@ def qualify(name, candidate, started):
         run('incus','start',RUNNER)
         run('incus','file','push',str(candidate),RUNNER+'/root/artifact.tar.gz')
         run('incus','file','push',str(HERE/'smoke.py'),RUNNER+'/root/smoke.py')
+        if name == 'mongodb-mcp-server':
+            run('incus', 'file', 'push', str(HERE/'mongodb_mcp.py'), RUNNER+'/root/mongodb_mcp.py')
         if name == 'supabase-studio':
             meta = next(a for a in json.loads(LOCK.read_text()) if a['name']=='supabase-postgres-meta')
             archive = OUT/meta['file']
@@ -341,7 +346,7 @@ def main():
         return
     report_file = OUT/'build-report.json'
     report = json.loads(report_file.read_text()) if report_file.exists() else {}
-    order = ['supabase-storage','supabase-postgres-meta','supabase-realtime','supabase-studio','supabase-pg17-extensions','supabase-imgproxy','supabase-supavisor','supabase-logflare','supabase-edge-runtime']
+    order = ['supabase-storage','supabase-postgres-meta','supabase-realtime','supabase-studio','supabase-pg17-extensions','supabase-imgproxy','supabase-supavisor','supabase-logflare','supabase-edge-runtime','mongodb-mcp-server']
     selected = order if requested==['all'] else [name for name in requested if name in RECIPES]
     try:
         for name in selected:
